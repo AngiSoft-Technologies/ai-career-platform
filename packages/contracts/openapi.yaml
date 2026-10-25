@@ -1,0 +1,482 @@
+openapi: 3.1.0
+info:
+  title: Job Radar API
+  version: "1.0.0"
+  description: |
+    Versioned REST API for the Job Radar platform (AngiSoft Technologies).
+
+    Base URL: `{backend_url}/v1`. The legacy `/api/v1` prefix remains as a
+    compatibility alias. Every response carries `x-api-version: v1`.
+
+    Authentication: `Authorization: Bearer <neon-auth-jwt>`. Requests without a
+    token run in demo mode (single seeded candidate) while `DEMO_MODE=true`.
+servers:
+  - url: https://job-radar-api-angisoft.fly.dev/v1
+    description: Production
+  - url: http://localhost:8088/v1
+    description: Local
+security:
+  - bearerAuth: []
+tags:
+  - name: profile
+  - name: opportunities
+  - name: applications
+  - name: documents
+  - name: ai
+  - name: sources
+  - name: followups
+paths:
+  /profile:
+    get:
+      tags: [profile]
+      summary: Get the signed-in candidate profile
+      responses:
+        "200":
+          description: Candidate profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  profile: { $ref: "#/components/schemas/CandidateProfile" }
+    patch:
+      tags: [profile]
+      summary: Update the candidate profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fullName: { type: string }
+                headline: { type: string }
+                summary: { type: string }
+                location: { type: string }
+                country: { type: string }
+                yearsExperience: { type: integer }
+                seniority:
+                  type: string
+                  enum: [intern, junior, mid, senior, lead]
+                desiredRoles:
+                  type: array
+                  items: { type: string }
+                skills:
+                  type: array
+                  items: { type: string }
+                preferredCountries:
+                  type: array
+                  items: { type: string }
+                preferredLocations:
+                  type: array
+                  items: { type: string }
+                remotePreferred: { type: boolean }
+      responses:
+        "200": { description: Updated profile }
+        "400": { $ref: "#/components/responses/BadRequest" }
+  /profile/preferences:
+    get:
+      tags: [profile]
+      summary: Get job preferences
+      responses:
+        "200": { description: Preferences }
+    put:
+      tags: [profile]
+      summary: Replace job preferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                preferredCountries:
+                  type: array
+                  items: { type: string }
+                preferredLocations:
+                  type: array
+                  items: { type: string }
+                preferredRoles:
+                  type: array
+                  items: { type: string }
+                desiredSeniority: { type: string }
+                minSalary: { type: integer }
+                currency: { type: string }
+                remoteOnly: { type: boolean }
+                willingToRelocate: { type: boolean }
+                notificationsEnabled: { type: boolean }
+      responses:
+        "200": { description: Saved preferences }
+  /opportunities:
+    get:
+      tags: [opportunities]
+      summary: Search and rank opportunities
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: country, in: query, schema: { type: string } }
+        - { name: workMode, in: query, schema: { type: string, enum: [onsite, hybrid, remote] } }
+        - { name: seniority, in: query, schema: { type: string, enum: [intern, junior, mid, senior, lead] } }
+        - { name: limit, in: query, schema: { type: integer, maximum: 100 } }
+        - { name: semantic, in: query, schema: { type: boolean }, description: "Blend vector similarity into ranking" }
+        - { name: ranked, in: query, schema: { type: boolean } }
+      responses:
+        "200":
+          description: Ranked opportunities
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Opportunity" }
+                  cached: { type: boolean }
+  /opportunities/{id}:
+    get:
+      tags: [opportunities]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Opportunity with match }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /opportunities/{id}/workspace:
+    get:
+      tags: [opportunities]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      summary: Application blueprint for an opportunity
+      responses:
+        "200": { description: Blueprint }
+  /applications:
+    get:
+      tags: [applications]
+      responses:
+        "200": { description: Applications }
+    post:
+      tags: [applications]
+      summary: Create (or fetch) an application for an opportunity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [opportunityId]
+              properties:
+                opportunityId: { type: string, format: uuid }
+                initialStatus: { type: string }
+      responses:
+        "201": { description: Application }
+  /applications/{id}:
+    get:
+      tags: [applications]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Application }
+    patch:
+      tags: [applications]
+      summary: Update application status (optimistic locking via version)
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, version]
+              properties:
+                status: { type: string }
+                version: { type: integer }
+                note: { type: string }
+      responses:
+        "200": { description: Updated application }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /applications/{id}/workspace:
+    get:
+      tags: [applications]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      summary: Full application workspace for an application
+      responses:
+        "200": { description: Workspace }
+  /applications/{id}/analyze:
+    post:
+      tags: [applications]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      summary: Analyse the external application page (platform, fields, questions)
+      responses:
+        "200": { description: Analysis }
+        "502": { description: Application page could not be analysed }
+  /applications/{id}/followups:
+    post:
+      tags: [followups]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      summary: Schedule a follow-up reminder
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dueAt: { type: string, format: date-time }
+                note: { type: string }
+      responses:
+        "201": { description: Follow-up created }
+  /followups:
+    get:
+      tags: [followups]
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [PENDING, SENT, DISMISSED] } }
+      responses:
+        "200": { description: Follow-ups }
+    patch:
+      tags: [followups]
+      summary: Update a follow-up (mark sent / dismiss)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, status]
+              properties:
+                id: { type: string, format: uuid }
+                status: { type: string, enum: [PENDING, SENT, DISMISSED] }
+      responses:
+        "200": { description: Updated follow-up }
+  /documents:
+    get:
+      tags: [documents]
+      parameters:
+        - { name: opportunityId, in: query, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Documents }
+    post:
+      tags: [documents]
+      summary: Generate a document (cv, cover_letter, application_email, answer)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [opportunityId, type]
+              properties:
+                opportunityId: { type: string, format: uuid }
+                applicationId: { type: string, format: uuid }
+                type: { type: string, enum: [cv, cover_letter, application_email, answer] }
+      responses:
+        "201": { description: Generated document }
+  /documents/validate:
+    post:
+      tags: [documents]
+      summary: ATS-compatibility validation of a document
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content: { type: string }
+                opportunityId: { type: string, format: uuid }
+      responses:
+        "200": { description: ATS validation report }
+  /documents/upload-url:
+    post:
+      tags: [documents]
+      summary: Create a presigned upload target for a CV
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [filename]
+              properties:
+                filename: { type: string }
+                contentType: { type: string }
+      responses:
+        "200": { description: Presigned target }
+  /ai/status:
+    get:
+      tags: [ai]
+      responses:
+        "200": { description: AI provider status }
+  /ai/job-summary:
+    post:
+      tags: [ai]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [opportunityId]
+              properties:
+                opportunityId: { type: string, format: uuid }
+      responses:
+        "200": { description: Job insight }
+  /ai/cover-letter:
+    post:
+      tags: [ai]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [opportunityId]
+              properties:
+                opportunityId: { type: string, format: uuid }
+                tone: { type: string, enum: [professional, enthusiastic, concise] }
+                save: { type: boolean }
+      responses:
+        "200": { description: Cover letter }
+  /ai/profile-analysis:
+    get:
+      tags: [ai]
+      responses:
+        "200": { description: Profile analysis }
+  /sources:
+    get:
+      tags: [sources]
+      summary: List job sources (curated + submitted by the user)
+      responses:
+        "200": { description: Sources }
+    post:
+      tags: [sources]
+      summary: Submit a job source (board, careers page, ATS) for verification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string, format: uri }
+                name: { type: string }
+                notes: { type: string }
+      responses:
+        "201": { description: Source submitted (status pending_review) }
+  /sources/catalog:
+    get:
+      tags: [sources]
+      summary: Curated list of supported Kenyan and global job boards
+      responses:
+        "200": { description: Catalog }
+  /sources/{id}:
+    get:
+      tags: [sources]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Source }
+  /sources/{id}/verify:
+    post:
+      tags: [sources]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      summary: Run source verification (reachability, platform detection, job links)
+      responses:
+        "200": { description: Verification result }
+  /mcp:
+    get:
+      tags: [ai]
+      summary: MCP tool inventory
+      responses:
+        "200": { description: Tools }
+    post:
+      tags: [ai]
+      summary: MCP JSON-RPC endpoint (initialize, tools/list, tools/call)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                jsonrpc: { type: string }
+                id: { type: string }
+                method: { type: string }
+                params: { type: object }
+      responses:
+        "200": { description: JSON-RPC response }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: Version conflict or invalid transition
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+        code: { type: string }
+    CandidateProfile:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        fullName: { type: string }
+        headline: { type: string }
+        summary: { type: string }
+        location: { type: string }
+        country: { type: string }
+        yearsExperience: { type: integer }
+        seniority: { type: string }
+        desiredRoles: { type: array, items: { type: string } }
+        skills: { type: array, items: { type: string } }
+        preferredCountries: { type: array, items: { type: string } }
+        preferredLocations: { type: array, items: { type: string } }
+        remotePreferred: { type: boolean }
+        version: { type: integer }
+    Opportunity:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        companyName: { type: string }
+        companySlug: { type: string }
+        companyWebsite: { type: string }
+        country: { type: string }
+        city: { type: string }
+        workMode: { type: string }
+        seniority: { type: string }
+        employmentType: { type: string }
+        salaryMin: { type: integer }
+        salaryMax: { type: integer }
+        currency: { type: string }
+        applyUrl: { type: string }
+        applicationMethod: { type: string }
+        platform: { type: string }
+        postedAt: { type: string, format: date-time }
+        skills: { type: array, items: { type: string } }
+        match:
+          type: object
+          properties:
+            score: { type: number }
+            explanation: { type: string }
+            gaps: { type: array, items: { type: string } }
+            factors:
+              type: object
+              properties:
+                skills: { type: number }
+                seniority: { type: number }
+                location: { type: number }
+                role: { type: number }
+                freshness: { type: number }

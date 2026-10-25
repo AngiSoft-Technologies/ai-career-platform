@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package jobradar.matching.v1;
+
+service MatchingService {
+  rpc CalculateMatch (MatchRequest) returns (MatchResponse);
+}
+
+message MatchRequest {
+  string profile_id = 1;
+  string opportunity_id = 2;
+}
+
+message MatchResponse {
+  string opportunity_id = 1;
+  double score = 2;
+  string explanation = 3;
+  repeated string gaps = 4;
+  map<string, double> factors = 5;
+}

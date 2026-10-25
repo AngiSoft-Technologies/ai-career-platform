@@ -1,0 +1,33 @@
+{
+  "name": "job-radar",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Job Radar - AI-powered career intelligence by AngiSoft Technologies",
+  "workspaces": [
+    "services/api",
+    "apps/web",
+    "packages/contracts"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c cyan,magenta \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "npm run dev -w @angisoft/job-radar-api",
+    "dev:web": "npm run dev -w @angisoft/job-radar-web",
+    "build": "npm run build -w @angisoft/job-radar-api && npm run build -w @angisoft/job-radar-web",
+    "typecheck": "npm run typecheck -w @angisoft/job-radar-api",
+    "db:migrate": "npm run db:migrate -w @angisoft/job-radar-api",
+    "db:seed": "npm run db:seed -w @angisoft/job-radar-api",
+    "grpc": "npm run grpc -w @angisoft/job-radar-api",
+    "web": "npm run dev -w @angisoft/job-radar-web",
+    "worker": "npm run worker -w @angisoft/job-radar-api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@neon/config": "^1.9.4",
+    "@neon/env": "^1.6.5"
+  }
+}

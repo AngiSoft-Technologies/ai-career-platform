@@ -1,0 +1,59 @@
+app = "job-radar-api-angisoft"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[deploy]
+  release_command = "node dist/db/migrate.js"
+
+[processes]
+  app = "node dist/index.js"
+  worker = "PROCESS_ROLE=worker node dist/index.js"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "8088"
+  API_URL = "https://job-radar-api-angisoft.fly.dev"
+  WEB_ORIGIN = "https://job-radar-web.netlify.app,http://localhost:3000,http://localhost:3100"
+  S3_BUCKET = "uploads"
+  GRPC_PORT = "50051"
+  DEMO_MODE = "true"
+
+[http_service]
+  internal_port = 8088
+  force_https = true
+  auto_stop_machines = "off"
+  min_machines_running = 1
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "connections"
+    soft_limit = 200
+    hard_limit = 250
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/live"
+
+[[services]]
+  internal_port = 50051
+  processes = ["app"]
+  protocols = ["tcp"]
+
+  [[services.ports]]
+    port = 50051
+    handlers = ["tls"]
+
+  [[services.tcp_checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "1gb"

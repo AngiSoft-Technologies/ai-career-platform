@@ -1,0 +1,183 @@
+type CandidateProfile {
+  id: ID!
+  email: String!
+  name: String
+  fullName: String!
+  headline: String!
+  summary: String!
+  location: String!
+  country: String!
+  yearsExperience: Int!
+  seniority: String!
+  skills: [String!]!
+  desiredRoles: [String!]!
+  preferredCountries: [String!]!
+  preferredLocations: [String!]!
+  remotePreferred: Boolean!
+}
+
+type Opportunity {
+  id: ID!
+  title: String!
+  description: String!
+  companyId: ID
+  companyName: String!
+  companySlug: String!
+  companyWebsite: String
+  country: String!
+  city: String!
+  workMode: String!
+  seniority: String!
+  employmentType: String!
+  salaryMin: Float
+  salaryMax: Float
+  currency: String
+  applyUrl: String!
+  applicationMethod: String!
+  platform: String!
+  postedAt: String!
+  status: String!
+  skills: [String!]!
+  riskScore: Int
+  riskAction: String
+  match: Match
+}
+
+type Match {
+  opportunityId: ID!
+  score: Float!
+  factors: MatchFactors!
+  explanation: String!
+  gaps: [String!]!
+}
+
+type MatchFactors {
+  skills: Float!
+  seniority: Float!
+  location: Float!
+  role: Float!
+  freshness: Float!
+}
+
+type ApplicationBlueprint {
+  id: ID!
+  method: String!
+  platform: String!
+  applicationUrl: String!
+  requiredDocuments: [String!]!
+  fields: [String!]!
+  questions: [String!]!
+  instructions: String!
+}
+
+type Application {
+  id: ID!
+  status: String!
+  opportunityId: ID!
+  createdAt: String!
+  updatedAt: String!
+  version: Int!
+}
+
+type FollowUp {
+  id: ID!
+  applicationId: ID!
+  opportunityTitle: String
+  companyName: String
+  dueAt: String!
+  status: String!
+  channel: String!
+  note: String!
+  createdAt: String!
+}
+
+type Document {
+  id: ID!
+  opportunityId: ID
+  type: String!
+  title: String!
+  content: String!
+  createdAt: String!
+}
+
+type Company {
+  id: ID!
+  name: String!
+  slug: String!
+  website: String
+  careersUrl: String
+  industry: String
+  country: String
+  openRoles: Int!
+  newThisWeek: Int!
+}
+
+type Profession {
+  id: ID!
+  slug: String!
+  name: String!
+  depth: Int!
+  domain: String
+  aliases: [String!]
+  medianSalary: Int
+  currency: String
+}
+
+type AtsReport {
+  score: Int!
+  grade: String!
+  issues: [String!]!
+}
+
+type Query {
+  profile: CandidateProfile
+  opportunities(
+    country: String
+    q: String
+    workMode: String
+    seniority: String
+    semantic: Boolean
+    limit: Int
+  ): [Opportunity!]!
+  opportunity(id: ID!): Opportunity
+  matches(limit: Int): [Opportunity!]!
+  applicationWorkspace(id: ID!): ApplicationBlueprint
+  applications: [Application!]!
+  application(id: ID!): Application
+  followups(status: String): [FollowUp!]!
+  documents(opportunityId: ID): [Document!]!
+  document(id: ID!): Document
+  companies(q: String, limit: Int): [Company!]!
+  company(slug: String!): Company
+  professions(depth: Int): [Profession!]!
+  validateDocument(content: String!): AtsReport!
+  aiStatus: AiStatus!
+}
+
+type AiStatus {
+  configured: Boolean!
+  mode: String!
+}
+
+type Mutation {
+  createApplication(opportunityId: ID!, status: String): Application!
+  updateApplicationStatus(id: ID!, status: String!, version: Int!): Application!
+  updateProfile(input: ProfileInput!): CandidateProfile!
+  saveDocument(id: ID!, title: String, content: String): Document!
+  validateDocument(content: String!): AtsReport!
+}
+
+input ProfileInput {
+  fullName: String
+  headline: String
+  summary: String
+  location: String
+  country: String
+  yearsExperience: Int
+  seniority: String
+  skills: [String!]
+  desiredRoles: [String!]
+  preferredCountries: [String!]
+  preferredLocations: [String!]
+  remotePreferred: Boolean
+}

@@ -1,0 +1,293 @@
+.dockerignore
+.env.example
+.env.local
+.github/  (3 files)
+  modernize/  (3 files)
+    java-upgrade/  (3 files)
+      .gitignore
+      hooks/  (2 files)
+        scripts/  (2 files)
+          recordToolUse.ps1
+          recordToolUse.sh
+.gitignore
+Dockerfile
+apps/  (5809 files)
+  mobile/  (3427 files)
+    .flutter-plugins-dependencies
+    .gitignore
+    .metadata
+    README.md
+    analysis_options.yaml
+    appstore.png
+    job_radar.iml
+    lib/  (70 files)
+      core/  (13 files)
+        authentication/  (3 files)
+          auth_session.dart
+          neon_auth_service.dart
+          token_storage.dart
+        configuration/  (1 files)
+          app_settings.dart
+        networking/  (2 files)
+          api_client.dart
+          api_exception.dart
+        routing/  (2 files)
+          app_router.dart
+          app_shell.dart
+        security/  (1 files)
+          base_url_validator.dart
+        storage/  (1 files)
+          local_database.dart
+        synchronization/  (3 files)
+          offline_action.dart
+          sync_controller.dart
+          sync_engine.dart
+      features/  (50 files)
+        application_workspace/  (4 files)
+          data/  (1 files)
+          domain/  (1 files)
+          presentation/  (2 files)
+        applications/  (4 files)
+          data/  (1 files)
+          domain/  (1 files)
+          presentation/  (2 files)
+        career_intelligence/  (4 files)
+          data/  (1 files)
+          domain/  (1 files)
+          presentation/  (2 files)
+        career_profile/  (4 files)
+          data/  (1 files)
+          domain/  (1 files)
+          presentation/  (2 files)
+        company_intelligence/  (3 files)
+          data/  (1 files)
+          domain/  (1 files)
+          presentation/  (1 files)
+        documents/  (5 files)
+          data/  (1 files)
+          domain/  (1 files)
+          presentation/  (3 files)
+        followups/  (4 files)
+          data/  (1 files)
+          domain/  (1 files)
+          presentation/  (2 files)
+        job_matching/  (3 files)
+          data/  (1 files)
+          domain/  (1 files)
+          presentation/  (1 files)
+        job_preferences/  (4 files)
+          data/  (1 files)
+          domain/  (1 files)
+          presentation/  (2 files)
+        notifications/  (4 files)
+          data/  (1 files)
+          domain/  (1 files)
+          presentation/  (2 files)
+        onboarding/  (3 files)
+          data/  (1 files)
+          domain/  (1 files)
+          presentation/  (1 files)
+        opportunities/  (5 files)
+          data/  (1 files)
+          domain/  (1 files)
+          presentation/  (3 files)
+        settings/  (3 files)
+          data/  (1 files)
+          domain/  (1 files)
+          presentation/  (1 files)
+      main.dart
+      shared/  (6 files)
+        formatting/  (1 files)
+          app_formatters.dart
+        result/  (1 files)
+          app_result.dart
+        theme/  (1 files)
+          app_theme.dart
+        widgets/  (3 files)
+          app_states.dart
+          match_score_badge.dart
+          status_chip.dart
+    playstore.png
+    pubspec.lock
+    pubspec.yaml
+    test/  (1 files)
+      widget_test.dart
+  web/  (2382 files)
+    next-env.d.ts
+    next.config.ts
+    package.json
+    postcss.config.mjs
+    public/  (12 files)
+      android-chrome-192x192.png
+      android-chrome-512x512.png
+      apple-touch-icon.png
+      favicon-16x16.png
+      favicon-32x32.png
+      favicon.ico
+      job_radar_logo.jpeg
+      llm.txt
+      robots.txt
+      site-map.xml
+      site.webmanifest
+      sw.js
+    src/  (38 files)
+      app/  (24 files)
+        (app)/  (20 files)
+          admin/  (1 files)
+          applications/  (2 files)
+          automation/  (1 files)
+          companies/  (2 files)
+          connections/  (1 files)
+          dashboard/  (1 files)
+          documents/  (2 files)
+          followups/  (1 files)
+          layout.tsx
+          matches/  (1 files)
+          moderation/  (1 files)
+          opportunities/  (2 files)
+          profile/  (1 files)
+          settings/  (1 files)
+          sources/  (1 files)
+          support/  (1 files)
+        globals.css
+        layout.tsx
+        login/  (1 files)
+          page.tsx
+        page.tsx
+      components/  (6 files)
+        auth-gate.tsx
+        service-worker.tsx
+        session.tsx
+        shell.tsx
+        theme.tsx
+        ui.tsx
+      lib/  (8 files)
+        api.ts
+        auth.ts
+        document.ts
+        format.ts
+        graphql.ts
+        hooks.ts
+        realtime.ts
+        types.ts
+    tsconfig.json
+    tsconfig.tsbuildinfo
+config/  (1 files)
+  mcporter.json
+db/  (8 files)
+  migrations/  (6 files)
+    001_init.sql
+    002_documents_user.sql
+    003_embedding_model.sql
+    004_sources_and_workspaces.sql
+    005_rbac.sql
+    006_fraud_and_ai_tasks.sql
+  seeds/  (2 files)
+    opportunities.json
+    profession_taxonomy.sql
+docker-compose.yml
+docs/  (2 files)
+  ALGORITHMS.md
+  jobfinder.md
+fly.toml
+netlify.toml
+package-lock.json
+package.json
+packages/  (5 files)
+  contracts/  (5 files)
+    graphql/  (1 files)
+      schema.graphql
+    openapi/  (0 files)
+    openapi.yaml
+    package.json
+    proto/  (1 files)
+      matching.proto
+    src/  (1 files)
+      index.ts
+services/  (116 files)
+  api/  (116 files)
+    package.json
+    src/  (81 files)
+      app.ts
+      auth/  (2 files)
+        neon-auth.ts
+        resolve-identity.ts
+      config.ts
+      db/  (7 files)
+        embed.ts
+        ingest.ts
+        migrate.ts
+        pool.ts
+        redis.ts
+        seed-scam-corpus.ts
+        seed.ts
+      graphql/  (1 files)
+        schema.ts
+      grpc/  (2 files)
+        run.ts
+        server.ts
+      index.ts
+      logger.ts
+      middleware/  (3 files)
+        error-handler.ts
+        identity.ts
+        rbac.ts
+      realtime/  (1 files)
+        hub.ts
+      routes/  (16 files)
+        admin.ts
+        ai.ts
+        analysis.ts
+        applications.ts
+        connections.ts
+        documents.ts
+        followups.ts
+        matches.ts
+        mcp.ts
+        me.ts
+        opportunities.ts
+        preferences.ts
+        profile.ts
+        sources.ts
+        stream.ts
+        v1.ts
+      services/  (42 files)
+        ai/  (5 files)
+          client.ts
+          embeddings.ts
+          insights.ts
+          semantic-search.ts
+          task-bus.ts
+        application/  (1 files)
+          analyzer.ts
+        applications.ts
+        catalog.ts
+        documents/  (2 files)
+          export.ts
+          validate.ts
+        documents.ts
+        followups.ts
+        ingestion/  (7 files)
+          index.ts
+          pipeline.ts
+          run.ts
+          sources/  (3 files)
+          types.ts
+        matching.ts
+        opportunities.ts
+        opportunity/  (1 files)
+          risk.ts
+        profile.ts
+        rbac/  (1 files)
+          index.ts
+        sources/  (17 files)
+          connectors/  (16 files)
+          http.ts
+        storage.ts
+      version.ts
+      worker/  (2 files)
+        index.ts
+        run.ts
+    tsconfig.json
+    tsup.config.ts
+tree.txt

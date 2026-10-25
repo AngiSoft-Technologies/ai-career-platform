@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+**/dist
+**/.next
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+apps/mobile
+*.jpeg
+docs
+infra
+tmp

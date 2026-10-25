@@ -1,0 +1,65 @@
+import '../../../core/networking/api_client.dart';
+import '../../../core/networking/api_exception.dart';
+import '../../applications/data/application_repository.dart';
+import '../../opportunities/data/opportunity_repository.dart';
+import '../domain/application_workspace.dart';
+
+class ApplicationWorkspaceRepository {
+  ApplicationWorkspaceRepository({
+    required ApiClient apiClient,
+    required ApplicationRepository applicationRepository,
+    required OpportunityRepository opportunityRepository,
+  }) : _apiClient = apiClient,
+       _applicationRepository = applicationRepository,
+       _opportunityRepository = opportunityRepository;
+
+  final ApiClient _apiClient;
+  final ApplicationRepository _applicationRepository;
+  final OpportunityRepository _opportunityRepository;
+
+  Future<ApplicationWorkspace> getWorkspace(String applicationId) async {
+    final application = await _applicationRepository.getApplication(
+      applicationId,
+    );
+    try {
+      final response = await _apiClient.get(
+        '/applications/$applicationId/workspace',
+      );
+      final opportunity = await _safeOpportunity(application.opportunityId);
+      return ApplicationWorkspace.fromJson(
+        _workspaceMap(response),
+        applicationId: applicationId,
+        opportunity: opportunity,
+      );
+    } on ApiException catch (error) {
+      if (!error.isNotFound) rethrow;
+      final opportunity = await _opportunityRepository.getById(
+        application.opportunityId,
+      );
+      final response = await _apiClient.get(
+        '/opportunities/${opportunity.id}/workspace',
+      );
+      return ApplicationWorkspace.fromJson(
+        _workspaceMap(response),
+        applicationId: applicationId,
+        opportunity: opportunity,
+      );
+    }
+  }
+
+  Future<dynamic> _safeOpportunity(String opportunityId) async {
+    try {
+      return await _opportunityRepository.getById(opportunityId);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Map<String, dynamic> _workspaceMap(dynamic response) {
+    if (response is Map && response['workspace'] is Map) {
+      return Map<String, dynamic>.from(response['workspace'] as Map);
+    }
+    if (response is Map) return Map<String, dynamic>.from(response);
+    return <String, dynamic>{};
+  }
+}
