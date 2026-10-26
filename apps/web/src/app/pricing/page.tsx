@@ -1,193 +1,145 @@
-import { Metadata } from "next";
+"use client";
+
 import Link from "next/link";
 import { Reveal } from "@/components/marketing/reveal";
 import { MarketingLayout } from "@/components/marketing/layout";
-import {
-  Check,
-  X,
-  Sparkles,
-  ShieldCheck,
-  FileText,
-  Briefcase,
-  Globe,
-  Brain,
-  HardDrive,
-  Users,
-  Zap,
-  Layers,
-  Download,
-  ChevronRight,
-  ArrowRight,
-} from "lucide-react";
+import { useApi } from "@/lib/hooks";
+import { Check, Download, ArrowRight } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
+export const metadata = {
   title: "Pricing — Job Radar",
-  description: "Free during development. 500 seats. Pro and Teams plans coming soon. No credit card required.",
+  description: "Free during beta. Join founding access and get matched to live jobs, tailored resumes and cover letters, and application tracking — all free.",
   openGraph: {
     title: "Pricing — Job Radar",
-    description: "Free founding access. Pro and Teams plans announced later.",
+    description: "Free founding access. Join the beta and start applying today.",
     type: "website",
     images: [{ url: "/media/og-cover.jpg", width: 1200, height: 630, alt: "Job Radar pricing" }],
   },
 };
 
-const PLANS = [
-  {
-    name: "Explorer",
-    badge: "Free during development",
-    featured: false,
-    price: 0,
-    period: "beta access",
-    description: "For individual job seekers who want honest search. Free while we build and refine.",
-    features: [
-      { label: "Global job feed (6+ sources)", included: true },
-      { label: "Scam shield & risk scores", included: true },
-      { label: "AI matching with breakdown", included: true },
-      { label: "ATS-ready CV & cover letter", included: true },
-      { label: "Pipeline tracker (Kanban)", included: true },
-      { label: "Follow-up reminders", included: true },
-      { label: "PDF / DOCX / PPTX / PNG export", included: true },
-      { label: "Offline mobile app (APK)", included: true },
-      { label: "Team workspaces", included: false },
-      { label: "Webhook integrations", included: false },
-      { label: "Priority support", included: false },
-      { label: "API access (GraphQL/REST)", included: false },
-    ],
-    cta: "Join free beta",
-  },
-  {
-    name: "Radar Pro",
-    badge: "Free during development",
-    featured: true,
-    price: 0,
-    period: "beta access",
-    description: "For power users who want deeper intelligence. Free while in beta.",
-    features: [
-      { label: "Everything in Explorer", included: true },
-      { label: "Salary benchmarking per role", included: true },
-      { label: "Skill gap analysis & learning paths", included: true },
-      { label: "Company intelligence dossiers", included: true },
-      { label: "Advanced filters & saved searches", included: true },
-      { label: "Unlimited document versions", included: true },
-      { label: "Custom AI rewrite tones", included: true },
-      { label: "Calendar sync (Google/Outlook)", included: true },
-      { label: "Export to Notion / Obsidian", included: true },
-      { label: "Priority email support", included: true },
-      { label: "Webhook integrations (5)", included: true },
-      { label: "API access (10k req/mo)", included: true },
-    ],
-    cta: "Join free beta",
-  },
-  {
-    name: "Teams",
-    badge: "Free during development",
-    featured: false,
-    price: 0,
-    period: "beta access",
-    description: "For hiring teams, agencies and career coaches. Free while in beta.",
-    features: [
-      { label: "Everything in Radar Pro", included: true },
-      { label: "Shared pipelines & candidate pool", included: true },
-      { label: "Role-based access (admin/recruiter/viewer)", included: true },
-      { label: "Team analytics & conversion funnels", included: true },
-      { label: "Bulk application tracking", included: true },
-      { label: "Custom branding on documents", included: true },
-      { label: "SSO (SAML/OIDC)", included: true },
-      { label: "Audit logs & compliance export", included: true },
-      { label: "Dedicated Slack channel", included: true },
-      { label: "SLA guarantee", included: true },
-      { label: "Unlimited webhooks", included: true },
-      { label: "API access (100k req/mo)", included: true },
-    ],
-    cta: "Join free beta",
-  },
-];
+interface PlanContent {
+  id: string;
+  name: string;
+  badge: string;
+  price: number;
+  period: string;
+  description: string;
+  features: Array<{ id: string; label: string; included: boolean }>;
+  ctaLabel: string;
+  ctaHref: string;
+}
+
+interface HeroContent {
+  id: string;
+  title: string;
+  subtitle: string;
+  description: string;
+}
 
 export default function PricingPage() {
+  const hero = useApi<HeroContent>("/content/pricing/hero");
+  const plans = useApi<PlanContent[]>("/content/pricing/plans");
+
+  const h = hero.data;
+  const p = plans.data ?? [];
+
   return (
     <MarketingLayout>
       <section className="mk-section" style={{ paddingTop: "140px" }} aria-labelledby="pricing-title">
         <div className="mk-container">
           <header className="mk-section-header">
             <span className="mk-section-eyebrow">Pricing</span>
-            <h1 id="pricing-title" className="mk-heading">Free during development. No charges until we're out of beta.</h1>
-            <p className="mk-lede">Use every feature, test thoroughly, report issues. We'll streamline together. Paid plans only after v1.0.</p>
+            {h && (
+              <>
+                <h1 id="pricing-title" className="mk-heading">{h.title}</h1>
+                <p className="mk-lede">{h.description}</p>
+              </>
+            )}
+            {!h && (
+              <>
+                <h1 id="pricing-title" className="mk-heading">Free during beta. No credit card. No charges until launch.</h1>
+                <p className="mk-lede">
+                  Join founding access today. Every feature is free while we build and refine. Paid plans only after v1.0 —
+                  founding members keep free access for life.
+                </p>
+              </>
+            )}
           </header>
         </div>
       </section>
 
       <section className="mk-section" aria-labelledby="plans-heading">
         <div className="mk-container">
-          <div className="mk-pricing-cards">
-            {PLANS.map((plan, i) => (
-              <Reveal key={plan.name} delay={i * 100}>
-                <article className={`mk-pricing-card ${plan.featured ? "mk-pricing-card--featured" : ""}`}>
-                  {plan.badge && <span className="mk-pricing-card__badge">{plan.badge}</span>}
-                  <h3 className="mk-pricing-card__name">{plan.name}</h3>
-                  <p className="mk-pricing-card__desc">{plan.description}</p>
+          {plans.loading ? (
+            <div className="mk-pricing-cards">
+              <Reveal delay={0}>
+                <article className="mk-pricing-card mk-pricing-card--featured" style={{ minHeight: "560px" }}>
+                  <span className="mk-pricing-card__badge">Loading…</span>
+                  <h3 className="mk-pricing-card__name">Loading…</h3>
+                  <p className="mk-pricing-card__desc">Loading…</p>
                   <div className="mk-pricing-card__price">
-                    <span className="mk-pricing-card__amount">${plan.price}</span>
-                    {plan.price > 0 && <span className="mk-pricing-card__period">{plan.period}</span>}
-                    {plan.price === 0 && <span className="mk-pricing-card__period" style={{ color: "var(--mk-success)" }}>{plan.period}</span>}
+                    <span className="mk-pricing-card__amount">$0</span>
+                    <span className="mk-pricing-card__period" style={{ color: "var(--mk-success)" }}>beta access</span>
                   </div>
                   <ul className="mk-pricing-card__features">
-                    {plan.features.map((f) => (
-                      <li key={f.label} className="mk-pricing-card__feature">
-                        {f.included ? <Check aria-hidden="true" /> : <X aria-hidden="true" />}
-                        <span style={{ color: f.included ? "var(--mk-text)" : "var(--mk-text-muted)" }}>{f.label}</span>
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                      <li key={i} className="mk-pricing-card__feature">
+                        <Check aria-hidden="true" />
+                        <span style={{ color: "var(--mk-text-muted)" }}>{"Loading…"}</span>
                       </li>
                     ))}
                   </ul>
-                  <Link
-                    href={plan.price === 0 ? "/download" : "/contact"}
-                    className={`mk-pricing-card__cta mk-btn ${plan.featured ? "mk-btn--primary" : "mk-btn--ghost"} mk-btn--full`}
-                  >
-                    {plan.cta} {plan.price > 0 && <ArrowRight aria-hidden="true" />}
+                  <Link href="/signup" className="mk-pricing-card__cta mk-btn mk-btn--primary mk-btn--full">
+                    {"Loading…"}
                   </Link>
                 </article>
               </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="mk-section" style={{ background: "var(--mk-surface)", borderTop: "1px solid var(--mk-border)", borderBottom: "1px solid var(--mk-border)" }} aria-labelledby="faq-heading">
-        <div className="mk-container">
-          <header className="mk-section-header">
-            <span className="mk-section-eyebrow">Common questions</span>
-            <h2 id="faq-heading" className="mk-section-heading">Pricing FAQ</h2>
-          </header>
-          <div className="mk-accordion">
-            {[
-              { q: "What does 'founding access' mean?", a: "The first 500 users get lifetime free access to all current features. When paid plans launch, founding members keep their tier at $0 forever." },
-              { q: "Will my data be locked in?", a: "No. Full export (JSON, CSV, PDF) anytime. Self-hostable on your own Neon + Fly. You own your data." },
-              { q: "Do you sell my data?", a: "Never. Your profile, matches and documents are never sold, shared with recruiters, or used to train models." },
-              { q: "What payment methods will you accept?", a: "Stripe (card, ACH), crypto (USDC on Base), and invoice for Teams. No crypto required." },
-              { q: "Can I upgrade/downgrade later?", a: "Yes, anytime. Prorated. Downgrades take effect at period end. No penalties." },
-            ].map((faq, i) => (
-              <Reveal key={faq.q} delay={i * 60}>
-                <details className="mk-accordion__item" open={i === 0}>
-                  <summary className="mk-accordion__trigger">{faq.q}<ChevronRight className="mk-accordion__icon" aria-hidden="true" /></summary>
-                  <div className="mk-accordion__content"><div className="mk-accordion__content-inner">{faq.a}</div></div>
-                </details>
-              </Reveal>
-            ))}
-          </div>
+            </div>
+          ) : p.length === 0 ? (
+            <p style={{ color: "var(--mk-text-muted)", textAlign: "center" }}>No plans configured yet.</p>
+          ) : (
+            <div className="mk-pricing-cards">
+              {p.map((plan, i) => (
+                <Reveal key={plan.id} delay={i * 100}>
+                  <article className={`mk-pricing-card ${i === 0 ? "mk-pricing-card--featured" : ""}`}>
+                    {plan.badge && <span className="mk-pricing-card__badge">{plan.badge}</span>}
+                    <h3 className="mk-pricing-card__name">{plan.name}</h3>
+                    <p className="mk-pricing-card__desc">{plan.description}</p>
+                    <div className="mk-pricing-card__price">
+                      <span className="mk-pricing-card__amount">${plan.price}</span>
+                      <span className="mk-pricing-card__period" style={{ color: plan.price === 0 ? "var(--mk-success)" : "var(--mk-text-muted)" }}>{plan.period}</span>
+                    </div>
+                    <ul className="mk-pricing-card__features">
+                      {plan.features.map((feat) => (
+                        <li key={feat.id} className="mk-pricing-card__feature">
+                          {feat.included ? <Check aria-hidden="true" /> : <span style={{ color: "var(--mk-text-muted)" }}>✗</span>}
+                          <span style={{ color: feat.included ? "var(--mk-text)" : "var(--mk-text-muted)" }}>{feat.label}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <Link href={plan.ctaHref} className={`mk-pricing-card__cta mk-btn ${i === 0 ? "mk-btn--primary" : "mk-btn--ghost"} mk-btn--full`}>
+                      {plan.ctaLabel}
+                    </Link>
+                  </article>
+                </Reveal>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
       <section className="mk-section mk-cta" aria-labelledby="cta-heading">
         <div className="mk-container">
-          <h2 id="cta-heading" className="mk-cta__title">Ready to claim your seat?</h2>
-          <p className="mk-cta__text">Join the beta — it's free. No credit card. No auto-renewal.</p>
+          <h2 id="cta-heading" className="mk-cta__title">Claim your free seat</h2>
+          <p className="mk-cta__text">Founding access is free. Create your profile and start applying to live jobs today.</p>
           <div className="mk-cta__actions">
-            <Link href="/download" className="mk-btn mk-btn--primary mk-btn--lg">
-              <Download aria-hidden="true" /> Claim free seat
+            <Link href="/signup" className="mk-btn mk-btn--primary mk-btn--lg">
+              <Download aria-hidden="true" /> Get started free
             </Link>
             <Link href="/contact" className="mk-btn mk-btn--ghost mk-btn--lg">
-              <ArrowRight aria-hidden="true" /> Questions? Ask us
+              <ArrowRight aria-hidden="true" /> Have questions?
             </Link>
           </div>
         </div>

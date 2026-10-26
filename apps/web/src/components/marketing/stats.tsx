@@ -25,7 +25,7 @@ export function Stats({ items, className, fallback }: StatsProps) {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`${API_URL}/stats`)
+    fetch(`${API_URL}/stats`, { credentials: "include" })
       .then((r) => r.ok && r.json())
       .then((d) => {
         if (!cancelled) {

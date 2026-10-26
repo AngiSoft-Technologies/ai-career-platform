@@ -3,6 +3,21 @@ import { query } from "../db/pool.js";
 
 export const publicRouter = Router();
 
+// Debug endpoint to diagnose Fly.io routing issues
+publicRouter.get("/debug", async (_request, response) => {
+  response.json({
+    message: "Public debug endpoint works",
+    timestamp: new Date().toISOString(),
+    headers: {
+      "fly-request-id": _request.headers["fly-request-id"],
+      "fly-client-id": _request.headers["fly-client-id"],
+      "fly-replay": _request.headers["fly-replay"],
+      "x-forwarded-for": _request.headers["x-forwarded-for"],
+      "x-forwarded-proto": _request.headers["x-forwarded-proto"],
+    },
+  });
+});
+
 const COHORT_CAP = Number(process.env.COHORT_CAP ?? 500);
 const CONTACT_WINDOW_MS = 60 * 60 * 1000;
 const CONTACT_LIMIT = 5;

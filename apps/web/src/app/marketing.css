@@ -275,8 +275,9 @@
   color: var(--mk-text);
 }
 .mk-footer__grid {
-  max-width: 1360px;
   margin: 0 auto 48px;
+  width: 100%;
+  max-width: none;
   display: grid;
   grid-template-columns: 1.6fr repeat(4, 1fr);
   gap: 48px;
@@ -316,7 +317,8 @@
 .mk-footer__link:hover { color: var(--mk-accent); transform: translateX(3px); }
 .mk-footer__link-icon { width: 16px; height: 16px; color: var(--mk-accent); flex-shrink: 0; }
 .mk-footer__bottom {
-  max-width: 1360px;
+  width: 100%;
+  max-width: none;
   margin: 0 auto;
   padding: 32px 24px 0;
   border-top: 1px solid var(--mk-border);
@@ -327,6 +329,7 @@
   gap: 16px;
   font-size: 0.8rem;
   color: var(--mk-text-muted);
+  width: 100%;
 }
 .mk-footer__copyright { margin: 0; }
 .mk-footer__motto { margin: 0; font-weight: 500; }
@@ -538,7 +541,7 @@
 
 /* ---------- Common utilities ---------- */
 .mk-section { padding: 88px 24px; }
-.mk-container { max-width: 1360px; margin: 0 auto; padding: 0 24px; }
+.mk-container { margin: 0 auto; padding: 0 24px; width: 100%; max-width: none; box-sizing: border-box; }
 .mk-eyebrow { display: inline-block; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--mk-accent); margin-bottom: 12px; }
 .mk-heading { font-size: clamp(2.2rem, 5vw, 3.8rem); font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; color: var(--mk-text); margin: 0 0 16px; }
 .mk-lede { font-size: clamp(1.05rem, 2.2vw, 1.25rem); line-height: 1.7; color: var(--mk-text-soft); max-width: 64ch; margin: 0 0 28px; }
@@ -742,7 +745,7 @@
   z-index: -1;
   pointer-events: none;
 }
-.mk-hero__inner { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 48px; align-items: center; max-width: 1360px; margin: 0 auto; width: 100%; }
+.mk-hero__inner { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 48px; align-items: center; max-width: 1360px; margin: 0 auto; width: 100%; padding: 0 24px; box-sizing: border-box; }
 .mk-hero__copy { text-align: left; }
 .mk-hero__eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--mk-accent-soft); border: 1px solid rgba(109, 139, 255, 0.3); border-radius: var(--mk-radius-pill); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mk-accent); margin-bottom: 20px; }
 .mk-hero__eyebrow svg { width: 14px; height: 14px; }

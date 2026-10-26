@@ -1,180 +1,200 @@
-import { Metadata } from "next";
+"use client";
+
 import Link from "next/link";
 import { Reveal } from "@/components/marketing/reveal";
 import { MarketingLayout } from "@/components/marketing/layout";
+import { useApi } from "@/lib/hooks";
 import {
-  ShieldCheck,
-  Sparkles,
-  Users,
-  Brain,
-  Globe,
-  ChevronRight,
-  Zap,
-  Code,
-  Heart,
+  Rocket,
   Target,
-  Layers,
-  Search,
-  Mail,
-  Clock,
   FileText,
+  Mail,
   Briefcase,
+  ShieldCheck,
+  Clock,
   ArrowRight,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "About Job Radar — The story behind the radar",
-  description: "Job Radar was born from Prof Angera's frustration with job hunting: 100+ sites, manual tailoring, wasted time. Built by a software engineer who lived the problem.",
+export const metadata = {
+  title: "About Job Radar",
+  description: "Job Radar helps you find real jobs worldwide, tailor resumes and cover letters, and track every application. Free during beta.",
   openGraph: {
     title: "About Job Radar",
-    description: "Global job search, scam screening, AI-assisted applications. Born from real frustration.",
+    description: "Find and apply to your dream job with Job Radar.",
     type: "website",
     images: [{ url: "/media/og-cover.jpg", width: 1200, height: 630, alt: "Job Radar" }],
   },
 };
 
-const PRINCIPLES = [
-  { icon: Target, title: "Precision over volume", text: "One honest match beats 100 noisy listings." },
-  { icon: Code, title: "Open where it counts", text: "GraphQL, REST, MCP endpoints. Your data, your tools." },
-  { icon: Heart, title: "Private by construction", text: "Signed URLs, no training on your data, no third-party sales." },
-  { icon: Layers, title: "Modular, not monolithic", text: "Use one feature or all five. Each works standalone." },
-];
+interface BenefitContent {
+  id: string;
+  title: string;
+  body: string;
+  icon: string;
+}
 
-const ORIGIN_STEPS = [
-  {
-    icon: Globe,
-    title: "The problem: fragmented search",
-    text: "In August 2026, Prof Angera was looking for work. He found himself visiting 100+ websites — LinkedIn, company career pages, niche boards, government portals, aggregators. Each had different filters, different layouts, different apply flows. Half the listings were stale. Some were scams. He spent hours just finding roles, not applying.",
-  },
-  {
-    icon: FileText,
-    title: "The problem: manual tailoring",
-    text: "Every application needed a custom resume and cover letter. He'd copy the job description, map his skills, rewrite bullets, adjust keywords for ATS. 30–45 minutes per role. For 20 roles that's 10+ hours of repetitive editing — time that could go to interview prep or learning.",
-  },
-  {
-    icon: Clock,
-    title: "The problem: zero visibility",
-    text: "After submitting? Silence. No confirmation, no status, no way to follow up systematically. He built a spreadsheet. It grew to 50 rows. Still no clarity. The process was opaque, manual, and exhausting.",
-  },
-  {
-    icon: Search,
-    title: "The insight: automate the drudgery, keep the decisions",
-    text: "As a software engineer, he saw the pattern: aggregation, normalisation, scoring, document generation, pipeline tracking — all automatable. The human should only do the parts that need judgment: which roles to pursue, how to frame the story, when to hit send. Job Radar was born.",
-  },
-];
+interface HeroContent {
+  id: string;
+  title: string;
+  subtitle: string;
+  description: string;
+}
 
-const TIMELINE = [
-  { date: "August 2026", title: "Idea crystallised", text: "Prof Angera defines the scope: global ingestion, scam detection, semantic matching, ATS-ready documents, application pipeline. Starts coding." },
-  { date: "September 2026", title: "Core pipeline live", text: "BullMQ workers ingest from 6 sources. PostgreSQL + pgvector for embeddings. Neon for branchable DB. Fly for backend. Netlify for frontend." },
-  { date: "October 2026", title: "Scam shield + documents", text: "Risk scoring (domain age, salary anomaly, duplicate fingerprint, keyword signatures). Three-panel document editor with live ATS score and line diff. Android APK builds." },
-  { date: "October 2026", title: "Founding cohort opens", text: "500 free seats. Marketing site launches. Real users start testing. Feedback loop begins." },
-];
+interface ComparisonColumn {
+  id: string;
+  label: string;
+  items: string[];
+  check: boolean;
+}
+
+const ICON_MAP: Record<string, React.ElementType> = {
+  Target,
+  FileText,
+  Mail,
+  Briefcase,
+  ShieldCheck,
+  Clock,
+};
+
+function IconFromName(name: string) {
+  const Comp = ICON_MAP[name] || Rocket;
+  return <Comp aria-hidden="true" />;
+}
 
 export default function AboutPage() {
+  const hero = useApi<HeroContent>("/content/about/hero");
+  const benefits = useApi<BenefitContent[]>("/content/about/benefits");
+  const comparison = useApi<ComparisonColumn[]>("/content/about/comparison");
+
+  const h = hero.data;
+  const b = benefits.data ?? [];
+  const c = comparison.data ?? [];
+
   return (
     <MarketingLayout>
       <section className="mk-about-hero" aria-labelledby="about-title">
         <div className="mk-about-hero__inner">
           <Reveal delay={0}>
             <span className="mk-hero__eyebrow">
-              <Sparkles aria-hidden="true" /> The story behind Job Radar
+              <Rocket aria-hidden="true" /> Built for job seekers
             </span>
           </Reveal>
           <Reveal delay={100}>
-            <h1 id="about-title" className="mk-heading">Built from frustration. Designed for honesty.</h1>
-            <p className="mk-lede">Job Radar wasn't a startup idea. It was a personal necessity. Prof Angera lived the broken job hunt — 100+ sites, manual tailoring, zero visibility. He built the tool he needed.</p>
+            {h && (
+              <>
+                <h1 id="about-title" className="mk-heading">{h.title}</h1>
+                <p className="mk-lede">{h.description}</p>
+              </>
+            )}
+            {!h && (
+              <>
+                <h1 id="about-title" className="mk-heading">Find your dream job. Faster.</h1>
+                <p className="mk-lede">
+                  Job Radar helps students, graduates and professionals find real openings worldwide, tailor resumes and
+                  cover letters to each role, and track every application — all in one place.
+                </p>
+              </>
+            )}
           </Reveal>
+          <div className="mk-hero__cta" style={{ marginTop: "32px" }}>
+            <Link href="/signup" className="mk-btn mk-btn--primary mk-btn--lg">
+              <Rocket aria-hidden="true" /> Start finding jobs — free
+            </Link>
+          </div>
         </div>
       </section>
 
-      <section className="mk-section" aria-labelledby="origin-heading">
+      <section className="mk-section" aria-labelledby="features-heading">
         <div className="mk-container">
           <header className="mk-section-header">
-            <span className="mk-section-eyebrow">Origin</span>
-            <h2 id="origin-heading" className="mk-section-heading">The problem was real. The solution had to be too.</h2>
+            <span className="mk-section-eyebrow">What we do for you</span>
+            <h2 id="features-heading" className="mk-section-heading">Your job search, organised</h2>
           </header>
-          <div className="mk-grid mk-grid--2">
-            {ORIGIN_STEPS.map((step, i) => (
-              <Reveal key={step.title} delay={i * 100}>
-                <div className="mk-card" style={{ minHeight: "280px" }}>
-                  <div className="mk-card__icon"><step.icon aria-hidden="true" /></div>
-                  <h3 className="mk-card__title">{step.title}</h3>
-                  <p className="mk-card__text" style={{ lineHeight: 1.7 }}>{step.text}</p>
+          <div className="mk-grid mk-grid--3">
+            {benefits.loading ? (
+              <div className="mk-grid mk-grid--3" style={{ gap: "24px" }}>
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <div key={i} className="mk-card" style={{ height: "200px", display: "flex", flexDirection: "column", gap: "12px", padding: "24px" }}>
+                    <div className="mk-card__icon" style={{ color: "var(--mk-text-muted)" }}><Rocket /></div>
+                    <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--mk-text-muted)" }}>{"Loading…"}</div>
+                    <div style={{ fontSize: "0.88rem", color: "var(--mk-text-soft)", lineHeight: 1.6 }}>{"Loading…"}</div>
+                  </div>
+                ))}
+              </div>
+            ) : b.length === 0 ? (
+              <p style={{ color: "var(--mk-text-muted)", textAlign: "center" }}>No benefits configured yet.</p>
+            ) : (
+              b.map((benefit, i) => (
+                <Reveal key={benefit.id} delay={i * 80} className="mk-card">
+                  <div className="mk-card__icon">{IconFromName(benefit.icon)}</div>
+                  <h3 className="mk-card__title">{benefit.title}</h3>
+                  <p className="mk-card__text">{benefit.body}</p>
+                </Reveal>
+              ))
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="mk-section" style={{ background: "var(--mk-surface)", borderTop: "1px solid var(--mk-border)", borderBottom: "1px solid var(--mk-border)" }} aria-labelledby="vs-heading">
+        <div className="mk-container">
+          <header className="mk-section-header">
+            <span className="mk-section-eyebrow">Why Job Radar</span>
+            <h2 id="vs-heading" className="mk-section-heading">Built for you, not for recruiters</h2>
+          </header>
+          <div className="mk-grid mk-grid--3">
+            {comparison.loading ? (
+              <div className="mk-grid mk-grid--3" style={{ gap: "24px" }}>
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="mk-card" style={{ padding: "24px" }}>
+                    <h3 className="mk-card__title" style={{ color: "var(--mk-text-muted)" }}>{"Loading…"}</h3>
+                    <ul className="mk-footer__list" style={{ color: "var(--mk-text-muted)" }}>
+                      <li style={{ fontSize: "0.85rem", marginBottom: "8px" }}>{"Loading…"}</li>
+                      <li style={{ fontSize: "0.85rem", marginBottom: "8px" }}>{"Loading…"}</li>
+                      <li style={{ fontSize: "0.85rem", marginBottom: "8px" }}>{"Loading…"}</li>
+                      <li style={{ fontSize: "0.85rem", marginBottom: "8px" }}>{"Loading…"}</li>
+                      <li style={{ fontSize: "0.85rem", marginBottom: "8px" }}>{"Loading…"}</li>
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            ) : c.length === 0 ? (
+              <p style={{ color: "var(--mk-text-muted)", textAlign: "center" }}>No comparison data configured yet.</p>
+            ) : (
+              c.map((col, ci) => (
+                <div key={ci} className="mk-card">
+                  <h3 className="mk-card__title" style={{ marginBottom: "12px", color: col.check ? "var(--mk-success)" : "var(--mk-text-soft)" }}>
+                    {col.label}
+                  </h3>
+                  <ul className="mk-footer__list" style={{ color: "var(--mk-text-soft)" }}>
+                    {col.items.map((item, ii) => (
+                      <li key={ii} style={{ marginBottom: "8px", fontSize: "0.85rem" }}>
+                        <span style={{ color: col.check ? "var(--mk-success)" : "var(--mk-text-muted)", marginRight: "6px" }}>
+                          {col.check ? "✓" : "✗"}
+                        </span>
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="mk-section" aria-labelledby="principles-heading">
-        <div className="mk-container">
-          <header className="mk-section-header">
-            <span className="mk-section-eyebrow">Principles</span>
-            <h2 id="principles-heading" className="mk-section-heading">The rules we don't break</h2>
-          </header>
-          <div className="mk-grid mk-grid--4">
-            {PRINCIPLES.map((p, i) => (
-              <Reveal key={p.title} delay={i * 80} className="mk-card">
-                <div className="mk-card__icon"><p.icon aria-hidden="true" /></div>
-                <h3 className="mk-card__title">{p.title}</h3>
-                <p className="mk-card__text">{p.text}</p>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="mk-section" aria-labelledby="timeline-heading">
-        <div className="mk-container">
-          <header className="mk-section-header">
-            <span className="mk-section-eyebrow">Timeline</span>
-            <h2 id="timeline-heading" className="mk-section-heading">From August 2026 to now</h2>
-          </header>
-          <div className="mk-timeline">
-            {TIMELINE.map((t, i) => (
-              <Reveal key={t.date} delay={i * 80} className="mk-timeline__item">
-                <span className="mk-timeline__dot" aria-hidden="true" />
-                <div className="mk-timeline__year">{t.date}</div>
-                <h3 className="mk-timeline__title">{t.title}</h3>
-                <p className="mk-timeline__text">{t.text}</p>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="mk-section" aria-labelledby="team-heading">
-        <div className="mk-container">
-          <header className="mk-section-header">
-            <span className="mk-section-eyebrow">Team</span>
-            <h2 id="team-heading" className="mk-section-heading">A small team at AngiSoft Technologies, Nairobi</h2>
-          </header>
-          <div className="mk-grid mk-grid--2">
-            <Reveal delay={0} className="mk-card">
-              <h3 className="mk-card__title">Prof Silas Angera</h3>
-              <p className="mk-card__text">Founder & lead engineer. Software engineer who lived the job hunt. Built the ingestion pipeline, matching engine, document editor, and mobile app.</p>
-            </Reveal>
-            <Reveal delay={80} className="mk-card">
-              <h3 className="mk-card__title">Open to collaborators</h3>
-              <p className="mk-card__text">We're looking for engineers, designers, and product thinkers who care about honest job search. <Link href="/contact" className="mk-btn mk-btn--ghost mk-btn--sm" style={{ marginTop: "12px", width: "fit-content" }}>Talk to us</Link></p>
-            </Reveal>
+              ))
+            )}
           </div>
         </div>
       </section>
 
       <section className="mk-section mk-cta" aria-labelledby="cta-heading">
         <div className="mk-container">
-          <h2 id="cta-heading" className="mk-cta__title">Want the tool that should have existed?</h2>
-          <p className="mk-cta__text">Free during founding access. 494 of 500 seats left. No credit card.</p>
+          <h2 id="cta-heading" className="mk-cta__title">Ready to find your next role?</h2>
+          <p className="mk-cta__text">Create your profile, get matched to live jobs, and apply with a tailored resume and cover letter — free during beta.</p>
           <div className="mk-cta__actions">
-            <Link href="/download" className="mk-btn mk-btn--primary mk-btn--lg">
-              <ArrowRight aria-hidden="true" /> Get the Android APK
+            <Link href="/signup" className="mk-btn mk-btn--primary mk-btn--lg">
+              <ArrowRight aria-hidden="true" /> Get started free
             </Link>
-            <Link href="/contact" className="mk-btn mk-btn--ghost mk-btn--lg">
-              <Mail aria-hidden="true" /> Ask us anything
+            <Link href="/jobs" className="mk-btn mk-btn--ghost mk-btn--lg">
+              <ArrowRight aria-hidden="true" /> Browse live jobs
             </Link>
           </div>
         </div>

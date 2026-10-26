@@ -1,152 +1,138 @@
-import { Metadata } from "next";
+"use client";
+
 import Link from "next/link";
 import { Reveal } from "@/components/marketing/reveal";
 import { MarketingLayout } from "@/components/marketing/layout";
-import { FeatureSection } from "@/components/marketing/feature-section";
+import { useApi } from "@/lib/hooks";
 import {
-  Compass,
-  ShieldCheck,
-  Brain,
+  Target,
   FileText,
+  Mail,
   Briefcase,
-  HardDrive,
+  ShieldCheck,
+  Rocket,
+  Sparkles,
   ArrowRight,
-  ExternalLink,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
+export const metadata = {
   title: "Features — Job Radar",
-  description: "Global aggregation, scam detection, AI matching, ATS-ready documents, pipeline tracking, private storage. Every feature built for real job hunting.",
+  description: "Find live jobs worldwide, tailor your resume and cover letter, and track every application. Built for job seekers.",
   openGraph: {
     title: "Features — Job Radar",
-    description: "Global job search, scam screening, AI-assisted applications. Every feature explained.",
+    description: "Find and apply to your dream job. Tailored resumes, cover letters and application tracking.",
     type: "website",
     images: [{ url: "/media/og-cover.jpg", width: 1200, height: 630, alt: "Job Radar features" }],
   },
 };
 
-const FEATURES_DATA = [
-  {
-    id: "aggregation",
-    iconName: "compass",
-    title: "Global aggregation",
-    subtitle: "One feed from every board",
-    text: "We ingest Arbeitnow, RemoteOK, Remotive, Lever, Greenhouse and custom Kenyan portals. Deduplication merges cross-postings. Normalised schema: title, company, location, work mode, seniority, salary, skills, apply URL, source, posted date. Updated every 30 minutes via BullMQ workers.",
-    details: [
-      "6 live sources, 430+ active roles",
-      "30-minute ingestion cycles",
-      "Cross-board deduplication",
-      "Structured skill extraction",
-      "Source health monitoring",
-    ],
-  },
-  {
-    id: "security",
-    iconName: "shield-check",
-    title: "Scam detection first",
-    subtitle: "Fingerprint every posting",
-    text: "Before you see a role, it passes through: domain age check, SSL validity, company registry lookup, salary median deviation, duplicate fingerprint across boards, keyword scam signatures (crypto, 'work from home packing', upfront fees). Risk score 0–100. >70 = held for moderator review. <20 = safe badge.",
-    details: [
-      "Domain age + SSL verification",
-      "Company registry cross-check",
-      "Salary anomaly detection (z-score > 3)",
-      "Duplicate fingerprint (SimHash 64-bit)",
-      "Keyword signature corpus (200+ patterns)",
-      "Moderator review queue with evidence pack",
-    ],
-  },
-  {
-    id: "matching",
-    iconName: "brain",
-    title: "Honest AI matching",
-    subtitle: "Skills, location, semantics — one score",
-    text: "Your profile (skills, location, work mode, seniority, preferences) generates a 1536-dim embedding. Each opportunity has an embedding. Cosine similarity + structured overlap (skills Jaccard, location exact, seniority band, work mode match) = composite 0–100. No black box — breakdown shown per role. The model only rearranges your facts.",
-    details: [
-      "Vector similarity (pgvector HNSW)",
-      "Structured skill overlap (Jaccard)",
-      "Location + work mode exact match",
-      "Seniority band alignment",
-      "Transparent breakdown per role",
-      "Zero hallucination — traces to profile",
-    ],
-  },
-  {
-    id: "documents",
-    iconName: "file-text",
-    title: "ATS-ready documents",
-    subtitle: "Three-panel editor, live ATS score",
-    text: "Resumonk-inspired editor: left structure tree, center live preview with inline AI suggestions, right ATS score + line diff. Sections: header, summary, experience (STAR bullets), skills, projects, education. Export PDF, DOCX, PPTX, PNG. Version history. ATS score checks: keyword coverage, section completeness, formatting, contact info, quantifiable achievements.",
-    details: [
-      "Three-panel layout (structure / preview / score)",
-      "Inline AI rewrite per bullet (your facts only)",
-      "Live ATS score 0–100 with checklist",
-      "Line-level diff: added/removed/context",
-      "Export: PDF, DOCX, PPTX, PNG",
-      "Version history with rollback",
-    ],
-  },
-  {
-    id: "tracking",
-    iconName: "briefcase",
-    title: "Pipeline you own",
-    subtitle: "Kanban + follow-ups + reminders",
-    text: "Auto-stage from email/webhook: Applied → Screen → Interview → Offer. Manual drag-drop. Notes per stage. Follow-up engine: detects silent periods (>7d), drafts contextual nudge emails, one-click send. Never auto-submits. Calendar sync (ICS). Export pipeline CSV.",
-    details: [
-      "Auto-stage from email/webhook",
-      "Drag-drop Kanban board",
-      "Per-stage notes & attachments",
-      "Smart follow-up drafts (7/14/30d)",
-      "One-click send via BFF proxy",
-      "ICS calendar sync",
-      "CSV/JSON export",
-    ],
-  },
-  {
-    id: "privacy",
-    iconName: "hard-drive",
-    title: "Private by construction",
-    subtitle: "Signed URLs, no training, no sales",
-    text: "Documents stored in Neon Object Storage (branchable, per-user buckets). Access via short-lived signed URLs (15 min). Your profile, matches and documents never train models. No third-party analytics. No data sold. GDPR/CCPA delete on request. Self-hostable on your own Neon + Fly.",
-    details: [
-      "Branchable object storage per user",
-      "15-min signed URLs for every download",
-      "Zero model training on your data",
-      "No third-party analytics/tracking",
-      "GDPR/CCPA delete endpoint",
-      "Self-hostable (Neon + Fly + Netlify)",
-    ],
-  },
-];
+interface FeatureContent {
+  id: string;
+  title: string;
+  body: string;
+  icon: string;
+}
+
+interface HeroContent {
+  id: string;
+  title: string;
+  subtitle: string;
+  description: string;
+}
+
+const ICON_MAP: Record<string, React.ElementType> = {
+  Target,
+  FileText,
+  Mail,
+  Briefcase,
+  ShieldCheck,
+  Rocket,
+};
+
+function IconFromName(name: string) {
+  const Comp = ICON_MAP[name] || Rocket;
+  return <Comp aria-hidden="true" />;
+}
 
 export default function FeaturesPage() {
+  const hero = useApi<HeroContent>("/content/features/hero");
+  const features = useApi<FeatureContent[]>("/content/features");
+
+  const h = hero.data;
+  const f = features.data ?? [];
+
   return (
     <MarketingLayout>
       <section className="mk-section" style={{ paddingTop: "140px" }} aria-labelledby="features-title">
         <div className="mk-container">
           <header className="mk-section-header">
-            <span className="mk-section-eyebrow">Features</span>
-            <h1 id="features-title" className="mk-heading" style={{ fontSize: "clamp(2.5rem, 5vw, 4rem)" }}>Every feature exists because job hunting is broken</h1>
-            <p className="mk-lede">We didn't build a feature list. We fixed the problems job seekers actually face.</p>
+            <span className="mk-section-eyebrow">What Job Radar does for you</span>
+            {h && (
+              <>
+                <h1 id="features-title" className="mk-heading" style={{ fontSize: "clamp(2.5rem, 5vw, 4rem)" }}>
+                  {h.title}
+                </h1>
+                <p className="mk-lede">{h.description}</p>
+              </>
+            )}
+            {!h && (
+              <>
+                <h1 id="features-title" className="mk-heading" style={{ fontSize: "clamp(2.5rem, 5vw, 4rem)" }}>
+                  Find real jobs. Apply with confidence.
+                </h1>
+                <p className="mk-lede">
+                  Job Radar helps students, graduates and professionals find openings worldwide, tailor resumes and
+                  cover letters to each role, and track every application — all in one place.
+                </p>
+              </>
+            )}
           </header>
         </div>
       </section>
 
-      {FEATURES_DATA.map((f, i) => (
-        <FeatureSection key={f.id} f={f} index={i} />
-      ))}
+      <section className="mk-section" aria-labelledby="features-grid-heading">
+        <div className="mk-container">
+          {features.loading ? (
+            <div className="mk-grid mk-grid--3" style={{ gap: "24px" }}>
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} className="mk-card" style={{ height: "240px", display: "flex", flexDirection: "column", gap: "12px", padding: "28px" }}>
+                  <div className="mk-card__icon" style={{ color: "var(--mk-text-muted)" }}><Sparkles /></div>
+                  <div style={{ fontSize: "1.15rem", fontWeight: 700, color: "var(--mk-text-muted)" }}>{"Loading…"}</div>
+                  <div style={{ fontSize: "0.92rem", color: "var(--mk-text-soft)", lineHeight: 1.65 }}>{"Loading…"}</div>
+                </div>
+              ))}
+            </div>
+          ) : f.length === 0 ? (
+            <p style={{ color: "var(--mk-text-muted)", textAlign: "center" }}>No features configured yet.</p>
+          ) : (
+            <div className="mk-grid mk-grid--3">
+              {f.map((feat, i) => (
+                <Reveal key={feat.id} delay={i * 80} className="mk-card">
+                  <div className="mk-card__icon">{IconFromName(feat.icon)}</div>
+                  <h3 className="mk-card__title">{feat.title}</h3>
+                  <p className="mk-card__text">{feat.body}</p>
+                  <Link href="/signup" className="mk-btn mk-btn--ghost mk-btn--sm" style={{ marginTop: "16px", width: "fit-content" }}>
+                    <ArrowRight aria-hidden="true" /> Get started
+                  </Link>
+                </Reveal>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
 
       <section className="mk-section mk-cta" aria-labelledby="cta-heading">
         <div className="mk-container">
-          <h2 id="cta-heading" className="mk-cta__title">See it in action</h2>
-          <p className="mk-cta__text">The best way to understand is to try it. Free during founding access.</p>
+          <h2 id="cta-heading" className="mk-cta__title">Ready to find your next role?</h2>
+          <p className="mk-cta__text">Create your profile, get matched to live jobs, and apply with a tailored resume and cover letter.</p>
           <div className="mk-cta__actions">
-            <Link href="/download" className="mk-btn mk-btn--primary mk-btn--lg">
-              <ArrowRight aria-hidden="true" /> Get the Android APK
+            <Link href="/signup" className="mk-btn mk-btn--primary mk-btn--lg">
+              <ArrowRight aria-hidden="true" /> Get started free
             </Link>
-            <Link href="/contact" className="mk-btn mk-btn--ghost mk-btn--lg">
-              <ExternalLink aria-hidden="true" /> Request a live demo
+            <Link href="/jobs" className="mk-btn mk-btn--ghost mk-btn--lg">
+              <ArrowRight aria-hidden="true" /> Browse live jobs
             </Link>
           </div>
         </div>

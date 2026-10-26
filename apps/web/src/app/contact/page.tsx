@@ -25,7 +25,7 @@ export default function ContactPage() {
           <header className="mk-section-header">
             <span className="mk-section-eyebrow">Contact</span>
             <h1 id="contact-title" className="mk-heading">Let's talk</h1>
-            <p className="mk-lede">Questions, feedback, partnership ideas, or just want to say hello — we'd love to hear from you.</p>
+            <p className="mk-lede">Questions, feedback, or just want to say hello — we'd love to hear from you.</p>
           </header>
           <div className="mk-grid mk-grid--2" style={{ gap: "48px", alignItems: "start" }}>
             <Reveal delay={0}>

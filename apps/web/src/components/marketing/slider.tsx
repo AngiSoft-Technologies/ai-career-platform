@@ -32,12 +32,17 @@ export function Slider({
   const isHoveredRef = useRef(false);
 
   const goTo = (i: number) => {
-    setIndex((prev) => (prev + count) % count);
-    setDirection((prev) => (prev === "next" ? "prev" : "next"));
+    setIndex(i);
+    setDirection(i > index ? "next" : "prev");
+  };
+
+  const goToPrev = () => {
+    setIndex((prev) => (prev - 1 + count) % count);
+    setDirection("prev");
   };
 
   const next = () => goTo(index + 1);
-  const prev = () => goTo(index - 1);
+  const prev = () => goToPrev();
 
   useEffect(() => {
     if (!autoPlay || count <= 1) return;

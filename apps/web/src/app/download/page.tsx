@@ -1,18 +1,8 @@
 import { Metadata } from "next";
 import { Reveal } from "@/components/marketing/reveal";
 import { MarketingLayout } from "@/components/marketing/layout";
-import {
-  Smartphone,
-  HardDrive,
-  Zap,
-  ShieldCheck,
-  Download,
-  ExternalLink,
-  Check,
-  ArrowRight,
-  FileText,
-  Globe,
-} from "lucide-react";
+import { useApi } from "@/lib/hooks";
+import { Smartphone, HardDrive, Zap, ShieldCheck, Download, ExternalLink, Check, ArrowRight, FileText, Globe } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -27,21 +17,61 @@ export const metadata: Metadata = {
   },
 };
 
-const FEATURES = [
-  { icon: HardDrive, title: "SQLite offline", text: "Full read access to your matches, documents and pipeline without a connection." },
-  { icon: Zap, title: "Background sync", text: "New matches, reminders and alerts arrive even when the app is closed." },
-  { icon: ShieldCheck, title: "Push alerts", text: "Instant notification when a high-match role appears or a follow-up is due." },
-];
+interface FeatureContent {
+  id: string;
+  title: string;
+  body: string;
+  icon: string;
+}
+
+interface HeroContent {
+  id: string;
+  title: string;
+  subtitle: string;
+  description: string;
+}
+
+const ICON_MAP: Record<string, React.ElementType> = {
+  Smartphone,
+  HardDrive,
+  Zap,
+  ShieldCheck,
+  FileText,
+  Globe,
+};
+
+function IconFromName(name: string) {
+  const Comp = ICON_MAP[name] || Smartphone;
+  return <Comp aria-hidden="true" />;
+}
 
 export default function DownloadPage() {
+  const hero = useApi<HeroContent>("/content/download/hero");
+  const features = useApi<FeatureContent[]>("/content/download/features");
+
+  const h = hero.data;
+  const f = features.data ?? [];
+
   return (
     <MarketingLayout>
       <section className="mk-section mk-download" style={{ paddingTop: "140px" }} aria-labelledby="download-title">
         <div className="mk-container">
           <header className="mk-section-header">
             <span className="mk-section-eyebrow">Download</span>
-            <h1 id="download-title" className="mk-heading">Your radar in your pocket</h1>
-            <p className="mk-lede">Native Flutter app. SQLite offline. Background sync. Push alerts. APK ready, Play Store submission in progress.</p>
+            {h && (
+              <>
+                <h1 id="download-title" className="mk-heading">{h.title}</h1>
+                <p className="mk-lede">{h.description}</p>
+              </>
+            )}
+            {!h && (
+              <>
+                <h1 id="download-title" className="mk-heading">Your radar in your pocket</h1>
+                <p className="mk-lede">
+                  Native Flutter app. SQLite offline. Background sync. Push alerts. APK ready, Play Store submission in progress.
+                </p>
+              </>
+            )}
           </header>
           <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: "32px", alignItems: "flex-start" }}>
             <Reveal delay={0}>
@@ -71,15 +101,29 @@ export default function DownloadPage() {
                   </a>
                 </div>
                 <div className="mk-download__features">
-                  {FEATURES.map((f, i) => (
-                    <Reveal key={f.title} delay={i * 80}>
-                      <div className="mk-download__feature">
-                        <div className="mk-download__feature-icon"><f.icon aria-hidden="true" /></div>
-                        <div className="mk-download__feature-title">{f.title}</div>
-                        <div className="mk-download__feature-text">{f.text}</div>
-                      </div>
-                    </Reveal>
-                  ))}
+                  {features.loading ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                      {[1, 2, 3].map((i: number) => (
+                        <div key={i} className="mk-download__feature" style={{ opacity: 0.5 }}>
+                          <div className="mk-download__feature-icon"><HardDrive /></div>
+                          <div className="mk-download__feature-title">Loading…</div>
+                          <div className="mk-download__feature-text">Loading…</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : f.length === 0 ? (
+                    <p style={{ color: "var(--mk-text-muted)" }}>No app features configured yet.</p>
+                  ) : (
+                    f.map((feat: FeatureContent, i: number) => (
+                      <Reveal key={feat.id} delay={i * 80}>
+                        <div className="mk-download__feature">
+                          <div className="mk-download__feature-icon">{IconFromName(feat.icon)}</div>
+                          <div className="mk-download__feature-title">{feat.title}</div>
+                          <div className="mk-download__feature-text">{feat.body}</div>
+                        </div>
+                      </Reveal>
+                    ))
+                  )}
                 </div>
               </div>
             </Reveal>
@@ -97,7 +141,7 @@ export default function DownloadPage() {
             {[
               { step: "01", title: "Download", text: "Tap the button above to download the APK (206 MB)." },
               { step: "02", title: "Allow unknown sources", text: "Settings → Security → Allow installation from unknown sources." },
-              { step: "03", title: "Install & open", text: "Open the APK, install, and sign in with your Neon Auth account." },
+              { step: "03", title: "Install & open", text: "Open the APK, install, and sign in with your Job Radar account." },
             ].map((s, i) => (
               <Reveal key={s.step} delay={i * 100} className="mk-card">
                 <div className="mk-card__icon" style={{ fontSize: "2rem", color: "var(--mk-accent)" }}>{s.step}</div>
