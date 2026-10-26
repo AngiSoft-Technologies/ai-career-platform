@@ -75,6 +75,9 @@ export function VideoHero({
           loop={loop}
           playsInline={playsInline}
           aria-hidden={true}
+          disablePictureInPicture
+          disableRemotePlayback
+          preload="metadata"
         >
           <source src={videoSrc} type="video/mp4" />
         </video>

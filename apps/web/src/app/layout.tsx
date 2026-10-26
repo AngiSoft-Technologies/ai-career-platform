@@ -10,18 +10,21 @@ const sans = Inter({
   subsets: ["latin"],
   variable: "--font-sans-brand",
   display: "swap",
+  preload: false,
 });
 
 const serif = Fraunces({
   subsets: ["latin"],
   variable: "--font-serif-brand",
   display: "swap",
+  preload: false,
 });
 
 const mono = JetBrains_Mono({
   subsets: ["latin"],
   variable: "--font-mono-brand",
   display: "swap",
+  preload: false,
 });
 
 const display = Archivo_Black({
@@ -29,6 +32,7 @@ const display = Archivo_Black({
   weight: "400",
   variable: "--font-display-brand",
   display: "swap",
+  preload: false,
 });
 
 const themeBoot = `(function(){try{var t=localStorage.getItem("jr.theme");if(t&&/^[a-z]+$/.test(t)){document.documentElement.setAttribute("data-theme",t);}}catch(e){}})();`;

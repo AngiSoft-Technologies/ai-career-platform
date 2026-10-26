@@ -46,6 +46,16 @@ export function Slider({
     return () => clearTimeout(timer);
   }, [index, autoPlay, autoPlayInterval, count, next]);
 
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") prev();
+      if (e.key === "ArrowRight") next();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [prev, next]);
+
   useEffect(() => {
     const el = containerRef.current;
     if (!el || !pauseOnHover) return;

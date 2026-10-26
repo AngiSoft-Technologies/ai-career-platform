@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { API_URL } from "@/lib/auth";
 import { Compass, ClipboardList, Zap, FolderKanban, Building2, Globe, Briefcase } from "lucide-react";
 import { Counter } from "./counter";
 import { Reveal } from "./reveal";
@@ -24,7 +25,7 @@ export function Stats({ items, className, fallback }: StatsProps) {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/v1/stats")
+    fetch(`${API_URL}/stats`)
       .then((r) => r.ok && r.json())
       .then((d) => {
         if (!cancelled) {

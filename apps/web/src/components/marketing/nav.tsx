@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import { API_URL } from "@/lib/auth";
 import {
   Menu,
   X,
@@ -51,7 +52,7 @@ export function MarketingNav() {
   }, []);
 
   useEffect(() => {
-    fetch("/v1/public/cohort")
+    fetch(`${API_URL}/public/cohort`)
       .then((r) => r.ok && r.json())
       .then((d) => setCohort(d))
       .catch(() => {});

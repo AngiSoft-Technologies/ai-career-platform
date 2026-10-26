@@ -318,7 +318,7 @@
 .mk-footer__bottom {
   max-width: 1360px;
   margin: 0 auto;
-  padding-top: 32px;
+  padding: 32px 24px 0;
   border-top: 1px solid var(--mk-border);
   display: flex;
   flex-wrap: wrap;
@@ -538,7 +538,7 @@
 
 /* ---------- Common utilities ---------- */
 .mk-section { padding: 88px 24px; }
-.mk-container { max-width: 1360px; margin: 0 auto; }
+.mk-container { max-width: 1360px; margin: 0 auto; padding: 0 24px; }
 .mk-eyebrow { display: inline-block; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--mk-accent); margin-bottom: 12px; }
 .mk-heading { font-size: clamp(2.2rem, 5vw, 3.8rem); font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; color: var(--mk-text); margin: 0 0 16px; }
 .mk-lede { font-size: clamp(1.05rem, 2.2vw, 1.25rem); line-height: 1.7; color: var(--mk-text-soft); max-width: 64ch; margin: 0 0 28px; }
