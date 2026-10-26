@@ -17,6 +17,8 @@ import { useApi } from "@/lib/hooks";
 import { api } from "@/lib/api";
 import { formatDateTime, titleCase } from "@/lib/format";
 import type { Application, Opportunity } from "@/lib/types";
+import { APPLICATION_STATUS_TRANSITIONS } from "@angisoft/job-radar-contracts";
+import type { ApplicationStatus } from "@angisoft/job-radar-contracts";
 
 interface ApplicationsResponse {
   items: Application[];
@@ -35,9 +37,12 @@ export default function ApplicationsPage() {
 
   const visible = tab === "all" ? items : items.filter((item) => item.status === tab);
 
-  const updateStatus = async (application: Application, status: string) => {
+  const updateStatus = async (application: Application, status: ApplicationStatus) => {
     try {
-      await api.patch(`/applications/${application.id}/status`, { status });
+      await api.patch(`/applications/${application.id}/status`, {
+        status,
+        version: application.version,
+      });
       toast.push(`Moved to ${titleCase(status)}`, "success");
       applications.refresh();
     } catch (caught) {
@@ -132,11 +137,11 @@ export default function ApplicationsPage() {
                     <select
                       className="select"
                       value={application.status}
-                      onChange={(event) => void updateStatus(application, event.target.value)}
+                      onChange={(event) => void updateStatus(application, event.target.value as ApplicationStatus)}
                       aria-label="Application status"
                       style={{ width: 165 }}
                     >
-                      {STAGES.map((stage) => (
+                      {[application.status, ...(APPLICATION_STATUS_TRANSITIONS[application.status] ?? [])].map((stage) => (
                         <option key={stage} value={stage}>
                           {titleCase(stage)}
                         </option>

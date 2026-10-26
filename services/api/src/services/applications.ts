@@ -4,6 +4,7 @@ import type {
   ApplicationStatus,
   Opportunity,
 } from "@angisoft/job-radar-contracts";
+import { APPLICATION_STATUS_TRANSITIONS } from "@angisoft/job-radar-contracts";
 import { query } from "../db/pool.js";
 import { getOpportunity } from "./opportunities.js";
 
@@ -202,24 +203,6 @@ export async function createApplication(
   return mapApplication(existing);
 }
 
-const allowedTransitions: Record<string, ApplicationStatus[]> = {
-  SHORTLISTED: ["ANALYZED", "WITHDRAWN"],
-  ANALYZED: ["APPLICATION_PREPARATION", "WITHDRAWN"],
-  APPLICATION_PREPARATION: ["READY_TO_APPLY", "WITHDRAWN"],
-  READY_TO_APPLY: ["APPLIED", "WITHDRAWN"],
-  APPLIED: ["ACKNOWLEDGED", "NO_RESPONSE", "REJECTED", "WITHDRAWN"],
-  ACKNOWLEDGED: ["SCREENING", "REJECTED", "NO_RESPONSE", "WITHDRAWN"],
-  SCREENING: ["ASSESSMENT", "INTERVIEW", "REJECTED", "WITHDRAWN"],
-  ASSESSMENT: ["INTERVIEW", "REJECTED", "WITHDRAWN"],
-  INTERVIEW: ["OFFER", "REJECTED", "WITHDRAWN"],
-  OFFER: ["REJECTED", "WITHDRAWN"],
-  NO_RESPONSE: ["ACKNOWLEDGED", "REJECTED", "WITHDRAWN"],
-  REJECTED: [],
-  WITHDRAWN: [],
-  EXPIRED: [],
-  FAILED: [],
-};
-
 export async function updateApplicationStatus(
   userId: string,
   applicationId: string,
@@ -233,7 +216,7 @@ export async function updateApplicationStatus(
   const row = current.rows[0];
   if (!row) throw new Error("APPLICATION_NOT_FOUND");
 
-  const allowed = allowedTransitions[row.status] ?? [];
+  const allowed = APPLICATION_STATUS_TRANSITIONS[row.status as ApplicationStatus] ?? [];
   if (!allowed.includes(nextStatus)) {
     throw new Error(`INVALID_TRANSITION:${row.status}->${nextStatus}`);
   }

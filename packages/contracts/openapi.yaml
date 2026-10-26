@@ -25,6 +25,8 @@ tags:
   - name: ai
   - name: sources
   - name: followups
+  - name: admin
+  - name: public
 paths:
   /profile:
     get:
@@ -39,7 +41,7 @@ paths:
                 type: object
                 properties:
                   profile: { $ref: "#/components/schemas/CandidateProfile" }
-    patch:
+    put:
       tags: [profile]
       summary: Update the candidate profile
       requestBody:
@@ -99,7 +101,7 @@ paths:
                 preferredRoles:
                   type: array
                   items: { type: string }
-                desiredSeniority: { type: string }
+                desiredSeniority: { type: string, enum: [intern, junior, mid, senior, lead, executive] }
                 minSalary: { type: integer }
                 currency: { type: string }
                 remoteOnly: { type: boolean }
@@ -162,15 +164,10 @@ paths:
               required: [opportunityId]
               properties:
                 opportunityId: { type: string, format: uuid }
-                initialStatus: { type: string }
+                status: { type: string, enum: [DISCOVERED, SHORTLISTED, ANALYZED, APPLICATION_PREPARATION, READY_TO_APPLY, APPLIED, ACKNOWLEDGED, NO_RESPONSE, SCREENING, ASSESSMENT, INTERVIEW, OFFER, REJECTED, WITHDRAWN, EXPIRED, FAILED] }
       responses:
         "201": { description: Application }
-  /applications/{id}:
-    get:
-      tags: [applications]
-      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
-      responses:
-        "200": { description: Application }
+  /applications/{id}/status:
     patch:
       tags: [applications]
       summary: Update application status (optimistic locking via version)
@@ -216,6 +213,7 @@ paths:
               type: object
               properties:
                 dueAt: { type: string, format: date-time }
+                channel: { type: string, enum: [email, whatsapp, linkedin, phone, manual] }
                 note: { type: string }
       responses:
         "201": { description: Follow-up created }
@@ -223,22 +221,24 @@ paths:
     get:
       tags: [followups]
       parameters:
-        - { name: status, in: query, schema: { type: string, enum: [PENDING, SENT, DISMISSED] } }
+        - { name: status, in: query, schema: { type: string, enum: [PENDING, SENT, COMPLETED, CANCELLED, OVERDUE] } }
       responses:
         "200": { description: Follow-ups }
+  /followups/{id}:
     patch:
       tags: [followups]
-      summary: Update a follow-up (mark sent / dismiss)
+      summary: Update a follow-up reminder
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [id, status]
               properties:
-                id: { type: string, format: uuid }
-                status: { type: string, enum: [PENDING, SENT, DISMISSED] }
+                status: { type: string, enum: [PENDING, SENT, COMPLETED, CANCELLED, OVERDUE] }
+                note: { type: string }
+                dueAt: { type: string, format: date-time }
       responses:
         "200": { description: Updated follow-up }
   /documents:
@@ -248,6 +248,7 @@ paths:
         - { name: opportunityId, in: query, schema: { type: string, format: uuid } }
       responses:
         "200": { description: Documents }
+  /documents/generate:
     post:
       tags: [documents]
       summary: Generate a document (cv, cover_letter, application_email, answer)
@@ -264,6 +265,40 @@ paths:
                 type: { type: string, enum: [cv, cover_letter, application_email, answer] }
       responses:
         "201": { description: Generated document }
+  /documents/{id}:
+    get:
+      tags: [documents]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Document details }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [documents]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                content: { type: string }
+      responses:
+        "200": { description: Updated document }
+  /documents/{id}/export:
+    post:
+      tags: [documents]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                format: { type: string, enum: [pdf, docx, pptx, txt, html] }
+      responses:
+        "200": { description: Exported document }
   /documents/validate:
     post:
       tags: [documents]
@@ -276,8 +311,10 @@ paths:
               type: object
               required: [content]
               properties:
-                content: { type: string }
+                content: { type: string, maxLength: 200000 }
+                documentId: { type: string, format: uuid }
                 opportunityId: { type: string, format: uuid }
+                keywords: { type: array, items: { type: string, maxLength: 80 }, maxItems: 60 }
       responses:
         "200": { description: ATS validation report }
   /documents/upload-url:
@@ -336,6 +373,44 @@ paths:
       tags: [ai]
       responses:
         "200": { description: Profile analysis }
+  /matches:
+    get:
+      tags: [opportunities]
+      summary: List opportunities ranked for the current candidate
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: country, in: query, schema: { type: string } }
+        - { name: workMode, in: query, schema: { type: string, enum: [onsite, hybrid, remote] } }
+        - { name: seniority, in: query, schema: { type: string, enum: [intern, junior, mid, senior, lead] } }
+        - { name: semantic, in: query, schema: { type: string, enum: ["true", "false"] } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+      responses:
+        "200": { description: Ranked opportunities with match explanations }
+  /matches/{opportunityId}:
+    get:
+      tags: [opportunities]
+      parameters: [{ name: opportunityId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Match for one opportunity }
+    post:
+      tags: [opportunities]
+      parameters: [{ name: opportunityId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Recalculated match }
+  /companies:
+    get:
+      tags: [opportunities]
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+      responses:
+        "200": { description: Companies and active role counts }
+  /companies/{slug}:
+    get:
+      tags: [opportunities]
+      parameters: [{ name: slug, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: Company profile and active roles }
   /sources:
     get:
       tags: [sources]
@@ -364,12 +439,284 @@ paths:
       summary: Curated list of supported Kenyan and global job boards
       responses:
         "200": { description: Catalog }
-  /sources/{id}:
+  /sources/queue:
     get:
       tags: [sources]
+      summary: List sources awaiting curation
+      responses:
+        "200": { description: Source review queue }
+  /connections:
+    get:
+      tags: [profile]
+      responses:
+        "200": { description: Connected providers }
+  /connections/{provider}/start:
+    post:
+      tags: [profile]
+      parameters: [{ name: provider, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: Provider authorization URL }
+  /connections/{provider}/callback:
+    post:
+      tags: [profile]
+      parameters: [{ name: provider, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: Provider connection result }
+  /connections/{id}:
+    delete:
+      tags: [profile]
       parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
       responses:
-        "200": { description: Source }
+        "200": { description: Connection revoked }
+  /admin/stats:
+    get:
+      tags: [admin]
+      responses:
+        "200": { description: Admin dashboard statistics }
+  /admin/roles:
+    get:
+      tags: [admin]
+      responses:
+        "200": { description: Available role assignments }
+  /admin/roles/assign:
+    post:
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, role]
+              properties:
+                userId: { type: string, format: uuid }
+                role: { type: string }
+      responses:
+        "200": { description: Role assigned }
+  /admin/roles/{userId}/{role}:
+    delete:
+      tags: [admin]
+      parameters:
+        - { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: role, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Role removed }
+  /admin/users:
+    get:
+      tags: [admin]
+      responses:
+        "200": { description: User list }
+  /admin/taxonomy:
+    get:
+      tags: [admin]
+      responses:
+        "200": { description: Profession taxonomy }
+    post:
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "201": { description: Taxonomy entry created or updated }
+  /admin/scam-corpus:
+    get:
+      tags: [admin]
+      responses:
+        "200": { description: Scam indicators }
+    post:
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "201": { description: Scam indicator added }
+  /admin/event-stream:
+    get:
+      tags: [admin]
+      parameters: [{ name: limit, in: query, schema: { type: integer } }]
+      responses:
+        "200": { description: Recent audit events }
+  /me:
+    get:
+      tags: [profile]
+      responses:
+        "200": { description: Current user and roles }
+  /stats:
+    get:
+      tags: [public]
+      security: []
+      responses:
+        "200": { description: Public aggregate counters }
+  /public/cohort:
+    get:
+      tags: [public]
+      security: []
+      responses:
+        "200": { description: Beta cohort capacity }
+  /public/featured:
+    get:
+      tags: [public]
+      security: []
+      responses:
+        "200": { description: Featured active opportunities }
+  /public/contact:
+    post:
+      tags: [public]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, message]
+              properties:
+                name: { type: string }
+                email: { type: string, format: email }
+                topic: { type: string }
+                message: { type: string }
+      responses:
+        "201": { description: Message accepted }
+  /content/benefits:
+    get:
+      tags: [public]
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/PublicContent" }
+  /content/comparison:
+    get:
+      tags: [public]
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/PublicContent" }
+  /content/about/hero:
+    get:
+      tags: [public]
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/PublicContent" }
+  /content/about/benefits:
+    get:
+      tags: [public]
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/PublicContent" }
+  /content/about/comparison:
+    get:
+      tags: [public]
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/PublicContent" }
+  /content/features/hero:
+    get:
+      tags: [public]
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/PublicContent" }
+  /content/features:
+    get:
+      tags: [public]
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/PublicContent" }
+  /content/faq/hero:
+    get:
+      tags: [public]
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/PublicContent" }
+  /content/faq:
+    get:
+      tags: [public]
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/PublicContent" }
+  /content/pricing/hero:
+    get:
+      tags: [public]
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/PublicContent" }
+  /content/pricing/plans:
+    get:
+      tags: [public]
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/PublicContent" }
+  /content/stories/hero:
+    get:
+      tags: [public]
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/PublicContent" }
+  /content/stories:
+    get:
+      tags: [public]
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/PublicContent" }
+  /content/security/hero:
+    get:
+      tags: [public]
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/PublicContent" }
+  /content/security:
+    get:
+      tags: [public]
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/PublicContent" }
+  /content/privacy/hero:
+    get:
+      tags: [public]
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/PublicContent" }
+  /content/privacy:
+    get:
+      tags: [public]
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/PublicContent" }
+  /content/terms/hero:
+    get:
+      tags: [public]
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/PublicContent" }
+  /content/terms:
+    get:
+      tags: [public]
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/PublicContent" }
+  /content/download/hero:
+    get:
+      tags: [public]
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/PublicContent" }
+  /content/download/features:
+    get:
+      tags: [public]
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/PublicContent" }
+  /stream/notifications:
+    get:
+      tags: [profile]
+      responses:
+        "200": { description: Server-sent notification stream, text/event-stream }
+  /mcp/status:
+    get:
+      tags: [ai]
+      responses:
+        "200": { description: MCP service status }
   /sources/{id}/verify:
     post:
       tags: [sources]
@@ -406,6 +753,17 @@ components:
       scheme: bearer
       bearerFormat: JWT
   responses:
+    PublicContent:
+      description: Public marketing copy and feature descriptions
+      headers:
+        Cache-Control:
+          schema: { type: string }
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - { type: object, additionalProperties: true }
+              - { type: array, items: { type: object, additionalProperties: true } }
     BadRequest:
       description: Invalid request
       content:
@@ -432,6 +790,8 @@ components:
       properties:
         id: { type: string, format: uuid }
         userId: { type: string, format: uuid }
+        email: { type: string, format: email }
+        name: { type: [string, "null"] }
         fullName: { type: string }
         headline: { type: string }
         summary: { type: string }

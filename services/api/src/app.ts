@@ -21,6 +21,7 @@ import { mcpRouter } from "./routes/mcp.js";
 import { metricsRouter, recordHttpRequest } from "./routes/metrics.js";
 import { statsRouter } from "./routes/stats.js";
 import { publicRouter } from "./routes/public.js";
+import { contentRouter } from "./routes/content.js";
 import { v1Router } from "./routes/v1.js";
 import { API_VERSION, API_VERSION_HEADER } from "./version.js";
 
@@ -142,6 +143,8 @@ app.use("/v1/stats", statsRouter);
 app.use("/api/v1/stats", statsRouter);
 app.use("/v1/public", publicRouter);
 app.use("/api/v1/public", publicRouter);
+app.use("/v1/content", contentRouter);
+app.use("/api/v1/content", contentRouter);
 app.use(flyReplayMiddleware);
 
 app.use(identity);

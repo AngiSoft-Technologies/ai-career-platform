@@ -149,6 +149,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
         ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: () => context.push('/home/profile/documents'),
+          icon: const Icon(Icons.description_outlined),
+          label: const Text('My documents'),
+        ),
         if (profile.summary.isNotEmpty) ...[
           const SizedBox(height: 14),
           SectionCard(

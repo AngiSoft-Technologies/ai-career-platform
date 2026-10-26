@@ -20,8 +20,6 @@ class ApiClient {
   final AppSettings _settings;
   final TokenStorage _tokenStorage;
   final http.Client _client;
-  String? _configuredBaseUrl;
-  String? _activeBaseUrl;
 
   Future<dynamic> get(String path, {Map<String, String>? query}) {
     return _request('GET', path, query: query);
@@ -47,13 +45,7 @@ class ApiClient {
     Map<String, String>? query,
     Map<String, dynamic>? body,
   }) async {
-    final baseUrl = _resolveBaseUrl();
-    var response = await _send(method, baseUrl, path, query, body);
-    final alternate = _alternateBaseUrl(baseUrl);
-    if (response.statusCode == 404 && alternate != null) {
-      response = await _send(method, alternate, path, query, body);
-      if (response.statusCode != 404) _activeBaseUrl = alternate;
-    }
+    final response = await _send(method, _settings.baseUrl, path, query, body);
     final decoded = _decode(response.body);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final error = decoded is Map ? decoded['error'] : null;
@@ -130,24 +122,6 @@ class ApiClient {
         cause: error,
       );
     }
-  }
-
-  String _resolveBaseUrl() {
-    if (_configuredBaseUrl != _settings.baseUrl) {
-      _configuredBaseUrl = _settings.baseUrl;
-      _activeBaseUrl = null;
-    }
-    return _activeBaseUrl ?? _settings.baseUrl;
-  }
-
-  String? _alternateBaseUrl(String baseUrl) {
-    final uri = Uri.tryParse(baseUrl);
-    if (uri == null || uri.host != 'job-radar-api-angisoft.fly.dev') {
-      return null;
-    }
-    if (!uri.path.endsWith('/v1')) return null;
-    final path = '${uri.path.substring(0, uri.path.length - 3)}/api/v1';
-    return uri.replace(path: path).toString().replaceAll(RegExp(r'/$'), '');
   }
 
   String _normalizePath(String path) {

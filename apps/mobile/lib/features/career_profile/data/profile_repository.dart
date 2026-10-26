@@ -30,13 +30,7 @@ class ProfileRepository {
 
   Future<CandidateProfile> updateProfile(Map<String, dynamic> changes) async {
     try {
-      dynamic response;
-      try {
-        response = await _apiClient.patch('/profile', body: changes);
-      } on ApiException catch (error) {
-        if (!error.isNotFound) rethrow;
-        response = await _apiClient.put('/profile', body: changes);
-      }
+      final response = await _apiClient.put('/profile', body: changes);
       final profile = CandidateProfile.fromJson(_profileMap(response));
       await _database.cacheProfile(profile.toJson());
       return profile;

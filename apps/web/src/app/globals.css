@@ -602,7 +602,7 @@ a {
   font-size: 0.78rem;
   color: var(--text-soft);
   cursor: pointer;
-  transition: all var(--dur) var(--ease);
+  transition: background-color var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease), opacity var(--dur) var(--ease);
 }
 .chip:hover {
   border-color: var(--border-strong);
@@ -1059,6 +1059,31 @@ a {
   50% {
     opacity: 0.25;
   }
+}
+
+.opportunity-search:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 1000;
+  inset: 0 auto auto 0;
+  transform: translateY(-150%);
+  padding: 0.75rem 1rem;
+  border-radius: 0 0 0.6rem 0;
+  color: var(--accent-contrast);
+  background: var(--accent);
+  font-weight: 700;
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
+h1, h2, h3, h4, h5, h6, [id] {
+  scroll-margin-top: 6rem;
 }
 
 .live-dot {

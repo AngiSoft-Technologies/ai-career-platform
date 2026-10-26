@@ -221,29 +221,29 @@ async function scheduleRecurringJobs(
   if (ingestionQueue) {
     await ingestionQueue.upsertJobScheduler(
       "scheduler-ingestion",
-      { every: ingestionMinutes * 60_000 },
-      { name: JOB_NAMES.ingestSources, data: {}, delay: 60_000 },
+      { every: ingestionMinutes * 60_000, startDate: new Date(Date.now() + 60_000) },
+      { name: JOB_NAMES.ingestSources, data: {} },
     );
   }
 
   if (embeddingQueue) {
     await embeddingQueue.upsertJobScheduler(
       "scheduler-embeddings",
-      { every: embeddingMinutes * 60_000 },
-      { name: JOB_NAMES.refreshEmbeddings, data: {}, delay: 120_000 },
+      { every: embeddingMinutes * 60_000, startDate: new Date(Date.now() + 120_000) },
+      { name: JOB_NAMES.refreshEmbeddings, data: {} },
     );
   }
 
   if (maintenanceQueue) {
     await maintenanceQueue.upsertJobScheduler(
       "scheduler-maintenance",
-      { every: maintenanceHours * 3_600_000 },
-      { name: JOB_NAMES.expireOpportunities, data: {}, delay: 180_000 },
+      { every: maintenanceHours * 3_600_000, startDate: new Date(Date.now() + 180_000) },
+      { name: JOB_NAMES.expireOpportunities, data: {} },
     );
     await maintenanceQueue.upsertJobScheduler(
       "scheduler-event-pruning",
-      { every: pruningHours * 3_600_000 },
-      { name: JOB_NAMES.pruneEvents, data: {}, delay: 240_000 },
+      { every: pruningHours * 3_600_000, startDate: new Date(Date.now() + 240_000) },
+      { name: JOB_NAMES.pruneEvents, data: {} },
     );
   }
 

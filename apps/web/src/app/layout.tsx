@@ -38,6 +38,7 @@ const display = Archivo_Black({
 const themeBoot = `(function(){try{var t=localStorage.getItem("jr.theme");if(t&&/^[a-z]+$/.test(t)){document.documentElement.setAttribute("data-theme",t);}}catch(e){}})();`;
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://job-radar-ke.netlify.app"),
   title: {
     default: "Job Radar — Global job search, all professions",
     template: "%s · Job Radar",
@@ -101,6 +102,7 @@ export default function RootLayout({
       className={`${sans.variable} ${serif.variable} ${mono.variable} ${display.variable}`}
     >
       <body>
+        <a className="skip-link" href="#main-content">Skip to main content</a>
         <script dangerouslySetInnerHTML={{ __html: themeBoot }} />
         <ServiceWorkerRegistrar />
         <ThemeProvider>

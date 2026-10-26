@@ -34,9 +34,9 @@ class AppShell extends StatelessWidget {
             label: 'Applications',
           ),
           const NavigationDestination(
-            icon: Icon(Icons.description_outlined),
-            selectedIcon: Icon(Icons.description_rounded),
-            label: 'Documents',
+            icon: Icon(Icons.auto_awesome_outlined),
+            selectedIcon: Icon(Icons.auto_awesome_rounded),
+            label: 'Matches',
           ),
           NavigationDestination(
             icon: Badge(

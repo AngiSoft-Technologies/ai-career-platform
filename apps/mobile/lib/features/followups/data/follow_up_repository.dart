@@ -67,7 +67,11 @@ class FollowUpRepository {
       await _database.cacheFollowUp(followUp.toJson());
       await _enqueue(
         'schedule_followup',
-        {'applicationId': applicationId, 'body': body},
+        {
+          'applicationId': applicationId,
+          'localFollowUpId': followUp.id,
+          'body': body,
+        },
         status: error.isNotFound ? 'failed' : 'pending',
         error: error.isNotFound ? error.message : null,
       );
@@ -80,8 +84,25 @@ class FollowUpRepository {
     required String status,
   }) async {
     final body = <String, dynamic>{'id': followUp.id, 'status': status};
+    if (followUp.id.startsWith('local-')) {
+      final updated = FollowUp(
+        id: followUp.id,
+        applicationId: followUp.applicationId,
+        dueAt: followUp.dueAt,
+        status: status,
+        note: followUp.note,
+        createdAt: followUp.createdAt,
+        updatedAt: DateTime.now(),
+      );
+      await _database.cacheFollowUp(updated.toJson());
+      await _enqueue('update_followup', body, status: 'pending');
+      return updated;
+    }
     try {
-      final response = await _apiClient.patch('/followups', body: body);
+      final response = await _apiClient.patch(
+        '/followups/${followUp.id}',
+        body: {'status': status},
+      );
       final updated = FollowUp.fromJson(_followUpMap(response));
       await _database.cacheFollowUp(updated.toJson());
       return updated;

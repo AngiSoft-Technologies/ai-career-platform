@@ -20,9 +20,32 @@ export type ApplicationStatus =
   | "EXPIRED"
   | "FAILED";
 
+export const APPLICATION_STATUS_TRANSITIONS: Partial<
+  Record<ApplicationStatus, ApplicationStatus[]>
+> = {
+  SHORTLISTED: ["ANALYZED", "WITHDRAWN"],
+  ANALYZED: ["APPLICATION_PREPARATION", "WITHDRAWN"],
+  APPLICATION_PREPARATION: ["READY_TO_APPLY", "WITHDRAWN"],
+  READY_TO_APPLY: ["APPLIED", "WITHDRAWN"],
+  APPLIED: ["ACKNOWLEDGED", "NO_RESPONSE", "REJECTED", "WITHDRAWN"],
+  ACKNOWLEDGED: ["SCREENING", "REJECTED", "NO_RESPONSE", "WITHDRAWN"],
+  SCREENING: ["ASSESSMENT", "INTERVIEW", "REJECTED", "WITHDRAWN"],
+  ASSESSMENT: ["INTERVIEW", "REJECTED", "WITHDRAWN"],
+  INTERVIEW: ["OFFER", "REJECTED", "WITHDRAWN"],
+  OFFER: ["REJECTED", "WITHDRAWN"],
+  NO_RESPONSE: ["ACKNOWLEDGED", "REJECTED", "WITHDRAWN"],
+  DISCOVERED: ["SHORTLISTED", "WITHDRAWN"],
+  REJECTED: [],
+  WITHDRAWN: [],
+  EXPIRED: [],
+  FAILED: [],
+};
+
 export interface CandidateProfile {
   id: string;
   userId: string;
+  email?: string;
+  name?: string | null;
   fullName: string;
   headline: string;
   summary: string;

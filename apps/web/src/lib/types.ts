@@ -1,3 +1,5 @@
+import type { ApplicationStatus } from "@angisoft/job-radar-contracts";
+
 export type ThemeKey = "aurora" | "editorial" | "terminal" | "kinetic" | "atlas";
 
 export type RoleKey =
@@ -78,7 +80,7 @@ export interface Application {
   id: string;
   userId: string;
   opportunityId: string;
-  status: string;
+  status: ApplicationStatus;
   createdAt: string;
   updatedAt: string;
   version: number;

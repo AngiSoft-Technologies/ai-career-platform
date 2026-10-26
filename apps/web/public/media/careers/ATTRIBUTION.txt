@@ -1,0 +1,25 @@
+Career photography attribution
+
+All included photos are served locally as optimized WebP files and are available
+under the Unsplash License. The people pictured are illustrative and are not
+Job Radar users or testimonials.
+
+lagos-career-story.webp
+  Photo by Ninthgrid: https://unsplash.com/photos/a-woman-sitting-at-a-table-with-a-laptop-J-IBERCeDTY
+  Lagos, Nigeria. Unsplash License: https://unsplash.com/license
+
+technology-professional.webp
+  Photo by Vitaly Gariev: https://unsplash.com/photos/man-with-glasses-working-on-laptop-in-office-Mt1ul01a-00
+  Unsplash License: https://unsplash.com/license
+
+engineering-professional.webp
+  Photo by Kelum Chathuranga: https://unsplash.com/photos/a-man-sitting-in-front-of-a-laptop-computer-0m-6I48ChD8
+  Unsplash License: https://unsplash.com/license
+
+healthcare-professional.webp
+  Photo by Vitaly Gariev: https://unsplash.com/photos/a-female-doctor-wearing-a-stethoscope-sits-at-her-desk-_zbqco3m7dA
+  Unsplash License: https://unsplash.com/license
+
+women-in-tech.webp
+  Photo by Christina @ wocintechchat.com M: https://unsplash.com/photos/woman-using-laptop-bVya-9G7iDg
+  Unsplash License: https://unsplash.com/license

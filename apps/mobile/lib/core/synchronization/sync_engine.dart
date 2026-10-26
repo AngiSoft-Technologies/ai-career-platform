@@ -25,11 +25,21 @@ class SyncEngine {
 
   Future<SyncRunResult> syncNow() async {
     final actions = await _database.pendingActions();
+    final resolvedIds = <String, String>{};
     var completed = 0;
     var failed = 0;
     for (final action in actions) {
       try {
-        await _execute(action);
+        final mapping = await _execute(_resolveAction(action, resolvedIds));
+        if (mapping != null) {
+          resolvedIds.addAll(mapping);
+          for (final entry in mapping.entries) {
+            await _database.replacePendingActionReference(
+              entry.key,
+              entry.value,
+            );
+          }
+        }
         await _database.updateAction(
           action.idempotencyKey,
           status: 'completed',
@@ -67,51 +77,94 @@ class SyncEngine {
     );
   }
 
-  Future<void> _execute(OfflineAction action) async {
+  OfflineAction _resolveAction(
+    OfflineAction action,
+    Map<String, String> resolvedIds,
+  ) {
+    dynamic resolve(dynamic value) {
+      if (value is String) return resolvedIds[value] ?? value;
+      if (value is List) return value.map(resolve).toList();
+      if (value is Map) {
+        return value.map((key, item) => MapEntry(key, resolve(item)));
+      }
+      return value;
+    }
+
+    return OfflineAction(
+      idempotencyKey: action.idempotencyKey,
+      actionType: action.actionType,
+      payload: Map<String, dynamic>.from(resolve(action.payload) as Map),
+      status: action.status,
+      createdAt: action.createdAt,
+      updatedAt: action.updatedAt,
+      lastError: action.lastError,
+    );
+  }
+
+  Future<Map<String, String>?> _execute(OfflineAction action) async {
     switch (action.actionType) {
       case 'create_application':
-        await _apiClient.post('/applications', body: action.payload);
+        {
+          final response = await _apiClient.post(
+            '/applications',
+            body: {'opportunityId': action.payload['opportunityId']},
+          );
+          final serverApplication = _nestedMap(response, 'application');
+          final localId = action.payload['localId'] as String?;
+          final serverId = serverApplication['id'] as String?;
+          if (localId != null && serverId != null) {
+            await _database.remapLocalApplicationId(localId, serverApplication);
+            return {localId: serverId};
+          }
+          return null;
+        }
       case 'update_application_status':
-        try {
-          await _apiClient.patch(
-            '/applications/${action.payload['id']}',
-            body: action.payload['body'],
-          );
-        } on ApiException catch (error) {
-          if (!error.isNotFound) rethrow;
-          await _apiClient.patch(
-            '/applications/${action.payload['id']}/status',
-            body: action.payload['body'],
-          );
-        }
+        await _apiClient.patch(
+          '/applications/${action.payload['id']}/status',
+          body: action.payload['body'],
+        );
+        return null;
       case 'update_profile':
-        try {
-          await _apiClient.patch('/profile', body: action.payload);
-        } on ApiException catch (error) {
-          if (!error.isNotFound) rethrow;
-          await _apiClient.put('/profile', body: action.payload);
-        }
+        await _apiClient.put('/profile', body: action.payload);
+        return null;
       case 'update_preferences':
         await _apiClient.put('/profile/preferences', body: action.payload);
+        return null;
       case 'schedule_followup':
-        await _apiClient.post(
+        final response = await _apiClient.post(
           '/applications/${action.payload['applicationId']}/followups',
           body: action.payload['body'],
         );
-      case 'update_followup':
-        await _apiClient.patch('/followups', body: action.payload);
-      case 'generate_document':
-        try {
-          await _apiClient.post('/documents', body: action.payload);
-        } on ApiException catch (error) {
-          if (!error.isNotFound) rethrow;
-          await _apiClient.post('/documents/generate', body: action.payload);
+        final followUp = _nestedMap(response, 'followup');
+        final localId = action.payload['localFollowUpId'] as String?;
+        final serverId = followUp['id'] as String?;
+        if (localId != null && serverId != null) {
+          await _database.remapLocalFollowUpId(localId, serverId);
+          return {localId: serverId};
         }
+        return null;
+      case 'update_followup':
+        await _apiClient.patch(
+          '/followups/${action.payload['id']}',
+          body: {'status': action.payload['status']},
+        );
+        return null;
+      case 'generate_document':
+        await _apiClient.post('/documents/generate', body: action.payload);
+        return null;
       default:
         throw ApiException(
           statusCode: 400,
           message: 'Unknown offline action ${action.actionType}',
         );
     }
+  }
+
+  Map<String, dynamic> _nestedMap(dynamic value, String key) {
+    if (value is Map && value[key] is Map) {
+      return Map<String, dynamic>.from(value[key] as Map);
+    }
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return <String, dynamic>{};
   }
 }

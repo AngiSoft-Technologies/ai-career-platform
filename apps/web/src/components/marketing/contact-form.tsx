@@ -4,6 +4,7 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { Send, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui";
 import clsx from "clsx";
+import { API_URL } from "@/lib/auth";
 
 export function ContactForm() {
   const toast = useToast();
@@ -31,7 +32,7 @@ export function ContactForm() {
     if (!validate() || submitting) return;
     setSubmitting(true);
     try {
-      const res = await fetch("/v1/public/contact", {
+      const res = await fetch(`${API_URL.replace(/\/v1$/, "")}/v1/public/contact`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),

@@ -32,22 +32,14 @@ class ApplicationRepository {
   }
 
   Future<JobApplication> getApplication(String id) async {
-    try {
-      final response = await _apiClient.get('/applications/$id');
-      return JobApplication.fromJson(_applicationMap(response));
-    } on ApiException catch (error) {
-      if (!error.isNotFound && !error.isNetworkError) rethrow;
-      final applications = await listApplications();
-      return applications.firstWhere(
-        (application) => application.id == id,
-        orElse: () => throw ApiException(
-          statusCode: 404,
-          message: error.isNetworkError
-              ? 'This application is not available offline yet'
-              : 'Application not found',
-        ),
-      );
-    }
+    final applications = await listApplications();
+    return applications.firstWhere(
+      (application) => application.id == id,
+      orElse: () => throw const ApiException(
+        statusCode: 404,
+        message: 'Application not found in your saved applications',
+      ),
+    );
   }
 
   Future<JobApplication> createApplication(String opportunityId) async {
@@ -72,7 +64,10 @@ class ApplicationRepository {
         version: 1,
       );
       await _database.cacheApplication(application.toJson());
-      await _enqueue('create_application', {'opportunityId': opportunityId});
+      await _enqueue('create_application', {
+        'opportunityId': opportunityId,
+        'localId': application.id,
+      });
       return application;
     }
   }
@@ -87,20 +82,29 @@ class ApplicationRepository {
       'version': application.version,
       if (note != null && note.isNotEmpty) 'note': note,
     };
+    if (application.id.startsWith('local-')) {
+      final updated = JobApplication(
+        id: application.id,
+        userId: application.userId,
+        opportunityId: application.opportunityId,
+        status: status,
+        appliedAt: application.appliedAt,
+        createdAt: application.createdAt,
+        updatedAt: DateTime.now(),
+        version: application.version + 1,
+      );
+      await _database.cacheApplication(updated.toJson());
+      await _enqueue('update_application_status', {
+        'id': application.id,
+        'body': body,
+      });
+      return updated;
+    }
     try {
-      dynamic response;
-      try {
-        response = await _apiClient.patch(
-          '/applications/${application.id}',
-          body: body,
-        );
-      } on ApiException catch (error) {
-        if (!error.isNotFound) rethrow;
-        response = await _apiClient.patch(
-          '/applications/${application.id}/status',
-          body: body,
-        );
-      }
+      final response = await _apiClient.patch(
+        '/applications/${application.id}/status',
+        body: body,
+      );
       final updated = JobApplication.fromJson(_applicationMap(response));
       await _database.cacheApplication(updated.toJson());
       return updated;

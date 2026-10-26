@@ -6,6 +6,7 @@ import '../../features/applications/presentation/application_list_screen.dart';
 import '../../features/career_profile/presentation/profile_screen.dart';
 import '../../features/documents/presentation/document_list_screen.dart';
 import '../../features/documents/presentation/document_viewer_screen.dart';
+import '../../features/job_matching/presentation/matches_screen.dart';
 import '../../features/job_preferences/presentation/preferences_screen.dart';
 import '../../features/notifications/presentation/notification_screen.dart';
 import '../../features/onboarding/presentation/onboarding_screen.dart';
@@ -30,6 +31,10 @@ GoRouter createAppRouter(AuthSession authSession) {
     },
     routes: [
       GoRoute(path: '/', redirect: (_, _) => '/home/opportunities'),
+      GoRoute(
+        path: '/home/documents',
+        redirect: (_, _) => '/home/profile/documents',
+      ),
       GoRoute(
         path: '/onboarding',
         builder: (context, state) => const OnboardingScreen(),
@@ -57,8 +62,8 @@ GoRouter createAppRouter(AuthSession authSession) {
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/home/documents',
-                builder: (context, state) => const DocumentListScreen(),
+                path: '/home/matches',
+                builder: (context, state) => const MatchesScreen(),
               ),
             ],
           ),
@@ -75,6 +80,12 @@ GoRouter createAppRouter(AuthSession authSession) {
               GoRoute(
                 path: '/home/profile',
                 builder: (context, state) => const ProfileScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'documents',
+                    builder: (context, state) => const DocumentListScreen(),
+                  ),
+                ],
               ),
             ],
           ),

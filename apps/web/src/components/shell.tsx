@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Activity,
   BadgeCheck,
@@ -170,10 +170,42 @@ function MobileMenu({
   nav: NavItem[];
 }) {
   const pathname = usePathname();
+  const drawerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const focusFrame = window.requestAnimationFrame(() => {
+      drawerRef.current?.querySelector<HTMLElement>("a[href], button:not([disabled])")?.focus();
+    });
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab" || !drawerRef.current) return;
+      const focusable = drawerRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      const first = focusable.item(0);
+      const last = focusable.item(focusable.length - 1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open, onClose]);
+
   if (!open) return null;
   return (
     <div
-      onClick={onClose}
       style={{
         position: "fixed",
         inset: 0,
@@ -182,8 +214,18 @@ function MobileMenu({
         backdropFilter: "blur(4px)",
       }}
     >
-      <nav
-        onClick={(event) => event.stopPropagation()}
+      <button
+        type="button"
+        aria-label="Close navigation menu"
+        onClick={onClose}
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0, background: "transparent" }}
+      />
+      <div
+        ref={drawerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Mobile navigation"
+        tabIndex={-1}
         className="surface-solid"
         style={{
           position: "absolute",
@@ -201,12 +243,14 @@ function MobileMenu({
             <X size={18} />
           </IconButton>
         </div>
-        <div className="stack" style={{ gap: "0.2rem" }}>
-          {nav.map((item) => (
-            <NavLink key={item.href} item={item} active={pathname.startsWith(item.href)} onClick={onClose} />
-          ))}
-        </div>
-      </nav>
+        <nav aria-label="Primary navigation">
+          <div className="stack" style={{ gap: "0.2rem" }}>
+            {nav.map((item) => (
+              <NavLink key={item.href} item={item} active={pathname.startsWith(item.href)} onClick={onClose} />
+            ))}
+          </div>
+        </nav>
+      </div>
     </div>
   );
 }
@@ -221,6 +265,7 @@ function AuroraShell({ children, session }: { children: ReactNode; session: Sess
   const pathname = usePathname();
   const { connected, pending } = useConnection();
   const [menuOpen, setMenuOpen] = useState(false);
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
 
   return (
     <div className="aurora-grid">
@@ -254,12 +299,12 @@ function AuroraShell({ children, session }: { children: ReactNode; session: Sess
           <Avatar name={session?.user.name ?? session?.user.email} size={32} />
         </header>
 
-        <main className="main-pad" style={{ maxWidth: 1440, margin: "0 auto" }}>
+        <main id="main-content" className="main-pad" style={{ maxWidth: 1440, margin: "0 auto" }}>
           {children}
         </main>
       </div>
 
-      <MobileMenu open={menuOpen} onClose={() => setMenuOpen(false)} nav={nav} />
+      <MobileMenu open={menuOpen} onClose={closeMenu} nav={nav} />
     </div>
   );
 }
@@ -357,7 +402,7 @@ function EditorialShell({ children, session }: { children: ReactNode; session: S
         </nav>
       </header>
 
-      <main className="main-pad" style={{ maxWidth: 1240, margin: "0 auto" }}>
+      <main id="main-content" className="main-pad" style={{ maxWidth: 1240, margin: "0 auto" }}>
         {children}
       </main>
 
@@ -452,7 +497,7 @@ function TerminalShell({ children, session }: { children: ReactNode; session: Se
           })}
         </nav>
 
-        <main style={{ flex: 1, minWidth: 0, padding: "1rem" }}>{children}</main>
+        <main id="main-content" style={{ flex: 1, minWidth: 0, padding: "1rem" }}>{children}</main>
       </div>
 
       <footer
@@ -539,7 +584,7 @@ function KineticShell({ children, session }: { children: ReactNode; session: Ses
         </nav>
       </header>
 
-      <main className="main-pad" style={{ flex: 1, maxWidth: 1500, margin: "0 auto", width: "100%" }}>
+      <main id="main-content" className="main-pad" style={{ flex: 1, maxWidth: 1500, margin: "0 auto", width: "100%" }}>
         {children}
       </main>
 
@@ -653,7 +698,7 @@ function AtlasShell({ children, session }: { children: ReactNode; session: Sessi
           ))}
         </nav>
 
-        <main style={{ minWidth: 0, display: "flex" }}>
+        <main id="main-content" style={{ minWidth: 0, display: "flex" }}>
           <div style={{ flex: 1, minWidth: 0, padding: "1.2rem" }}>{children}</div>
           <aside
             style={{

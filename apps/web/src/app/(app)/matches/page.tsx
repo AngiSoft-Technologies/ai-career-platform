@@ -25,11 +25,11 @@ export default function MatchesPage() {
             Your best matches
           </h1>
           <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginTop: 4 }}>
-            Skills, location, work mode and seniority blended with semantic relevance.
+            Skills, location, work mode and seniority shape each role’s fit score.
           </p>
         </div>
         <Badge tone="accent">
-          <Zap size={11} /> semantic + rules
+          <Zap size={11} /> Profile-ranked
         </Badge>
       </div>
 

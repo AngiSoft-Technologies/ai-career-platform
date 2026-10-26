@@ -164,7 +164,9 @@ Future<void> main() async {
         Provider<SettingsRepository>.value(
           value: SettingsRepository(settings: settings),
         ),
-        Provider<MatchRepository>.value(value: const MatchRepository()),
+        Provider<MatchRepository>.value(
+          value: MatchRepository(apiClient: apiClient),
+        ),
         Provider<CompanyIntelligenceRepository>.value(
           value: const CompanyIntelligenceRepository(),
         ),

@@ -23,12 +23,27 @@ class FollowUp {
     final now = DateTime.now();
     return FollowUp(
       id: json['id'] as String? ?? '',
-      applicationId: json['applicationId'] as String? ?? '',
-      dueAt: DateTime.tryParse(json['dueAt'] as String? ?? '') ?? now,
+      applicationId:
+          json['applicationId'] as String? ??
+          json['application_id'] as String? ??
+          '',
+      dueAt:
+          DateTime.tryParse(
+            json['dueAt'] as String? ?? json['due_at'] as String? ?? '',
+          ) ??
+          now,
       status: json['status'] as String? ?? 'PENDING',
       note: json['note'] as String? ?? '',
-      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? now,
-      updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? '') ?? now,
+      createdAt:
+          DateTime.tryParse(
+            json['createdAt'] as String? ?? json['created_at'] as String? ?? '',
+          ) ??
+          now,
+      updatedAt:
+          DateTime.tryParse(
+            json['updatedAt'] as String? ?? json['updated_at'] as String? ?? '',
+          ) ??
+          now,
     );
   }
 

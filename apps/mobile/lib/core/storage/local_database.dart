@@ -232,6 +232,87 @@ class LocalDatabase {
     });
   }
 
+  Future<void> remapLocalApplicationId(
+    String localId,
+    Map<String, dynamic> serverApplication,
+  ) async {
+    final serverId = serverApplication['id'] as String?;
+    if (serverId == null || serverId.isEmpty || localId == serverId) return;
+    await cacheApplication(serverApplication);
+    await _database.transaction((transaction) async {
+      await transaction.delete(
+        'applications',
+        where: 'id = ?',
+        whereArgs: [localId],
+      );
+      await transaction.delete(
+        'application_status',
+        where: 'application_id = ?',
+        whereArgs: [localId],
+      );
+      final followups = await transaction.query(
+        'followups',
+        where: 'application_id = ?',
+        whereArgs: [localId],
+      );
+      for (final row in followups) {
+        final json = _decodeMap(row)..['applicationId'] = serverId;
+        await transaction.update(
+          'followups',
+          {'application_id': serverId, 'json': jsonEncode(json)},
+          where: 'id = ?',
+          whereArgs: [row['id']],
+        );
+      }
+    });
+    await replacePendingActionReference(localId, serverId);
+  }
+
+  Future<void> remapLocalFollowUpId(String localId, String serverId) async {
+    if (localId == serverId) return;
+    await _database.transaction((transaction) async {
+      final rows = await transaction.query(
+        'followups',
+        where: 'id = ?',
+        whereArgs: [localId],
+        limit: 1,
+      );
+      if (rows.isNotEmpty) {
+        final row = rows.first;
+        final json = _decodeMap(row)..['id'] = serverId;
+        await transaction.delete(
+          'followups',
+          where: 'id = ?',
+          whereArgs: [localId],
+        );
+        await transaction.insert('followups', {
+          ...row,
+          'id': serverId,
+          'json': jsonEncode(json),
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+    });
+    await replacePendingActionReference(localId, serverId);
+  }
+
+  Future<void> replacePendingActionReference(String oldId, String newId) async {
+    final rows = await _database.query(
+      'offline_actions',
+      where: 'status = ?',
+      whereArgs: ['pending'],
+    );
+    for (final row in rows) {
+      final payload = jsonDecode(row['payload']! as String);
+      final rewritten = _replaceId(payload, oldId, newId);
+      await _database.update(
+        'offline_actions',
+        {'payload': jsonEncode(rewritten), 'updated_at': _now},
+        where: 'idempotency_key = ?',
+        whereArgs: [row['idempotency_key']],
+      );
+    }
+  }
+
   Future<List<Map<String, dynamic>>> cachedApplications() async {
     final rows = await _database.query(
       'applications',
@@ -400,6 +481,18 @@ class LocalDatabase {
   Map<String, dynamic> _decodeMap(Map<String, Object?> row) {
     final decoded = jsonDecode(row['json']! as String);
     return Map<String, dynamic>.from(decoded as Map);
+  }
+
+  dynamic _replaceId(dynamic value, String oldId, String newId) {
+    if (value is String) return value == oldId ? newId : value;
+    if (value is List)
+      return value.map((item) => _replaceId(item, oldId, newId)).toList();
+    if (value is Map) {
+      return value.map(
+        (key, item) => MapEntry(key, _replaceId(item, oldId, newId)),
+      );
+    }
+    return value;
   }
 
   int get _now => DateTime.now().millisecondsSinceEpoch;

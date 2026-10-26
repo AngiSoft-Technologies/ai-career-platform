@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState , Suspense } from "react";
+import { useEffect, useMemo, useState , Suspense } from "react";
 import { Briefcase, Compass, Filter, MapPin, RefreshCw, Search } from "lucide-react";
 import {
   Badge,
@@ -47,6 +47,17 @@ function OpportunitiesPageInner() {
     }),
     [debounced, country, workMode, seniority, semantic],
   );
+
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (debounced) next.set("q", debounced);
+    if (country) next.set("country", country);
+    if (workMode) next.set("workMode", workMode);
+    if (seniority) next.set("seniority", seniority);
+    if (semantic) next.set("semantic", "true");
+    const suffix = next.toString();
+    router.replace(suffix ? `/opportunities?${suffix}` : "/opportunities", { scroll: false });
+  }, [country, debounced, router, semantic, seniority, workMode]);
 
   const { data, loading, error, offline, refresh } = useApi<OpportunitiesResponse>(
     "/opportunities",
@@ -98,6 +109,7 @@ function OpportunitiesPageInner() {
           >
             <Search size={16} style={{ color: "var(--text-muted)" }} />
             <input
+              className="opportunity-search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               onKeyDown={(event) => {
@@ -110,7 +122,6 @@ function OpportunitiesPageInner() {
               style={{
                 background: "transparent",
                 border: "none",
-                outline: "none",
                 color: "var(--text)",
                 width: "100%",
                 fontSize: "0.92rem",

@@ -52,13 +52,7 @@ class DocumentRepository {
       'type': type,
     };
     try {
-      dynamic response;
-      try {
-        response = await _apiClient.post('/documents', body: body);
-      } on ApiException catch (error) {
-        if (!error.isNotFound) rethrow;
-        response = await _apiClient.post('/documents/generate', body: body);
-      }
+      final response = await _apiClient.post('/documents/generate', body: body);
       final document = GeneratedDocument.fromJson(_documentMap(response));
       await _database.cacheDocument(document.toJson());
       return document;
@@ -74,8 +68,16 @@ class DocumentRepository {
   }
 
   Future<GeneratedDocument?> getDocument(String id) async {
-    final cached = await _database.cachedDocument(id);
-    return cached == null ? null : GeneratedDocument.fromJson(cached);
+    try {
+      final response = await _apiClient.get('/documents/$id');
+      final document = GeneratedDocument.fromJson(_documentMap(response));
+      await _database.cacheDocument(document.toJson());
+      return document;
+    } on ApiException catch (error) {
+      if (!error.isNetworkError) rethrow;
+      final cached = await _database.cachedDocument(id);
+      return cached == null ? null : GeneratedDocument.fromJson(cached);
+    }
   }
 
   Map<String, dynamic> _documentMap(dynamic response) {
