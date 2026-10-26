@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../shared/widgets/brand_mark.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/authentication/auth_session.dart';
@@ -41,18 +43,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Align(
-                      child: Container(
-                        width: 72,
-                        height: 72,
+                    Center(
+                      child: DecoratedBox(
                         decoration: BoxDecoration(
                           color: scheme.primaryContainer,
                           borderRadius: BorderRadius.circular(22),
                         ),
-                        child: Icon(
-                          Icons.radar_rounded,
-                          size: 38,
-                          color: scheme.onPrimaryContainer,
+                        child: const Padding(
+                          padding: EdgeInsets.all(14),
+                          child: BrandMark(size: 44),
                         ),
                       ),
                     ),

@@ -15,10 +15,10 @@ primary_region = "iad"
   NODE_ENV = "production"
   PORT = "8088"
   API_URL = "https://job-radar-api-angisoft.fly.dev"
-  WEB_ORIGIN = "https://job-radar-web.netlify.app,http://localhost:3000,http://localhost:3100"
+  WEB_ORIGIN = "https://job-radar-ke.netlify.app,http://localhost:3000,http://localhost:3100"
   S3_BUCKET = "uploads"
   GRPC_PORT = "50051"
-  DEMO_MODE = "true"
+  DEMO_MODE = "false"
 
 [http_service]
   internal_port = 8088
@@ -57,3 +57,10 @@ primary_region = "iad"
   cpu_kind = "shared"
   cpus = 1
   memory = "1gb"
+
+# Fly Metrics: exposes a Prometheus scrape endpoint on the app.
+# The built-in Grafana dashboards (fly dashboard metrics) read this.
+[[metrics]]
+  [metrics.http]
+    port = 9091
+    path = "/metrics"

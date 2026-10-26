@@ -55,8 +55,13 @@ export default function LandingPage() {
   return (
     <main className="landing">
       <nav className="landing-nav">
-        <Link href="/" className="landing-brand">
-          <Radar size={20} /> Job Radar
+        <Link href="/" className="landing-brand" aria-label="Job Radar home">
+          <img
+            src="/brand/logo-wordmark-light.png"
+            alt="Job Radar"
+            width={146}
+            height={41}
+          />
         </Link>
         <div className="row row-wrap" style={{ gap: "0.5rem" }}>
           <Link href="/login" className="btn btn-ghost btn-sm">

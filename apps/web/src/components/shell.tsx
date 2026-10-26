@@ -121,25 +121,22 @@ function useConnection() {
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <Link href="/dashboard" className="row" style={{ gap: "0.55rem" }}>
-      <span
-        style={{
-          width: 30,
-          height: 30,
-          borderRadius: 8,
-          background: "var(--accent)",
-          color: "var(--accent-contrast)",
-          display: "grid",
-          placeItems: "center",
-          fontWeight: 900,
-          fontSize: "0.85rem",
-          flexShrink: 0,
-        }}
-      >
-        JR
-      </span>
+      <img
+        src="/brand/logo-mark.png"
+        alt="Job Radar"
+        width={30}
+        height={30}
+        style={{ width: 30, height: 30, flexShrink: 0, objectFit: "contain" }}
+      />
       {!compact ? (
         <span style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
-          <strong style={{ fontSize: "0.95rem" }}>Job Radar</strong>
+          <img
+            src="/brand/logo-wordmark-light.png"
+            alt="Job Radar"
+            width={132}
+            height={37}
+            style={{ width: 132, height: "auto", marginBlock: -2 }}
+          />
           <span style={{ fontSize: "0.62rem", color: "var(--text-muted)", letterSpacing: "0.14em" }}>
             ANGISOFT
           </span>

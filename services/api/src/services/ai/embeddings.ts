@@ -51,8 +51,7 @@ export async function refreshOpportunityEmbeddings(
        FROM opportunities o
        JOIN companies c ON c.id = o.company_id
        LEFT JOIN opportunity_skills os ON os.opportunity_id = o.id
-       LEFT JOIN opportunity_embeddings oe ON oe.opportunity_id = o.id
-      WHERE o.status = 'active' AND oe.opportunity_id IS NULL
+      WHERE o.status = 'active' AND o.embedding IS NULL
       GROUP BY o.id, c.id
       ORDER BY o.posted_at DESC
       LIMIT $1`,

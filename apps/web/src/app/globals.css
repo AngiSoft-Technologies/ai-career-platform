@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+/* Tailwind preflight ships -webkit-text-size-adjust, which Firefox rejects.
+   Declaring the standard property keeps the mobile text sizing correct and
+   removes the parse warning. */
+html {
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
 /* ==========================================================================
    Job Radar design tokens
    Five themes share one semantic token contract. A theme swaps the token
@@ -1221,6 +1229,12 @@ a {
   color: var(--text);
 }
 
+.landing-brand img {
+  width: clamp(118px, 16vw, 152px);
+  height: auto;
+  display: block;
+}
+
 .landing-hero {
   display: flex;
   flex-direction: column;
@@ -1406,3 +1420,4 @@ a {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+@import "./marketing.css";

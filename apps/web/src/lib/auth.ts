@@ -4,7 +4,14 @@ export const API_URL = (
   process.env.NEXT_PUBLIC_API_URL ?? "https://job-radar-api-angisoft.fly.dev/v1"
 ).replace(/\/$/, "");
 
-export const NEON_AUTH_URL = (
+/**
+ * Auth always goes through the same-origin Next.js proxy at /api/auth.
+ * Talking to the Neon Auth origin directly would make the session cookie a
+ * third-party cookie, which Chrome and Firefox block, leaving the session null.
+ */
+export const NEON_AUTH_URL = "/api/auth";
+
+export const NEON_AUTH_UPSTREAM_URL = (
   process.env.NEXT_PUBLIC_NEON_AUTH_URL ??
   "https://ep-mute-glitter-b5uefleh.neonauth.c-7.us-east-2.aws.neon.tech/neondb/auth"
 ).replace(/\/$/, "");
@@ -111,8 +118,11 @@ async function requestToken(): Promise<string | null> {
     headers: { accept: "application/json" },
   });
   if (!response.ok) return null;
-  const payload = (await response.json()) as { token?: string; expiresAt?: string | number };
-  if (!payload.token) return null;
+  const payload = (await response.json().catch(() => null)) as {
+    token?: string;
+    expiresAt?: string | number;
+  } | null;
+  if (!payload?.token) return null;
   window.localStorage.setItem(TOKEN_KEY, payload.token);
   const claimExpiry = tokenExpiry(payload.token);
   const expiry =
@@ -145,11 +155,11 @@ export async function fetchSession(): Promise<Session | null> {
     headers: { accept: "application/json" },
   });
   if (!response.ok) return null;
-  const payload = (await response.json()) as {
+  const payload = (await response.json().catch(() => null)) as {
     user?: { id: string; email: string; name?: string | null; image?: string | null };
     session?: { expiresAt?: string | number };
-  };
-  if (!payload.user) return null;
+  } | null;
+  if (!payload?.user) return null;
 
   const token = await getToken();
   const session: Session = {

@@ -9,8 +9,11 @@ coverage/
 # Env / secrets
 .env
 .env.*
-!.env.example
-!**/.env.example
+.env.example
+**/.env.example
+tree.*
+docs/
+db/
 
 # Logs
 *.log

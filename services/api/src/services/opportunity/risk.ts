@@ -101,7 +101,32 @@ function duplicateNgramRatio(text: string): number {
   return duplicated / grams.length;
 }
 
+const certificateAgeCache = new Map<string, { value: number | null; at: number }>();
+const CERTIFICATE_CACHE_TTL_MS = 60 * 60_000;
+
+export async function certificateAgeForHost(
+  hostname: string,
+): Promise<number | null> {
+  const cached = certificateAgeCache.get(hostname);
+  if (cached && Date.now() - cached.at < CERTIFICATE_CACHE_TTL_MS) {
+    return cached.value;
+  }
+  const value = await openCertificateAge(hostname);
+  certificateAgeCache.set(hostname, { value, at: Date.now() });
+  return value;
+}
+
 async function certificateAgeDays(hostname: string): Promise<number | null> {
+  const cached = certificateAgeCache.get(hostname);
+  if (cached && Date.now() - cached.at < CERTIFICATE_CACHE_TTL_MS) {
+    return cached.value;
+  }
+  const value = await openCertificateAge(hostname);
+  certificateAgeCache.set(hostname, { value, at: Date.now() });
+  return value;
+}
+
+async function openCertificateAge(hostname: string): Promise<number | null> {
   return new Promise((resolve) => {
     try {
       const socket = tlsConnect(
@@ -310,6 +335,12 @@ function medianSalaryFor(seniority: string, country: string): number {
   return Math.round((base.median * factor) / MONTHS_PER_YEAR);
 }
 
+export interface PrecomputedRiskFeatures {
+  companyKnown?: boolean;
+  bulkPostingCount?: number;
+  domainAgeDays?: number | null;
+}
+
 export async function extractFeatures(input: {
   title: string;
   description: string;
@@ -320,30 +351,41 @@ export async function extractFeatures(input: {
   salaryMin?: number | null;
   salaryMax?: number | null;
   currency?: string | null;
+  precomputed?: PrecomputedRiskFeatures;
 }): Promise<RiskFeatures> {
   const hostname = hostnameOf(input.applyUrl);
   const contactEmail = input.description.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i)?.[0]?.toLowerCase();
   const emailDomain = contactEmail?.split("@")[1];
 
+  const precomputed = input.precomputed ?? {};
+
   const [certAge, companyRow, bulk] = await Promise.all([
-    hostname ? certificateAgeDays(hostname) : Promise.resolve(null),
-    hostname
-      ? query<{ website: string | null }>(
-          `SELECT website FROM companies WHERE slug = $1::text OR website ILIKE '%' || $2::text || '%' LIMIT 1`,
-          [
-            input.company.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-            hostname,
-          ],
-        )
-      : Promise.resolve({ rows: [] as Array<{ website: string | null }> }),
-    hostname
-      ? query<{ count: string }>(
-          `SELECT count(*)::text AS count FROM opportunities
-            WHERE apply_url ILIKE '%' || $1::text || '%'
-              AND created_at > now() - interval '24 hours'`,
-          [hostname],
-        )
-      : Promise.resolve({ rows: [{ count: "0" }] }),
+    precomputed.domainAgeDays !== undefined
+      ? Promise.resolve(precomputed.domainAgeDays)
+      : hostname
+        ? certificateAgeDays(hostname)
+        : Promise.resolve(null),
+    precomputed.companyKnown !== undefined
+      ? Promise.resolve({ rows: [] as Array<{ website: string | null }> })
+      : hostname
+        ? query<{ website: string | null }>(
+            `SELECT website FROM companies WHERE slug = $1::text OR website ILIKE '%' || $2::text || '%' LIMIT 1`,
+            [
+              input.company.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+              hostname,
+            ],
+          )
+        : Promise.resolve({ rows: [] as Array<{ website: string | null }> }),
+    precomputed.bulkPostingCount !== undefined
+      ? Promise.resolve({ rows: [{ count: String(precomputed.bulkPostingCount) }] })
+      : hostname
+        ? query<{ count: string }>(
+            `SELECT count(*)::text AS count FROM opportunities
+              WHERE apply_url ILIKE '%' || $1::text || '%'
+                AND created_at > now() - interval '24 hours'`,
+            [hostname],
+          )
+        : Promise.resolve({ rows: [{ count: "0" }] }),
   ]);
 
   const salary = input.salaryMax ?? input.salaryMin;
@@ -367,8 +409,8 @@ export async function extractFeatures(input: {
     ),
     templateSpamRatio: duplicateNgramRatio(`${input.title} ${input.description}`),
     simhashDistanceToScam: null,
-    companyKnown: companyRow.rows.length > 0,
-    bulkPostingCount: Number(bulk.rows[0]?.count ?? 0),
+    companyKnown: precomputed.companyKnown ?? companyRow.rows.length > 0,
+    bulkPostingCount: precomputed.bulkPostingCount ?? Number(bulk.rows[0]?.count ?? 0),
     httpsOnly: input.applyUrl.startsWith("https://"),
     descriptionLength: input.description.length,
     salaryPeriod: period,
@@ -380,17 +422,49 @@ export async function extractFeatures(input: {
   };
 }
 
-async function nearestScamDistance(hash: bigint, variant: string): Promise<number | null> {
-  const result = await query<{ simhash: string }>(
-    `SELECT simhash FROM scam_signatures
-      WHERE label LIKE '%:' || $1::text
-      LIMIT 500`,
-    [variant],
+interface ScamSignature {
+  simhash: bigint;
+  variant: string;
+}
+
+let scamSignatureCache: ScamSignature[] | null = null;
+let scamSignatureCacheAt = 0;
+
+const SCAM_CACHE_TTL_MS = 10 * 60_000;
+
+/**
+ * The scam corpus is a small, slow-changing reference table. Loading it once
+ * turns two database round trips per job into in-memory Hamming distance
+ * comparisons, which is what made ingestion take minutes.
+ */
+async function loadScamSignatures(): Promise<ScamSignature[]> {
+  const now = Date.now();
+  if (scamSignatureCache && now - scamSignatureCacheAt < SCAM_CACHE_TTL_MS) {
+    return scamSignatureCache;
+  }
+
+  const result = await query<{ simhash: string; label: string }>(
+    `SELECT simhash, label FROM scam_signatures LIMIT 5000`,
   );
-  if (result.rows.length === 0) return null;
+
+  scamSignatureCache = result.rows.map((row) => ({
+    simhash: BigInt(row.simhash),
+    variant: row.label.includes(":") ? row.label.split(":").pop() ?? "full" : "full",
+  }));
+  scamSignatureCacheAt = now;
+  return scamSignatureCache;
+}
+
+function nearestScamDistance(
+  hash: bigint,
+  signatures: ScamSignature[],
+  variant: string,
+): number | null {
+  const candidates = signatures.filter((entry) => entry.variant === variant);
+  if (candidates.length === 0) return null;
   let nearest = 64;
-  for (const row of result.rows) {
-    nearest = Math.min(nearest, hammingDistance(hash, BigInt(row.simhash)));
+  for (const entry of candidates) {
+    nearest = Math.min(nearest, hammingDistance(hash, entry.simhash));
   }
   return nearest;
 }
@@ -399,10 +473,9 @@ async function nearestScamDistanceBoth(
   fullHash: bigint,
   descriptionHash: bigint,
 ): Promise<number | null> {
-  const [full, description] = await Promise.all([
-    nearestScamDistance(fullHash, "full"),
-    nearestScamDistance(descriptionHash, "description"),
-  ]);
+  const signatures = await loadScamSignatures();
+  const full = nearestScamDistance(fullHash, signatures, "full");
+  const description = nearestScamDistance(descriptionHash, signatures, "description");
   const candidates = [full, description].filter(
     (value): value is number => value !== null,
   );
@@ -420,6 +493,7 @@ export async function assessRisk(input: {
   salaryMin?: number | null;
   salaryMax?: number | null;
   currency?: string | null;
+  precomputed?: PrecomputedRiskFeatures;
 }): Promise<RiskAssessment> {
   const features = await extractFeatures(input);
   const fullHash = simhash(`${input.company} ${input.title} ${input.description}`);

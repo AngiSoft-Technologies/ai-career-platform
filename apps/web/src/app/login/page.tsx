@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { ArrowRight, KeyRound, Radar, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, KeyRound, ShieldCheck, Sparkles } from "lucide-react";
 import { Button, Field, Input, useToast } from "@/components/ui";
 import { useSession } from "@/components/session";
 
@@ -49,8 +49,13 @@ function LoginInner() {
   return (
     <main className="landing" style={{ minHeight: "100dvh" }}>
       <nav className="landing-nav">
-        <Link href="/" className="landing-brand">
-          <Radar size={20} /> Job Radar
+        <Link href="/" className="landing-brand" aria-label="Job Radar home">
+          <img
+            src="/brand/logo-wordmark-light.png"
+            alt="Job Radar"
+            width={146}
+            height={41}
+          />
         </Link>
         <Link href="/" className="btn btn-ghost btn-sm">
           Back home

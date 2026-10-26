@@ -1,6 +1,6 @@
 "use client";
 
-import { API_URL, getToken } from "./auth";
+import { API_URL, clearToken, getToken } from "./auth";
 
 export interface ApiError {
   error: string;
@@ -104,6 +104,11 @@ interface RequestOptions {
   cache?: boolean;
   queueWhenOffline?: boolean;
   signal?: AbortSignal;
+  /**
+   * Set to false to stop the client from clearing an expired token and
+   * retrying the request once with a freshly minted one.
+   */
+  retryOnUnauthorized?: boolean;
 }
 
 function buildUrl(path: string, query?: RequestOptions["query"]): string {

@@ -1,6 +1,8 @@
 import { query } from "../../db/pool.js";
 import {
   assessRisk,
+  certificateAgeForHost,
+  type PrecomputedRiskFeatures,
   fingerprintInput,
   simhash,
   type RiskAction,
@@ -209,14 +211,118 @@ async function upsertSource(adapter: JobSourceAdapter): Promise<string> {
   return id;
 }
 
+const RISK_CONCURRENCY = Number(process.env.RISK_SCORING_CONCURRENCY ?? 8);
+
+async function mapWithConcurrency<T>(
+  items: T[],
+  limit: number,
+  worker: (item: T) => Promise<void>,
+): Promise<void> {
+  let cursor = 0;
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      const item = items[index];
+      if (item === undefined) continue;
+      await worker(item);
+    }
+  });
+  await Promise.all(runners);
+}
+
+function hostnameOfUrl(url: string): string | null {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Loads the per-batch signals the risk engine needs with two queries instead
+ * of two per job. With Neon at ~200ms round trip this is the difference
+ * between a one minute ingest and a nine minute ingest.
+ */
+async function loadBatchRiskFeatures(
+  prepared: PreparedJob[],
+): Promise<Map<string, PrecomputedRiskFeatures>> {
+  const map = new Map<string, PrecomputedRiskFeatures>();
+
+  const slugs = [
+    ...new Set(
+      prepared.map((job) => job.companyName.toLowerCase().replace(/[^a-z0-9]+/g, "-")),
+    ),
+  ];
+  const hostnames = [
+    ...new Set(
+      prepared
+        .map((job) => hostnameOfUrl(job.applyUrl))
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ];
+
+  const knownSlugs = new Set<string>();
+  if (slugs.length > 0) {
+    const companies = await query<{ slug: string }>(
+      `SELECT slug FROM companies WHERE slug = ANY($1::text[])`,
+      [slugs],
+    );
+    for (const row of companies.rows) knownSlugs.add(row.slug);
+  }
+
+  const certAgeByHostname = new Map<string, number | null>();
+  {
+    const uniqueHosts = [
+      ...new Set(
+        prepared
+          .map((job) => hostnameOfUrl(job.applyUrl))
+          .filter((value): value is string => Boolean(value)),
+      ),
+    ];
+    await mapWithConcurrency(uniqueHosts, 8, async (host) => {
+      certAgeByHostname.set(host, await certificateAgeForHost(host));
+    });
+  }
+
+  const bulkByHostname = new Map<string, number>();
+  if (hostnames.length > 0) {
+    const bulk = await query<{ hostname: string; count: string }>(
+      `SELECT substring(apply_url from 'https?://([^/]+)') AS hostname,
+              count(*)::text AS count
+         FROM opportunities
+        WHERE created_at > now() - interval '24 hours'
+        GROUP BY 1`,
+    );
+    for (const row of bulk.rows) {
+      const hostname = row.hostname.replace(/^www\./, "").toLowerCase();
+      bulkByHostname.set(hostname, Number(row.count));
+    }
+  }
+
+  for (const job of prepared) {
+    const slug = job.companyName.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    const hostname = hostnameOfUrl(job.applyUrl);
+    map.set(job.externalId, {
+      companyKnown: knownSlugs.has(slug),
+      bulkPostingCount: hostname ? (bulkByHostname.get(hostname) ?? 0) : 0,
+      domainAgeDays: hostname ? (certAgeByHostname.get(hostname) ?? null) : null,
+    });
+  }
+
+  return map;
+}
+
 async function upsertBatch(
   prepared: PreparedJob[],
   sourceId: string,
 ): Promise<{ inserted: number; updated: number }> {
   if (prepared.length === 0) return { inserted: 0, updated: 0 };
 
+  const precomputed = await loadBatchRiskFeatures(prepared);
   const scored = new Map<string, RiskAssessment>();
-  for (const job of prepared) {
+
+  await mapWithConcurrency(prepared, RISK_CONCURRENCY, async (job) => {
     const assessment = await assessRisk({
       title: job.title,
       description: job.description,
@@ -227,8 +333,14 @@ async function upsertBatch(
       salaryMin: job.salaryMin,
       salaryMax: job.salaryMax,
       currency: job.currency ?? null,
+      precomputed: precomputed.get(job.externalId),
     }).catch((error) => {
-      console.error("[risk] scoring failed", error instanceof Error ? error.message : error);
+      console.error(
+        "[risk] scoring failed",
+        error instanceof Error
+          ? `${error.name}: ${error.message} ${error.stack?.split("\n")[1] ?? ""}`
+          : String(error),
+      );
       return {
         score: 0,
         action: "publish" as RiskAction,
@@ -237,7 +349,7 @@ async function upsertBatch(
       };
     });
     scored.set(job.externalId, assessment);
-  }
+  });
 
   const companyNames = prepared.map((job) => job.companyName);
   const companySlugs = prepared.map((job) => job.companySlug);
@@ -267,20 +379,19 @@ async function upsertBatch(
             x.salary_max, x.currency, x.apply_url, x.application_method,
             x.platform, x.posted_at,
             CASE WHEN x.risk_action = 'reject' THEN 'hidden' ELSE 'active' END,
-            x.risk_score, x.risk_flags, x.risk_action, now(), x.simhash::bigint,
+            x.risk_score, '{}'::text[], x.risk_action, now(), x.simhash::bigint,
             x.fingerprint
        FROM unnest(
               $2::text[], $3::text[], $4::text[], $5::text[], $6::text[],
               $7::text[], $8::text[], $9::text[], $10::text[],
               $11::int[], $12::int[], $13::text[], $14::text[], $15::text[],
               $16::text[], $17::timestamptz[], $18::text[], $19::numeric[],
-              $20::text[], $21::text[], $22::bigint[], $23::text[]
+              $20::text[], $21::bigint[], $22::text[]
             ) AS x(
               company_slug, external_id, title, description, country, city,
               work_mode, seniority, employment_type, salary_min, salary_max,
               currency, apply_url, application_method, platform, posted_at,
-              company_name, risk_score, risk_flags, risk_action, simhash,
-              fingerprint
+              company_name, risk_score, risk_action, simhash, fingerprint
             )
        JOIN companies c ON c.slug = x.company_slug
      ON CONFLICT (source_id, external_id) DO UPDATE SET
@@ -325,12 +436,39 @@ async function upsertBatch(
       prepared.map((job) => job.postedAt),
       prepared.map((job) => job.companyName),
       prepared.map((job) => scored.get(job.externalId)?.score ?? 0),
-      prepared.map((job) => scored.get(job.externalId)?.flags ?? []),
       prepared.map((job) => scored.get(job.externalId)?.action ?? "publish"),
       prepared.map((job) => job.simhash),
       prepared.map((job) => job.fingerprint),
     ],
   );
+
+  // risk_flags is a per-row array and cannot travel through unnest(), so the
+  // flags are written in one follow-up statement.
+  const flagged = prepared.filter(
+    (job) => (scored.get(job.externalId)?.flags.length ?? 0) > 0,
+  );
+  if (flagged.length > 0) {
+    await query(
+      `UPDATE opportunities o
+          SET risk_flags = ARRAY(SELECT jsonb_array_elements_text(x.flags)),
+              risk_score = x.score,
+              risk_action = x.action,
+              risk_scored_at = now()
+         FROM unnest($1::text[], $2::int[], $3::text[], $4::jsonb[])
+              AS x(external_id, score, action, flags)
+        WHERE o.source_id = $5::uuid
+          AND o.external_id = x.external_id`,
+      [
+        flagged.map((job) => job.externalId),
+        flagged.map((job) => scored.get(job.externalId)?.score ?? 0),
+        flagged.map((job) => scored.get(job.externalId)?.action ?? "publish"),
+        flagged.map((job) =>
+          JSON.stringify(scored.get(job.externalId)?.flags ?? []),
+        ),
+        sourceId,
+      ],
+    );
+  }
 
   const opportunityIds = result.rows.map((row) => row.id);
   const idByExternalId = new Map(

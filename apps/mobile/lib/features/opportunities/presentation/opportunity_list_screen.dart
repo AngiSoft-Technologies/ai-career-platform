@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../shared/widgets/brand_mark.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -37,7 +39,7 @@ class _OpportunityListScreenState extends State<OpportunityListScreen> {
     final controller = context.watch<OpportunityController>();
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Opportunities'),
+        title: const BrandMark(size: 26, showWordmark: true, onDark: false),
         actions: [
           IconButton(
             tooltip: controller.showSavedOnly

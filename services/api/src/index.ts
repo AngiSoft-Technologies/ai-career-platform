@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { app } from "./app.js";
 import { config } from "./config.js";
-import { pool } from "./db/pool.js";
+import { pool, warmPool } from "./db/pool.js";
 import { redis, startRedis } from "./db/redis.js";
 import { logger } from "./logger.js";
 import { attachRealtime, closeRealtime } from "./realtime/hub.js";
@@ -25,10 +25,17 @@ async function main(): Promise<void> {
   let grpc: GrpcHandle | null = null;
   let workers: WorkerHandle | null = null;
 
+  startRedis();
+
+  const databaseReady = await warmPool();
+  if (!databaseReady) {
+    logger.error("Database is not reachable at startup");
+    process.exit(1);
+  }
+
   if (role === "app" || role === "api") {
     const server = createServer(app);
     attachRealtime(server);
-    startRedis();
 
     server.listen(config.PORT, () => {
       logger.info(
@@ -55,7 +62,6 @@ async function main(): Promise<void> {
   }
 
   if (role === "app" || role === "worker") {
-    startRedis();
     workers = await startWorkers();
   }
 

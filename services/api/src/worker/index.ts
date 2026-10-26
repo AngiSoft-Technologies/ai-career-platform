@@ -106,9 +106,21 @@ async function handleExpireOpportunities(): Promise<{ expired: number }> {
 async function handlePruneEvents(): Promise<{ pruned: number }> {
   const result = await query(
     `DELETE FROM events
-      WHERE created_at < now() - interval '90 days'`,
+      WHERE occurred_at < now() - interval '90 days'`,
   );
   return { pruned: result.rowCount ?? 0 };
+}
+
+function describeError(error: unknown): Record<string, unknown> {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack?.split("\n").slice(0, 4).join(" | "),
+      code: (error as { code?: string }).code,
+    };
+  }
+  return { name: "Unknown", message: String(error) };
 }
 
 const handlers: Record<JobName, () => Promise<unknown>> = {
@@ -152,7 +164,7 @@ export async function startWorkers(): Promise<WorkerHandle> {
             {
               queue: queueName,
               job: job.name,
-              error: error instanceof Error ? error.message : String(error),
+              error: describeError(error),
             },
             "Background job failed",
           );
@@ -167,7 +179,7 @@ export async function startWorkers(): Promise<WorkerHandle> {
 
     worker.on("failed", (job, error) => {
       logger.error(
-        { job: job?.name, error: error.message },
+        { job: job?.name, error: describeError(error) },
         "Background job attempt failed",
       );
     });
@@ -200,6 +212,7 @@ async function scheduleRecurringJobs(
   const ingestionMinutes = Number(process.env.INGESTION_INTERVAL_MINUTES ?? 30);
   const embeddingMinutes = Number(process.env.EMBEDDING_INTERVAL_MINUTES ?? 60);
   const maintenanceHours = Number(process.env.MAINTENANCE_INTERVAL_HOURS ?? 6);
+  const pruningHours = Number(process.env.PRUNING_INTERVAL_HOURS ?? 24);
 
   const ingestionQueue = queueMap.get(QUEUE_NAMES.ingestion);
   const embeddingQueue = queueMap.get(QUEUE_NAMES.embeddings);
@@ -209,7 +222,7 @@ async function scheduleRecurringJobs(
     await ingestionQueue.upsertJobScheduler(
       "scheduler-ingestion",
       { every: ingestionMinutes * 60_000 },
-      { name: JOB_NAMES.ingestSources, data: {} },
+      { name: JOB_NAMES.ingestSources, data: {}, delay: 60_000 },
     );
   }
 
@@ -217,7 +230,7 @@ async function scheduleRecurringJobs(
     await embeddingQueue.upsertJobScheduler(
       "scheduler-embeddings",
       { every: embeddingMinutes * 60_000 },
-      { name: JOB_NAMES.refreshEmbeddings, data: {} },
+      { name: JOB_NAMES.refreshEmbeddings, data: {}, delay: 120_000 },
     );
   }
 
@@ -225,12 +238,12 @@ async function scheduleRecurringJobs(
     await maintenanceQueue.upsertJobScheduler(
       "scheduler-maintenance",
       { every: maintenanceHours * 3_600_000 },
-      { name: JOB_NAMES.expireOpportunities, data: {} },
+      { name: JOB_NAMES.expireOpportunities, data: {}, delay: 180_000 },
     );
     await maintenanceQueue.upsertJobScheduler(
       "scheduler-event-pruning",
-      { every: maintenanceHours * 3_600_000 },
-      { name: JOB_NAMES.pruneEvents, data: {} },
+      { every: pruningHours * 3_600_000 },
+      { name: JOB_NAMES.pruneEvents, data: {}, delay: 240_000 },
     );
   }
 
@@ -239,6 +252,7 @@ async function scheduleRecurringJobs(
       ingestionMinutes,
       embeddingMinutes,
       maintenanceHours,
+      pruningHours,
     },
     "Recurring background jobs scheduled",
   );

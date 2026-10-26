@@ -2,6 +2,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { config } from "../config.js";
 import { query } from "../db/pool.js";
 import { clearUserRoleCache } from "../services/rbac/index.js";
+import { logger } from "../logger.js";
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -50,10 +51,21 @@ export async function verifyNeonToken(
       [subject],
     );
     const user = result.rows[0];
-    if (!user) return null;
+    if (!user) {
+      logger.warn({ subject }, "Neon Auth user not found in neon_auth.user");
+      return null;
+    }
 
     return { userId: user.id, email: user.email, name: user.name };
-  } catch {
+  } catch (error) {
+    logger.error(
+      {
+        errorName: error instanceof Error ? error.name : typeof error,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorCode: (error as { code?: string }).code,
+      },
+      "Neon Auth token verification failed",
+    );
     return null;
   }
 }
