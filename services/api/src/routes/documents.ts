@@ -2,12 +2,13 @@ import { Router } from "express";
 import { z } from "zod";
 import { query } from "../db/pool.js";
 import { broadcast } from "../realtime/hub.js";
-import { renderDocument } from "../services/documents/export.js";
+import { contentToExportSections, renderDocument } from "../services/documents/export.js";
 import { slugify } from "../services/ingestion/pipeline.js";
 import { validateDocumentForAts, validateRequestSchema } from "../services/documents/validate.js";
 import {
   generateDocument,
   listDocuments,
+  prepareDocumentTailoring,
 } from "../services/documents.js";
 import { createUploadTarget } from "../services/storage.js";
 
@@ -60,11 +61,28 @@ const updateSchema = z.object({
   content: z.string().max(200_000).optional(),
 });
 
+const tailorSchema = z.object({ opportunityId: z.string().uuid() });
+
+documentsRouter.post("/:id/tailor", async (request, response, next) => {
+  try {
+    const sourceDocumentId = z.string().uuid().parse(request.params.id);
+    const input = tailorSchema.parse(request.body);
+    const proposal = await prepareDocumentTailoring({
+      userId: response.locals.userId as string,
+      sourceDocumentId,
+      opportunityId: input.opportunityId,
+    });
+    response.json({ proposal });
+  } catch (error) {
+    next(error);
+  }
+});
+
 documentsRouter.get("/:id", async (request, response, next) => {
   try {
     const documentId = z.string().uuid().parse(request.params.id);
     const result = await query(
-      `SELECT id, opportunity_id, type, title, content, created_at
+      `SELECT id, opportunity_id, parent_document_id, type, title, content, created_at
          FROM documents WHERE id = $1 AND user_id = $2`,
       [documentId, response.locals.userId as string],
     );
@@ -76,6 +94,7 @@ documentsRouter.get("/:id", async (request, response, next) => {
     response.json({
       id: row.id,
       opportunityId: row.opportunity_id,
+      parentDocumentId: row.parent_document_id ?? undefined,
       type: row.type,
       title: row.title,
       content: row.content,
@@ -112,6 +131,68 @@ documentsRouter.patch("/:id", async (request, response, next) => {
       content: row.content,
       createdAt: row.created_at,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+documentsRouter.post("/:id/versions", async (request, response, next) => {
+  try {
+    const documentId = z.string().uuid().parse(request.params.id);
+    const input = z.object({
+      title: z.string().min(1).max(240).optional(),
+      content: z.string().max(200_000).optional(),
+      opportunityId: z.string().uuid().optional(),
+    }).parse(request.body ?? {});
+    const source = await query<{
+      opportunity_id: string;
+      parent_document_id: string | null;
+      application_id: string | null;
+      type: string;
+      title: string;
+      content: string;
+    }>(
+      `SELECT opportunity_id, parent_document_id, application_id, type, title, content
+         FROM documents WHERE id = $1 AND user_id = $2`,
+      [documentId, response.locals.userId as string],
+    );
+    const row = source.rows[0];
+    if (!row) {
+      response.status(404).json({ error: "Document not found" });
+      return;
+    }
+    const opportunityId = input.opportunityId ?? row.opportunity_id;
+    if (input.opportunityId) {
+      const opportunity = await query<{ id: string }>(
+        "SELECT id FROM opportunities WHERE id = $1",
+        [input.opportunityId],
+      );
+      if (!opportunity.rows[0]) {
+        response.status(404).json({ error: "Opportunity not found" });
+        return;
+      }
+    }
+    let applicationId = row.application_id;
+    if (opportunityId !== row.opportunity_id) {
+      const targetApplication = await query<{ id: string }>(
+        `SELECT id FROM applications
+          WHERE user_id = $1 AND opportunity_id = $2
+          ORDER BY created_at DESC LIMIT 1`,
+        [response.locals.userId as string, opportunityId],
+      );
+      applicationId = targetApplication.rows[0]?.id ?? null;
+    }
+    const inserted = await query(
+      `INSERT INTO documents (user_id, opportunity_id, application_id, parent_document_id, type, title, content)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, opportunity_id AS "opportunityId", parent_document_id AS "parentDocumentId", type, title, content, created_at AS "createdAt"`,
+      [response.locals.userId as string, opportunityId, applicationId, row.parent_document_id ?? documentId, row.type,
+        input.title ?? `${row.title} — tailored copy`, input.content ?? row.content],
+    );
+    const document = inserted.rows[0];
+    if (!document) throw new Error("DOCUMENT_VERSION_CREATE_FAILED");
+    broadcast("document.generated", { documentId: document.id, type: document.type }, response.locals.userId as string);
+    response.status(201).json({ document });
   } catch (error) {
     next(error);
   }
@@ -186,6 +267,7 @@ documentsRouter.post("/upload-url", async (request, response) => {
 
 const exportSchema = z.object({
   format: z.enum(["pdf", "docx", "pptx", "png"]),
+  template: z.enum(["classic", "modern", "minimal"]).default("classic"),
 });
 
 documentsRouter.post("/:id/export", async (request, response, next) => {
@@ -216,14 +298,10 @@ documentsRouter.post("/:id/export", async (request, response, next) => {
     const rendered = await renderDocument(
       {
         title: document.title,
-        subtitle: `${document.type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())} · Job Radar`,
-        sections: [{ paragraphs: document.content.split(/\n{2,}/).filter(Boolean) }],
-        metadata: {
-          generated: new Date().toISOString(),
-          platform: "Job Radar — AngiSoft Technologies",
-        },
+        sections: contentToExportSections(document.content),
       },
       input.format,
+      input.template,
     );
 
     await query(
@@ -236,7 +314,7 @@ documentsRouter.post("/:id/export", async (request, response, next) => {
       .setHeader("Content-Type", rendered.mimeType)
       .setHeader(
         "Content-Disposition",
-        `attachment; filename="${slugify(document.title)}-jobradar.${rendered.extension}"`,
+        `attachment; filename="${slugify(document.title)}.${rendered.extension}"`,
       )
       .send(rendered.body);
   } catch (error) {

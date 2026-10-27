@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   CalendarClock,
+  CheckCircle2,
+  Clipboard,
   ExternalLink,
   FileText,
   Mail,
@@ -35,17 +37,41 @@ interface ApplicationItem {
   createdAt: string;
   updatedAt: string;
   version: number;
+  appliedAt?: string;
 }
 
 interface ApplicationsResponse {
   items: ApplicationItem[];
 }
 
+function safeEmployerUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    if (!(["https:", "http:"].includes(url.protocol)) || !url.hostname) return null;
+    if (typeof window !== "undefined" && url.origin === window.location.origin) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 export default function ApplicationWorkspacePage() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const toast = useToast();
+  const startedFromOpportunity = useRef(false);
   const [tab, setTab] = useState("overview");
   const [analysis, setAnalysis] = useState<ApplicationAnalysis | null>(null);
+  const [applicationOverride, setApplicationOverride] = useState<ApplicationItem | null>(null);
+  const [startingGuide, setStartingGuide] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [employerPageOpen, setEmployerPageOpen] = useState(false);
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [questionAnswers, setQuestionAnswers] = useState<Record<string, string>>({});
+  const [guideChecks, setGuideChecks] = useState<Record<string, boolean>>({});
+  const [progressLoaded, setProgressLoaded] = useState(false);
+  const [confirmingSubmission, setConfirmingSubmission] = useState(false);
   const [analysing, setAnalysing] = useState(false);
   const [savingFollowup, setSavingFollowup] = useState(false);
   const [followupDate, setFollowupDate] = useState(() => {
@@ -55,31 +81,137 @@ export default function ApplicationWorkspacePage() {
   });
 
   const applications = useApi<ApplicationsResponse>("/applications");
-  const application = applications.data?.items?.find((item) => item.id === params.id);
+  const application = applicationOverride ?? applications.data?.items?.find((item) => item.id === params.id);
   const opportunities = useApi<{ items: Opportunity[] }>("/opportunities", { limit: 100 });
   const opportunity = opportunities.data?.items?.find(
     (item) => item.id === application?.opportunityId,
   );
+  const employerUrl = analysis ? safeEmployerUrl(analysis.analysisUrl) : null;
 
-  const analyse = async () => {
-    if (!application) return;
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(`jr.application-guide:${params.id}`);
+      if (saved) {
+        const parsed = JSON.parse(saved) as Record<string, unknown>;
+        if ("checks" in parsed && parsed.checks && typeof parsed.checks === "object") {
+          setGuideChecks(parsed.checks as Record<string, boolean>);
+          setQuestionAnswers(parsed.questionAnswers && typeof parsed.questionAnswers === "object" ? parsed.questionAnswers as Record<string, string> : {});
+          setEmailSubject(typeof parsed.emailSubject === "string" ? parsed.emailSubject : "");
+          setEmailBody(typeof parsed.emailBody === "string" ? parsed.emailBody : "");
+        } else {
+          setGuideChecks(Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, boolean] => typeof entry[1] === "boolean")));
+        }
+      }
+    } catch {
+      setGuideChecks({});
+    }
+    setProgressLoaded(true);
+  }, [params.id]);
+
+  useEffect(() => {
+    if (progressLoaded) {
+      window.localStorage.setItem(`jr.application-guide:${params.id}`, JSON.stringify({ checks: guideChecks, questionAnswers, emailSubject, emailBody }));
+    }
+  }, [emailBody, emailSubject, guideChecks, params.id, progressLoaded, questionAnswers]);
+
+  const analyse = async (): Promise<ApplicationAnalysis | null> => {
+    if (!application) return null;
     setAnalysing(true);
     try {
       const response = await api.post<{ analysis: ApplicationAnalysis }>(
         `/applications/${application.id}/analyze`,
       );
       setAnalysis(response.analysis);
-      setTab("apply");
-      toast.push(`Analysed ${response.analysis.platform}`, "success");
+      setQuestionAnswers((current) => Object.keys(current).length ? current : Object.fromEntries(response.analysis.questions.map((item) => [item.question, item.answer ?? ""])));
+      setEmailSubject((current) => current || response.analysis.emailSubject || `Application for ${opportunity?.title ?? "this role"}`);
+      setEmailBody((current) => current || response.analysis.emailBody || `Hello,\n\nI am applying for the ${opportunity?.title ?? "role"} position${opportunity?.companyName ? ` at ${opportunity.companyName}` : ""}. I have attached my application documents for your review.\n\nKind regards`);
+      toast.push(`Application instructions ready for ${response.analysis.platform}`, "success");
+      return response.analysis;
     } catch (caught) {
       toast.push(
         caught instanceof Error ? caught.message : "Analysis failed",
         "danger",
       );
+      return null;
     } finally {
       setAnalysing(false);
     }
   };
+
+  const changeStatus = async (current: ApplicationItem, status: string) => {
+    setUpdatingStatus(true);
+    try {
+      const response = await api.patch<{ application: ApplicationItem }>(
+        `/applications/${current.id}/status`,
+        { status, version: current.version },
+      );
+      setApplicationOverride(response.application);
+      applications.refresh();
+      return response.application;
+    } catch (caught) {
+      toast.push(caught instanceof Error ? caught.message : "Could not update application progress", "danger");
+      return null;
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
+  const startGuidedApplication = async () => {
+    if (!application) return;
+    setStartingGuide(true);
+    try {
+      const result = analysis ?? await analyse();
+      if (!result) return;
+      let current = applicationOverride ?? application;
+      if (current.status === "SHORTLISTED") {
+        const analyzed = await changeStatus(current, "ANALYZED");
+        if (!analyzed) return;
+        current = analyzed;
+      }
+      if (current.status === "ANALYZED") {
+        const preparing = await changeStatus(current, "APPLICATION_PREPARATION");
+        if (!preparing) return;
+      }
+      setTab("apply");
+    } finally {
+      setStartingGuide(false);
+    }
+  };
+
+  const setGuideCheck = (key: string, checked: boolean) => {
+    setGuideChecks((current) => ({ ...current, [key]: checked }));
+  };
+
+  const copyEmail = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.push(`${label} copied`, "success");
+    } catch {
+      toast.push("Clipboard access is unavailable in this browser", "warning");
+    }
+  };
+
+  const markReadyToApply = async () => {
+    if (!application || application.status !== "APPLICATION_PREPARATION") return;
+    const ready = await changeStatus(application, "READY_TO_APPLY");
+    if (ready) toast.push("You are ready to continue on the employer’s application", "success");
+  };
+
+  const confirmSubmitted = async () => {
+    if (!application || application.status !== "READY_TO_APPLY") return;
+    const applied = await changeStatus(application, "APPLIED");
+    if (applied) {
+      setConfirmingSubmission(false);
+      toast.push("Application marked as submitted", "success");
+    }
+  };
+
+  useEffect(() => {
+    if (searchParams.get("guided") !== "1" || !application || startedFromOpportunity.current) return;
+    startedFromOpportunity.current = true;
+    setTab("apply");
+    void startGuidedApplication();
+  }, [application?.id, searchParams]);
 
   const scheduleFollowup = async () => {
     if (!application) return;
@@ -142,20 +274,10 @@ export default function ApplicationWorkspacePage() {
             size="sm"
             icon={<Radar size={14} />}
             loading={analysing}
-            onClick={() => void analyse()}
+            onClick={() => void startGuidedApplication()}
           >
-            Analyse page
+            {analysis ? "Continue application" : "Start guided application"}
           </Button>
-          {opportunity?.applyUrl ? (
-            <a
-              href={opportunity.applyUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-primary btn-sm"
-            >
-              Apply <ExternalLink size={13} />
-            </a>
-          ) : null}
         </div>
       </div>
 
@@ -208,19 +330,34 @@ export default function ApplicationWorkspacePage() {
       ) : null}
 
       {tab === "apply" ? (
-        <Card style={{ padding: "1.2rem" }}>
+        <div className="application-guide">
+          <Card className="application-guide__intro" style={{ padding: "1.2rem" }}>
+            <div className="application-guide__intro-copy">
+              <div className="eyebrow">Your application, step by step</div>
+              <h2>{application.status === "APPLIED" ? "Submission recorded" : opportunity?.applicationMethod === "email" ? "Prepare and send your email" : "Complete the employer’s application"}</h2>
+              <p>{application.status === "APPLIED" ? `You marked this application as submitted${application.appliedAt ? ` on ${formatDateTime(application.appliedAt)}` : ""}.` : opportunity?.applicationMethod === "email" ? "We’ll prepare the details and documents. You review everything, then send it from your email app." : "Keep these instructions beside the employer’s form. Job Radar will never submit the form for you."}</p>
+            </div>
+            <div className="application-guide__progress" aria-label={`Application status: ${titleCase(application.status)}`}>
+              <CheckCircle2 size={18} />
+              <span>{titleCase(application.status)}</span>
+            </div>
+          </Card>
+
+          {analysis ? (
+            <>
+              <Card style={{ padding: "1.2rem" }}>
           <SectionTitle
-            eyebrow="Detected"
-            title="Application form"
-            description="Parsed live from the employer's posting page."
+            eyebrow="Employer instructions"
+            title={analysis.method === "email" ? "Email application" : `${titleCase(analysis.platform)} application`}
+            description={analysis.rawTitle ? `Instructions prepared from ${analysis.rawTitle}.` : "Review the requirements, prepare your materials, and follow the employer’s steps."}
             action={
               <Button size="sm" variant="outline" loading={analysing} onClick={() => void analyse()}>
                 Re-analyse
               </Button>
             }
           />
-          {analysis ? (
-            <div className="stack" style={{ marginTop: "1rem", gap: "1rem" }}>
+            <div className="application-guide__layout">
+              <div className="stack" style={{ gap: "1rem" }}>
               <div className="row row-wrap" style={{ gap: "0.4rem" }}>
                 <Badge tone="accent">{titleCase(analysis.platform)}</Badge>
                 <Badge tone="neutral">{titleCase(analysis.method)}</Badge>
@@ -231,8 +368,84 @@ export default function ApplicationWorkspacePage() {
                 ) : null}
               </div>
 
+              {analysis.method === "email" ? (
+                <section className="application-guide__email" aria-labelledby="email-draft-heading">
+                  <h3 id="email-draft-heading">Review your email</h3>
+                  <label className="field">
+                    <span className="label">To</span>
+                    <div className="application-guide__copy-row">
+                      <input className="input" readOnly value={analysis.emailRecipient ?? "Recipient not found — check the employer instructions"} aria-label="Email recipient" />
+                      {analysis.emailRecipient ? <Button type="button" size="sm" variant="outline" icon={<Clipboard size={14} />} onClick={() => void copyEmail(analysis.emailRecipient!, "Recipient")}>Copy</Button> : null}
+                    </div>
+                  </label>
+                  <label className="field">
+                    <span className="label">Subject</span>
+                    <input className="input" value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} />
+                  </label>
+                  <label className="field">
+                    <span className="label">Message</span>
+                    <textarea className="input" rows={8} value={emailBody} onChange={(event) => setEmailBody(event.target.value)} />
+                  </label>
+                  <div className="application-guide__attachments">
+                    <strong>Before sending, attach your documents</strong>
+                    <p>{analysis.requiredDocuments.map(titleCase).join(" and ") || "CV and cover letter"} are expected. Generate or review them in your document editor.</p>
+                    <Link href={`/documents?opportunityId=${application.opportunityId}`} className="btn btn-outline btn-sm"><FileText size={14} /> Open my documents</Link>
+                  </div>
+                  {analysis.emailRecipient ? (
+                    <a className="btn btn-primary" href={`mailto:${encodeURIComponent(analysis.emailRecipient)}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`}>
+                      Open email app <Mail size={14} />
+                    </a>
+                  ) : null}
+                </section>
+              ) : (
+                <section className="application-guide__employer" aria-label="Employer application page">
+                  <div className="application-guide__employer-heading">
+                    <div>
+                      <h3>Employer’s application page</h3>
+                      <p>Complete each form step there. Return here whenever you need your checklist or prepared documents.</p>
+                    </div>
+                    <div className="row row-wrap">
+                      <Button type="button" size="sm" variant="outline" onClick={() => setEmployerPageOpen((open) => !open)}>
+                        {employerPageOpen ? "Hide employer page" : "Open inside Job Radar"}
+                      </Button>
+                      {employerUrl ? <a className="btn btn-ghost btn-sm" href={employerUrl} target="_blank" rel="noopener noreferrer">New tab <ExternalLink size={13} /></a> : null}
+                    </div>
+                  </div>
+                  {employerPageOpen && employerUrl ? (
+                    <iframe
+                      className="application-guide__frame"
+                      title={`Employer application for ${opportunity?.title ?? "this role"}`}
+                      src={employerUrl}
+                      referrerPolicy="no-referrer"
+                      sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-downloads"
+                    />
+                  ) : (
+                    <div className="application-guide__frame-placeholder">
+                      <ExternalLink size={22} />
+                      <p>{employerUrl ? "Open the employer’s site here to follow its application steps." : "This link cannot be embedded safely. Use the employer’s website address from the job listing."}</p>
+                    </div>
+                  )}
+                  <p className="application-guide__embed-note">Some employers block embedded pages. If the page stays blank, use “New tab”; this checklist will remain open here.</p>
+                </section>
+              )}
+
+              {analysis.questions.length > 0 ? (
+                <section className="application-guide__questions" aria-labelledby="application-questions-heading">
+                  <h3 id="application-questions-heading">Questions to prepare</h3>
+                  <p>These were found in the employer’s page. Draft and review your answers before entering them there.</p>
+                  {analysis.questions.map((item) => (
+                    <label className="field" key={item.question}>
+                      <span className="label">{item.question}</span>
+                      <textarea className="input" rows={4} value={questionAnswers[item.question] ?? ""} onChange={(event) => setQuestionAnswers((current) => ({ ...current, [item.question]: event.target.value }))} placeholder="Write a truthful answer in your own words" />
+                    </label>
+                  ))}
+                </section>
+              ) : null}
+
               {analysis.fields.length > 0 ? (
-                <div className="table-scroll">
+                <details className="application-guide__details">
+                  <summary>Detected fields and profile suggestions ({analysis.fields.length})</summary>
+                <div className="table-scroll" style={{ marginTop: "0.8rem" }}>
                   <table className="data-table">
                     <thead>
                       <tr>
@@ -262,6 +475,7 @@ export default function ApplicationWorkspacePage() {
                     </tbody>
                   </table>
                 </div>
+                </details>
               ) : (
                 <p style={{ fontSize: "0.88rem", color: "var(--text-muted)" }}>
                   No structured form was detected. This employer likely uses a bespoke page.
@@ -269,31 +483,68 @@ export default function ApplicationWorkspacePage() {
               )}
 
               {analysis.instructions.length > 0 ? (
-                <div>
-                  <div className="eyebrow" style={{ marginBottom: "0.4rem" }}>
-                    Instructions
-                  </div>
+                <div className="application-guide__instructions">
+                  <h3>What the employer asks you to do</h3>
                   {analysis.instructions.map((instruction, index) => (
-                    <p key={index} style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
-                      {instruction}
-                    </p>
+                    <label key={index} className="application-guide__check">
+                      <input type="checkbox" checked={Boolean(guideChecks[`instruction-${index}`])} onChange={(event) => setGuideCheck(`instruction-${index}`, event.target.checked)} />
+                      <span>{instruction}</span>
+                    </label>
                   ))}
                 </div>
               ) : null}
+              </div>
+
+              <aside className="application-guide__rail" aria-label="Application checklist">
+                <h3>Before you submit</h3>
+                <p>Use these checks as you move through the employer’s process.</p>
+                {[
+                  ["details", "I checked the role and employer details"],
+                  ["documents", `I prepared ${analysis.requiredDocuments.map(titleCase).join(" and ") || "the requested documents"}`],
+                  ["answers", "I reviewed my answers and corrected anything that was wrong"],
+                  ["final", analysis.method === "email" ? "I checked the recipient and attachments before sending" : "I reviewed the completed form on the employer’s page"],
+                ].map(([key, label]) => (
+                  <label key={key} className="application-guide__check">
+                    <input type="checkbox" checked={Boolean(guideChecks[key])} onChange={(event) => setGuideCheck(key, event.target.checked)} />
+                    <span>{label}</span>
+                  </label>
+                ))}
+                <Button type="button" className="application-guide__ready" loading={updatingStatus} disabled={application.status !== "APPLICATION_PREPARATION" || !["details", "documents", "answers", "final"].every((key) => guideChecks[key])} onClick={() => void markReadyToApply()}>
+                  {application.status === "READY_TO_APPLY" ? "Ready to continue" : "I’m ready to submit"}
+                </Button>
+                {application.status === "READY_TO_APPLY" ? (
+                  <div className="application-guide__confirm">
+                    {!confirmingSubmission ? (
+                      <Button type="button" variant="outline" onClick={() => setConfirmingSubmission(true)}>{analysis.method === "email" ? "I sent the email" : "I submitted on the employer’s site"}</Button>
+                    ) : (
+                      <div role="group" aria-label="Confirm application submission">
+                        <p>Did you complete and submit the application with the employer?</p>
+                        <Button type="button" loading={updatingStatus} onClick={() => void confirmSubmitted()}>Yes, mark as applied</Button>
+                        <Button type="button" variant="ghost" onClick={() => setConfirmingSubmission(false)}>Not yet</Button>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+                {application.status === "APPLIED" ? <p className="application-guide__submitted"><CheckCircle2 size={16} /> Submission recorded in your applications.</p> : null}
+              </aside>
             </div>
+              </Card>
+            </>
           ) : (
+            <Card style={{ padding: "1.2rem" }}>
             <EmptyState
               icon={<Radar size={26} />}
               title="Not analysed yet"
               description="Analyse the employer's page to extract the form fields and screen questions."
               action={
-                <Button size="sm" loading={analysing} onClick={() => void analyse()}>
-                  Analyse now
+                <Button size="sm" loading={analysing || startingGuide} onClick={() => void startGuidedApplication()}>
+                  Prepare my application
                 </Button>
               }
             />
+            </Card>
           )}
-        </Card>
+        </div>
       ) : null}
 
       {tab === "followup" ? (

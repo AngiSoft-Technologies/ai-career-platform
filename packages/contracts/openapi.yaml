@@ -199,7 +199,14 @@ paths:
       parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
       summary: Analyse the external application page (platform, fields, questions)
       responses:
-        "200": { description: Analysis }
+        "200":
+          description: Best-effort application page analysis
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  analysis: { $ref: "#/components/schemas/ApplicationAnalysis" }
         "502": { description: Application page could not be analysed }
   /applications/{id}/followups:
     post:
@@ -286,6 +293,62 @@ paths:
                 content: { type: string }
       responses:
         "200": { description: Updated document }
+  /documents/{id}/tailor:
+    post:
+      tags: [documents]
+      summary: Prepare a job-specific resume or cover-letter proposal for review
+      description: Uses the selected source document and profile as factual evidence. Returns an unsaved proposal; the source document is unchanged.
+      parameters: [{ name: id, in: path, required: true, description: Source document ID, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [opportunityId]
+              properties:
+                opportunityId: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Proposed tailored document and review metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  proposal:
+                    type: object
+                    required: [sourceDocumentId, opportunityId, type, title, content, changes, matchedRequirements, uncoveredRequirements]
+                    properties:
+                      sourceDocumentId: { type: string, format: uuid }
+                      opportunityId: { type: string, format: uuid }
+                      type: { type: string, enum: [cv, cover_letter] }
+                      title: { type: string }
+                      content: { type: string }
+                      changes: { type: array, items: { type: string } }
+                      matchedRequirements: { type: array, items: { type: string } }
+                      uncoveredRequirements: { type: array, items: { type: string } }
+        "400": { description: Source document type cannot be tailored }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { description: Tailoring provider returned an invalid or ungrounded proposal }
+        "503": { description: AI provider is not configured }
+  /documents/{id}/versions:
+    post:
+      tags: [documents]
+      summary: Save an approved document as an independent version
+      parameters: [{ name: id, in: path, required: true, description: Source document ID, schema: { type: string, format: uuid } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string, maxLength: 240 }
+                content: { type: string, maxLength: 200000 }
+                opportunityId: { type: string, format: uuid, description: Target job for this version }
+      responses:
+        "201": { description: Saved independent version; source is unchanged }
+        "404": { $ref: "#/components/responses/NotFound" }
   /documents/{id}/export:
     post:
       tags: [documents]
@@ -840,3 +903,37 @@ components:
                 location: { type: number }
                 role: { type: number }
                 freshness: { type: number }
+    ApplicationAnalysis:
+      type: object
+      properties:
+        platform: { type: string }
+        method: { type: string, enum: [website, email, ats, form] }
+        analysisUrl: { type: string }
+        fields:
+          type: array
+          items:
+            type: object
+            properties:
+              key: { type: string }
+              label: { type: string }
+              type: { type: string }
+              required: { type: boolean }
+              mapped: { type: boolean }
+              suggestedValue: { type: string }
+              options: { type: array, items: { type: string } }
+        questions:
+          type: array
+          items:
+            type: object
+            properties:
+              question: { type: string }
+              answer: { type: string }
+              confidence: { type: number }
+        requiredDocuments: { type: array, items: { type: string } }
+        instructions: { type: array, items: { type: string } }
+        requiresUserInput: { type: array, items: { type: string } }
+        deadline: { type: string }
+        rawTitle: { type: string }
+        emailRecipient: { type: string }
+        emailSubject: { type: string }
+        emailBody: { type: string }

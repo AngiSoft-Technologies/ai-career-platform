@@ -34,6 +34,7 @@ export interface ApplicationAnalysis {
   questions: Array<{ question: string; answer: string; confidence: number }>;
   emailRecipient?: string;
   emailSubject?: string;
+  emailBody?: string;
   requiredDocuments: string[];
   instructions: string[];
   requiresUserInput: string[];
@@ -265,12 +266,28 @@ function suggestValue(
 
 export async function analyseApplicationPage(input: {
   applyUrl: string;
+  applicationMethod?: string;
   profile: CandidateProfile | null;
 }): Promise<ApplicationAnalysis> {
   const url = input.applyUrl;
 
-  if (url.startsWith("mailto:")) {
-    const recipient = url.replace(/^mailto:/, "").split("?")[0];
+  const isMailto = /^mailto:/i.test(url);
+  const directEmail = isMailto || /^[^\s:/?#]+@[^\s:/?#]+\.[^\s:/?#]+$/.test(url);
+  if (directEmail) {
+    const mailto = isMailto ? url : `mailto:${url}`;
+    const mailtoContent = mailto.slice("mailto:".length);
+    const queryStart = mailtoContent.indexOf("?");
+    const rawRecipient = queryStart < 0
+      ? mailtoContent
+      : mailtoContent.slice(0, queryStart);
+    const rawQuery = queryStart < 0 ? "" : mailtoContent.slice(queryStart + 1);
+    let recipient = rawRecipient.replaceAll(",", ", ");
+    try {
+      recipient = decodeURIComponent(recipient);
+    } catch {
+      // Keep the source value if a mailto address contains malformed escapes.
+    }
+    const params = new URLSearchParams(rawQuery);
     return {
       platform: "email",
       method: "email",
@@ -278,8 +295,8 @@ export async function analyseApplicationPage(input: {
       fields: [],
       questions: [],
       emailRecipient: recipient,
-      emailSubject: (new URL(`mailto:${recipient}${url.includes("?") ? url.slice(url.indexOf("?")) : ""}`))
-        .searchParams.get("subject") ?? undefined,
+      emailSubject: params.get("subject") ?? undefined,
+      emailBody: params.get("body") ?? undefined,
       requiredDocuments: ["cv", "cover_letter"],
       instructions: [
         "Attach your CV and a tailored cover letter.",
@@ -339,6 +356,9 @@ export async function analyseApplicationPage(input: {
   if (mapped.some((f) => f.type === "file" && /transcript|certificate/i.test(`${f.key} ${f.label}`))) {
     requiredDocuments.push("transcript");
   }
+  if (input.applicationMethod === "email") {
+    requiredDocuments.push("cv", "cover_letter");
+  }
   if (requiredDocuments.length === 0) {
     requiredDocuments.push("cv");
     if (/cover/i.test(text)) requiredDocuments.push("cover_letter");
@@ -355,7 +375,7 @@ export async function analyseApplicationPage(input: {
     .map((field) => field.label || field.key);
 
   const method: ApplicationAnalysis["method"] =
-    platform === "email"
+    input.applicationMethod === "email" || platform === "email"
       ? "email"
       : ["greenhouse", "lever", "ashby", "workable", "smartrecruiters", "workday", "oracle"].includes(platform)
         ? "ats"

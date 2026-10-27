@@ -89,6 +89,7 @@ export interface Application {
 export interface JobDocument {
   id: string;
   opportunityId: string;
+  parentDocumentId?: string;
   type: string;
   title: string;
   content: string;
@@ -167,13 +168,14 @@ export interface ApplicationAnalysis {
     suggestedValue?: string;
     options?: string[];
   }>;
-  questions: Array<{ question: string; required: boolean }>;
+  questions: Array<{ question: string; answer?: string; confidence?: number; required?: boolean }>;
   requiredDocuments: string[];
   instructions: string[];
-  requiresUserInput: Array<{ field: string; reason: string }>;
+  requiresUserInput: string[];
   rawTitle?: string;
   emailRecipient?: string;
   emailSubject?: string;
+  emailBody?: string;
 }
 
 export interface Connection {

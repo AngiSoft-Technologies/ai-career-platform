@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/match_score_badge.dart';
@@ -210,9 +209,19 @@ class _ApplicationWorkspaceScreenState
               FilledButton.tonalIcon(
                 onPressed: workspace.applicationUrl.isEmpty
                     ? null
-                    : () => _openUrl(workspace.applicationUrl),
-                icon: const Icon(Icons.open_in_new_rounded),
-                label: const Text('Open application page'),
+                    : () => context.push(
+                        '/applications/${widget.applicationId}/apply',
+                      ),
+                icon: Icon(
+                  workspace.method == 'email'
+                      ? Icons.mark_email_read_outlined
+                      : Icons.play_circle_outline,
+                ),
+                label: Text(
+                  workspace.method == 'email'
+                      ? 'Prepare application email'
+                      : 'Start guided application',
+                ),
               ),
             ],
           ),
@@ -297,12 +306,6 @@ class _ApplicationWorkspaceScreenState
         ),
       ),
     );
-  }
-
-  Future<void> _openUrl(String value) async {
-    final uri = Uri.tryParse(value);
-    if (uri == null) return;
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   String _fieldLabel(String value) {

@@ -6,7 +6,6 @@ import { useState } from "react";
 import {
   ArrowLeft,
   Building2,
-  ExternalLink,
   FileText,
   MapPin,
   Radar,
@@ -67,8 +66,8 @@ export default function OpportunityDetailPage() {
         opportunityId: item.id,
       });
       setApplicationId(response.application.id);
-      toast.push("Application workspace created", "success");
-      setTab("apply");
+      toast.push("Opening your guided application", "success");
+      router.push(`/applications/${response.application.id}?guided=1`);
     } catch (caught) {
       toast.push(
         caught instanceof Error ? caught.message : "Could not create the application",
@@ -256,15 +255,14 @@ export default function OpportunityDetailPage() {
                 <InfoRow label="Method" value={titleCase(item.applicationMethod)} />
                 <InfoRow label="Platform" value={titleCase(item.platform)} />
                 <InfoRow label="Expires" value={item.expiresAt ? formatDate(item.expiresAt) : "Not stated"} />
-                <a
-                  href={item.applyUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn btn-outline btn-sm"
+                <Button
+                  size="sm"
+                  loading={generating}
+                  onClick={() => void startApplication()}
                   style={{ marginTop: "0.3rem" }}
                 >
-                  Open employer page <ExternalLink size={13} />
-                </a>
+                  {item.applicationMethod === "email" ? "Prepare application email" : "Start guided application"}
+                </Button>
                 <p style={{ fontSize: "0.76rem", color: "var(--text-muted)", marginTop: "0.3rem" }}>
                   Job Radar never submits on your behalf. We prepare, you review, you submit.
                 </p>
@@ -374,7 +372,7 @@ export default function OpportunityDetailPage() {
                       <div className="stack" style={{ gap: "0.35rem" }}>
                         {analysis.requiresUserInput.map((item) => (
                           <div
-                            key={item.field}
+                            key={item}
                             style={{
                               padding: "0.55rem 0.7rem",
                               border: "1px solid var(--border)",
@@ -382,9 +380,9 @@ export default function OpportunityDetailPage() {
                               fontSize: "0.84rem",
                             }}
                           >
-                            <strong>{item.field}</strong>
+                            <strong>{item}</strong>
                             <div style={{ color: "var(--text-muted)", fontSize: "0.78rem" }}>
-                              {item.reason}
+                              Enter or confirm this value on the employer’s form.
                             </div>
                           </div>
                         ))}
@@ -458,15 +456,13 @@ export default function OpportunityDetailPage() {
                   All documents
                 </Button>
               </Link>
-              <a
-                href={item.applyUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn btn-primary"
+              <Button
+                loading={generating}
+                onClick={() => void startApplication()}
                 style={{ width: "100%" }}
               >
-                Apply on employer site <ExternalLink size={14} />
-              </a>
+                {item.applicationMethod === "email" ? "Prepare application email" : "Start guided application"}
+              </Button>
             </div>
             <div
               style={{

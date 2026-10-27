@@ -93,6 +93,12 @@ class ApplicationController extends ChangeNotifier {
     }
   }
 
-  Future<JobApplication> getApplication(String id) =>
-      _repository.getApplication(id);
+  Future<JobApplication> getApplication(String id) async {
+    final application = await _repository.getApplication(id);
+    if (!_items.any((item) => item.id == id)) {
+      _items = [application, ..._items];
+      notifyListeners();
+    }
+    return application;
+  }
 }

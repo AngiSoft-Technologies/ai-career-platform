@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Briefcase, CheckCircle2, ExternalLink, Radar, TrendingUp } from "lucide-react";
+import { Briefcase, CheckCircle2, Radar, TrendingUp } from "lucide-react";
 import {
   Badge,
   Button,
@@ -120,16 +120,6 @@ export default function ApplicationsPage() {
                     </h3>
                     <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", marginTop: 3 }}>
                       {opportunity?.companyName ?? "—"}
-                      {opportunity?.applyUrl ? (
-                        <a
-                          href={opportunity.applyUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{ marginLeft: "0.6rem", color: "var(--accent)" }}
-                        >
-                          employer site <ExternalLink size={11} style={{ verticalAlign: "-1px" }} />
-                        </a>
-                      ) : null}
                     </p>
                   </div>
 
@@ -147,9 +137,9 @@ export default function ApplicationsPage() {
                         </option>
                       ))}
                     </select>
-                    <Link href={`/applications/${application.id}`}>
+                    <Link href={`/applications/${application.id}?guided=1`}>
                       <Button variant="outline" size="sm" icon={<Radar size={13} />}>
-                        Workspace
+                        Continue application
                       </Button>
                     </Link>
                   </div>

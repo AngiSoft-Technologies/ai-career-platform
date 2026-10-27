@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../data/application_workspace_repository.dart';
 import '../domain/application_workspace.dart';
+import '../domain/application_analysis.dart';
 
 enum WorkspaceLoadState { idle, loading, ready, error }
 
@@ -33,4 +34,10 @@ class ApplicationWorkspaceController extends ChangeNotifier {
     }
     notifyListeners();
   }
+
+  Future<ApplicationWorkspace> getWorkspace(String applicationId) =>
+      _repository.getWorkspace(applicationId);
+
+  Future<ApplicationAnalysis> analyzeApplication(String applicationId) =>
+      _repository.analyzeApplication(applicationId);
 }

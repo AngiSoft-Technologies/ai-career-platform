@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/application_workspace/presentation/application_workspace_screen.dart';
+import '../../features/application_workspace/presentation/application_apply_screen.dart';
 import '../../features/applications/presentation/application_list_screen.dart';
 import '../../features/career_profile/presentation/profile_screen.dart';
 import '../../features/documents/presentation/document_list_screen.dart';
@@ -101,6 +102,11 @@ GoRouter createAppRouter(AuthSession authSession) {
         builder: (context, state) => ApplicationWorkspaceScreen(
           applicationId: state.pathParameters['id']!,
         ),
+      ),
+      GoRoute(
+        path: '/applications/:id/apply',
+        builder: (context, state) =>
+            ApplicationApplyScreen(applicationId: state.pathParameters['id']!),
       ),
       GoRoute(
         path: '/documents/:id',

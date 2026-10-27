@@ -17,8 +17,9 @@ analysisRouter.post("/:id/analyze", async (request, response, next) => {
       opportunity_id: string;
       apply_url: string;
       title: string;
+      application_method: string;
     }>(
-      `SELECT a.id, a.opportunity_id, o.apply_url, o.title
+      `SELECT a.id, a.opportunity_id, o.apply_url, o.title, o.application_method
          FROM applications a
          JOIN opportunities o ON o.id = a.opportunity_id
         WHERE a.id = $1 AND a.user_id = $2`,
@@ -38,6 +39,7 @@ analysisRouter.post("/:id/analyze", async (request, response, next) => {
 
     const analysis = await analyseApplicationPage({
       applyUrl: row.apply_url,
+      applicationMethod: row.application_method,
       profile,
     });
 

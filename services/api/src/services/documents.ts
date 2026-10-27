@@ -2,13 +2,22 @@ import type { DocumentDraft } from "@angisoft/job-radar-contracts";
 import { query } from "../db/pool.js";
 import { getOpportunity } from "./opportunities.js";
 import { getProfile } from "./profile.js";
+import { runDocumentTailoringAgent, type TailoringProposal } from "./documents/tailoring-agent.js";
 
 type DocumentType = DocumentDraft["type"];
+
+export interface PreparedDocumentTailoring extends TailoringProposal {
+  sourceDocumentId: string;
+  opportunityId: string;
+  type: "cv" | "cover_letter";
+  title: string;
+}
 
 interface DocumentRow {
   id: string;
   application_id: string | null;
   opportunity_id: string;
+  parent_document_id?: string | null;
   type: DocumentType;
   title: string;
   content: string;
@@ -27,7 +36,7 @@ function buildCoverLetter(
 
 I am applying for the ${title} role. I am a ${headline.toLowerCase()} with hands-on experience across ${topSkills}. ${summary}
 
-What draws me to ${company} is the opportunity to contribute to a team solving meaningful problems at scale. In my recent work I have delivered production software, collaborated across product and engineering, and taken ownership from discovery through delivery.
+What draws me to ${company} is the opportunity to contribute to its work. I would welcome the chance to discuss how my profile and skills could support the ${title} role.
 
 I would welcome the chance to discuss how my experience can support ${company}'s goals. Thank you for your time and consideration.
 
@@ -46,7 +55,7 @@ function buildEmail(
 
 Dear Hiring Team at ${company},
 
-Please find attached my CV and cover letter for the ${title} position. I bring practical experience in ${topSkills} and a strong record of shipping reliable products.
+Please find attached my CV and cover letter for the ${title} position. My profile highlights my skills in ${topSkills} and relevant experience.
 
 I would appreciate the opportunity to discuss the role further.
 
@@ -77,9 +86,7 @@ CORE SKILLS
 ${skills.map((skill) => `- ${skill}`).join("\n")}
 
 EXPERIENCE
-- Designed, built and maintained production software using ${skills.slice(0, 4).join(", ")}.
-- Collaborated with product, design and operations teams to deliver user-facing features.
-- Improved reliability and delivery speed through testing, automation and clear documentation.
+Add your roles, employers, dates, and achievements. Replace this prompt with details from your actual work history.
 
 EDUCATION
 - Add your education details here.
@@ -170,12 +177,60 @@ export async function generateDocument(input: {
   };
 }
 
+export async function prepareDocumentTailoring(input: {
+  userId: string;
+  sourceDocumentId: string;
+  opportunityId: string;
+}): Promise<PreparedDocumentTailoring> {
+  const sourceResult = await query<{
+    id: string;
+    type: string;
+    title: string;
+    content: string;
+  }>(
+    `SELECT id, type, title, content
+       FROM documents WHERE id = $1 AND user_id = $2`,
+    [input.sourceDocumentId, input.userId],
+  );
+  const source = sourceResult.rows[0];
+  if (!source) throw new Error("DOCUMENT_NOT_FOUND");
+  if (source.type !== "cv" && source.type !== "cover_letter") {
+    throw new Error("DOCUMENT_TYPE_CANNOT_BE_TAILORED");
+  }
+
+  const [profile, opportunity] = await Promise.all([
+    getProfile(input.userId),
+    getOpportunity(input.opportunityId),
+  ]);
+  if (!profile) throw new Error("PROFILE_NOT_FOUND");
+  if (!opportunity) throw new Error("OPPORTUNITY_NOT_FOUND");
+
+  const proposal = await runDocumentTailoringAgent({
+    source: {
+      id: source.id,
+      type: source.type,
+      title: source.title,
+      content: source.content,
+    },
+    profile,
+    opportunity,
+  });
+
+  return {
+    sourceDocumentId: source.id,
+    opportunityId: opportunity.id,
+    type: source.type,
+    title: `${source.type === "cv" ? "Resume" : "Cover letter"} — ${opportunity.title} at ${opportunity.companyName}`,
+    ...proposal,
+  };
+}
+
 export async function listDocuments(
   userId: string,
   opportunityId?: string,
 ): Promise<DocumentDraft[]> {
   const result = await query<DocumentRow>(
-    `SELECT id, application_id, opportunity_id, type, title, content
+    `SELECT id, application_id, opportunity_id, parent_document_id, type, title, content
      FROM documents
      WHERE user_id = $1 AND ($2::uuid IS NULL OR opportunity_id = $2)
      ORDER BY created_at DESC`,
@@ -186,6 +241,7 @@ export async function listDocuments(
     id: row.id,
     applicationId: row.application_id ?? undefined,
     opportunityId: row.opportunity_id,
+    parentDocumentId: row.parent_document_id ?? undefined,
     type: row.type,
     title: row.title,
     content: row.content,

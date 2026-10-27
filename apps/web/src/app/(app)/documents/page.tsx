@@ -58,7 +58,7 @@ function DocumentsPageInner() {
           Your application kit
         </h1>
         <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginTop: 4 }}>
-          Resumes, cover letters and application emails. Edit, validate for ATS, export anywhere.
+          Keep a source resume, create job-specific copies, and prepare matching cover letters. Review edits and gaps before exporting.
         </p>
       </div>
 
@@ -128,7 +128,7 @@ function DocumentsPageInner() {
             >
               <div className="row" style={{ justifyContent: "space-between", gap: "0.6rem" }}>
                 <FileText size={18} style={{ color: "var(--text-muted)" }} />
-                <Badge tone="accent">{titleCase(document.type)}</Badge>
+                <Badge tone="accent">{document.parentDocumentId ? "Job version" : titleCase(document.type)}</Badge>
               </div>
               <h3 style={{ fontSize: "1rem", marginTop: "0.7rem" }}>{document.title}</h3>
               <p style={{ fontSize: "0.76rem", color: "var(--text-muted)", marginTop: 4 }}>

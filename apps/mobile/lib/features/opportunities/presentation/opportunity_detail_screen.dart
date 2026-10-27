@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../shared/formatting/app_formatters.dart';
 import '../../../shared/widgets/app_states.dart';
@@ -193,15 +192,11 @@ class _OpportunityDetailScreenState extends State<OpportunityDetailScreen> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.playlist_add_rounded),
-          label: const Text('Add to applications'),
-        ),
-        const SizedBox(height: 10),
-        OutlinedButton.icon(
-          onPressed: opportunity.applyUrl.isEmpty
-              ? null
-              : () => _openApplyUrl(opportunity.applyUrl),
-          icon: const Icon(Icons.open_in_new_rounded),
-          label: const Text('Apply on employer website'),
+          label: Text(
+            opportunity.applicationMethod == 'email'
+                ? 'Prepare application email'
+                : 'Start guided application',
+          ),
         ),
       ],
     );
@@ -220,13 +215,7 @@ class _OpportunityDetailScreenState extends State<OpportunityDetailScreen> {
       );
       return;
     }
-    context.push('/applications/${application.id}/workspace');
-  }
-
-  Future<void> _openApplyUrl(String value) async {
-    final uri = Uri.tryParse(value);
-    if (uri == null) return;
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+    context.push('/applications/${application.id}/apply');
   }
 
   String _title(String value) {

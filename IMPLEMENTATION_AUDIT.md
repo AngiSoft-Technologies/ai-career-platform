@@ -16,9 +16,9 @@ The backend is the broadest layer, but it is not a complete implementation of ev
 | Deduplication, freshness and fraud controls | Pipeline has deterministic keys and risk assessment; review queue and scam corpus/admin routes exist | **Partial**; documented MinHash/LSH clustering and calibrated model are proposals, not present |
 | Job search, filters and role detail | REST search, Postgres FTS, optional semantic retrieval, web and mobile opportunity screens | **Implemented core**; pagination and consistent filter coverage need work; web filter state now syncs to the URL |
 | Profile-to-job matching and explanations | Rule-based scoring, optional embeddings, `/matches` and per-job match endpoint, web/mobile match components | **Partial**; proposed bitmap/IDF engine is not implemented; “semantic + rules” UI may imply more than score service guarantees |
-| Application tracking and workspace | Status state machine, event history, analysis/workspace APIs, web application list/detail; mobile list/workspace | **Partial**; creation is supported, but actual application submission automation is not. Web status mutation sends the required version |
-| Resume/CV and cover-letter generation, ATS checks, exports | Generate/edit/validate/export endpoints and web editor/viewer; mobile list/viewer | **Partial**; no full structured resume editor/import and no AST-based, multi-format pipeline as proposed |
-| User-controlled application assistance and ATS platform adapters | Analyzer/blueprint, external apply links, manual workspace steps | **Mostly missing**; no verified Greenhouse/Workday/etc. submission adapters or guarded browser automation |
+| Application tracking and workspace | Status state machine, event history, analysis/workspace APIs, guided web/mobile application flows | **Partial**; email preparation, embedded employer forms, saved checklists, and user-confirmed submission tracking are implemented. Job Radar does not submit forms or email on the user’s behalf |
+| Resume/CV and cover-letter generation, ATS checks, exports | Web section editor with reordering, preview/autosave, ATS report, three PDF styles; four tracked AI agents analyze job criteria, map candidate evidence, draft a job-specific version, and review factual grounding. User reviews/edits proposal and saves an independent copy linked to target job. Exports omit platform attribution | **Partial**; no PDF/DOCX resume import/parsing, structured experience-entry editor, full template gallery/font/page controls, or side-by-side version history. Grounding review is best-effort; generic profile-based generation still asks users to supply missing work history |
+| User-controlled application assistance and ATS platform adapters | Best-effort page analysis, email draft and document checklist, embedded employer pages, mobile live field/question reading, saved manual steps, final user confirmation | **Partial**; visible fields can be re-read locally in the mobile WebView. Provider-specific adapters, automatic field entry, and reliable cross-step page analysis are not implemented |
 | Follow-ups and notifications | Follow-up CRUD, notification stream/realtime events and web/mobile alerts | **Partial**; channels are reminders, not confirmed outbound email/WhatsApp/LinkedIn delivery |
 | Career insights and analytics | Admin stats, profile analysis, career intelligence mobile feature module | **Partial**; no demonstrated complete analytics projections or durable event replay |
 | Integrations and account connections | Connections API and web page; OAuth start/callback routes | **Partial**; provider coverage and end-to-end lifecycle need verification |
@@ -32,9 +32,9 @@ The backend is the broadest layer, but it is not a complete implementation of ev
 
 **Web public routes:** `/`, `/about`, `/features`, `/stories`, `/pricing`, `/faq`, `/security`, `/privacy`, `/terms`, `/contact`, `/download`, `/login` (and auth callback). Public content requests now have matching Express routes; contact posts to the configured API origin.
 
-**Web signed-in routes:** `/dashboard`, `/opportunities` and detail, `/matches`, `/applications` and detail, `/documents` and detail, `/followups`, `/profile`, `/connections`, `/settings`, `/companies` and detail, `/sources`, `/moderation`, `/support`, `/automation`, `/admin`. Candidate workflows are strongest; company detail delegates to the listing module, and several operator views need contract/role verification. There are five user-selectable shell themes (Aurora, Editorial, Terminal, Kinetic, Atlas), while the public site and Flutter app use different visual systems. This gives variety but weakens product continuity.
+**Web signed-in routes:** `/dashboard`, `/opportunities` and detail, `/matches`, `/applications` and detail, `/documents` and detail, `/followups`, `/profile`, `/connections`, `/settings`, `/companies` and detail, `/sources`, `/moderation`, `/support`, `/automation`, `/admin`. Job details now create/reuse an application and open a method-specific guided workspace. Company detail delegates to the listing module, and several operator views need contract/role verification. There are five user-selectable shell themes (Aurora, Editorial, Terminal, Kinetic, Atlas), while the public site and Flutter app use different visual systems.
 
-**Flutter routes:** onboarding; opportunities and detail; applications and workspace; matches; notifications; profile (including documents); preferences; settings. Feature modules also include company intelligence, career intelligence, and follow-ups, but these are not top-level screens. Mobile has no dashboard, connections, source/admin/operator workflows, or public content routes.
+**Flutter routes:** onboarding; opportunities and detail; applications and workspace; guided application browser/email flow; matches; notifications; profile (including documents); preferences; settings. Feature modules also include company intelligence, career intelligence, and follow-ups, but these are not top-level screens. Mobile has no dashboard, connections, source/admin/operator workflows, or public content routes.
 
 ## API and Infrastructure Reality
 
@@ -64,7 +64,7 @@ Do not “combine” all protocols into every request. Use REST for current firs
 
 ## UI/UX Review and Redesign Direction
 
-The public landing page has already been rebuilt around a clear three-step story, real career photography, a visible resume workspace preview, and diverse African professional imagery. It gives first-time visitors a clearer idea of the product. Apply that same story to the signed-in workflow: show a job’s source, fit reasons, salary/location and a clear next action; make the application pipeline visual and resumable; use consistent empty/loading/error states; keep data filters in the URL; and use one shared color/type/spacing system across web and Flutter. Use real product screenshots for actual functions and label illustrative previews honestly. Keep photos for human storytelling; use functional interface previews for software capabilities.
+The public landing page has already been rebuilt around a clear three-step story, real career photography, a visible resume workspace preview, and diverse African professional imagery. The signed-in opportunity → guided application journey now includes a method-specific checklist, email preparation, an embedded employer page where allowed, and a user-confirmed submission step. Continue by making progress synchronization and saved answers consistent across devices, add provider adapters when there is real demand, and bring remaining workflows onto one shared design system. Keep photos for human storytelling; use functional interface previews for software capabilities.
 
 ### Interface guideline findings
 
@@ -82,8 +82,9 @@ Reference inspiration (interaction patterns only; the interface should remain or
 1. Generate or validate client types from OpenAPI and add operation-level request/response checks to prevent future drift.
 2. Define durable offline conflict, retry, and idempotency behavior, then validate sync on-device.
 3. Complete mobile’s secondary workflows (dashboard, connections, preferences coverage) and bring remaining screens onto the shared design system.
-4. Redesign the signed-in opportunity → match explanation → application workspace journey, then apply the system to operator pages.
-5. Verify deployed worker/gRPC/realtime/storage/CDN configuration in Fly/Netlify and document actual production topology separately from product proposals.
+4. Validate the guided application journey with real employer pages and improve dynamic page analysis without taking over form submission.
+5. Apply the design system to remaining candidate and operator pages.
+6. Verify deployed worker/gRPC/realtime/storage/CDN configuration in Fly/Netlify and document actual production topology separately from product proposals.
 
 ## Source Map Reviewed
 
@@ -91,8 +92,7 @@ Reference inspiration (interaction patterns only; the interface should remain or
 
 ## Validation Notes
 
-- Web TypeScript check passes: `npm run typecheck -w @angisoft/job-radar-web`.
-- API TypeScript check passes: `npm run typecheck -w @angisoft/job-radar-api`.
-- Web TypeScript check passes: `npm run typecheck -w @angisoft/job-radar-web`.
+- API and web TypeScript checks pass: `npm run typecheck -w @angisoft/job-radar-api` and `npm run typecheck -w @angisoft/job-radar-web`.
 - Web production build passes: `npm run build -w @angisoft/job-radar-web`.
-- `dart analyze lib/features/followups/data/follow_up_repository.dart` passes. Full changed-file Flutter analysis stalled without finishing; it initially exposed and helped fix a missing offline-action status argument. No test suites were run.
+- Targeted Dart analysis passed for the guided application screen and router. Full Flutter analysis stalled without finishing. Android debug build was interrupted after 504 seconds with no build result.
+- No test suites were run.

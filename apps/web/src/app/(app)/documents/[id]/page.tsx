@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Download,
@@ -10,7 +10,6 @@ import {
   GripVertical,
   Plus,
   Save,
-  Sparkles,
   Trash2,
   Wand2,
 } from "lucide-react";
@@ -20,6 +19,7 @@ import {
   Card,
   EmptyState,
   Meter,
+  Modal,
   SectionTitle,
   Skeleton,
   Tabs,
@@ -28,17 +28,27 @@ import {
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/hooks";
 import {
-  STARTER_SECTIONS,
   buildPreviewHtml,
   parseDocument,
   serialiseDocument,
   type DocSection,
 } from "@/lib/document";
 import { formatDateTime, titleCase } from "@/lib/format";
-import type { AtsReport, JobDocument } from "@/lib/types";
+import type { AtsReport, JobDocument, Opportunity } from "@/lib/types";
 
 interface DocumentsResponse {
   documents: JobDocument[];
+}
+
+interface TailoringProposal {
+  sourceDocumentId: string;
+  opportunityId: string;
+  type: "cv" | "cover_letter";
+  title: string;
+  content: string;
+  changes: string[];
+  matchedRequirements: string[];
+  uncoveredRequirements: string[];
 }
 
 export default function DocumentEditorPage() {
@@ -50,23 +60,65 @@ export default function DocumentEditorPage() {
   const [title, setTitle] = useState("");
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [generating, setGenerating] = useState(false);
+  const [creatingVersion, setCreatingVersion] = useState(false);
   const [validating, setValidating] = useState(false);
   const [report, setReport] = useState<AtsReport | null>(null);
   const [tab, setTab] = useState("edit");
   const [dragging, setDragging] = useState<string | null>(null);
+  const [template, setTemplate] = useState<"classic" | "modern" | "minimal">("classic");
+  const [tailorOpen, setTailorOpen] = useState(false);
+  const [tailorBusy, setTailorBusy] = useState(false);
+  const [tailoringProposal, setTailoringProposal] = useState<TailoringProposal | null>(null);
+  const [tailoringOpportunityId, setTailoringOpportunityId] = useState("");
 
   const { data, loading } = useApi<JobDocument>(`/documents/${params.id}`);
   const list = useApi<DocumentsResponse>("/documents");
+  const opportunities = useApi<{ items: Opportunity[] }>("/opportunities", { limit: 100 });
+  const documentItems = list.data?.documents ?? [];
+  const baseDocument = data?.parentDocumentId
+    ? documentItems.find((document) => document.id === data.parentDocumentId)
+    : data;
+  const jobVersions = baseDocument
+    ? documentItems.filter((document) => document.parentDocumentId === baseDocument.id)
+    : [];
 
   useEffect(() => {
     if (!data) return;
     const parsed = parseDocument(data.content);
     setSections(parsed.sections);
     setTitle(data.title);
+    setTailoringOpportunityId(data.opportunityId);
   }, [data]);
 
+  useEffect(() => {
+    const saved = window.localStorage.getItem("job-radar-document-template");
+    if (saved === "classic" || saved === "modern" || saved === "minimal") setTemplate(saved);
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("job-radar-document-template", template);
+  }, [template]);
+
   const content = useMemo(() => serialiseDocument(title, sections), [title, sections]);
+  const latestDraft = useRef({ title, content });
+  latestDraft.current = { title, content };
+
+  useEffect(() => {
+    if (!dirty || !data) return;
+    const snapshot = { title, content };
+    const timer = window.setTimeout(() => {
+      setSaving(true);
+      void api.patch(`/documents/${params.id}`, snapshot)
+        .then(() => {
+          if (latestDraft.current.title === snapshot.title && latestDraft.current.content === snapshot.content) {
+            setDirty(false);
+          }
+        })
+        .catch((caught) => toast.push(caught instanceof Error ? caught.message : "Autosave failed", "danger"))
+        .finally(() => setSaving(false));
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [content, data, dirty, params.id, title, toast]);
 
   const updateSection = (id: string, patch: Partial<DocSection>) => {
     setSections((current) =>
@@ -145,38 +197,68 @@ export default function DocumentEditorPage() {
     }
   };
 
-  const generate = async () => {
-    setGenerating(true);
+  const createVersion = async () => {
+    setCreatingVersion(true);
     try {
-      const response = await api.post<{ document: JobDocument }>("/documents/generate", {
-        opportunityId: data?.opportunityId,
-        type: "cv",
-      });
-      toast.push("New version generated", "success");
+      await api.patch(`/documents/${params.id}`, { title, content });
+      const response = await api.post<{ document: JobDocument }>(`/documents/${params.id}/versions`, {});
+      toast.push("Independent copy created. Your original is unchanged.", "success");
       router.push(`/documents/${response.document.id}`);
     } catch (caught) {
-      toast.push(
-        caught instanceof Error ? caught.message : "Generation failed",
-        "danger",
-      );
+      toast.push(caught instanceof Error ? caught.message : "Could not create a copy", "danger");
     } finally {
-      setGenerating(false);
+      setCreatingVersion(false);
+    }
+  };
+
+  const prepareTailoredVersion = async () => {
+    if (!tailoringOpportunityId) {
+      toast.push("Choose the job you want to tailor this document for", "warning");
+      return;
+    }
+    setTailorBusy(true);
+    setTailoringProposal(null);
+    try {
+      await api.patch(`/documents/${params.id}`, { title, content });
+      const response = await api.post<{ proposal: TailoringProposal }>(
+        `/documents/${params.id}/tailor`,
+        { opportunityId: tailoringOpportunityId },
+      );
+      setTailoringProposal(response.proposal);
+      toast.push("Tailored draft is ready for your review", "success");
+    } catch (caught) {
+      toast.push(caught instanceof Error ? caught.message : "Could not tailor this document", "danger");
+    } finally {
+      setTailorBusy(false);
+    }
+  };
+
+  const saveTailoredVersion = async () => {
+    if (!tailoringProposal) return;
+    setTailorBusy(true);
+    try {
+      const response = await api.post<{ document: JobDocument }>(
+        `/documents/${params.id}/versions`,
+        {
+          title: tailoringProposal.title,
+          content: tailoringProposal.content,
+          opportunityId: tailoringProposal.opportunityId,
+        },
+      );
+      toast.push("Job-specific copy saved. Your source document is unchanged.", "success");
+      setTailorOpen(false);
+      router.push(`/documents/${response.document.id}`);
+    } catch (caught) {
+      toast.push(caught instanceof Error ? caught.message : "Could not save the tailored copy", "danger");
+    } finally {
+      setTailorBusy(false);
     }
   };
 
   const exportDocument = async (format: "pdf" | "docx" | "pptx" | "png") => {
     try {
       await api.patch(`/documents/${params.id}`, { title, content });
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL ?? "https://job-radar-api-angisoft.fly.dev/v1"}/documents/${params.id}/export`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ format }),
-        },
-      );
-      if (!response.ok) throw new Error(`Export failed (${response.status})`);
-      const blob = await response.blob();
+      const blob = await api.postBlob(`/documents/${params.id}/export`, { format, template });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -233,12 +315,17 @@ export default function DocumentEditorPage() {
           </div>
         </div>
         <div className="row row-wrap" style={{ gap: "0.4rem" }}>
-          <Badge tone={dirty ? "warning" : "success"}>{dirty ? "Unsaved" : "Saved"}</Badge>
+          <Badge tone={dirty ? "warning" : "success"}>{saving ? "Saving…" : dirty ? "Unsaved changes" : "All changes saved"}</Badge>
           <Button variant="outline" size="sm" icon={<Wand2 size={14} />} loading={validating} onClick={() => void validate()}>
             ATS check
           </Button>
-          <Button variant="outline" size="sm" icon={<Sparkles size={14} />} loading={generating} onClick={() => void generate()}>
-            Regenerate
+          {data.type === "cv" || data.type === "cover_letter" ? (
+            <Button variant="outline" size="sm" icon={<Wand2 size={14} />} onClick={() => { setTailoringProposal(null); setTailorOpen(true); }}>
+              Tailor for a job
+            </Button>
+          ) : null}
+          <Button variant="outline" size="sm" icon={<FileText size={14} />} loading={creatingVersion} onClick={() => void createVersion()}>
+            Duplicate document
           </Button>
           <Button size="sm" icon={<Save size={14} />} loading={saving} onClick={() => void save()}>
             Save
@@ -247,6 +334,14 @@ export default function DocumentEditorPage() {
       </div>
 
       <div className="row row-wrap" style={{ gap: "0.4rem" }}>
+        <label className="row" style={{ gap: "0.4rem", marginRight: "0.5rem" }}>
+          <span className="eyebrow">Template</span>
+          <select className="select" value={template} onChange={(event) => setTemplate(event.target.value as typeof template)} style={{ width: 130, padding: "0.35rem 0.5rem" }}>
+            <option value="classic">Classic</option>
+            <option value="modern">Modern</option>
+            <option value="minimal">Minimal</option>
+          </select>
+        </label>
         <span className="eyebrow">Export</span>
         {(["pdf", "docx", "pptx", "png"] as const).map((format) => (
           <Button
@@ -264,6 +359,26 @@ export default function DocumentEditorPage() {
           Last saved {formatDateTime(data.createdAt)}
         </span>
       </div>
+
+      {data.parentDocumentId && baseDocument ? (
+        <Card style={{ padding: "0.8rem 1rem" }}>
+          <span className="eyebrow">Job-specific version</span>
+          <span style={{ marginLeft: "0.5rem", fontSize: "0.84rem" }}>Based on <Link href={`/documents/${baseDocument.id}`} style={{ color: "var(--accent)" }}>{baseDocument.title}</Link></span>
+          {jobVersions.length > 0 ? (
+            <div className="row row-wrap" style={{ gap: "0.45rem", marginTop: "0.6rem" }}>
+              {jobVersions.map((version) => <Link key={version.id} href={`/documents/${version.id}`}><Badge tone={version.id === data.id ? "accent" : "neutral"}>{version.title}</Badge></Link>)}
+            </div>
+          ) : null}
+        </Card>
+      ) : null}
+      {!data.parentDocumentId && jobVersions.length > 0 ? (
+        <Card style={{ padding: "0.8rem 1rem" }}>
+          <div className="eyebrow">Job-specific versions · {jobVersions.length}</div>
+          <div className="row row-wrap" style={{ gap: "0.45rem", marginTop: "0.6rem" }}>
+            {jobVersions.map((version) => <Link key={version.id} href={`/documents/${version.id}`}><Badge tone="accent">{version.title}</Badge></Link>)}
+          </div>
+        </Card>
+      ) : null}
 
       <Tabs
         tabs={[
@@ -369,7 +484,7 @@ export default function DocumentEditorPage() {
                 <SectionTitle eyebrow="Live preview" title="How it prints" />
               </div>
               <div style={{ padding: "1rem", background: "var(--surface)" }}>
-                <div className="paper">
+                <div className={`paper paper-${template}`}>
                   <h1>{title}</h1>
                   <div
                     style={{
@@ -397,7 +512,7 @@ export default function DocumentEditorPage() {
 
       {tab === "preview" ? (
         <Card style={{ padding: "1.5rem" }}>
-          <div className="paper" style={{ maxWidth: 780, margin: "0 auto" }}>
+          <div className={`paper paper-${template}`} style={{ maxWidth: 780, margin: "0 auto" }}>
             <h1>{title}</h1>
             <div dangerouslySetInnerHTML={{ __html: buildPreviewHtml(title, sections) }} />
           </div>
@@ -573,6 +688,83 @@ export default function DocumentEditorPage() {
           ))}
         </div>
       ) : null}
+
+      <Modal
+        open={tailorOpen}
+        onClose={() => setTailorOpen(false)}
+        title="Tailor this document for a job"
+        width={820}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setTailorOpen(false)}>Cancel</Button>
+            {tailoringProposal ? (
+              <>
+                <Button variant="outline" loading={tailorBusy} onClick={() => void prepareTailoredVersion()}>
+                  Regenerate proposal
+                </Button>
+                <Button loading={tailorBusy} onClick={() => void saveTailoredVersion()}>
+                  Save as job version
+                </Button>
+              </>
+            ) : (
+              <Button loading={tailorBusy} onClick={() => void prepareTailoredVersion()}>
+                Prepare tailored draft
+              </Button>
+            )}
+          </>
+        }
+      >
+        <div className="stack" style={{ gap: "0.9rem" }}>
+          <p style={{ color: "var(--text-muted)", fontSize: "0.86rem" }}>
+            Job Radar analyses this document against the role title, posting, requirements and responsibilities. It creates a separate draft, keeps the original intact, and leaves the final review to you.
+          </p>
+          <label className="field">
+            <span className="label">Target job</span>
+            <select className="select" value={tailoringOpportunityId} onChange={(event) => setTailoringOpportunityId(event.target.value)}>
+              <option value="">Choose a job…</option>
+              {(opportunities.data?.items ?? []).map((item) => (
+                <option key={item.id} value={item.id}>{item.title} — {item.companyName}</option>
+              ))}
+            </select>
+          </label>
+          {tailorBusy && !tailoringProposal ? (
+            <div className="surface" style={{ padding: "1rem" }}>The document agents are comparing your evidence with the role and preparing a reviewable draft…</div>
+          ) : null}
+          {tailoringProposal ? (
+            <>
+              <div className="grid-2" style={{ gap: "0.8rem" }}>
+                <Card style={{ padding: "0.9rem" }}>
+                  <div className="eyebrow">What changed</div>
+                  <ul style={{ paddingLeft: "1.1rem", marginTop: "0.5rem", fontSize: "0.82rem" }}>
+                    {tailoringProposal.changes.map((change, index) => <li key={`${index}-${change}`}>{change}</li>)}
+                  </ul>
+                  <div className="eyebrow" style={{ marginTop: "0.8rem" }}>Supported requirements</div>
+                  <ul style={{ paddingLeft: "1.1rem", marginTop: "0.5rem", fontSize: "0.82rem" }}>
+                    {tailoringProposal.matchedRequirements.map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}
+                  </ul>
+                </Card>
+                <Card style={{ padding: "0.9rem" }}>
+                  <div className="eyebrow">Gaps to review honestly</div>
+                  {tailoringProposal.uncoveredRequirements.length ? (
+                    <ul style={{ paddingLeft: "1.1rem", marginTop: "0.5rem", fontSize: "0.82rem" }}>
+                      {tailoringProposal.uncoveredRequirements.map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}
+                    </ul>
+                  ) : <p style={{ fontSize: "0.82rem", marginTop: "0.5rem" }}>No uncovered requirements were identified from the provided job posting.</p>}
+                  <p style={{ color: "var(--text-muted)", fontSize: "0.76rem", marginTop: "0.7rem" }}>A gap is not a suggestion to add a skill or experience you do not have.</p>
+                </Card>
+              </div>
+              <label className="field">
+                <span className="label">Version name</span>
+                <input className="input" value={tailoringProposal.title} onChange={(event) => setTailoringProposal((current) => current ? { ...current, title: event.target.value } : current)} />
+              </label>
+              <label className="field">
+                <span className="label">Review and edit the proposed document</span>
+                <textarea className="textarea" style={{ minHeight: 320 }} value={tailoringProposal.content} onChange={(event) => setTailoringProposal((current) => current ? { ...current, content: event.target.value } : current)} />
+              </label>
+            </>
+          ) : null}
+        </div>
+      </Modal>
     </div>
   );
 }

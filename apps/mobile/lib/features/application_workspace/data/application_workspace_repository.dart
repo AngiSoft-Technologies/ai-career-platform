@@ -3,6 +3,7 @@ import '../../../core/networking/api_exception.dart';
 import '../../applications/data/application_repository.dart';
 import '../../opportunities/data/opportunity_repository.dart';
 import '../domain/application_workspace.dart';
+import '../domain/application_analysis.dart';
 
 class ApplicationWorkspaceRepository {
   ApplicationWorkspaceRepository({
@@ -45,6 +46,24 @@ class ApplicationWorkspaceRepository {
         opportunity: opportunity,
       );
     }
+  }
+
+  Future<ApplicationAnalysis> analyzeApplication(String applicationId) async {
+    final response = await _apiClient.post(
+      '/applications/$applicationId/analyze',
+    );
+    if (response is Map && response['analysis'] is Map) {
+      return ApplicationAnalysis.fromJson(
+        Map<String, dynamic>.from(response['analysis'] as Map),
+      );
+    }
+    if (response is Map) {
+      return ApplicationAnalysis.fromJson(Map<String, dynamic>.from(response));
+    }
+    throw const ApiException(
+      statusCode: 500,
+      message: 'The application instructions could not be read.',
+    );
   }
 
   Future<dynamic> _safeOpportunity(String opportunityId) async {

@@ -230,6 +230,26 @@ export async function request<T>(
   return data;
 }
 
+async function requestBlob(path: string, body: unknown): Promise<Blob> {
+  const url = buildUrl(path);
+  const createHeaders = async () => ({ ...(await authHeaders()), "Content-Type": "application/json" });
+  let response = await fetch(url, { method: "POST", headers: await createHeaders(), body: JSON.stringify(body) });
+  if (response.status === 401) {
+    clearToken();
+    const fresh = await getToken();
+    if (fresh) response = await fetch(url, {
+      method: "POST",
+      headers: { accept: "application/json", authorization: `Bearer ${fresh}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { error?: string } | null;
+    throw new ApiRequestError({ error: payload?.error ?? `Export failed (${response.status})`, status: response.status });
+  }
+  return response.blob();
+}
+
 export async function replayOutbox(): Promise<{ replayed: number; failed: number }> {
   const items = readOutbox();
   if (items.length === 0) return { replayed: 0, failed: 0 };
@@ -273,4 +293,5 @@ export const api = {
   put: <T>(path: string, body?: unknown) => request<T>(path, { method: "PUT", body }),
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: "PATCH", body }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  postBlob: (path: string, body: unknown) => requestBlob(path, body),
 };

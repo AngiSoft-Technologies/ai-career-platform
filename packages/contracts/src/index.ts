@@ -131,6 +131,7 @@ export interface DocumentDraft {
   id: string;
   applicationId?: string;
   opportunityId: string;
+  parentDocumentId?: string;
   type: "cv" | "cover_letter" | "application_email" | "answer";
   title: string;
   content: string;

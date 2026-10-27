@@ -994,6 +994,35 @@ a {
   margin-bottom: 0.3rem;
 }
 
+.paper-modern h1 {
+  color: #0f766e;
+  border-left: 4px solid #14b8a6;
+  padding-left: 0.8rem;
+}
+
+.paper-modern h2 {
+  color: #115e59;
+  border-color: #99f6e4;
+  letter-spacing: 0.08em;
+}
+
+.paper-minimal {
+  padding: 2.8rem;
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.paper-minimal h1 {
+  font-size: 1.8rem;
+  letter-spacing: -0.03em;
+}
+
+.paper-minimal h2 {
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  color: #374151;
+  border: 0;
+}
+
 /* ==========================================================================
    Misc
    ========================================================================== */
@@ -1157,6 +1186,49 @@ h1, h2, h3, h4, h5, h6, [id] {
   padding: 1rem;
   min-height: 100dvh;
   align-items: start;
+}
+
+.application-guide { display: grid; gap: 1rem; }
+.application-guide__intro { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; }
+.application-guide__intro-copy { max-width: 760px; }
+.application-guide__intro h2 { margin: .25rem 0 .4rem; font-size: clamp(1.3rem, 2.6vw, 1.8rem); }
+.application-guide__intro p { max-width: 68ch; margin: 0; color: var(--text-muted); line-height: 1.6; }
+.application-guide__progress { display: inline-flex; flex: 0 0 auto; align-items: center; gap: .55rem; padding: .65rem .8rem; border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--accent); font-size: .82rem; font-weight: 700; }
+.application-guide__layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; align-items: start; gap: 1.2rem; margin-top: 1.2rem; }
+.application-guide__layout > :first-child { min-width: 0; }
+.application-guide__email, .application-guide__questions, .application-guide__employer, .application-guide__instructions { display: grid; gap: .8rem; padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-2); }
+.application-guide__email h3, .application-guide__questions h3, .application-guide__employer h3, .application-guide__instructions h3, .application-guide__rail h3 { margin: 0; font-size: 1rem; }
+.application-guide__questions > p, .application-guide__employer-heading p, .application-guide__rail > p { margin: -.25rem 0 .2rem; color: var(--text-muted); font-size: .82rem; line-height: 1.55; }
+.application-guide__copy-row { display: flex; gap: .5rem; }
+.application-guide__copy-row .input { min-width: 0; }
+.application-guide__attachments { padding: .8rem; border-left: 3px solid var(--accent); background: var(--surface); }
+.application-guide__attachments p { margin: .35rem 0 .65rem; color: var(--text-muted); font-size: .82rem; }
+.application-guide__employer-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.application-guide__employer-heading > div:first-child { max-width: 480px; }
+.application-guide__employer-heading p { margin: .3rem 0 0; }
+.application-guide__frame { display: block; width: 100%; height: min(72vh, 820px); min-height: 480px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: #fff; }
+.application-guide__frame-placeholder { display: grid; min-height: 180px; place-content: center; justify-items: center; gap: .7rem; border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); color: var(--text-muted); text-align: center; }
+.application-guide__frame-placeholder p { margin: 0; }
+.application-guide__embed-note { margin: 0; color: var(--text-muted); font-size: .76rem; line-height: 1.5; }
+.application-guide__details { padding: .85rem 1rem; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.application-guide__details summary { cursor: pointer; font-weight: 650; }
+.application-guide__rail { position: sticky; top: 1rem; display: grid; gap: .8rem; padding: 1rem; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-solid); }
+.application-guide__check { display: flex; align-items: flex-start; gap: .65rem; color: var(--text-soft); font-size: .82rem; line-height: 1.5; cursor: pointer; }
+.application-guide__check input { width: 17px; height: 17px; flex: 0 0 auto; margin: .1rem 0 0; accent-color: var(--accent); }
+.application-guide__ready, .application-guide__confirm > button { width: 100%; justify-content: center; }
+.application-guide__confirm { display: grid; gap: .5rem; padding-top: .2rem; }
+.application-guide__confirm p { margin: 0 0 .35rem; font-size: .84rem; line-height: 1.5; }
+.application-guide__submitted { display: flex; align-items: center; gap: .45rem; margin: 0; color: var(--success); font-size: .84rem; }
+
+@media (max-width: 900px) {
+  .application-guide__layout { grid-template-columns: 1fr; }
+  .application-guide__rail { position: static; }
+}
+@media (max-width: 640px) {
+  .application-guide__intro, .application-guide__employer-heading { align-items: stretch; flex-direction: column; }
+  .application-guide__progress { align-self: flex-start; }
+  .application-guide__copy-row { align-items: stretch; flex-direction: column; }
+  .application-guide__frame { height: 68vh; min-height: 380px; }
 }
 
 .aurora-side {
