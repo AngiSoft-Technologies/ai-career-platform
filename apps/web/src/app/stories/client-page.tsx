@@ -103,7 +103,7 @@ export default function StoriesPage() {
             <a href="/signup" className="mk-btn mk-btn--primary mk-btn--lg">
               <ArrowRight aria-hidden="true" /> Get started free
             </a>
-            <a href="/jobs" className="mk-btn mk-btn--ghost mk-btn--lg">
+            <a href="/opportunities" className="mk-btn mk-btn--ghost mk-btn--lg">
               <ArrowRight aria-hidden="true" /> Browse live jobs
             </a>
           </div>

@@ -199,7 +199,7 @@ export default function AboutPage() {
             <Link href="/signup" className="mk-btn mk-btn--primary mk-btn--lg">
               <ArrowRight aria-hidden="true" /> Get started free
             </Link>
-            <Link href="/jobs" className="mk-btn mk-btn--ghost mk-btn--lg">
+            <Link href="/opportunities" className="mk-btn mk-btn--ghost mk-btn--lg">
               <ArrowRight aria-hidden="true" /> Browse live jobs
             </Link>
           </div>

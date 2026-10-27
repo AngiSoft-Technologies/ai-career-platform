@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useEffect } from "react";
 import { Reveal } from "@/components/marketing/reveal";
+import { MarketingLayout } from "@/components/marketing/layout";
 import { useApi } from "@/lib/hooks";
 import {
   Download,
@@ -87,7 +88,7 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <main>
+    <MarketingLayout>
       <section className="jr-hero" aria-labelledby="hero-title">
         <div className="jr-hero__inner">
           <div className="jr-hero__copy">
@@ -96,7 +97,7 @@ export default function LandingPage() {
             <p>Discover relevant opportunities, shape your resume for each role, and keep every application moving from one workspace.</p>
             <div className="jr-hero__actions">
               <Link href="/signup" className="jr-button jr-button--primary">Build my career profile <ArrowRight aria-hidden="true" /></Link>
-              <Link href="/jobs" className="jr-button jr-button--quiet">Browse opportunities</Link>
+              <Link href="/opportunities" className="jr-button jr-button--quiet">Browse opportunities</Link>
             </div>
             <p className="jr-hero__note">Your experience stays yours. You choose what to share and when to apply.</p>
           </div>
@@ -264,12 +265,12 @@ export default function LandingPage() {
             <Link href="/signup" className="mk-btn mk-btn--primary mk-btn--lg">
               <Download aria-hidden="true" /> Get started free
             </Link>
-            <Link href="/jobs" className="mk-btn mk-btn--ghost mk-btn--lg">
+            <Link href="/opportunities" className="mk-btn mk-btn--ghost mk-btn--lg">
               <ArrowRight aria-hidden="true" /> Browse live jobs
             </Link>
           </div>
         </div>
       </section>
-    </main>
+    </MarketingLayout>
   );
 }
