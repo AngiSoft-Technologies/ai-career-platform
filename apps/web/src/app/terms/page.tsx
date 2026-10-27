@@ -75,7 +75,7 @@ export default function TermsPage() {
                 ))}
               </div>
             ) : s.length === 0 ? (
-              <p style={{ color: "var(--mk-text-muted)" }}>No terms content configured yet.</p>
+              <p style={{ color: "var(--mk-text-muted)" }}>More details coming soon.</p>
             ) : (
               s.map((section, i) => (
                 <Reveal key={section.id} delay={i * 50}>

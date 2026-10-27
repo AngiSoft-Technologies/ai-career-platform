@@ -1,6 +1,6 @@
 "use client";
 
-import { API_URL, clearToken, getToken } from "./auth";
+import { API_URL, cachedSession, cachedToken, clearToken, getToken } from "./auth";
 
 export interface ApiError {
   error: string;
@@ -124,7 +124,8 @@ function buildUrl(path: string, query?: RequestOptions["query"]): string {
 }
 
 async function authHeaders(): Promise<Record<string, string>> {
-  const token = await getToken();
+  const cached = cachedToken();
+  const token = cached ?? (cachedSession() ? await getToken() : null);
   const headers: Record<string, string> = { accept: "application/json" };
   if (token) headers.authorization = `Bearer ${token}`;
   return headers;
@@ -178,7 +179,11 @@ export async function request<T>(
     });
   }
 
-  if (response.status === 401 && options.retryOnUnauthorized !== false) {
+  if (
+    response.status === 401 &&
+    options.retryOnUnauthorized !== false &&
+    (headers.authorization || cachedSession())
+  ) {
     clearToken();
     const fresh = await getToken();
     if (fresh) {

@@ -87,7 +87,7 @@ export default function PricingPage() {
               </Reveal>
             </div>
           ) : p.length === 0 ? (
-            <p style={{ color: "var(--mk-text-muted)", textAlign: "center" }}>No plans configured yet.</p>
+            <p style={{ color: "var(--mk-text-muted)", textAlign: "center" }}>More plans coming soon.</p>
           ) : (
             <div className="mk-pricing-cards">
               {p.map((plan, i) => (
@@ -125,7 +125,7 @@ export default function PricingPage() {
           <p className="mk-cta__text">Founding access is free. Create your profile and start applying to live jobs today.</p>
           <div className="mk-cta__actions">
             <Link href="/signup" className="mk-btn mk-btn--primary mk-btn--lg">
-              <Download aria-hidden="true" /> Get started free
+              <Download aria-hidden="true" /> Create a free account
             </Link>
             <Link href="/contact" className="mk-btn mk-btn--ghost mk-btn--lg">
               <ArrowRight aria-hidden="true" /> Have questions?

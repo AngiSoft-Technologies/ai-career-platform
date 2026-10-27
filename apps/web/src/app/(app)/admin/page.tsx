@@ -26,6 +26,7 @@ import {
 import { useApi } from "@/lib/hooks";
 import { api } from "@/lib/api";
 import { formatDateTime, titleCase } from "@/lib/format";
+import { InvitationsPanel } from "./invitations-panel";
 
 interface StatsResponse {
   totals: {
@@ -96,6 +97,7 @@ export default function AdminPage() {
   const taxonomy = useApi<TaxonomyResponse>("/admin/taxonomy");
   const scam = useApi<ScamResponse>("/admin/scam-corpus");
   const events = useApi<EventResponse>("/admin/event-stream", { limit: 60 });
+  const invitations = useApi<{ items: unknown[] }>("/admin/invitations");
 
   const [assignUser, setAssignUser] = useState("");
   const [assignRole, setAssignRole] = useState("");
@@ -177,6 +179,7 @@ export default function AdminPage() {
           { key: "roles", label: "Roles", count: roles.data?.roles?.length },
           { key: "taxonomy", label: "Taxonomy", count: taxonomy.data?.professions?.length },
           { key: "scam", label: "Scam corpus", count: scam.data?.total },
+          { key: "invitations", label: "Invitations", count: invitations.data?.items?.length },
           { key: "events", label: "Events", count: events.data?.total },
         ]}
         active={tab}
@@ -281,12 +284,12 @@ export default function AdminPage() {
                     <td>{user.name ?? "—"}</td>
                     <td>
                       <div className="row row-wrap" style={{ gap: "0.25rem" }}>
-                        {user.roles.length === 0 ? (
+                        {!(Array.isArray(user.roles) ? user.roles : []).length ? (
                           <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
                             no roles
                           </span>
                         ) : (
-                          user.roles.map((role) => (
+                          (Array.isArray(user.roles) ? user.roles : []).map((role) => (
                             <Badge key={role} tone="accent">
                               {titleCase(role)}
                             </Badge>
@@ -481,6 +484,8 @@ export default function AdminPage() {
           )}
         </Card>
       ) : null}
+
+      {tab === "invitations" ? <InvitationsPanel /> : null}
 
       {tab === "events" ? (
         <Card style={{ padding: "1.1rem" }}>

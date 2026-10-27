@@ -22,7 +22,9 @@ import { metricsRouter, recordHttpRequest } from "./routes/metrics.js";
 import { statsRouter } from "./routes/stats.js";
 import { publicRouter } from "./routes/public.js";
 import { contentRouter } from "./routes/content.js";
+import { invitationRouter } from "./routes/invitations.js";
 import { v1Router } from "./routes/v1.js";
+import { webhookRouter } from "./routes/webhooks.js";
 import { API_VERSION, API_VERSION_HEADER } from "./version.js";
 
 export const app = express();
@@ -42,6 +44,8 @@ app.use(
     credentials: true,
   }),
 );
+app.use("/v1/webhooks", webhookRouter);
+app.use("/api/v1/webhooks", webhookRouter);
 app.use(express.json({ limit: "2mb" }));
 app.use((_request, response, next) => {
   response.setHeader(API_VERSION_HEADER, API_VERSION);
@@ -134,8 +138,44 @@ app.get(["/health", "/v1/health"], async (_request, response) => {
 
 app.use("/v1/graphql", buildYoga("/v1/graphql"));
 app.use("/graphql", buildYoga("/graphql"));
-app.use("/v1/mcp", mcpRouter);
-app.use("/mcp", mcpRouter);
+
+const mcpResourcePath = "/v1/mcp";
+const mcpResource = `${config.API_URL.replace(/\/$/, "")}${mcpResourcePath}`;
+const mcpResourceMetadata = `${config.API_URL.replace(/\/$/, "")}/.well-known/oauth-protected-resource${mcpResourcePath}`;
+const mcpAuthorizationServer = config.NEON_AUTH_BASE_URL?.replace(/\/$/, "");
+
+const protectedResource = (resource: string) => ({
+  resource,
+  authorization_servers: mcpAuthorizationServer ? [mcpAuthorizationServer] : [],
+  scopes_supported: ["openid", "profile", "email", "offline_access"],
+  bearer_methods_supported: ["header"],
+  resource_name: "Job Radar",
+});
+
+app.get("/.well-known/oauth-protected-resource/v1/mcp", (_request, response) => {
+  response.json(protectedResource(mcpResource));
+});
+
+app.get("/.well-known/oauth-protected-resource/mcp", (_request, response) => {
+  response.json(
+    protectedResource(`${config.API_URL.replace(/\/$/, "")}/mcp`),
+  );
+});
+
+app.use([mcpResourcePath, "/mcp"], (_request, response, next) => {
+  const sendJson = response.json.bind(response);
+  response.json = ((body: unknown) => {
+    if (response.statusCode === 401 && !response.getHeader("WWW-Authenticate")) {
+      response.setHeader(
+        "WWW-Authenticate",
+        `Bearer resource_metadata="${mcpResourceMetadata}"`,
+      );
+    }
+    return sendJson(body);
+  }) as typeof response.json;
+  next();
+});
+
 app.use(metricsRouter);
 // Public, cacheable aggregate counters for the marketing site. Mounted before
 // identity because it must not require a session.
@@ -143,11 +183,15 @@ app.use("/v1/stats", statsRouter);
 app.use("/api/v1/stats", statsRouter);
 app.use("/v1/public", publicRouter);
 app.use("/api/v1/public", publicRouter);
+app.use("/v1/invitations", invitationRouter);
+app.use("/api/v1/invitations", invitationRouter);
 app.use("/v1/content", contentRouter);
 app.use("/api/v1/content", contentRouter);
 app.use(flyReplayMiddleware);
 
 app.use(identity);
+app.use("/v1/mcp", mcpRouter);
+app.use("/mcp", mcpRouter);
 app.use("/v1", v1Router);
 app.use("/api/v1", v1Router);
 

@@ -2,13 +2,12 @@
 
 import { useState } from "react";
 import { LogOut, Palette, ShieldCheck, UserCog } from "lucide-react";
+import { linkGoogle } from "@/lib/auth";
 import {
   Badge,
   Button,
   Card,
   SectionTitle,
-  Select,
-  Switch,
   useToast,
 } from "@/components/ui";
 import { ROLE_LABELS, THEMES, ThemePicker, useTheme } from "@/components/theme";
@@ -16,22 +15,15 @@ import { useSession } from "@/components/session";
 import { outboxItems } from "@/lib/api";
 import type { RoleKey } from "@/lib/types";
 
-const ROLES: RoleKey[] = [
-  "job_seeker",
-  "analyst",
-  "moderator",
-  "support_agent",
-  "source_curator",
-  "automation",
-  "admin",
-  "super_admin",
-];
-
 export default function SettingsPage() {
   const { role, setTheme } = useTheme();
-  const { session, roles, permissions, switchRole, signOut } = useSession();
+  const { session, roles, permissions, signOut } = useSession();
   const toast = useToast();
   const [outbox, setOutbox] = useState(outboxItems());
+  const [linkingGoogle, setLinkingGoogle] = useState(false);
+  const isStaff = roles.some((item) =>
+    ["admin", "super_admin", "moderator", "support_agent", "source_curator", "automation", "analyst"].includes(item),
+  );
 
   return (
     <div className="stack" style={{ gap: "1.2rem" }}>
@@ -46,7 +38,7 @@ export default function SettingsPage() {
         <SectionTitle
           eyebrow="Appearance"
           title="Theme"
-          description="Five genuinely different layouts. Each role has a default, but you can override it."
+          description="Five layouts. Pick the one you like and it stays on this device."
           action={<Palette size={17} style={{ color: "var(--text-muted)" }} />}
         />
         <div style={{ marginTop: "1rem" }}>
@@ -54,23 +46,26 @@ export default function SettingsPage() {
         </div>
       </Card>
 
+      {isStaff ? (
       <Card style={{ padding: "1.2rem" }}>
         <SectionTitle
           eyebrow="Access"
-          title="Role and permissions"
-          description="Your role decides which dashboards and tools you see."
+          title="Your roles and permissions"
+          description="Roles are assigned by administrators. You cannot change them yourself."
           action={<UserCog size={17} style={{ color: "var(--text-muted)" }} />}
         />
         <div style={{ marginTop: "1rem" }}>
           <label className="field" style={{ maxWidth: 320 }}>
-            <span className="label">Active role</span>
-            <Select value={role} onChange={(event) => switchRole(event.target.value as RoleKey)}>
-              {ROLES.map((item) => (
-                <option key={item} value={item}>
-                  {ROLE_LABELS[item]}
-                </option>
-              ))}
-            </Select>
+            <span className="label">Your role</span>
+            <div style={{
+              padding: "0.5rem 0.75rem",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius-sm)",
+              background: "var(--surface)",
+              color: "var(--text-muted)",
+            }}>
+              {ROLE_LABELS[role] ?? role}
+            </div>
           </label>
 
           <div className="row row-wrap" style={{ gap: "0.35rem", marginTop: "1rem" }}>
@@ -106,9 +101,10 @@ export default function SettingsPage() {
           </details>
         </div>
       </Card>
+      ) : null}
 
       <Card style={{ padding: "1.2rem" }}>
-        <SectionTitle eyebrow="Offline" title="Sync queue" />
+        <SectionTitle eyebrow="Offline" title="Changes waiting to send" />
         <div style={{ marginTop: "0.9rem" }}>
           {outbox.length === 0 ? (
             <p style={{ fontSize: "0.86rem", color: "var(--text-muted)" }}>
@@ -161,16 +157,35 @@ export default function SettingsPage() {
               {session?.user.email}
             </div>
           </div>
-          <Button
-            variant="danger"
-            icon={<LogOut size={15} />}
-            onClick={() => {
-              void signOut();
-              window.location.href = "/";
-            }}
-          >
-            Sign out
-          </Button>
+          <div className="row row-wrap" style={{ gap: "0.6rem" }}>
+            <Button
+              variant="outline"
+              onClick={async () => {
+                setLinkingGoogle(true);
+                try {
+                  const started = await linkGoogle("/settings");
+                  if (!started) toast.push("Google is not available right now", "danger");
+                } catch {
+                  toast.push("Google is not available right now", "danger");
+                } finally {
+                  setLinkingGoogle(false);
+                }
+              }}
+              loading={linkingGoogle}
+            >
+              Connect Google
+            </Button>
+            <Button
+              variant="danger"
+              icon={<LogOut size={15} />}
+              onClick={() => {
+                void signOut();
+                window.location.href = "/";
+              }}
+            >
+              Sign out
+            </Button>
+          </div>
         </div>
       </Card>
 
@@ -194,7 +209,7 @@ export default function SettingsPage() {
           }}
         >
           <ShieldCheck size={15} style={{ color: "var(--accent)" }} />
-          Documents are stored in private object storage with short-lived signed URLs.
+          Your documents stay private and are only shared through time-limited links.
         </div>
       </Card>
     </div>

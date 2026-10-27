@@ -79,7 +79,7 @@ export default function ContactPage() {
           <p className="mk-cta__text">Free during development. No credit card. Help us build the honest job search you deserve.</p>
           <div className="mk-cta__actions">
             <a href="/download" className="mk-btn mk-btn--primary mk-btn--lg">
-              <ArrowRight aria-hidden="true" /> Get the Android APK
+              <ArrowRight aria-hidden="true" /> Get the Android app
             </a>
           </div>
         </div>

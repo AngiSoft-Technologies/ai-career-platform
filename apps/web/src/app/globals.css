@@ -4,6 +4,7 @@
    Declaring the standard property keeps the mobile text sizing correct and
    removes the parse warning. */
 html {
+  text-size-adjust: 100%;
   -webkit-text-size-adjust: 100%;
 }
 

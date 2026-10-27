@@ -97,7 +97,7 @@ export default function PrivacyPage() {
                 </Reveal>
               </div>
             ) : s.length === 0 ? (
-              <p style={{ color: "var(--mk-text-muted)" }}>No privacy content configured yet.</p>
+              <p style={{ color: "var(--mk-text-muted)" }}>More details coming soon.</p>
             ) : (
               s.map((section, i) => (
                 <Reveal key={section.id} delay={i * 50}>

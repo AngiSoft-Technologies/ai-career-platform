@@ -35,9 +35,24 @@ export async function verifyNeonToken(
 
   try {
     const { payload } = await jwtVerify(token, keySet, {
-      audience: origin,
       issuer: [origin, authBaseUrl],
     });
+
+    const audiences = Array.isArray(payload.aud)
+      ? payload.aud
+      : payload.aud
+        ? [payload.aud]
+        : [];
+    const allowedAudiences = new Set<string>([
+      origin,
+      authBaseUrl,
+      config.API_URL,
+      `${config.API_URL}/v1/mcp`,
+      `${config.API_URL}/mcp`,
+    ]);
+    if (!audiences.some((audience) => allowedAudiences.has(audience))) {
+      return null;
+    }
 
     const subject = payload.sub;
     if (!subject || payload.role === "anonymous") return null;
@@ -70,8 +85,41 @@ export async function verifyNeonToken(
   }
 }
 
+const NEON_TO_APP_ROLE: Record<string, string> = {
+  super_admin: "super_admin",
+  admin: "admin",
+  moderator: "moderator",
+  support_agent: "support_agent",
+  source_curator: "source_curator",
+  analyst: "analyst",
+  job_seeker: "job_seeker",
+  automation: "automation",
+};
+
+async function syncNeonRole(userId: string, neonRole: string | null): Promise<void> {
+  const appRole = neonRole ? NEON_TO_APP_ROLE[neonRole] : null;
+  if (!appRole) return;
+
+  const result = await query<{ name: string }>(
+    `SELECT name FROM roles WHERE name = $1`,
+    [appRole],
+  );
+  if (result.rowCount === 0) return;
+
+  await query(
+    `INSERT INTO public.user_roles (user_id, role_id)
+     SELECT $1, r.id FROM roles r
+      WHERE r.name = $2
+        AND NOT EXISTS (
+          SELECT 1 FROM user_roles ur WHERE ur.user_id = $1 AND ur.role_id = r.id AND ur.is_active = true
+        )
+     ON CONFLICT (user_id, role_id) DO UPDATE SET is_active = true, expires_at = NULL`,
+    [userId, appRole],
+  );
+}
+
 export async function ensureLocalUser(identity: NeonIdentity): Promise<string> {
-  const inserted = await query<{ id: string }>(
+  const inserted = await query<{ id: string; role: string }>(
     `INSERT INTO public.users (id, email, display_name)
      VALUES ($1, $2, $3)
      ON CONFLICT (id) DO UPDATE
@@ -94,16 +142,24 @@ export async function ensureLocalUser(identity: NeonIdentity): Promise<string> {
     [userId, identity.name],
   );
 
-  await query(
-    `INSERT INTO public.user_roles (user_id, role_id)
-     SELECT $1, r.id FROM roles r
-      WHERE r.name = 'job_seeker'
-        AND NOT EXISTS (
-          SELECT 1 FROM user_roles ur WHERE ur.user_id = $1 AND ur.is_active = true
-        )
-     ON CONFLICT (user_id, role_id) DO NOTHING`,
+  const neonUser = await query<{ role: string }>(
+    `SELECT role FROM neon_auth."user" WHERE id = $1`,
     [userId],
   );
+  if (neonUser.rows[0]?.role) {
+    await syncNeonRole(userId, neonUser.rows[0].role);
+  } else {
+    await query(
+      `INSERT INTO public.user_roles (user_id, role_id)
+       SELECT $1, r.id FROM roles r
+        WHERE r.name = 'job_seeker'
+          AND NOT EXISTS (
+            SELECT 1 FROM user_roles ur WHERE ur.user_id = $1 AND ur.is_active = true
+          )
+       ON CONFLICT (user_id, role_id) DO NOTHING`,
+      [userId],
+    );
+  }
 
   clearUserRoleCache(userId);
 

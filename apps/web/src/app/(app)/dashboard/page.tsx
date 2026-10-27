@@ -970,7 +970,7 @@ function AdminDashboard() {
                     </td>
                     <td>
                       <div className="row row-wrap" style={{ gap: "0.25rem" }}>
-                        {(user.roles ?? []).map((role) => (
+                        {(Array.isArray(user.roles) ? user.roles : []).map((role) => (
                           <Badge key={role} tone="accent">
                             {role}
                           </Badge>

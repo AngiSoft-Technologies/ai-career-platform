@@ -65,9 +65,17 @@ function normalizeSetCookie(value: string, secureContext: boolean): string {
       return true;
     });
 
-  attributes.push(secureContext ? "SameSite=None; Secure" : "SameSite=Lax");
+  const alreadySecure = attributes.some(
+    (attribute) => attribute.toLowerCase() === "secure",
+  );
+  if (secureContext && !alreadySecure) attributes.push("Secure");
 
-  return `${browserCookieName(upstreamName, secureContext)}=${cookieValue}; ${attributes.join("; ")}`;
+  attributes.push("SameSite=Lax");
+
+  const browserName = browserCookieName(upstreamName, secureContext);
+  if (!browserName) return "";
+
+  return `${browserName}=${cookieValue}; ${attributes.join("; ")}`;
 }
 
 async function proxy(
@@ -117,9 +125,9 @@ async function proxy(
   const setCookies =
     upstream.headers.getSetCookie?.() ?? upstream.headers.get("set-cookie") ?? [];
   for (const value of Array.isArray(setCookies) ? setCookies : [setCookies]) {
-    if (value) {
-      responseHeaders.append("set-cookie", normalizeSetCookie(value, secureContext));
-    }
+    if (!value) continue;
+    const normalized = normalizeSetCookie(value, secureContext);
+    if (normalized) responseHeaders.append("set-cookie", normalized);
   }
   const upstreamType = upstream.headers.get("content-type");
   if (upstreamType) responseHeaders.set("content-type", upstreamType);

@@ -43,8 +43,12 @@ Future<void> main() async {
   final settings = await AppSettings.load();
   final database = await LocalDatabase.open();
   final tokenStorage = TokenStorage();
-  final apiClient = ApiClient(settings: settings, tokenStorage: tokenStorage);
   final authService = NeonAuthService();
+  final apiClient = ApiClient(
+    settings: settings,
+    tokenStorage: tokenStorage,
+    authService: authService,
+  );
   final authSession = AuthSession(
     authService: authService,
     tokenStorage: tokenStorage,

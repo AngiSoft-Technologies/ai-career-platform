@@ -34,12 +34,20 @@ import { useWebSocket } from "@/lib/realtime";
 import { outboxSize } from "@/lib/api";
 import type { Session } from "@/lib/auth";
 
+interface NavSubItem {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  roles: RoleKey[];
+}
+
 interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
   roles: RoleKey[];
   group: string;
+  subItems?: NavSubItem[];
 }
 
 const ALL: RoleKey[] = [
@@ -53,51 +61,238 @@ const ALL: RoleKey[] = [
   "super_admin",
 ];
 
-const STAFF: RoleKey[] = ["moderator", "support_agent", "source_curator", "automation", "admin", "super_admin"];
 const ADMIN: RoleKey[] = ["admin", "super_admin"];
 const CURATORS: RoleKey[] = ["source_curator", "admin", "super_admin"];
 
-export const NAV_ITEMS: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ALL, group: "Overview" },
-  { href: "/opportunities", label: "Opportunities", icon: Compass, roles: ALL, group: "Overview" },
-  { href: "/matches", label: "Matches", icon: Sparkles, roles: ALL, group: "Overview" },
-  { href: "/applications", label: "Applications", icon: Briefcase, roles: ALL, group: "Work" },
-  { href: "/documents", label: "Documents", icon: FileText, roles: ALL, group: "Work" },
-  { href: "/followups", label: "Follow-ups", icon: ListChecks, roles: ALL, group: "Work" },
-  { href: "/profile", label: "Profile", icon: UserRound, roles: ALL, group: "You" },
-  { href: "/connections", label: "Connections", icon: Link2, roles: ALL, group: "You" },
-  { href: "/sources", label: "Sources", icon: Globe2, roles: CURATORS, group: "Platform" },
-  { href: "/moderation", label: "Moderation", icon: BadgeCheck, roles: ["moderator", "admin", "super_admin"], group: "Platform" },
-  { href: "/support", label: "Support", icon: MessageSquare, roles: ["support_agent", "admin", "super_admin"], group: "Platform" },
-  { href: "/automation", label: "Automation", icon: Activity, roles: ["automation", "admin", "super_admin"], group: "Platform" },
-  { href: "/admin", label: "Administration", icon: ShieldCheck, roles: ADMIN, group: "Platform" },
-  { href: "/settings", label: "Settings", icon: Settings, roles: ALL, group: "You" },
-];
+const ROLE_NAV: Record<RoleKey, NavItem[]> = {
+  job_seeker: [
+    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["job_seeker"], group: "Overview" },
+    { href: "/opportunities", label: "Opportunities", icon: Compass, roles: ["job_seeker"], group: "Overview" },
+    { href: "/matches", label: "Matches", icon: Sparkles, roles: ["job_seeker"], group: "Overview" },
+    { href: "/applications", label: "Applications", icon: Briefcase, roles: ["job_seeker"], group: "Work" },
+    { href: "/documents", label: "Documents", icon: FileText, roles: ["job_seeker"], group: "Work" },
+    { href: "/followups", label: "Follow-ups", icon: ListChecks, roles: ["job_seeker"], group: "Work" },
+    { href: "/profile", label: "Profile", icon: UserRound, roles: ["job_seeker"], group: "You" },
+    { href: "/connections", label: "Connections", icon: Link2, roles: ["job_seeker"], group: "You" },
+    { href: "/settings", label: "Settings", icon: Settings, roles: ["job_seeker"], group: "You" },
+  ],
+  analyst: [
+    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["analyst"], group: "Overview" },
+    { href: "/opportunities", label: "Opportunities", icon: Compass, roles: ["analyst"], group: "Data" },
+    { href: "/matches", label: "Matches", icon: Sparkles, roles: ["analyst"], group: "Data" },
+    { href: "/analytics", label: "Analytics", icon: Gauge, roles: ["analyst"], group: "Analysis" },
+    { href: "/reports", label: "Reports", icon: FileText, roles: ["analyst"], group: "Analysis" },
+    { href: "/settings", label: "Settings", icon: Settings, roles: ["analyst"], group: "You" },
+  ],
+  moderator: [
+    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["moderator"], group: "Overview" },
+    {
+      href: "/moderation",
+      label: "Moderation",
+      icon: BadgeCheck,
+      roles: ["moderator"],
+      group: "Moderation",
+      subItems: [
+        { href: "/moderation", label: "Queue", icon: ListChecks, roles: ["moderator"] },
+        { href: "/moderation/reports", label: "Reports", icon: FileText, roles: ["moderator"] },
+        { href: "/moderation/users", label: "Users", icon: Users, roles: ["moderator"] },
+      ],
+    },
+    { href: "/reports", label: "Reports", icon: FileText, roles: ["moderator"], group: "Reports" },
+    { href: "/settings", label: "Settings", icon: Settings, roles: ["moderator"], group: "You" },
+  ],
+  support_agent: [
+    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["support_agent"], group: "Overview" },
+    {
+      href: "/support",
+      label: "Support",
+      icon: MessageSquare,
+      roles: ["support_agent"],
+      group: "Support",
+      subItems: [
+        { href: "/support", label: "Tickets", icon: ListChecks, roles: ["support_agent"] },
+        { href: "/support/users", label: "Users", icon: Users, roles: ["support_agent"] },
+        { href: "/support/knowledge", label: "Knowledge Base", icon: FileText, roles: ["support_agent"] },
+      ],
+    },
+    { href: "/settings", label: "Settings", icon: Settings, roles: ["support_agent"], group: "You" },
+  ],
+  source_curator: [
+    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["source_curator"], group: "Overview" },
+    {
+      href: "/sources",
+      label: "Sources",
+      icon: Globe2,
+      roles: ["source_curator"],
+      group: "Sources",
+      subItems: [
+        { href: "/sources", label: "All Sources", icon: Globe2, roles: ["source_curator"] },
+        { href: "/sources/add", label: "Add Source", icon: Globe2, roles: ["source_curator"] },
+        { href: "/sources/health", label: "Health", icon: Activity, roles: ["source_curator"] },
+      ],
+    },
+    {
+      href: "/opportunities",
+      label: "Jobs",
+      icon: Compass,
+      roles: ["source_curator"],
+      group: "Jobs",
+      subItems: [
+        { href: "/opportunities", label: "All Jobs", icon: Compass, roles: ["source_curator"] },
+        { href: "/opportunities/import", label: "Import", icon: Globe2, roles: ["source_curator"] },
+      ],
+    },
+    {
+      href: "/companies",
+      label: "Companies",
+      icon: Users,
+      roles: ["source_curator"],
+      group: "Companies",
+      subItems: [
+        { href: "/companies", label: "All Companies", icon: Users, roles: ["source_curator"] },
+        { href: "/companies/add", label: "Add Company", icon: Users, roles: ["source_curator"] },
+      ],
+    },
+    { href: "/settings", label: "Settings", icon: Settings, roles: ["source_curator"], group: "You" },
+  ],
+  automation: [
+    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["automation"], group: "Overview" },
+    {
+      href: "/automation",
+      label: "Automation",
+      icon: Activity,
+      roles: ["automation"],
+      group: "Automation",
+      subItems: [
+        { href: "/automation", label: "Overview", icon: Activity, roles: ["automation"] },
+        { href: "/automation/workflows", label: "Workflows", icon: Wrench, roles: ["automation"] },
+        { href: "/automation/logs", label: "Logs", icon: Activity, roles: ["automation"] },
+        { href: "/automation/schedules", label: "Schedules", icon: Radio, roles: ["automation"] },
+      ],
+    },
+    { href: "/settings", label: "Settings", icon: Settings, roles: ["automation"], group: "You" },
+  ],
+  admin: [
+    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["admin"], group: "Overview" },
+    {
+      href: "/admin",
+      label: "Administration",
+      icon: ShieldCheck,
+      roles: ["admin"],
+      group: "Administration",
+      subItems: [
+        { href: "/admin", label: "Overview", icon: LayoutDashboard, roles: ["admin"] },
+        { href: "/admin/users", label: "Users", icon: Users, roles: ["admin"] },
+        { href: "/admin/roles", label: "Roles & Permissions", icon: ShieldCheck, roles: ["admin"] },
+        { href: "/admin/invitations", label: "Invitations", icon: Users, roles: ["admin"] },
+        { href: "/admin/taxonomy", label: "Taxonomy", icon: FileText, roles: ["admin"] },
+        { href: "/admin/scam-corpus", label: "Scam Corpus", icon: ShieldCheck, roles: ["admin"] },
+      ],
+    },
+    {
+      href: "/sources",
+      label: "Sources",
+      icon: Globe2,
+      roles: ["admin"],
+      group: "Platform",
+      subItems: [
+        { href: "/sources", label: "All Sources", icon: Globe2, roles: ["admin"] },
+        { href: "/sources/add", label: "Add Source", icon: Globe2, roles: ["admin"] },
+      ],
+    },
+    {
+      href: "/moderation",
+      label: "Moderation",
+      icon: BadgeCheck,
+      roles: ["admin"],
+      group: "Administration",
+      subItems: [
+        { href: "/moderation", label: "Queue", icon: ListChecks, roles: ["admin"] },
+        { href: "/moderation/reports", label: "Reports", icon: FileText, roles: ["admin"] },
+      ],
+    },
+    { href: "/settings", label: "Settings", icon: Settings, roles: ["admin"], group: "You" },
+  ],
+  super_admin: [
+    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["super_admin"], group: "Overview" },
+    {
+      href: "/admin",
+      label: "Administration",
+      icon: ShieldCheck,
+      roles: ["super_admin"],
+      group: "Administration",
+      subItems: [
+        { href: "/admin", label: "Overview", icon: LayoutDashboard, roles: ["super_admin"] },
+        { href: "/admin/users", label: "Users", icon: Users, roles: ["super_admin"] },
+        { href: "/admin/roles", label: "Roles & Permissions", icon: ShieldCheck, roles: ["super_admin"] },
+        { href: "/admin/invitations", label: "Invitations", icon: Users, roles: ["super_admin"] },
+        { href: "/admin/taxonomy", label: "Taxonomy", icon: FileText, roles: ["super_admin"] },
+        { href: "/admin/scam-corpus", label: "Scam Corpus", icon: ShieldCheck, roles: ["super_admin"] },
+        { href: "/admin/audit", label: "Audit Logs", icon: FileText, roles: ["super_admin"] },
+        { href: "/admin/system", label: "System", icon: Wrench, roles: ["super_admin"] },
+      ],
+    },
+    {
+      href: "/sources",
+      label: "Sources",
+      icon: Globe2,
+      roles: ["super_admin"],
+      group: "Platform",
+      subItems: [
+        { href: "/sources", label: "All Sources", icon: Globe2, roles: ["super_admin"] },
+        { href: "/sources/add", label: "Add Source", icon: Globe2, roles: ["super_admin"] },
+        { href: "/sources/health", label: "Health", icon: Activity, roles: ["super_admin"] },
+      ],
+    },
+    {
+      href: "/moderation",
+      label: "Moderation",
+      icon: BadgeCheck,
+      roles: ["super_admin"],
+      group: "Administration",
+      subItems: [
+        { href: "/moderation", label: "Queue", icon: ListChecks, roles: ["super_admin"] },
+        { href: "/moderation/reports", label: "Reports", icon: FileText, roles: ["super_admin"] },
+        { href: "/moderation/users", label: "Users", icon: Users, roles: ["super_admin"] },
+      ],
+    },
+    {
+      href: "/support",
+      label: "Support",
+      icon: MessageSquare,
+      roles: ["super_admin"],
+      group: "Platform",
+      subItems: [
+        { href: "/support", label: "Tickets", icon: ListChecks, roles: ["super_admin"] },
+        { href: "/support/users", label: "Users", icon: Users, roles: ["super_admin"] },
+      ],
+    },
+    {
+      href: "/automation",
+      label: "Automation",
+      icon: Activity,
+      roles: ["super_admin"],
+      group: "Platform",
+      subItems: [
+        { href: "/automation", label: "Overview", icon: Activity, roles: ["super_admin"] },
+        { href: "/automation/workflows", label: "Workflows", icon: Wrench, roles: ["super_admin"] },
+        { href: "/automation/logs", label: "Logs", icon: Activity, roles: ["super_admin"] },
+      ],
+    },
+    {
+      href: "/dashboard",
+      label: "Preview as Job Seeker",
+      icon: UserRound,
+      roles: ["super_admin"],
+      group: "Preview",
+    },
+    { href: "/settings", label: "Settings", icon: Settings, roles: ["super_admin"], group: "You" },
+  ],
+};
 
 function useNav(role: RoleKey) {
-  return useMemo(() => NAV_ITEMS.filter((item) => item.roles.includes(role)), [role]);
-}
-
-export function AppShell({
-  children,
-  session,
-}: {
-  children: ReactNode;
-  session: Session | null;
-}) {
-  const { theme } = useTheme();
-  switch (theme) {
-    case "editorial":
-      return <EditorialShell session={session}>{children}</EditorialShell>;
-    case "terminal":
-      return <TerminalShell session={session}>{children}</TerminalShell>;
-    case "kinetic":
-      return <KineticShell session={session}>{children}</KineticShell>;
-    case "atlas":
-      return <AtlasShell session={session}>{children}</AtlasShell>;
-    default:
-      return <AuroraShell session={session}>{children}</AuroraShell>;
-  }
+  return useMemo(() => ROLE_NAV[role] ?? [], [role]);
+  return useMemo(() => ROLE_NAV[role] ?? [], [role]);
 }
 
 function useConnection() {
@@ -856,4 +1051,26 @@ function UserBlock({ session, role }: { session: Session | null; role: RoleKey }
       </div>
     </div>
   );
+}
+
+export function AppShell({
+  children,
+  session,
+}: {
+  children: ReactNode;
+  session: Session | null;
+}) {
+  const { theme } = useTheme();
+  switch (theme) {
+    case "editorial":
+      return <EditorialShell session={session}>{children}</EditorialShell>;
+    case "terminal":
+      return <TerminalShell session={session}>{children}</TerminalShell>;
+    case "kinetic":
+      return <KineticShell session={session}>{children}</KineticShell>;
+    case "atlas":
+      return <AtlasShell session={session}>{children}</AtlasShell>;
+    default:
+      return <AuroraShell session={session}>{children}</AuroraShell>;
+  }
 }

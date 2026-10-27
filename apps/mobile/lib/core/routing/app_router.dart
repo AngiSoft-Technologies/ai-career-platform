@@ -14,6 +14,7 @@ import '../../features/onboarding/presentation/onboarding_screen.dart';
 import '../../features/opportunities/presentation/opportunity_detail_screen.dart';
 import '../../features/opportunities/presentation/opportunity_list_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
+import '../../features/invite/presentation/invite_accept_screen.dart';
 import '../authentication/auth_session.dart';
 import 'app_shell.dart';
 
@@ -120,6 +121,11 @@ GoRouter createAppRouter(AuthSession authSession) {
       GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/invite/:token',
+        builder: (context, state) =>
+            InviteAcceptScreen(token: state.pathParameters['token']!),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

@@ -74,7 +74,7 @@ export default function SecurityPage() {
                 </Reveal>
               </div>
             ) : s.length === 0 ? (
-              <p style={{ color: "var(--mk-text-muted)" }}>No security content configured yet.</p>
+              <p style={{ color: "var(--mk-text-muted)" }}>More details coming soon.</p>
             ) : (
               s.map((section, i) => (
                 <Reveal key={section.id} delay={i * 80}>

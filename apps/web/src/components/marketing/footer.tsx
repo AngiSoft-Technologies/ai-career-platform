@@ -26,7 +26,6 @@ const FOOTER_LINKS = {
   ],
   Company: [
     { href: "/about", label: "About", icon: Info },
-    { href: "/stories", label: "Stories", icon: FileText },
     { href: "/contact", label: "Contact", icon: Globe },
   ],
   Resources: [

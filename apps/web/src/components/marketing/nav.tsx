@@ -7,16 +7,10 @@ import {
   Menu,
   X,
   Briefcase,
-  FileText,
   Sparkles,
-  ShieldCheck,
   Globe,
   HelpCircle,
-  Lock,
-  Download,
   Info,
-  ChevronDown,
-  ChevronUp,
   Zap,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
@@ -25,23 +19,14 @@ import clsx from "clsx";
 const NAV_LINKS = [
   { href: "/features", label: "Features", icon: Sparkles },
   { href: "/pricing", label: "Pricing", icon: Briefcase },
-  { href: "/stories", label: "Stories", icon: FileText },
   { href: "/about", label: "About", icon: Info },
   { href: "/contact", label: "Contact", icon: Globe },
   { href: "/faq", label: "FAQ", icon: HelpCircle },
 ];
 
-const DROPDOWN_LINKS = [
-  { href: "/features#matching", label: "AI Matching", icon: Sparkles },
-  { href: "/features#documents", label: "Documents", icon: FileText },
-  { href: "/features#tracking", label: "Pipeline", icon: Briefcase },
-  { href: "/features#security", label: "Scam Shield", icon: ShieldCheck },
-];
-
 export function MarketingNav() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [cohort, setCohort] = useState<{remaining: number; cap: number} | null>(null);
 
@@ -84,29 +69,6 @@ export function MarketingNav() {
 
           <nav className="mk-nav__primary" role="navigation" aria-label="Main navigation">
             <ul className="mk-nav__list">
-              <li className="mk-nav__item mk-nav__item--dropdown">
-                <button
-                  className={clsx("mk-nav__link mk-nav__link--dropdown", dropdownOpen && "is-open")}
-                  aria-expanded={dropdownOpen}
-                  aria-haspopup="true"
-                  aria-controls="product-dropdown"
-                  onClick={(e) => { e.preventDefault(); setDropdownOpen(!dropdownOpen); }}
-                >
-                  <Sparkles className="mk-nav__icon" aria-hidden="true" />
-                  Product
-                  <ChevronDown className="mk-nav__chevron" aria-hidden="true" />
-                </button>
-                <ul id="product-dropdown" className="mk-dropdown" role="menu" aria-label="Product features">
-                  {DROPDOWN_LINKS.map((item) => (
-                    <li key={item.href} role="none">
-                      <Link href={item.href} className="mk-dropdown__link" role="menuitem" onClick={() => setDropdownOpen(false)}>
-                        <item.icon className="mk-dropdown__icon" aria-hidden="true" />
-                        <span>{item.label}</span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </li>
               {NAV_LINKS.map((item) => (
                 <li key={item.href} className="mk-nav__item">
                   <Link
@@ -126,7 +88,7 @@ export function MarketingNav() {
             <Link href="/login" className="mk-btn mk-btn--ghost">
               Sign in
             </Link>
-            <Link href="/download" className="mk-btn mk-btn--primary">
+            <Link href="/signup" className="mk-btn mk-btn--primary">
               Start free
             </Link>
 
@@ -145,29 +107,6 @@ export function MarketingNav() {
         <div id="mobile-menu" className={clsx("mk-mobile-menu", mobileOpen && "is-open")} role="dialog" aria-label="Navigation menu" aria-modal="true">
           <nav className="mk-mobile-menu__inner">
             <ul className="mk-mobile-menu__list">
-              <li>
-                <button
-                  className={clsx("mk-mobile-menu__link mk-mobile-menu__link--dropdown", dropdownOpen && "is-open")}
-                  aria-expanded={dropdownOpen}
-                  aria-haspopup="true"
-                  aria-controls="mobile-product-dropdown"
-                  onClick={() => setDropdownOpen(!dropdownOpen)}
-                >
-                  <Sparkles className="mk-mobile-menu__icon" aria-hidden="true" />
-                  Product
-                  <ChevronDown className="mk-mobile-menu__chevron" aria-hidden="true" />
-                </button>
-                <ul id="mobile-product-dropdown" className="mk-mobile-menu__sub" role="menu" aria-label="Product features">
-                  {DROPDOWN_LINKS.map((item) => (
-                    <li key={item.href} role="none">
-                      <Link href={item.href} className="mk-mobile-menu__sub-link" role="menuitem" onClick={() => { setDropdownOpen(false); setMobileOpen(false); }}>
-                        <item.icon className="mk-mobile-menu__icon" aria-hidden="true" />
-                        <span>{item.label}</span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </li>
               {NAV_LINKS.map((item) => (
                 <li key={item.href}>
                   <Link
@@ -187,7 +126,7 @@ export function MarketingNav() {
               <Link href="/login" className="mk-btn mk-btn--ghost mk-btn--full" onClick={() => setMobileOpen(false)}>
                 Sign in
               </Link>
-              <Link href="/download" className="mk-btn mk-btn--primary mk-btn--full" onClick={() => setMobileOpen(false)}>
+              <Link href="/signup" className="mk-btn mk-btn--primary mk-btn--full" onClick={() => setMobileOpen(false)}>
                 Start free
               </Link>
             </div>

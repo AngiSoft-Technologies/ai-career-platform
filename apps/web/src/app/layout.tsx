@@ -44,14 +44,14 @@ export const metadata: Metadata = {
     template: "%s · Job Radar",
   },
   description:
-    "Job Radar aggregates global jobs across every profession, ranks them against your profile, prepares ATS-ready documents and helps you track applications. AI prepares, you review and submit.",
+    "Job Radar brings global roles together, ranks them for your profile, prepares your application documents and helps you track every application. You review and submit.",
   applicationName: "Job Radar",
   category: "jobs",
   keywords: [
     "jobs",
     "career",
     "global jobs",
-    "ATS resume",
+    "resume builder",
     "cover letter",
     "application tracking",
     "AngiSoft",

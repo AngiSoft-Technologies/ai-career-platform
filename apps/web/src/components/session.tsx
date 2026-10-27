@@ -33,7 +33,6 @@ interface SessionContextValue {
   signIn: (email: string, password: string) => Promise<boolean>;
   signUp: (email: string, password: string, name: string) => Promise<boolean>;
   signOut: () => Promise<void>;
-  switchRole: (role: RoleKey) => void;
 }
 
 const SessionContext = createContext<SessionContextValue>({
@@ -47,7 +46,6 @@ const SessionContext = createContext<SessionContextValue>({
   signIn: async () => false,
   signUp: async () => false,
   signOut: async () => undefined,
-  switchRole: () => undefined,
 });
 
 const ROLE_ORDER: RoleKey[] = [
@@ -66,7 +64,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [serverRoles, setServerRoles] = useState<RoleKey[]>([]);
   const [serverPermissions, setServerPermissions] = useState<string[]>([]);
-  const { role, setRole } = useTheme();
 
   const refresh = useCallback(async () => {
     try {
@@ -95,11 +92,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         permissions: string[];
         user: { id: string; email: string; name: string | null };
       }>("/me");
-      setServerRoles(
-        (identity.roles ?? []).filter((name): name is RoleKey =>
-          ROLE_ORDER.includes(name as RoleKey),
-        ),
+      const granted = (identity.roles ?? []).filter((name): name is RoleKey =>
+        ROLE_ORDER.includes(name as RoleKey),
       );
+      setServerRoles(granted);
       setServerPermissions(identity.permissions ?? []);
     } catch {
       return;
@@ -115,8 +111,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const roles = useMemo(() => {
     if (serverRoles.length > 0) return serverRoles;
-    return [role];
-  }, [serverRoles, role]);
+    return ["job_seeker"] as RoleKey[];
+  }, [serverRoles]);
 
   const permissions = serverPermissions;
 
@@ -153,9 +149,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setServerPermissions([]);
         clearSession();
       },
-      switchRole: (next) => setRole(next),
     }),
-    [session, loading, roles, permissions, primaryRole, refresh, setRole],
+    [session, loading, roles, permissions, primaryRole, refresh],
   );
 
   return (

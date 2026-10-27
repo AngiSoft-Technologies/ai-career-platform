@@ -10,6 +10,13 @@ import {
   removeRole,
 } from "../services/rbac/index.js";
 import { requirePermission } from "../middleware/rbac.js";
+import {
+  createInvitation,
+  InvitationError,
+  listInvitations,
+  resendInvitation,
+  revokeInvitation,
+} from "../services/invitations.js";
 
 export const adminRouter = Router();
 
@@ -125,7 +132,10 @@ adminRouter.get("/users", requirePermission("users:read"), async (request, respo
     const search = typeof request.query.q === "string" ? request.query.q : null;
     const result = await query(
       `SELECT u.id, u.email, u.display_name AS name, u.created_at,
-              COALESCE(array_agg(r.name) FILTER (WHERE r.name IS NOT NULL), '{}') AS roles
+              COALESCE(
+                array_agg(r.name::text) FILTER (WHERE r.name IS NOT NULL),
+                ARRAY[]::text[]
+              ) AS roles
          FROM users u
          LEFT JOIN user_roles ur ON ur.user_id = u.id AND ur.is_active = true
          LEFT JOIN roles r ON r.id = ur.role_id
@@ -294,6 +304,93 @@ adminRouter.get("/event-stream", requirePermission("users:read"), async (request
     );
     response.json({ items: result.rows, total: result.rowCount });
   } catch (error) {
+    next(error);
+  }
+});
+
+
+adminRouter.get("/invitations", requirePermission("users:roles:read"), async (_request, response, next) => {
+  try {
+    const items = await listInvitations();
+    response.json({ items });
+  } catch (error) {
+    next(error);
+  }
+});
+
+adminRouter.post("/invitations", requirePermission("users:roles:write"), async (request, response, next) => {
+  try {
+    const input = z
+      .object({
+        email: z.string().email().max(320),
+        role: z.string().min(2).max(60),
+        name: z.string().trim().min(1).max(120).optional(),
+      })
+      .parse(request.body);
+
+    const invitedBy = response.locals.userId as string;
+    const inviter = await query<{ email: string }>(
+      `SELECT email FROM users WHERE id = $1`,
+      [invitedBy],
+    );
+
+    const result = await createInvitation({
+      email: input.email,
+      role: input.role,
+      name: input.name ?? null,
+      invitedBy,
+      invitedByEmail: inviter.rows[0]?.email ?? null,
+    });
+
+    response.status(201).json(result);
+  } catch (error) {
+    if (error instanceof InvitationError) {
+      response.status(error.status).json({ error: error.message, code: error.code });
+      return;
+    }
+    if (error instanceof z.ZodError) {
+      response.status(400).json({
+        error: "That invitation request was not valid",
+        code: "INVALID_REQUEST",
+      });
+      return;
+    }
+    next(error);
+  }
+});
+
+adminRouter.post("/invitations/:id/resend", requirePermission("users:roles:write"), async (request, response, next) => {
+  try {
+    const id = z.string().uuid().parse(request.params.id);
+    const result = await resendInvitation(id);
+    response.json(result);
+  } catch (error) {
+    if (error instanceof InvitationError) {
+      response.status(error.status).json({ error: error.message, code: error.code });
+      return;
+    }
+    if (error instanceof z.ZodError) {
+      response.status(400).json({ error: "That request was not valid", code: "INVALID_REQUEST" });
+      return;
+    }
+    next(error);
+  }
+});
+
+adminRouter.delete("/invitations/:id", requirePermission("users:roles:write"), async (request, response, next) => {
+  try {
+    const id = z.string().uuid().parse(request.params.id);
+    const revoked = await revokeInvitation(id);
+    if (!revoked) {
+      response.status(404).json({ error: "Invitation not found", code: "INVITATION_NOT_FOUND" });
+      return;
+    }
+    response.json({ ok: true, id });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      response.status(400).json({ error: "That request was not valid", code: "INVALID_REQUEST" });
+      return;
+    }
     next(error);
   }
 });

@@ -8,10 +8,10 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Download — Job Radar Android App",
-  description: "Download the Job Radar Android APK. SQLite offline, background sync, push alerts. Free during development.",
+  description: "Get the Job Radar Android app. Browse roles, save favourites and keep your applications moving.",
   openGraph: {
     title: "Download — Job Radar",
-    description: "Native Flutter app. SQLite offline. Background sync. Push alerts. Free during beta.",
+    description: "Job Radar for Android. Browse roles, save favourites and keep your applications moving.",
     type: "website",
     images: [{ url: "/media/og-cover.jpg", width: 1200, height: 630, alt: "Job Radar" }],
   },
@@ -68,7 +68,8 @@ export default function DownloadPage() {
               <>
                 <h1 id="download-title" className="mk-heading">Your radar in your pocket</h1>
                 <p className="mk-lede">
-                  Native Flutter app. SQLite offline. Background sync. Push alerts. APK ready, Play Store submission in progress.
+                  Browse roles, save favourites and pick up where you left off, even when your
+                  connection drops.
                 </p>
               </>
             )}
@@ -85,7 +86,7 @@ export default function DownloadPage() {
                   <div className="mk-mock-list" style={{ gap: "10px" }}>
                     <div className="mk-mock-card"><div className="mk-mock-card__avatar" style={{ background: "var(--mk-accent-soft)", color: "var(--mk-accent)" }}><Smartphone aria-hidden="true" /></div><div className="mk-mock-card__info"><div className="mk-mock-card__title">3 new matches</div><div className="mk-mock-card__meta"><span>Updated 2m ago</span></div></div></div>
                     <div className="mk-mock-card"><div className="mk-mock-card__avatar" style={{ background: "var(--mk-success-soft)", color: "var(--mk-success)" }}><FileText aria-hidden="true" /></div><div className="mk-mock-card__info"><div className="mk-mock-card__title">CV exported</div><div className="mk-mock-card__meta"><span>PDF ready</span></div></div></div>
-                    <div className="mk-mock-card"><div className="mk-mock-card__avatar" style={{ background: "var(--mk-info-soft)", color: "var(--mk-info)" }}><Globe aria-hidden="true" /></div><div className="mk-mock-card__info"><div className="mk-mock-card__title">Background sync</div><div className="mk-mock-card__meta"><span>Last: 30s ago</span></div></div></div>
+                    <div className="mk-mock-card"><div className="mk-mock-card__avatar" style={{ background: "var(--mk-info-soft)", color: "var(--mk-info)" }}><Globe aria-hidden="true" /></div><div className="mk-mock-card__info"><div className="mk-mock-card__title">Always up to date</div><div className="mk-mock-card__meta"><span>Last: 30s ago</span></div></div></div>
                   </div>
                 </div>
               </div>
@@ -94,10 +95,10 @@ export default function DownloadPage() {
               <div style={{ maxWidth: "420px" }}>
                 <div className="mk-download__badges">
                   <a href="/download" className="mk-badge">
-                    <Download aria-hidden="true" /> Download APK (206 MB)
+                    <Download aria-hidden="true" /> Download for Android
                   </a>
-                  <a href="https://play.google.com/store/apps/details?id=com.angisoft.jobradar" target="_blank" rel="noopener noreferrer" className="mk-badge">
-                    <ExternalLink aria-hidden="true" /> Coming to Google Play
+                  <a href="https://play.google.com/store/apps/details?id=ke.co.angisoft.job_radar" target="_blank" rel="noopener noreferrer" className="mk-badge">
+                    <ExternalLink aria-hidden="true" /> Get it on Google Play
                   </a>
                 </div>
                 <div className="mk-download__features">
@@ -112,7 +113,7 @@ export default function DownloadPage() {
                       ))}
                     </div>
                   ) : f.length === 0 ? (
-                    <p style={{ color: "var(--mk-text-muted)" }}>No app features configured yet.</p>
+                    <p style={{ color: "var(--mk-text-muted)" }}>More features coming soon.</p>
                   ) : (
                     f.map((feat: FeatureContent, i: number) => (
                       <Reveal key={feat.id} delay={i * 80}>
@@ -135,13 +136,13 @@ export default function DownloadPage() {
         <div className="mk-container">
           <header className="mk-section-header">
             <span className="mk-section-eyebrow">Installation</span>
-            <h2 id="install-heading" className="mk-section-heading">How to install the APK</h2>
+            <h2 id="install-heading" className="mk-section-heading">How to install the app</h2>
           </header>
           <div className="mk-grid mk-grid--3">
             {[
-              { step: "01", title: "Download", text: "Tap the button above to download the APK (206 MB)." },
+              { step: "01", title: "Download", text: "Tap the button above to download the app." },
               { step: "02", title: "Allow unknown sources", text: "Settings → Security → Allow installation from unknown sources." },
-              { step: "03", title: "Install & open", text: "Open the APK, install, and sign in with your Job Radar account." },
+              { step: "03", title: "Install & open", text: "Open the downloaded file, install the app and sign in with your Job Radar account." },
             ].map((s, i) => (
               <Reveal key={s.step} delay={i * 100} className="mk-card">
                 <div className="mk-card__icon" style={{ fontSize: "2rem", color: "var(--mk-accent)" }}>{s.step}</div>
@@ -159,7 +160,7 @@ export default function DownloadPage() {
           <p className="mk-cta__text">No credit card. No auto-renewal. Help us build the honest job search you deserve.</p>
           <div className="mk-cta__actions">
             <a href="/download" className="mk-btn mk-btn--primary mk-btn--lg">
-              <Download aria-hidden="true" /> Download APK
+              <Download aria-hidden="true" /> Download for Android
             </a>
           </div>
         </div>

@@ -98,7 +98,7 @@ publicRouter.get("/featured", async (_request, response, next) => {
          JOIN companies c ON c.id = o.company_id
         WHERE o.status = 'active'
         ORDER BY o.posted_at DESC
-        LIMIT 6`,
+        LIMIT 12`,
     );
 
     const value = {

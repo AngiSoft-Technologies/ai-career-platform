@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Reveal } from "@/components/marketing/reveal";
 import { MarketingLayout } from "@/components/marketing/layout";
 import { useApi } from "@/lib/hooks";
+import { useSession } from "@/components/session";
 import {
-  Download,
   ArrowRight,
+  ArrowLeft,
+  MapPin,
   ShieldCheck,
   Sparkles,
   FileText,
@@ -24,9 +26,18 @@ import {
   Mail,
   Clock,
 } from "lucide-react";
-import type { Opportunity } from "@/lib/types";
-
-;
+interface FeaturedJob {
+  id: string;
+  title: string;
+  company: string;
+  city: string;
+  country: string;
+  workMode: string;
+  seniority: string;
+  salaryMin: number | null;
+  salaryMax: number | null;
+  currency: string | null;
+}
 
 interface Benefit {
   id: string;
@@ -65,10 +76,22 @@ function IconFromName(name: string) {
   return <Comp aria-hidden="true" />;
 }
 
+function salaryLabel(job: FeaturedJob): string | null {
+  if (job.salaryMin === null && job.salaryMax === null) return null;
+  const format = (value: number) =>
+    new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(value);
+  const currency = job.currency ? `${job.currency} ` : "";
+  if (job.salaryMin !== null && job.salaryMax !== null) {
+    return `${currency}${format(job.salaryMin)} – ${format(job.salaryMax)}`;
+  }
+  return `${currency}${format((job.salaryMin ?? job.salaryMax) as number)}`;
+}
+
 export default function LandingPage() {
+  const { session } = useSession();
   const benefits = useApi<Benefit[]>("/content/benefits");
   const comparison = useApi<ComparisonContent>("/content/comparison");
-  const featuredJobs = useApi<{ items: Opportunity[] }>("/opportunities", { limit: 4, status: "active" });
+  const featuredJobs = useApi<{ jobs: FeaturedJob[] }>("/public/featured");
 
   const b = benefits.data?.length ? benefits.data : [
     { id: "discover", title: "Find relevant opportunities", body: "Explore roles that fit your skills, experience and preferences.", icon: "Search" },
@@ -81,7 +104,17 @@ export default function LandingPage() {
     { label: "A clearer application", items: ["See relevant skills and experience", "Tailor your resume for the role"], check: true },
     { label: "Your choice at every step", items: ["Review before you share", "Apply through the original channel"], check: true },
   ];
-  const jobs = featuredJobs.data?.items ?? [];
+  const jobs = featuredJobs.data?.jobs ?? [];
+  const jobSlider = useRef<HTMLDivElement>(null);
+  const gate = (path: string) =>
+    session ? path : `/signup?next=${encodeURIComponent(path)}`;
+  const slideJobs = (direction: 1 | -1) => {
+    const track = jobSlider.current;
+    if (!track) return;
+    const card = track.querySelector<HTMLElement>(".jr-job-card");
+    const distance = card ? card.offsetWidth + 16 : track.clientWidth * 0.8;
+    track.scrollBy({ left: direction * distance, behavior: "smooth" });
+  };
 
   useEffect(() => {
     document.title = "Find work that fits you | Job Radar";
@@ -97,7 +130,7 @@ export default function LandingPage() {
             <p>Discover relevant opportunities, shape your resume for each role, and keep every application moving from one workspace.</p>
             <div className="jr-hero__actions">
               <Link href="/signup" className="jr-button jr-button--primary">Build my career profile <ArrowRight aria-hidden="true" /></Link>
-              <Link href="/opportunities" className="jr-button jr-button--quiet">Browse opportunities</Link>
+              <Link href={gate("/opportunities")} className="jr-button jr-button--quiet">Browse opportunities</Link>
             </div>
             <p className="jr-hero__note">Your experience stays yours. You choose what to share and when to apply.</p>
           </div>
@@ -111,10 +144,10 @@ export default function LandingPage() {
               sizes="(max-width: 760px) 100vw, 52vw"
               className="jr-hero__photo"
             />
-            <div className="jr-match-preview" aria-label="Illustrative job match preview">
+            <div className="jr-match-preview" aria-label="Job match preview">
               <div className="jr-match-preview__top"><span className="jr-live-dot" /> Example match <span className="jr-match-preview__fit">Strong fit</span></div>
               <div className="jr-match-preview__job">{jobs[0]?.title ?? "Product Designer"}</div>
-              <div className="jr-match-preview__company">{jobs[0]?.companyName ?? "A role matched to your profile"}</div>
+              <div className="jr-match-preview__company">{jobs[0]?.company ?? "A role matched to your profile"}</div>
               <div className="jr-match-preview__meta"><span>{jobs[0]?.city ?? "Nairobi"}{jobs[0]?.workMode ? ` · ${jobs[0].workMode}` : " · Hybrid"}</span><span>Skills align</span></div>
               <div className="jr-match-preview__bar"><span /></div>
               <div className="jr-match-preview__bottom"><span>Review match details</span><ArrowRight aria-hidden="true" /></div>
@@ -135,7 +168,7 @@ export default function LandingPage() {
             <li><span>03</span><div><strong>Keep your momentum</strong><small>Track applications and follow-ups in one place.</small></div></li>
           </ul>
         </div>
-        <div className="jr-editor" aria-label="Illustrative resume editor preview">
+        <div className="jr-editor" aria-label="Resume editor preview">
           <div className="jr-editor__top"><div className="jr-editor__dots"><i /><i /><i /></div><span>Resume workspace</span><span className="jr-editor__saved"><Check aria-hidden="true" /> Saved</span></div>
           <div className="jr-editor__body">
             <aside className="jr-editor__rail"><span className="is-active"><FileText aria-hidden="true" /> Resume</span><span><Target aria-hidden="true" /> Match notes</span><span><Briefcase aria-hidden="true" /> Applications</span></aside>
@@ -154,7 +187,6 @@ export default function LandingPage() {
             </div>
             <div className="jr-editor__suggestion"><span><Sparkles aria-hidden="true" /> Match insight</span><strong>Bring your research work into focus.</strong><small>Connect your user research experience to this role’s requirements.</small><button type="button">Review suggestion</button></div>
           </div>
-          <div className="jr-editor__caption">Illustrative workspace preview</div>
         </div>
       </section>
 
@@ -176,7 +208,7 @@ export default function LandingPage() {
                 ))}
               </div>
             ) : b.length === 0 ? (
-              <p style={{ color: "var(--mk-text-muted)", textAlign: "center" }}>No benefits configured yet.</p>
+              <p style={{ color: "var(--mk-text-muted)", textAlign: "center" }}>More benefits coming soon.</p>
             ) : (
               b.map((benefit, i) => (
                 <Reveal key={benefit.id} delay={i * 80} className="mk-card">
@@ -211,7 +243,7 @@ export default function LandingPage() {
                 ))}
               </div>
             ) : c.length === 0 ? (
-              <p style={{ color: "var(--mk-text-muted)", textAlign: "center" }}>No comparison data configured yet.</p>
+              <p style={{ color: "var(--mk-text-muted)", textAlign: "center" }}>More details coming soon.</p>
             ) : (
               c.map((col, ci) => (
                 <div key={ci} className="mk-card">
@@ -235,42 +267,80 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="jr-people" aria-labelledby="people-title">
-        <div className="jr-people__heading">
-          <div><span className="jr-eyebrow jr-eyebrow--dark">Every career has a next chapter</span><h2 id="people-title">Built for people doing meaningful work.</h2></div>
-          <p>From technology to healthcare, Job Radar helps you bring your experience into focus and take your next step with confidence.</p>
-        </div>
-        <div className="jr-people__grid">
-          <article className="jr-person-card jr-person-card--wide">
-            <Image src="/media/careers/technology-professional.webp" alt="A man with glasses working at a laptop in a shared office" fill sizes="(max-width: 760px) 100vw, 50vw" />
-            <div className="jr-person-card__label"><span>Technology</span><strong>Make your experience easier to see.</strong></div>
-          </article>
-          <article className="jr-person-card">
-            <Image src="/media/careers/healthcare-professional.webp" alt="A doctor at work in a clinical office" fill sizes="(max-width: 760px) 100vw, 25vw" />
-            <div className="jr-person-card__label"><span>Healthcare</span><strong>Keep your next move in view.</strong></div>
-          </article>
-          <article className="jr-person-card">
-            <Image src="/media/careers/engineering-professional.webp" alt="An engineer working at a laptop" fill sizes="(max-width: 760px) 100vw, 25vw" />
-            <div className="jr-person-card__label"><span>Engineering</span><strong>Show the work behind your skills.</strong></div>
-          </article>
-        </div>
-        <p className="jr-people__note">Images are illustrative; people shown are not Job Radar users.</p>
-      </section>
+      <section className="jr-jobs" aria-labelledby="jobs-title">
+        <div className="jr-jobs__inner">
+          <div className="jr-jobs__heading">
+            <div>
+              <span className="jr-eyebrow jr-eyebrow--dark">Live opportunities</span>
+              <h2 id="jobs-title">Roles worth a closer look.</h2>
+            </div>
+            <p>A preview of active roles on Job Radar.</p>
+          </div>
 
-      <section className="mk-section mk-cta" aria-labelledby="cta-heading">
-        <div className="mk-container">
-          <h2 id="cta-heading" className="mk-cta__title">Ready to find your next role?</h2>
-          <p className="mk-cta__text">Create your profile, get matched to live jobs, and apply with a tailored resume and cover letter — all in one place.</p>
-          <div className="mk-cta__actions">
-            <Link href="/signup" className="mk-btn mk-btn--primary mk-btn--lg">
-              <Download aria-hidden="true" /> Get started free
-            </Link>
-            <Link href="/opportunities" className="mk-btn mk-btn--ghost mk-btn--lg">
-              <ArrowRight aria-hidden="true" /> Browse live jobs
+          <div className="jr-jobs__controls" aria-label="Job slider controls">
+            <button type="button" className="jr-jobs__arrow" onClick={() => slideJobs(-1)} aria-label="Previous jobs">
+              <ArrowLeft aria-hidden="true" />
+            </button>
+            <button type="button" className="jr-jobs__arrow" onClick={() => slideJobs(1)} aria-label="Next jobs">
+              <ArrowRight aria-hidden="true" />
+            </button>
+          </div>
+
+          <div
+            className="jr-jobs__track"
+            ref={jobSlider}
+            tabIndex={0}
+            aria-label="Available jobs"
+          >
+            {featuredJobs.loading
+              ? [0, 1, 2].map((item) => (
+                  <div key={item} className="jr-job-card jr-job-card--loading" aria-hidden="true">
+                    <span />
+                    <span />
+                    <span />
+                  </div>
+                ))
+              : jobs.map((job) => {
+                  const salary = salaryLabel(job);
+                  return (
+                    <Link
+                      key={job.id}
+                      href={gate(`/opportunities/${job.id}`)}
+                      className="jr-job-card"
+                    >
+                      <div className="jr-job-card__top">
+                        <span>{job.company}</span>
+                        <span className="jr-job-card__live">Live</span>
+                      </div>
+                      <h3 className="jr-job-card__title">{job.title}</h3>
+                      <div className="jr-job-card__meta">
+                        <span><MapPin aria-hidden="true" />{job.city || job.country}</span>
+                        <span><Briefcase aria-hidden="true" />{job.workMode}</span>
+                      </div>
+                      <div className="jr-job-card__tags">
+                        <span>{job.seniority}</span>
+                        {salary ? <span>{salary}</span> : null}
+                      </div>
+                      <div className="jr-job-card__cta">
+                        View role
+                        <ArrowRight aria-hidden="true" />
+                      </div>
+                    </Link>
+                  );
+                })}
+            {!featuredJobs.loading && jobs.length === 0 ? (
+              <p className="jr-jobs__empty">New roles are being added. Check back shortly.</p>
+            ) : null}
+          </div>
+
+          <div className="jr-jobs__more">
+            <Link href={gate("/opportunities")} className="mk-btn mk-btn--primary mk-btn--lg">
+              {session ? "View all jobs" : "Create a free account"} <ArrowRight aria-hidden="true" />
             </Link>
           </div>
         </div>
       </section>
+
     </MarketingLayout>
   );
 }

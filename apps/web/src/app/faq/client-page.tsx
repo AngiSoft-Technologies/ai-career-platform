@@ -62,7 +62,7 @@ export default function FAQPage() {
                 ))}
               </div>
             ) : f.length === 0 ? (
-              <p style={{ color: "var(--mk-text-muted)", textAlign: "center" }}>No FAQs configured yet.</p>
+              <p style={{ color: "var(--mk-text-muted)", textAlign: "center" }}>More answers coming soon.</p>
             ) : (
               f.map((faq, i) => (
                 <Reveal key={faq.id} delay={i * 40}>

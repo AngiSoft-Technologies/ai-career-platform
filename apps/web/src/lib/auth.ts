@@ -181,6 +181,55 @@ export async function fetchSession(): Promise<Session | null> {
   return session;
 }
 
+export const GOOGLE_PENDING_EMAIL = "jr.google.email";
+export const GOOGLE_PENDING_AT = "jr.google.at";
+
+export async function signInWithGoogle(
+  email: string,
+  next = "/dashboard",
+): Promise<boolean> {
+  const callbackURL = new URL(next, window.location.origin).toString();
+  const response = await fetch(`${NEON_AUTH_URL}/sign-in/social`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json", accept: "application/json" },
+    body: JSON.stringify({
+      provider: "google",
+      callbackURL,
+      newUserCallbackURL: new URL("/profile", window.location.origin).toString(),
+      errorCallbackURL: new URL("/login?mode=signin", window.location.origin).toString(),
+      requestSignUp: true,
+      ...(email ? { loginHint: email.trim() } : {}),
+    }),
+  });
+  if (!response.ok) return false;
+  const payload = (await response.json().catch(() => null)) as { url?: string } | null;
+  if (!payload?.url) return false;
+  try {
+    window.sessionStorage.setItem(GOOGLE_PENDING_EMAIL, email.trim());
+    window.sessionStorage.setItem(GOOGLE_PENDING_AT, String(Date.now()));
+  } catch {}
+  window.location.assign(payload.url);
+  return true;
+}
+
+export async function linkGoogle(next = "/settings"): Promise<boolean> {
+  const response = await fetch(`${NEON_AUTH_URL}/link-social`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json", accept: "application/json" },
+    body: JSON.stringify({
+      provider: "google",
+      callbackURL: new URL(next, window.location.origin).toString(),
+    }),
+  });
+  if (!response.ok) return false;
+  const payload = (await response.json().catch(() => null)) as { url?: string } | null;
+  if (!payload?.url) return false;
+  window.location.assign(payload.url);
+  return true;
+}
+
 export async function signIn(email: string, password: string): Promise<boolean> {
   const response = await fetch(`${NEON_AUTH_URL}/sign-in/email`, {
     method: "POST",

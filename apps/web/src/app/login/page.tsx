@@ -2,17 +2,38 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { ArrowRight, KeyRound, ShieldCheck, Sparkles } from "lucide-react";
 import { Button, Field, Input, useToast } from "@/components/ui";
 import { useSession } from "@/components/session";
+import {
+  GOOGLE_PENDING_AT,
+  GOOGLE_PENDING_EMAIL,
+  linkGoogle,
+  signInWithGoogle,
+} from "@/lib/auth";
+import { continueAuthorization } from "@/lib/oauth";
+import { ROLE_HOME } from "@/components/theme";
+import type { RoleKey } from "@/lib/types";
+
+function GoogleMark() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.39-.18-2.05H12v3.88h5.38a4.6 4.6 0 0 1-2 3.02v2.51h3.24c1.9-1.75 2.98-4.33 2.98-7.36Z" />
+      <path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.62-2.41l-3.24-2.51c-.9.6-2.04.96-3.38.96-2.6 0-4.8-1.76-5.59-4.12H3.06v2.59A10 10 0 0 0 12 22Z" />
+      <path fill="#FBBC05" d="M6.41 13.92a6 6 0 0 1 0-3.84V7.49H3.06a10 10 0 0 0 0 9.02l3.35-2.59Z" />
+      <path fill="#EA4335" d="M12 5.96c1.47 0 2.79.51 3.83 1.5l2.87-2.87A9.64 9.64 0 0 0 12 2a10 10 0 0 0-8.94 5.49l3.35 2.59C7.2 7.72 9.4 5.96 12 5.96Z" />
+    </svg>
+  );
+}
 
 function LoginInner() {
   const router = useRouter();
   const params = useSearchParams();
   const toast = useToast();
-  const { signIn, signUp } = useSession();
+  const { signIn, signUp, session, loading } = useSession();
 
+  const authError = params.get("error");
   const [mode, setMode] = useState<"signin" | "signup">(
     params.get("mode") === "signup" ? "signup" : "signin",
   );
@@ -20,8 +41,95 @@ function LoginInner() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
+  const [notice, setNotice] = useState<"existing" | "failed" | null>(null);
+  const [oauthError, setOauthError] = useState<string | null>(null);
 
-  const next = params.get("next") ?? "/dashboard";
+  useEffect(() => {
+    let pendingEmail = "";
+    let pendingAt = 0;
+    try {
+      pendingEmail = window.sessionStorage.getItem(GOOGLE_PENDING_EMAIL) ?? "";
+      pendingAt = Number(window.sessionStorage.getItem(GOOGLE_PENDING_AT) ?? 0);
+    } catch {}
+
+    if (authError === "account_not_linked") {
+      setMode("signin");
+      setNotice("existing");
+      if (pendingEmail) setEmail(pendingEmail);
+    } else if (authError) {
+      setNotice("failed");
+    } else {
+      try {
+        window.sessionStorage.removeItem(GOOGLE_PENDING_EMAIL);
+        window.sessionStorage.removeItem(GOOGLE_PENDING_AT);
+      } catch {}
+    }
+
+    if (pendingAt && Date.now() - pendingAt > 10 * 60 * 1000) {
+      try {
+        window.sessionStorage.removeItem(GOOGLE_PENDING_EMAIL);
+        window.sessionStorage.removeItem(GOOGLE_PENDING_AT);
+      } catch {}
+    }
+  }, [authError]);
+
+  const requestedNext = params.get("next") ?? "/dashboard";
+  const next =
+    requestedNext.startsWith("/") && !requestedNext.startsWith("//")
+      ? requestedNext
+      : "/dashboard";
+
+  const oauthQuery = params.get("oauth_query") ?? "";
+
+  const resumeAuthorization = useCallback(async () => {
+    if (!oauthQuery) return false;
+    const url = await continueAuthorization(oauthQuery);
+    if (!url) return false;
+    window.location.assign(url);
+    return true;
+  }, [oauthQuery]);
+
+  useEffect(() => {
+    if (loading || !session || !oauthQuery) return;
+    void (async () => {
+      const resumed = await resumeAuthorization();
+      if (!resumed) {
+        setOauthError(
+          "We could not finish connecting that app. Please try again.",
+        );
+      }
+    })();
+  }, [loading, session, oauthQuery, resumeAuthorization]);
+
+  const continueWithGoogle = async () => {
+    const trimmed = email.trim();
+    setGoogleBusy(true);
+    try {
+      const returnTo = oauthQuery
+        ? `${window.location.pathname}${window.location.search}`
+        : next;
+      const started = await signInWithGoogle(trimmed, returnTo);
+      if (!started) {
+        toast.push("Google sign-in is not available right now", "danger");
+      }
+    } catch {
+      toast.push("Google sign-in is not available right now", "danger");
+    } finally {
+      setGoogleBusy(false);
+    }
+  };
+
+  const getRoleHome = (roles: string[]): string => {
+    const order: RoleKey[] = ["super_admin", "admin", "moderator", "source_curator", "support_agent", "analyst", "job_seeker"];
+    for (const r of order) {
+      if (roles.includes(r)) {
+        const home = ROLE_HOME[r];
+        if (home) return home;
+      }
+    }
+    return "/dashboard";
+  };
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -40,8 +148,16 @@ function LoginInner() {
         );
         return;
       }
+      const linkGoogleAccount =
+        mode === "signin" && notice === "existing";
+      if (linkGoogleAccount) {
+        const linked = await linkGoogle(next);
+        if (linked) return;
+      }
+      if (await resumeAuthorization()) return;
       toast.push(mode === "signin" ? "Welcome back" : "Account created", "success");
-      router.replace(next);
+      const home = getRoleHome(session?.roles ?? []);
+      router.replace(home);
       router.refresh();
     } finally {
       setBusy(false);
@@ -77,21 +193,20 @@ function LoginInner() {
         }}
       >
         <section>
-          <div className="eyebrow">Start here</div>
+          <div className="eyebrow">Job Radar</div>
           <h1
             className="display"
             style={{ fontSize: "clamp(1.9rem, 5vw, 3rem)", marginTop: 6, lineHeight: 1.05 }}
           >
-            Turn on your radar
+            {mode === "signup" ? "Create your account" : "Welcome back"}
           </h1>
           <p style={{ color: "var(--text-muted)", lineHeight: 1.65, marginTop: "0.8rem" }}>
-            One account, every board. Your profile is the only thing the AI uses, and you stay in
-            control of every application.
+            Find roles that fit, prepare your applications and keep every next step in one place.
           </p>
           <div className="stack" style={{ gap: "0.55rem", marginTop: "1.4rem" }}>
             {[
-              { icon: Sparkles, text: "Ranked matches across every profession" },
-              { icon: ShieldCheck, text: "Scam postings filtered before you see them" },
+              { icon: Sparkles, text: "Roles across every profession" },
+              { icon: ShieldCheck, text: "Clear fit details for every role" },
               { icon: KeyRound, text: "Your documents stay private to you" },
             ].map((item) => (
               <div key={item.text} className="row" style={{ gap: "0.55rem" }}>
@@ -103,6 +218,66 @@ function LoginInner() {
         </section>
 
         <section className="surface" style={{ padding: "1.5rem" }}>
+          {notice ? (
+            <p
+              role="alert"
+              style={{
+                margin: "0 0 1rem",
+                padding: "0.7rem 0.8rem",
+                borderRadius: "var(--radius-sm)",
+                background: notice === "existing" ? "var(--warning-soft)" : "var(--danger-soft)",
+                color: "var(--text)",
+                fontSize: "0.82rem",
+                lineHeight: 1.5,
+              }}
+            >
+              {notice === "existing"
+                ? "That email already has a Job Radar account. Enter your email and password to sign in — we will connect Google automatically."
+                : "Google sign-in did not finish. Try again or sign in with email."}
+            </p>
+          ) : null}
+          {oauthError ? (
+            <p
+              role="alert"
+              style={{
+                margin: "0 0 1rem",
+                padding: "0.7rem 0.8rem",
+                borderRadius: "var(--radius-sm)",
+                background: "var(--danger-soft)",
+                color: "var(--text)",
+                fontSize: "0.82rem",
+                lineHeight: 1.5,
+              }}
+            >
+              {oauthError}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={continueWithGoogle}
+            disabled={googleBusy || busy}
+            style={{ width: "100%", justifyContent: "center", gap: "0.55rem" }}
+          >
+            <GoogleMark />
+            {googleBusy ? "Opening Google…" : "Continue with Google"}
+          </button>
+
+          <div
+            className="row"
+            style={{
+              gap: "0.65rem",
+              margin: "1rem 0 1.1rem",
+              color: "var(--text-muted)",
+              fontSize: "0.72rem",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <hr className="divider" style={{ flex: 1 }} />
+            or continue with email
+            <hr className="divider" style={{ flex: 1 }} />
+          </div>
+
           <div className="row" style={{ gap: "0.4rem", marginBottom: "1.1rem" }}>
             {(["signin", "signup"] as const).map((option) => (
               <button
@@ -154,7 +329,7 @@ function LoginInner() {
             </Field>
 
             <Button type="submit" loading={busy} style={{ justifyContent: "center" }}>
-              {mode === "signin" ? "Sign in" : "Create my radar"} <ArrowRight size={15} />
+              {mode === "signin" ? "Sign in" : "Create account"} <ArrowRight size={15} />
             </Button>
           </form>
 
@@ -166,8 +341,8 @@ function LoginInner() {
               textAlign: "center",
             }}
           >
-            By continuing you agree that we may store your profile to rank roles for you. We never
-            submit an application on your behalf.
+            By continuing, you agree to our Terms and Privacy Policy. We never submit an
+            application on your behalf.
           </p>
         </section>
       </div>

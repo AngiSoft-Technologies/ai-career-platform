@@ -66,5 +66,20 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>jobradar</string>
+			</array>
+			<key>CFBundleURLName</key>
+			<string>co.angisoft.jobradar</string>
+		</dict>
+	</array>
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:jobs-radar.angisoft.co.ke</string>
+	</array>
 </dict>
 </plist>

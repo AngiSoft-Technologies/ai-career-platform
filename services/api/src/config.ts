@@ -38,6 +38,14 @@ const schema = z.object({
   NEON_REALTIME_URL: z.string().optional(),
   NEON_AI_GATEWAY_BASE_URL: z.string().url().optional(),
   NEON_AI_GATEWAY_TOKEN: z.string().optional(),
+  INVITE_SERVICE_EMAIL: z.string().email().optional(),
+  INVITE_SERVICE_PASSWORD: z.string().optional(),
+  INVITE_BASE_URL: z.string().url().optional(),
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASSWORD: z.string().optional(),
+  SMTP_FROM: z.string().optional(),
   MATCHING_GRPC_URL: z.string().optional(),
   DEMO_USER_ID: z
     .string()

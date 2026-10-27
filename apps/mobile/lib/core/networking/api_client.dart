@@ -4,29 +4,33 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
-import '../configuration/app_settings.dart';
+import '../authentication/neon_auth_service.dart';
 import '../authentication/token_storage.dart';
+import '../configuration/app_settings.dart';
 import 'api_exception.dart';
 
 class ApiClient {
   ApiClient({
     required AppSettings settings,
     required TokenStorage tokenStorage,
+    required NeonAuthService authService,
     http.Client? client,
   }) : _settings = settings,
        _tokenStorage = tokenStorage,
+       _authService = authService,
        _client = client ?? http.Client();
 
   final AppSettings _settings;
   final TokenStorage _tokenStorage;
+  final NeonAuthService _authService;
   final http.Client _client;
 
-  Future<dynamic> get(String path, {Map<String, String>? query}) {
-    return _request('GET', path, query: query);
+  Future<T> get<T>(String path, {Map<String, String>? query}) {
+    return _request('GET', path, query: query) as Future<T>;
   }
 
-  Future<dynamic> post(String path, {Map<String, dynamic>? body}) {
-    return _request('POST', path, body: body);
+  Future<T> post<T>(String path, {Map<String, dynamic>? body}) {
+    return _request('POST', path, body: body) as Future<T>;
   }
 
   Future<dynamic> put(String path, {Map<String, dynamic>? body}) {
@@ -46,19 +50,37 @@ class ApiClient {
     Map<String, dynamic>? body,
   }) async {
     final response = await _send(method, _settings.baseUrl, path, query, body);
+    if (response.statusCode == 401) {
+      final refreshed = await _tryRefreshToken();
+      if (refreshed) {
+        final retryResponse = await _send(
+          method,
+          _settings.baseUrl,
+          path,
+          query,
+          body,
+        );
+        final decoded = _decode(retryResponse.body);
+        if (retryResponse.statusCode < 200 || retryResponse.statusCode >= 300) {
+          throw _buildException(retryResponse);
+        }
+        return decoded;
+      }
+    }
     final decoded = _decode(response.body);
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      final error = decoded is Map ? decoded['error'] : null;
-      final code = decoded is Map ? decoded['code'] : null;
-      throw ApiException(
-        statusCode: response.statusCode,
-        message: error is String && error.isNotEmpty
-            ? error
-            : 'Request failed with status ${response.statusCode}',
-        code: code is String ? code : null,
-      );
+      throw _buildException(response);
     }
     return decoded;
+  }
+
+  Future<bool> _tryRefreshToken() async {
+    final cookie = await _tokenStorage.readCookie();
+    if (cookie == null || cookie.isEmpty) return false;
+    final newToken = await _authService.refreshToken(cookie);
+    if (newToken == null || newToken.isEmpty) return false;
+    await _tokenStorage.writeToken(newToken);
+    return true;
   }
 
   Future<http.Response> _send(
@@ -136,6 +158,19 @@ class ApiClient {
     } on FormatException {
       return body;
     }
+  }
+
+  ApiException _buildException(http.Response response) {
+    final decoded = _decode(response.body);
+    final error = decoded is Map ? decoded['error'] : null;
+    final code = decoded is Map ? decoded['code'] : null;
+    return ApiException(
+      statusCode: response.statusCode,
+      message: error is String && error.isNotEmpty
+          ? error
+          : 'Request failed with status ${response.statusCode}',
+      code: code is String ? code : null,
+    );
   }
 
   static const _timeout = Duration(seconds: 20);

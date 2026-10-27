@@ -91,7 +91,6 @@ export default function FeaturesPage() {
       <section className="jr-feature-story" aria-labelledby="feature-story-title">
         <div className="jr-feature-story__photo">
           <Image src="/media/careers/women-in-tech.webp" alt="A technologist working at a computer in a dark studio" fill sizes="(max-width: 760px) 100vw, 45vw" />
-          <span>Illustrative career imagery</span>
         </div>
         <div className="jr-feature-story__copy">
           <span className="jr-eyebrow jr-eyebrow--dark">One search, connected steps</span>
@@ -131,20 +130,6 @@ export default function FeaturesPage() {
         </div>
       </section>
 
-      <section className="mk-section mk-cta" aria-labelledby="cta-heading">
-        <div className="mk-container">
-          <h2 id="cta-heading" className="mk-cta__title">Ready to find your next role?</h2>
-          <p className="mk-cta__text">Create your profile, get matched to live jobs, and apply with a tailored resume and cover letter.</p>
-          <div className="mk-cta__actions">
-            <Link href="/signup" className="mk-btn mk-btn--primary mk-btn--lg">
-              <ArrowRight aria-hidden="true" /> Get started free
-            </Link>
-            <Link href="/opportunities" className="mk-btn mk-btn--ghost mk-btn--lg">
-              <ArrowRight aria-hidden="true" /> Browse live jobs
-            </Link>
-          </div>
-        </div>
-      </section>
     </MarketingLayout>
   );
 }

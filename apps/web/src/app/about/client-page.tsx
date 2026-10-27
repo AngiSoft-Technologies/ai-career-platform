@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Reveal } from "@/components/marketing/reveal";
 import { MarketingLayout } from "@/components/marketing/layout";
 import { useApi } from "@/lib/hooks";
+import { initials } from "@/lib/format";
 import {
   Rocket,
   Target,
@@ -32,6 +33,14 @@ interface HeroContent {
   description: string;
 }
 
+interface TestimonialContent {
+  id: string;
+  name: string;
+  role: string;
+  quote: string;
+  tags: string[];
+}
+
 interface ComparisonColumn {
   id: string;
   label: string;
@@ -57,6 +66,7 @@ export default function AboutPage() {
   const hero = useApi<HeroContent>("/content/about/hero");
   const benefits = useApi<BenefitContent[]>("/content/about/benefits");
   const comparison = useApi<ComparisonColumn[]>("/content/about/comparison");
+  const stories = useApi<TestimonialContent[]>("/content/stories");
 
   const h = hero.data;
   const b = benefits.data?.length ? benefits.data : [
@@ -64,6 +74,7 @@ export default function AboutPage() {
     { id: "prepare", title: "Prepare with purpose", body: "Shape your resume and cover letter for the role.", icon: "FileText" },
     { id: "follow-through", title: "Stay organised", body: "Keep applications, documents and follow-ups together.", icon: "Briefcase" },
   ];
+  const st = stories.data ?? [];
   const c = comparison.data?.length ? comparison.data : [
     { id: "control", label: "You stay in control", items: ["Review your profile and documents", "Choose where and when you apply"], check: true },
     { id: "clarity", label: "Move with clarity", items: ["See why a role may fit", "Keep next steps in view"], check: true },
@@ -191,20 +202,44 @@ export default function AboutPage() {
         </div>
       </section>
 
-      <section className="mk-section mk-cta" aria-labelledby="cta-heading">
+      <section className="mk-section" style={{ background: "var(--mk-surface)", borderTop: "1px solid var(--mk-border)" }} aria-labelledby="stories-heading">
         <div className="mk-container">
-          <h2 id="cta-heading" className="mk-cta__title">Ready to find your next role?</h2>
-          <p className="mk-cta__text">Create your profile, get matched to live jobs, and apply with a tailored resume and cover letter — free during beta.</p>
-          <div className="mk-cta__actions">
-            <Link href="/signup" className="mk-btn mk-btn--primary mk-btn--lg">
-              <ArrowRight aria-hidden="true" /> Get started free
-            </Link>
-            <Link href="/opportunities" className="mk-btn mk-btn--ghost mk-btn--lg">
-              <ArrowRight aria-hidden="true" /> Browse live jobs
-            </Link>
+          <header className="mk-section-header">
+            <span className="mk-section-eyebrow">Stories</span>
+            <h2 id="stories-heading" className="mk-section-heading">What Job Radar users are saying</h2>
+            <p className="mk-lede">Real people finding real roles, preparing tailored applications and keeping every next step in view.</p>
+          </header>
+          <div className="mk-stories__grid">
+            {stories.loading ? (
+              [1, 2, 3].map((i) => (
+                <div key={i} className="mk-story" style={{ minHeight: "300px" }}>
+                  <div className="mk-story__avatar">{"??"}</div>
+                  <blockquote className="mk-story__quote" style={{ color: "var(--mk-text-muted)" }}>{"Loading…"}</blockquote>
+                  <div className="mk-story__author">
+                    <span className="mk-story__name" style={{ color: "var(--mk-text-muted)" }}>{"Loading…"}</span>
+                    <span className="mk-story__role" style={{ color: "var(--mk-text-muted)" }}>{"Loading…"}</span>
+                  </div>
+                </div>
+              ))
+            ) : st.length === 0 ? (
+              <p className="jr-empty-stories">We’ll share real Job Radar experiences here as users choose to tell their stories.</p>
+            ) : (
+              st.map((story, i) => (
+                <Reveal key={story.id} delay={i * 80} className="mk-story">
+                  <div className="mk-story__avatar">{initials(story.name)}</div>
+                  <blockquote className="mk-story__quote">"{story.quote}"</blockquote>
+                  <div className="mk-story__author">
+                    <span className="mk-story__name">{story.name}</span>
+                    <span className="mk-story__role">{story.role}</span>
+                  </div>
+                  <div className="mk-story__tags">{story.tags.map((tag) => <span key={tag} className="mk-story__tag">{tag}</span>)}</div>
+                </Reveal>
+              ))
+            )}
           </div>
         </div>
       </section>
+
     </MarketingLayout>
   );
 }

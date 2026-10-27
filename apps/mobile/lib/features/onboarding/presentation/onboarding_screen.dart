@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/authentication/auth_session.dart';
+import '../../../core/authentication/neon_auth_service.dart';
 import '../../../shared/widgets/brand_mark.dart';
+
 import 'package:provider/provider.dart';
 
-import '../../../core/authentication/auth_session.dart';
 import '../domain/onboarding_form_state.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -203,6 +205,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       icon: const Icon(Icons.explore_outlined),
                       label: const Text('Continue in demo mode'),
                     ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: _formState.isSubmitting
+                          ? null
+                          : _signInWithGoogle,
+                      icon: Image.asset(
+                        'assets/branding/google_logo.png',
+                        width: 20,
+                        height: 20,
+                      ),
+                      label: const Text('Continue with Google'),
+                    ),
                     const SizedBox(height: 18),
                     Text(
                       'Your session token is stored in encrypted device storage and sent only to the Job Radar API.',
@@ -218,6 +232,26 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _formState = _formState.copyWith(isSubmitting: true, clearError: true);
+    });
+    final auth = context.read<AuthSession>();
+    final authService = context.read<NeonAuthService>();
+    try {
+      final result = await authService.signInWithGoogle();
+      await auth.signIn(email: result.email, password: result.token);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _formState = _formState.copyWith(
+          isSubmitting: false,
+          errorMessage: _message(error),
+        );
+      });
+    }
   }
 
   Future<void> _submit() async {
