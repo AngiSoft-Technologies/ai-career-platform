@@ -190,6 +190,22 @@ Assumptions: 10M MAU, 300M requests/month, 60% of traffic from Africa (Kenya pri
 - Write (replay + Frankfurt commit): 150–250 ms
 - Tigris edge fetch: 20–60 ms
 
+**Measured from Nairobi, 2026-10-30** (`services/api/scripts/probe-latency.mjs`, 20–25 samples each,
+served by the `jnb` machine):
+
+| Path | p50 | p95 | max |
+| --- | --- | --- | --- |
+| `/live` (no DB, no Redis) | 84 ms | 124 ms | 1,209 ms |
+| `/live`, second run | 95 ms | 133 ms | 723 ms |
+| `/v1/public/stats` | 77 ms | 409 ms | 451 ms |
+
+Two things fall out of this. First, the 15–40 ms estimate for an edge read was optimistic — the
+median for a *no-op* endpoint is already ~85 ms, and both medians exceed the table above for a
+Frankfurt Postgres read. Second, the tail is the real problem: roughly one request in five takes
+4–15× the median, and `/v1/public/stats` has a worse p95 than `/live`, which points at connection
+acquisition rather than query time. The next step is not a new region, it is connection reuse and
+a repeat of these numbers with a keep-alive client.
+
 ---
 
 ## 5. Neon capability blend — what each primitive is for
@@ -234,11 +250,27 @@ The user's instinct to blend REST, GraphQL, gRPC, MCP and SOAP is right, but onl
 
 **Do not shard. Partition.** At 10M users the problem is table size, not database count.
 
-- **User-owned tables** (`applications`, `matches`, `notifications`, `followups`, `documents`, `candidate_*`) → declarative **hash partitioning on `user_id`, 32 partitions**. This keeps each partition small, enables partition pruning on every user-scoped query (which is ~all of them), and is a pure DDL change — no application logic change.
+- **User-owned tables** (`applications`, `matches`, `notifications`, `followups`, `documents`, `candidate_*`) → declarative **hash partitioning on `user_id`, 32 partitions**. This keeps each partition small, enables partition pruning on every user-scoped query (which is ~all of them).
 - **Global catalog** (`opportunities`, `companies`, `opportunity_skills`, `profession_taxonomy`, `scam_signatures`) → **range partitioning on `posted_at` (monthly) + BRIN** for the time-ordered append pattern. 2,449 rows today; millions at scale.
 - **Never shard the catalog** — it is shared, read-mostly reference data that every user sees.
 
-Only when a *single primary compute* saturates (Launch allows 16 CU; Scale 56 CU) does real sharding become necessary — and at that point the move is **logical replication into additional Neon projects** (project-per-shard), which Neon natively supports. That is a plan change plus a routing layer, not a rewrite. This is exactly why partitioning-first is correct: it defers the irreversible decision until it is actually forced.
+**Correction to an earlier claim in this section: this is not a pure DDL change.** PostgreSQL requires every
+`PRIMARY KEY` and `UNIQUE` constraint on a partitioned table to include the partition key. Every one of these
+tables has a surrogate `id` primary key, so hash-partitioning on `user_id` forces one of:
+
+1. `PRIMARY KEY (user_id, id)` — `id` becomes unique *per partition*, not globally, so any lookup by `id`
+   alone is no longer safe; or
+2. drop the surrogate key, which every row reference in the application currently relies on.
+
+That is a semantic decision about identity, made permanently, in exchange for a table that holds **1 row
+today**. So partitioning is deferred to the trigger below, and P4 is left deliberately undone. The
+alternative — doing it now while the tables are empty — would be to make the constraint decision without
+any data to validate it against and then live with it forever. Trigger: a user-owned table passing ~50M rows,
+or the primary compute saturating, whichever comes first.
+
+Only then does real sharding become necessary, and at that point the move is **logical replication into
+additional Neon projects** (project-per-shard), which Neon natively supports. That is a plan change plus a
+routing layer, not a rewrite.
 
 ### Read replica routing
 
@@ -450,8 +482,8 @@ Extends P0–P5 in `ARCHITECTURE_BOUNDARIES.md`.
 | **P1b — Production wiring** *(done)* | `NEON_AUTH_OAUTH_CLIENT_ID`, `AUTH_OAUTH_REDIRECT_ALLOWLIST` and a 48-char `JWT_SECRET` in `fly secrets`; Redis eviction policy corrected at startup | Sign-in works outside localhost |
 | **P2 — Cut clients off Neon** *(done)* | `neon_auth_service.dart` deleted; cookie `token_storage.dart` removed; mobile → Custom Tab flow; the web `/api/auth` route is now a same-origin relay to the API. **No backward compatibility** | Boundary is real |
 | **P3 — Schema at scale** *(next)* | Migration 013 (the indexes in §7); `pg_stat_statements`; autovacuum tuning; verify index usage with `EXPLAIN` | Reads stop seq-scanning |
-| **P4 — Partition** | Hash-partition user tables on `user_id` ×32; range-partition `opportunities` on `posted_at` | Table size stops mattering |
-| **P5 — Region + replica** | `fly-replay` middleware (already scaffolded in `error-handler.ts`); deploy to `jnb` + `fra`; read replica routing; region-local Redis | Global latency |
+| **P4 — Partition** *(deferred, deliberately)* | Would force a permanent decision about surrogate-key uniqueness — see the correction in §7. Trigger: ~50M rows per user-owned table | Table size stops mattering |
+| **P5 — Region + replica** | `fly-replay` write routing built and tested, **off by default** (`WRITE_REPLAY_REGION`); `fra` machine deployed alongside 3× `jnb` + 2× `iad` | Global latency |
 | **P6 — Protocol blend** | Mobile reads → GraphQL; worker → gRPC; MCP hosted on its own autostop Machine; delete dead web GraphQL client | Cost + throughput |
 | **P7 — Observability** | OTel traces, error tracking, African synthetic checks, Grafana dashboards | Operability |
 | **P8 — Upgrade** | Neon Launch; AI Gateway on; Functions for long-running streams; Realtime where polling exists | Past 100k MAU |
@@ -479,9 +511,9 @@ Extends P0–P5 in `ARCHITECTURE_BOUNDARIES.md`.
 - [x] No mobile/web code path reaches Neon, S3, or any provider directly — enforced by `npm run check:boundaries` in CI.
 - [x] `/v1/auth/*` returns `Cache-Control: no-store`; rate limits enforced.
 - [x] Refresh rotation + reuse detection verified (reuse kills the family) — `verify-auth.mjs`.
-- [ ] Every `EXPLAIN` on the four hottest queries uses an index, not a seq scan.
-- [ ] A write from `jnb` is replayed to `fra`; a read is served locally.
-- [ ] p95 from Nairobi measured and recorded (currently unknown — there is no African vantage point).
+- [x] Every `EXPLAIN` on the four hottest queries uses an index, not a seq scan — verified with `enable_seqscan` forced off in migration 017; the planner already takes the feed index at 3,103 rows.
+- [x] p95 from Nairobi measured and recorded — 124 ms for `/live`, but a 1.2 s max. The tail is the open problem, not the median.
+- [ ] A write from `jnb` is replayed to `fra`; a read is served locally. *(mechanism built and tested; deliberately off — see `middleware/error-handler.ts` and §5 above)*
 - [ ] Load test at 1,200 req/s peak on a staging branch before Launch upgrade.
 
 ---
