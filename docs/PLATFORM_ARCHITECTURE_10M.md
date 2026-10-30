@@ -309,10 +309,11 @@ Already implemented (`worker/index.ts`, `services/api/src/worker/`). Design:
 Rules:
 - **One Redis DB per region** (`jnb`, `fra`, `iad`). Queues are region-local; only results are shared.
 - **Eviction ON** for cache DBs, **OFF** for queue DBs (never lose a notification).
-  Enforced at startup by `services/api/src/db/redis-policy.ts`, which reads
-  `maxmemory-policy` and corrects it where the provider allows `CONFIG SET`.
+  Reported at startup by `services/api/src/db/redis-policy.ts`. Note: Upstash exposes
+  neither `CONFIG GET` nor `CONFIG SET` for `maxmemory-policy`, so this is an
+  **operator action** — set Eviction to *noeviction* on the Upstash database.
   Upstash ships `optimistic-volatile` by default, which drops queued jobs
-  silently — this is currently the biggest silent-failure risk in the stack.
+  silently; this is currently the biggest silent-failure risk in the stack.
 - **Dead-letter queues** after 5 attempts, exponential backoff with jitter.
 - **Idempotency** on every mutating endpoint via the `idempotency_keys` table from migration 012 — the same key returns the stored response instead of a second write. Mobile networks retry aggressively; without this, retries duplicate applications.
 - **Switch to a fixed Upstash plan.** PAYG at $0.20/100k with BullMQ is a documented cost trap. At 300M ops/month PAYG is $600/mo vs $200/mo for fixed 10 GB.
@@ -461,6 +462,10 @@ Extends P0–P5 in `ARCHITECTURE_BOUNDARIES.md`.
 > without a real one), and Redis ran `optimistic-volatile` (queued jobs evaporate at the memory
 > limit). Details and fixes: `ARCHITECTURE_BOUNDARIES.md` §7.5. Verify in production, not just
 > locally.
+>
+> **Still needs a human:** Upstash does not let a client change `maxmemory-policy`. Set Eviction to
+> `noeviction` on the Upstash database in the console — otherwise jobs can still be dropped at the
+> memory limit, and the app can only warn.
 
 ### CI gates
 1. `npm run typecheck` (API) + `@angisoft/job-radar-web` typecheck — must pass.

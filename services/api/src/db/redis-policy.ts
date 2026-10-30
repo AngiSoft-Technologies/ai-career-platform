@@ -6,12 +6,18 @@ import { logger } from "../logger.js";
  *
  * Upstash ships `optimistic-volatile`, which silently drops keys — including
  * queued jobs and their locks — once the database reaches its memory limit.
- * The damage is invisible until a job goes missing, so the policy is
- * corrected at startup rather than trusted to the console.
+ * The damage is invisible until a job goes missing.
  *
- * The check is advisory, never fatal: an unreachable or managed Redis that
- * refuses `CONFIG SET` still has to boot, and the worker is not on the request
- * path.
+ * Verified against the live database: Upstash does not expose this parameter
+ * to clients. `CONFIG GET maxmemory-policy` answers `[]` and
+ * `CONFIG SET maxmemory-policy` fails with "Unknown option or number of
+ * arguments". The policy therefore cannot be corrected from inside the app —
+ * it is a per-database setting in the Upstash console.
+ *
+ * So this check does what the app *can* do: it fails loudly at boot when the
+ * policy is wrong or unreadable, instead of letting jobs vanish silently. The
+ * check is advisory, never fatal — Redis is not on the request path, and a
+ * managed Redis that refuses `CONFIG` still has to boot.
  */
 const REQUIRED_POLICY = "noeviction";
 
@@ -40,7 +46,8 @@ export async function ensureRedisQueuePolicy(redis: Redis): Promise<void> {
 
   if (policy === null) {
     logger.warn(
-      "Redis eviction policy is unknown. Jobs are durable only when it is noeviction.",
+      { required: REQUIRED_POLICY },
+      "Redis did not report its eviction policy. Managed providers such as Upstash do not expose CONFIG GET for it — check the eviction setting in the provider console. Jobs are durable only when it is noeviction.",
     );
     return;
   }
@@ -59,7 +66,7 @@ export async function ensureRedisQueuePolicy(redis: Redis): Promise<void> {
         required: REQUIRED_POLICY,
         error: error instanceof Error ? error.message : String(error),
       },
-      "Redis eviction policy must be noeviction for jobs to survive memory pressure. Set it in the Redis provider console.",
+      "Redis is not running noeviction, so queued jobs can be dropped at the memory limit. The provider refused CONFIG SET — change the eviction setting in the Redis provider console.",
     );
   }
 }

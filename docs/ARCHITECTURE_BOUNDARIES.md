@@ -375,9 +375,16 @@ immediately (15-minute TTL); refresh tokens are opaque and hashed, so they are u
 **3. Redis ran with an `optimistic-volatile` eviction policy.**
 Upstash's default silently drops keys at the memory limit — including queued jobs and their locks —
 which surfaces as "a job went missing" rather than an error. BullMQ requires `noeviction`.
-`services/api/src/db/redis-policy.ts` reads and, where the provider permits, corrects the policy at
-startup, and logs an actionable error where it does not. The check is advisory: Redis is not on the
-request path, so a managed instance that forbids `CONFIG SET` must still boot.
+
+Verified directly against the live database: Upstash does **not** expose this parameter to clients.
+`CONFIG GET maxmemory-policy` answers `[]` and `CONFIG SET maxmemory-policy` fails with *"Unknown
+option or number of arguments"*. The policy cannot be corrected from inside the app; it is a
+per-database setting in the Upstash console and must be changed there.
+
+`services/api/src/db/redis-policy.ts` therefore does what the app *can* do: it reads the policy at
+startup, corrects it where the provider allows `CONFIG SET` (self-hosted Redis), and otherwise logs
+a loud, actionable warning naming the exact setting to change. The check is advisory — Redis is not
+on the request path, so a managed instance that forbids `CONFIG` must still boot.
 
 The general rule: **anything that differs between local and production has to be proven in
 production.** Local verification with `DEMO_MODE` on proves the logic, not the wiring.
@@ -507,4 +514,4 @@ The boundary is clean when all of the following are true:
 | Auth end-to-end proof | `services/api/scripts/verify-auth.mjs` — 25 checks, green against production |
 | Auth mounted ahead of identity | `services/api/src/app.ts` — `/v1/auth` is mounted before `identity`; the auth router resolves the caller itself in `services/api/src/routes/auth.ts` |
 | Production token-signing guard | `services/api/src/auth/tokens.ts` → `accessSecret()` |
-| Redis job durability | `services/api/src/db/redis-policy.ts`, called from `services/api/src/index.ts` |
+| Redis job durability | `services/api/src/db/redis-policy.ts`, called from `services/api/src/index.ts`. Reports the policy at boot; Upstash exposes no `CONFIG` for it, so the value itself is an operator setting |
