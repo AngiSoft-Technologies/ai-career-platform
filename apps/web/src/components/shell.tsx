@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Activity,
@@ -31,7 +31,7 @@ import {
 import { useTheme, ROLE_LABELS, THEMES, type RoleKey } from "@/components/theme";
 import { Avatar, Badge, IconButton, cx } from "@/components/ui";
 import { useWebSocket } from "@/lib/realtime";
-import { outboxSize } from "@/lib/api";
+import { api, outboxSize } from "@/lib/api";
 import type { Session } from "@/lib/auth";
 
 interface NavSubItem {
@@ -72,6 +72,7 @@ const ROLE_NAV: Record<RoleKey, NavItem[]> = {
     { href: "/applications", label: "Applications", icon: Briefcase, roles: ["job_seeker"], group: "Work" },
     { href: "/documents", label: "Documents", icon: FileText, roles: ["job_seeker"], group: "Work" },
     { href: "/followups", label: "Follow-ups", icon: ListChecks, roles: ["job_seeker"], group: "Work" },
+    { href: "/notifications", label: "Notifications", icon: Bell, roles: ["job_seeker"], group: "Work" },
     { href: "/profile", label: "Profile", icon: UserRound, roles: ["job_seeker"], group: "You" },
     { href: "/connections", label: "Connections", icon: Link2, roles: ["job_seeker"], group: "You" },
     { href: "/settings", label: "Settings", icon: Settings, roles: ["job_seeker"], group: "You" },
@@ -313,6 +314,74 @@ function useConnection() {
   return { connected, events, pending };
 }
 
+/**
+ * The bell is a real destination now, not decoration.
+ *
+ * The count comes from the API (the `notifications` table), refreshes on a
+ * slow poll, and is re-read immediately when another view marks notifications
+ * read via the `jr:notifications` event.
+ */
+function NotificationsBell() {
+  const router = useRouter();
+  const [unread, setUnread] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      void api
+        .get<{ unreadCount: number }>("/me/notifications/unread-count")
+        .then((data) => {
+          if (!cancelled) setUnread(data.unreadCount ?? 0);
+        })
+        .catch(() => {
+          // A failed count must never break the shell.
+        });
+    };
+    load();
+    const timer = window.setInterval(load, 60_000);
+    window.addEventListener("jr:notifications", load);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener("jr:notifications", load);
+    };
+  }, []);
+
+  return (
+    <div style={{ position: "relative", display: "inline-flex" }}>
+      <IconButton
+        aria-label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"}
+        onClick={() => router.push("/notifications")}
+      >
+        <Bell size={18} />
+      </IconButton>
+      {unread > 0 ? (
+        <span
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            top: -2,
+            right: -2,
+            minWidth: 16,
+            height: 16,
+            padding: "0 4px",
+            borderRadius: 999,
+            background: "var(--accent)",
+            color: "var(--accent-contrast, #fff)",
+            fontSize: "0.62rem",
+            fontWeight: 700,
+            lineHeight: "16px",
+            textAlign: "center",
+            pointerEvents: "none",
+          }}
+        >
+          {unread > 99 ? "99+" : unread}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <Link href="/dashboard" className="row" style={{ gap: "0.55rem" }}>
@@ -488,9 +557,7 @@ function AuroraShell({ children, session }: { children: ReactNode; session: Sess
           <SearchBar />
           <div className="spacer" />
           <ConnectionPill connected={connected} pending={pending} />
-          <IconButton aria-label="Notifications">
-            <Bell size={18} />
-          </IconButton>
+          <NotificationsBell />
           <Avatar name={session?.user.name ?? session?.user.email} size={32} />
         </header>
 

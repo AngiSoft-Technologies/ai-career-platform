@@ -152,6 +152,9 @@ class SyncEngine {
       case 'generate_document':
         await _apiClient.post('/documents/generate', body: action.payload);
         return null;
+      case 'mark_notifications_read':
+        await _apiClient.post('/me/notifications/read');
+        return null;
       default:
         throw ApiException(
           statusCode: 400,

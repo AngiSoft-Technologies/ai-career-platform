@@ -26,6 +26,9 @@ class NotificationController extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
     try {
+      // Server first; a network failure falls back to the cache inside the
+      // repository, so this does not throw when offline.
+      await _repository.refresh();
       _items = await _repository.listNotifications();
       _unreadCount = await _repository.unreadCount();
       _state = NotificationLoadState.ready;

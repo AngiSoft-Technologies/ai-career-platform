@@ -384,6 +384,34 @@ class LocalDatabase {
     return rows.map(_decodeMap).toList();
   }
 
+  /// Replaces the local notification cache with the server's list.
+  ///
+  /// The server is the source of truth for notifications, so a full replace is
+  /// correct: a notification deleted or read on another device must not
+  /// survive locally.
+  Future<void> replaceNotifications(
+    List<Map<String, dynamic>> notifications,
+  ) async {
+    final batch = _database.batch();
+    batch.delete('notifications');
+    for (final notification in notifications) {
+      final createdAt =
+          DateTime.tryParse(notification['createdAt'] as String? ?? '')
+              ?.millisecondsSinceEpoch ??
+          _now;
+      batch.insert('notifications', {
+        'id': notification['id'],
+        'title': notification['title'] ?? '',
+        'body': notification['body'] ?? '',
+        'type': notification['type'] ?? 'general',
+        'is_read': notification['isRead'] == true ? 1 : 0,
+        'json': jsonEncode(notification),
+        'created_at': createdAt,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await batch.commit(noResult: true);
+  }
+
   Future<void> markAllNotificationsRead() async {
     final notifications = await cachedNotifications();
     final batch = _database.batch();

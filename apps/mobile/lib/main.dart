@@ -82,7 +82,10 @@ Future<void> main() async {
     apiClient: apiClient,
     database: database,
   );
-  final notificationRepository = NotificationRepository(database: database);
+  final notificationRepository = NotificationRepository(
+    apiClient: apiClient,
+    database: database,
+  );
   final workspaceRepository = ApplicationWorkspaceRepository(
     apiClient: apiClient,
     applicationRepository: applicationRepository,
