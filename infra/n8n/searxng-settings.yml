@@ -1,0 +1,16 @@
+use_default_settings: true
+search:
+  formats:
+    - html
+    - json
+  safe_search: 1
+  autocomplete: "duckduckgo"
+engines:
+  - name: duckduckgo
+    shortcut: ddg
+  - name: google
+  - name: bing
+  - name: brave
+  - name: github
+  - name: stackoverflow
+  - name: reddit

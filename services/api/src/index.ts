@@ -2,7 +2,8 @@ import { createServer } from "node:http";
 import { app } from "./app.js";
 import { config } from "./config.js";
 import { pool, warmPool } from "./db/pool.js";
-import { redis, startRedis } from "./db/redis.js";
+import { redis, startRedis, waitForRedis } from "./db/redis.js";
+import { ensureRedisQueuePolicy } from "./db/redis-policy.js";
 import { logger } from "./logger.js";
 import { attachRealtime, closeRealtime } from "./realtime/hub.js";
 import { startGrpcServer, type GrpcHandle } from "./grpc/server.js";
@@ -26,6 +27,9 @@ async function main(): Promise<void> {
   let workers: WorkerHandle | null = null;
 
   startRedis();
+  if (await waitForRedis()) {
+    await ensureRedisQueuePolicy(redis);
+  }
 
   const databaseReady = await warmPool();
   if (!databaseReady) {

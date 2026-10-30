@@ -8,8 +8,14 @@ info:
     Base URL: `{backend_url}/v1`. The legacy `/api/v1` prefix remains as a
     compatibility alias. Every response carries `x-api-version: v1`.
 
-    Authentication: `Authorization: Bearer <neon-auth-jwt>`. Requests without a
-    token run in demo mode (single seeded candidate) while `DEMO_MODE=true`.
+    Authentication: `Authorization: Bearer <access_token>`. Access tokens are
+    minted by this API at `/v1/auth/*` (15 minute lifetime). Refresh them with
+    `POST /v1/auth/refresh`; the refresh token rotates on every use and the
+    presented token is single-use. Requests without a token run in demo mode
+    (single seeded candidate) while `DEMO_MODE=true`.
+
+    The API owns identity. Clients exchange credentials for Job Radar tokens
+    and never contact the identity provider directly.
 servers:
   - url: https://job-radar-api-angisoft.fly.dev/v1
     description: Production
@@ -18,6 +24,7 @@ servers:
 security:
   - bearerAuth: []
 tags:
+  - name: auth
   - name: profile
   - name: opportunities
   - name: applications
@@ -28,6 +35,286 @@ tags:
   - name: admin
   - name: public
 paths:
+  /auth/sign-up:
+    post:
+      tags: [auth]
+      summary: Create an account with email and password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, name]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8 }
+                name: { type: string }
+      responses:
+        "201":
+          description: Account created
+          headers:
+            Cache-Control: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthSession" }
+        "202":
+          description: Account created; email confirmation required before sign-in
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { description: Too many attempts }
+  /auth/sign-in:
+    post:
+      tags: [auth]
+      summary: Sign in with email and password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        "200":
+          description: Signed in
+          headers:
+            Cache-Control: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthSession" }
+        "401": { description: Invalid credentials }
+        "429": { description: Too many attempts }
+  /auth/google:
+    post:
+      tags: [auth]
+      summary: Sign in with a Google ID token
+      description: |
+        Exchanges a Google ID token for Job Radar tokens. The token is verified
+        server-side against Google's JWKS and never leaves the API.
+
+        Most clients use `/auth/google/start` instead, which runs the whole
+        handshake in the browser and needs no provider SDK.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [idToken]
+              properties:
+                idToken: { type: string }
+                nonce: { type: string }
+      responses:
+        "200":
+          description: Signed in
+          headers:
+            Cache-Control: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthSession" }
+        "401": { description: Token could not be verified }
+  /auth/google/start:
+    get:
+      tags: [auth]
+      summary: Start the Google sign-in flow
+      description: |
+        Redirects the browser to the identity provider, which runs the Google
+        consent screen. The provider returns to the API, which redeems the
+        authorization code and sends the browser to `redirect_uri` with the
+        session in the URL fragment.
+
+        `redirect_uri` must be on the API's allowlist. App schemes such as
+        `jobradar://auth/callback` are allowed for mobile.
+      security: []
+      parameters:
+        - name: redirect_uri
+          in: query
+          required: true
+          schema: { type: string, format: uri }
+      responses:
+        "302":
+          description: Redirect to the identity provider
+          headers:
+            Location: { schema: { type: string } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+  /auth/google/callback:
+    get:
+      tags: [auth]
+      summary: Complete the Google sign-in flow
+      description: |
+        The provider redirects here with an authorization code. The API redeems
+        it, mints the session and redirects to the app with the tokens in the
+        URL fragment.
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema: { type: string }
+        - name: state
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "302":
+          description: Redirect to the app with the session
+          headers:
+            Location: { schema: { type: string } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+  /auth/google/link-ticket:
+    post:
+      tags: [auth]
+      summary: Issue a ticket for connecting a provider account
+      description: |
+        Issues a single-use ticket that binds a provider sign-in to the signed-in
+        account. The callback links the provider identity instead of creating a
+        new account.
+      responses:
+        "200":
+          description: Ticket issued
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ticket]
+                properties:
+                  ticket: { type: string }
+        "401": { description: Unauthorized }
+  /auth/google/link/start:
+    get:
+      tags: [auth]
+      summary: Start the provider sign-in that links an account
+      security: []
+      parameters:
+        - name: ticket
+          in: query
+          required: true
+          schema: { type: string }
+        - name: redirect_uri
+          in: query
+          required: true
+          schema: { type: string, format: uri }
+      responses:
+        "302":
+          description: Redirect to the identity provider
+          headers:
+            Location: { schema: { type: string } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+  /auth/password/reset-request:
+    post:
+      tags: [auth]
+      summary: Request a password reset link
+      description: |
+        The response is the same whether or not the address has an account, so
+        the endpoint cannot be used to discover accounts.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        "202": { description: Reset requested }
+        "429": { description: Too many attempts }
+  /auth/password/reset:
+    post:
+      tags: [auth]
+      summary: Set a new password with a reset token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token: { type: string }
+                password: { type: string, minLength: 8 }
+      responses:
+        "200":
+          description: Password changed and signed in
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthSession" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "429": { description: Too many attempts }
+  /auth/refresh:
+    post:
+      tags: [auth]
+      summary: Rotate a refresh token
+      description: |
+        Returns a new access token and a new refresh token. The presented
+        refresh token is single-use. Reusing one revokes the whole token
+        family and forces both the caller and the original owner to sign in
+        again.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        "200":
+          description: Tokens rotated
+          headers:
+            Cache-Control: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthSession" }
+        "401": { description: Refresh token invalid, expired, or reused }
+  /auth/sign-out:
+    post:
+      tags: [auth]
+      summary: Revoke a refresh token
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken: { type: string }
+      responses:
+        "204": { description: Signed out }
+  /auth/session:
+    get:
+      tags: [auth]
+      summary: Get the current session
+      responses:
+        "200":
+          description: Current session
+          headers:
+            Cache-Control: { schema: { type: string } }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  authenticated: { type: boolean }
+                  user: { $ref: "#/components/schemas/AuthUser" }
+                  roles: { type: array, items: { type: string } }
+                  permissions: { type: array, items: { type: string } }
+                  mode: { type: string, enum: [live, demo] }
+        "401": { description: Unauthorized }
   /profile:
     get:
       tags: [profile]
@@ -848,6 +1135,29 @@ components:
       properties:
         error: { type: string }
         code: { type: string }
+    AuthUser:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        name: { type: string }
+    AuthSession:
+      type: object
+      required:
+        - token
+        - tokenType
+        - expiresAt
+        - refreshToken
+        - refreshExpiresAt
+      properties:
+        token: { type: string }
+        tokenType: { type: string, enum: [Bearer] }
+        expiresAt: { type: string, format: date-time }
+        refreshToken: { type: string }
+        refreshExpiresAt: { type: string, format: date-time }
+        user: { $ref: "#/components/schemas/AuthUser" }
+        roles: { type: array, items: { type: string } }
+        permissions: { type: array, items: { type: string } }
     CandidateProfile:
       type: object
       properties:

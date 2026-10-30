@@ -4,9 +4,9 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { ShieldCheck } from "lucide-react";
-import { useSession } from "@/components/session";
 import {
   fetchPublicClient,
+  hasProviderSession,
   hostOf,
   parseAuthorizationRequest,
   respondToConsent,
@@ -23,10 +23,19 @@ const SCOPE_LABELS: Record<string, string> = {
 function ConsentInner() {
   const router = useRouter();
   const params = useSearchParams();
-  const { session, loading } = useSession();
   const [client, setClient] = useState<PublicClient | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * Whether the provider has a session for this browser.
+   *
+   * The decision is submitted inside the session the provider created, so it
+   * is that session — not the Job Radar session — that decides whether consent
+   * can be answered here. A user who signed in at the provider but whose app
+   * session has not been minted yet still has to be able to consent.
+   */
+  const [providerReady, setProviderReady] = useState(false);
+  const [checkingProvider, setCheckingProvider] = useState(true);
 
   const oauthQuery = params.get("oauth_query") ?? "";
   const request = parseAuthorizationRequest(oauthQuery);
@@ -43,9 +52,20 @@ function ConsentInner() {
   }, [request.clientId]);
 
   useEffect(() => {
-    if (loading || session || !oauthQuery) return;
-    router.replace(`/login?oauth_query=${encodeURIComponent(oauthQuery)}`);
-  }, [loading, session, oauthQuery, router]);
+    if (!oauthQuery) return;
+    let cancelled = false;
+    void hasProviderSession().then((ready) => {
+      if (cancelled) return;
+      setProviderReady(ready);
+      setCheckingProvider(false);
+      if (!ready) {
+        router.replace(`/login?oauth_query=${encodeURIComponent(oauthQuery)}`);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [oauthQuery, router]);
 
   const decide = async (accept: boolean) => {
     setBusy(true);
@@ -179,16 +199,20 @@ function ConsentInner() {
           <button
             type="button"
             className="btn btn-primary"
-            disabled={busy || loading || !session}
+            disabled={busy || !providerReady}
             onClick={() => void decide(true)}
             style={{ flex: 1, justifyContent: "center" }}
           >
-            {busy ? "Working…" : "Allow access"}
+            {busy
+              ? "Working…"
+              : checkingProvider
+                ? "Checking your session…"
+                : "Allow access"}
           </button>
           <button
             type="button"
             className="btn btn-outline"
-            disabled={busy || loading}
+            disabled={busy || !providerReady}
             onClick={() => void decide(false)}
             style={{ flex: 1, justifyContent: "center" }}
           >

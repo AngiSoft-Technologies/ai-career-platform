@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import 'core/authentication/api_auth_service.dart';
 import 'core/authentication/auth_session.dart';
-import 'core/authentication/neon_auth_service.dart';
 import 'core/authentication/token_storage.dart';
 import 'core/configuration/app_settings.dart';
 import 'core/networking/api_client.dart';
@@ -13,10 +13,10 @@ import 'core/routing/app_router.dart';
 import 'core/storage/local_database.dart';
 import 'core/synchronization/sync_controller.dart';
 import 'core/synchronization/sync_engine.dart';
-import 'features/applications/data/application_repository.dart';
-import 'features/applications/presentation/application_controller.dart';
 import 'features/application_workspace/data/application_workspace_repository.dart';
 import 'features/application_workspace/presentation/application_workspace_controller.dart';
+import 'features/applications/data/application_repository.dart';
+import 'features/applications/presentation/application_controller.dart';
 import 'features/career_intelligence/data/career_intelligence_repository.dart';
 import 'features/career_intelligence/presentation/career_intelligence_controller.dart';
 import 'features/career_profile/data/profile_repository.dart';
@@ -36,6 +36,7 @@ import 'features/opportunities/data/opportunity_repository.dart';
 import 'features/opportunities/presentation/opportunity_controller.dart';
 import 'features/settings/data/settings_repository.dart';
 import 'shared/theme/app_theme.dart';
+import 'shared/widgets/splash_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -43,7 +44,7 @@ Future<void> main() async {
   final settings = await AppSettings.load();
   final database = await LocalDatabase.open();
   final tokenStorage = TokenStorage();
-  final authService = NeonAuthService();
+  final authService = ApiAuthService(settings: settings);
   final apiClient = ApiClient(
     settings: settings,
     tokenStorage: tokenStorage,
@@ -160,7 +161,7 @@ Future<void> main() async {
         ChangeNotifierProvider<SyncController>.value(value: syncController),
         Provider<ApiClient>.value(value: apiClient),
         Provider<TokenStorage>.value(value: tokenStorage),
-        Provider<NeonAuthService>.value(value: authService),
+        Provider<ApiAuthService>.value(value: authService),
         Provider<LocalDatabase>.value(value: database),
         Provider<OnboardingRepository>.value(
           value: OnboardingRepository(authService: authService),
@@ -189,6 +190,7 @@ class JobRadarApp extends StatefulWidget {
 
 class _JobRadarAppState extends State<JobRadarApp> {
   GoRouter? _router;
+  bool _showSplash = true;
 
   @override
   void didChangeDependencies() {
@@ -204,6 +206,23 @@ class _JobRadarAppState extends State<JobRadarApp> {
 
   @override
   Widget build(BuildContext context) {
+    if (_showSplash) {
+      return MaterialApp(
+        title: 'Job Radar',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light(),
+        darkTheme: AppTheme.dark(),
+        themeMode: ThemeMode.system,
+        home: SplashScreen(
+          onFinished: () {
+            setState(() {
+              _showSplash = false;
+            });
+          },
+        ),
+      );
+    }
+
     return MaterialApp.router(
       title: 'Job Radar',
       debugShowCheckedModeBanner: false,

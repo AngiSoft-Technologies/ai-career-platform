@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const UPSTREAM =
-  process.env.NEON_AUTH_URL ??
-  process.env.NEXT_PUBLIC_NEON_AUTH_URL ??
-  "https://ep-mute-glitter-b5uefleh.neonauth.c-7.us-east-2.aws.neon.tech/neondb/auth";
+/**
+ * Same-origin relay for the identity provider.
+ *
+ * The API is the only party that talks to the provider. This route exists for
+ * one reason: the provider session has to stay a first-party cookie on this
+ * origin, because two steps of the OAuth authorization flow have to run inside
+ * the session the provider created. The request is forwarded to the API, which
+ * forwards it to the provider and returns the response untouched.
+ */
+const API_URL = (
+  process.env.NEXT_PUBLIC_API_URL ?? "https://job-radar-api-angisoft.fly.dev/v1"
+).replace(/\/$/, "");
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +69,10 @@ function normalizeSetCookie(value: string, secureContext: boolean): string {
       const lower = part.toLowerCase();
       if (lower.startsWith("partitioned")) return false;
       if (lower.startsWith("samesite=")) return false;
+      // The provider cookie has to become a host-only cookie for this origin.
+      // A Domain attribute for the provider's own domain would be rejected by
+      // the browser and the session would be lost.
+      if (lower.startsWith("domain=")) return false;
       if (lower.startsWith("secure") && !secureContext) return false;
       return true;
     });
@@ -83,7 +95,7 @@ async function proxy(
   context: { params: Promise<{ path: string[] }> },
 ): Promise<Response> {
   const { path } = await context.params;
-  const upstreamUrl = new URL(`${UPSTREAM}/${path.join("/")}`);
+  const upstreamUrl = new URL(`${API_URL}/auth/neon/${path.join("/")}`);
 
   request.nextUrl.searchParams.forEach((value, key) => {
     upstreamUrl.searchParams.append(key, value);

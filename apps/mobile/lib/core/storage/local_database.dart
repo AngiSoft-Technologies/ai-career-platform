@@ -485,8 +485,9 @@ class LocalDatabase {
 
   dynamic _replaceId(dynamic value, String oldId, String newId) {
     if (value is String) return value == oldId ? newId : value;
-    if (value is List)
+    if (value is List) {
       return value.map((item) => _replaceId(item, oldId, newId)).toList();
+    }
     if (value is Map) {
       return value.map(
         (key, item) => MapEntry(key, _replaceId(item, oldId, newId)),

@@ -1,5 +1,5 @@
 import { config } from "../config.js";
-import { ensureLocalUser, verifyNeonToken } from "./neon-auth.js";
+import { verifyAccessToken } from "./tokens.js";
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -7,6 +7,8 @@ const uuidPattern =
 export interface ResolvedIdentity {
   userId: string;
   authenticated: boolean;
+  /** "app" = token minted by this API, "demo" = seeded fallback. */
+  source?: "app" | "demo";
 }
 
 export class UnauthorizedError extends Error {
@@ -16,6 +18,13 @@ export class UnauthorizedError extends Error {
   }
 }
 
+/**
+ * Resolves a request to a local user.
+ *
+ * The API only accepts tokens it minted itself at /v1/auth. Clients get those
+ * tokens by exchanging credentials or a provider ID token with the backend, and
+ * never talk to Neon Auth directly.
+ */
 export async function resolveIdentity(input: {
   authorization?: string | null;
   headerUserId?: string | null;
@@ -26,10 +35,9 @@ export async function resolveIdentity(input: {
     : undefined;
 
   if (token) {
-    const identity = await verifyNeonToken(token);
+    const identity = await verifyAccessToken(token);
     if (!identity) throw new UnauthorizedError();
-    const userId = await ensureLocalUser(identity);
-    return { userId, authenticated: true };
+    return { ...identity, authenticated: true, source: "app" };
   }
 
   if (config.DEMO_MODE) {
@@ -41,6 +49,7 @@ export async function resolveIdentity(input: {
           ? candidate
           : config.DEMO_USER_ID,
       authenticated: false,
+      source: "demo",
     };
   }
 

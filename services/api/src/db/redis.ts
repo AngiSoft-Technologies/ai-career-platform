@@ -27,6 +27,30 @@ export function startRedis(): void {
   });
 }
 
+/**
+ * Waits for the first connect attempt to settle.
+ *
+ * Commands issued while the client is still connecting are rejected, because
+ * the offline queue is disabled — anything that has to run against Redis at
+ * startup goes through here first.
+ */
+export function waitForRedis(timeoutMs = 5_000): Promise<boolean> {
+  if (redis.status === "ready") return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const settle = (connected: boolean) => {
+      clearTimeout(timer);
+      redis.off("ready", onReady);
+      redis.off("error", onError);
+      resolve(connected);
+    };
+    const onReady = () => settle(true);
+    const onError = () => settle(false);
+    const timer = setTimeout(() => settle(false), timeoutMs);
+    redis.once("ready", onReady);
+    redis.once("error", onError);
+  });
+}
+
 export async function cacheGet<T>(key: string): Promise<T | null> {
   if (!ready) return null;
   try {

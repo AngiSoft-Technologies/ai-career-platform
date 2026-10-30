@@ -3,14 +3,14 @@ import 'package:flutter/foundation.dart';
 import '../configuration/app_settings.dart';
 import '../networking/api_client.dart';
 import '../networking/api_exception.dart';
-import 'neon_auth_service.dart';
+import 'api_auth_service.dart';
 import 'token_storage.dart';
 
 enum SessionState { signedOut, demo, authenticated }
 
 class AuthSession extends ChangeNotifier {
   AuthSession({
-    required NeonAuthService authService,
+    required ApiAuthService authService,
     required TokenStorage tokenStorage,
     required ApiClient apiClient,
     required AppSettings settings,
@@ -19,7 +19,7 @@ class AuthSession extends ChangeNotifier {
        _apiClient = apiClient,
        _settings = settings;
 
-  final NeonAuthService _authService;
+  final ApiAuthService _authService;
   final TokenStorage _tokenStorage;
   final ApiClient _apiClient;
   final AppSettings _settings;
@@ -92,10 +92,28 @@ class AuthSession extends ChangeNotifier {
 
   Future<void> signIn({required String email, required String password}) async {
     final result = await _authService.signIn(email: email, password: password);
-    await _tokenStorage.writeToken(result.token);
-    if (result.cookie != null && result.cookie!.isNotEmpty) {
-      await _tokenStorage.writeCookie(result.cookie!);
-    }
+    await _tokenStorage.writeSession(
+      token: result.token,
+      refreshToken: result.refreshToken,
+    );
+    await _settings.setDemoMode(false);
+    _name = result.name;
+    _email = result.email;
+    _state = SessionState.authenticated;
+    await _loadIdentity();
+    notifyListeners();
+  }
+
+  /// Completes the Google sign-in flow.
+  ///
+  /// The browser is used for the provider consent and the API returns the
+  /// session through a deep link.
+  Future<void> signInWithGoogle() async {
+    final result = await _authService.signInWithGoogle();
+    await _tokenStorage.writeSession(
+      token: result.token,
+      refreshToken: result.refreshToken,
+    );
     await _settings.setDemoMode(false);
     _name = result.name;
     _email = result.email;
@@ -114,10 +132,10 @@ class AuthSession extends ChangeNotifier {
       password: password,
       name: name,
     );
-    await _tokenStorage.writeToken(result.token);
-    if (result.cookie != null && result.cookie!.isNotEmpty) {
-      await _tokenStorage.writeCookie(result.cookie!);
-    }
+    await _tokenStorage.writeSession(
+      token: result.token,
+      refreshToken: result.refreshToken,
+    );
     await _settings.setDemoMode(false);
     _name = result.name;
     _email = result.email;
@@ -127,7 +145,7 @@ class AuthSession extends ChangeNotifier {
   }
 
   Future<void> continueInDemoMode() async {
-    await _tokenStorage.deleteToken();
+    await _tokenStorage.clearAll();
     await _settings.setDemoMode(true);
     _name = 'Demo Candidate';
     _email = '';
@@ -159,6 +177,14 @@ class AuthSession extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    final refreshToken = await _tokenStorage.readRefreshToken();
+    if (refreshToken != null && refreshToken.isNotEmpty) {
+      try {
+        await _authService.signOut(refreshToken);
+      } catch (_) {
+        // The local session is cleared either way.
+      }
+    }
     await _tokenStorage.clearAll();
     await _settings.setDemoMode(true);
     _name = '';

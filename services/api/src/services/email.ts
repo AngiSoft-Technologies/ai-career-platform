@@ -74,6 +74,56 @@ async function sendViaSmtp(input: {
   return { sent: true, provider: "smtp" };
 }
 
+/**
+ * Sends a password reset email.
+ *
+ * The reset link carries a single-use token that the API validates.
+ */
+export async function sendPasswordResetEmail(input: {
+  to: string;
+  name?: string | null;
+  resetUrl: string;
+}): Promise<EmailResult> {
+  if (!smtpConfigured()) {
+    return { sent: false, provider: null, reason: "email delivery unavailable" };
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: config.SMTP_HOST,
+    port: config.SMTP_PORT,
+    secure: config.SMTP_PORT === 465,
+    auth:
+      config.SMTP_USER && config.SMTP_PASSWORD
+        ? { user: config.SMTP_USER, pass: config.SMTP_PASSWORD }
+        : undefined,
+  });
+
+  const greeting = input.name ? `Hi ${escapeHtml(input.name)},` : "Hi,";
+
+  await transporter.sendMail({
+    from: config.SMTP_FROM,
+    to: input.to,
+    subject: "Reset your Job Radar password",
+    text: [
+      greeting,
+      "",
+      "Use the link below to choose a new password.",
+      "",
+      input.resetUrl,
+      "",
+      "This link expires in one hour. If you did not ask for it, ignore this email.",
+    ].join("\n"),
+    html: [
+      `<p>${greeting}</p>`,
+      "<p>Use the link below to choose a new password.</p>",
+      `<p><a href="${escapeHtml(input.resetUrl)}">Choose a new password</a></p>`,
+      "<p>This link expires in one hour. If you did not ask for it, ignore this email.</p>",
+    ].join(""),
+  });
+
+  return { sent: true, provider: "smtp" };
+}
+
 export async function sendInvitationEmail(input: {
   to: string;
   name?: string | null;

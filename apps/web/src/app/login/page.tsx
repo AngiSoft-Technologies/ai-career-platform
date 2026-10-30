@@ -2,17 +2,16 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, KeyRound, ShieldCheck, Sparkles } from "lucide-react";
 import { Button, Field, Input, useToast } from "@/components/ui";
 import { useSession } from "@/components/session";
+import { signInWithGoogle } from "@/lib/auth";
 import {
-  GOOGLE_PENDING_AT,
-  GOOGLE_PENDING_EMAIL,
-  linkGoogle,
-  signInWithGoogle,
-} from "@/lib/auth";
-import { continueAuthorization } from "@/lib/oauth";
+  continueAuthorization,
+  hasProviderSession,
+  startProviderSignIn,
+} from "@/lib/oauth";
 import { ROLE_HOME } from "@/components/theme";
 import type { RoleKey } from "@/lib/types";
 
@@ -42,36 +41,11 @@ function LoginInner() {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
-  const [notice, setNotice] = useState<"existing" | "failed" | null>(null);
+  const [notice, setNotice] = useState<"failed" | null>(null);
   const [oauthError, setOauthError] = useState<string | null>(null);
 
   useEffect(() => {
-    let pendingEmail = "";
-    let pendingAt = 0;
-    try {
-      pendingEmail = window.sessionStorage.getItem(GOOGLE_PENDING_EMAIL) ?? "";
-      pendingAt = Number(window.sessionStorage.getItem(GOOGLE_PENDING_AT) ?? 0);
-    } catch {}
-
-    if (authError === "account_not_linked") {
-      setMode("signin");
-      setNotice("existing");
-      if (pendingEmail) setEmail(pendingEmail);
-    } else if (authError) {
-      setNotice("failed");
-    } else {
-      try {
-        window.sessionStorage.removeItem(GOOGLE_PENDING_EMAIL);
-        window.sessionStorage.removeItem(GOOGLE_PENDING_AT);
-      } catch {}
-    }
-
-    if (pendingAt && Date.now() - pendingAt > 10 * 60 * 1000) {
-      try {
-        window.sessionStorage.removeItem(GOOGLE_PENDING_EMAIL);
-        window.sessionStorage.removeItem(GOOGLE_PENDING_AT);
-      } catch {}
-    }
+    if (authError) setNotice("failed");
   }, [authError]);
 
   const requestedNext = params.get("next") ?? "/dashboard";
@@ -80,7 +54,28 @@ function LoginInner() {
       ? requestedNext
       : "/dashboard";
 
-  const oauthQuery = params.get("oauth_query") ?? "";
+  /**
+   * The signed authorization request.
+   *
+   * The provider redirects the browser here with the authorization request as
+   * query parameters. The query is signed and expires, so it is handed back
+   * exactly as received.
+   */
+  const oauthQuery = useMemo(() => {
+    const explicit = params.get("oauth_query");
+    if (explicit) return explicit;
+    const raw = params.toString();
+    if (!raw) return "";
+    const signed = new URLSearchParams(raw);
+    if (signed.get("client_id") && signed.get("sig")) return raw;
+    return "";
+  }, [params]);
+
+  const provider = useMemo(() => {
+    if (!oauthQuery) return "";
+    const signed = new URLSearchParams(oauthQuery);
+    return signed.get("provider") ?? "";
+  }, [oauthQuery]);
 
   const resumeAuthorization = useCallback(async () => {
     if (!oauthQuery) return false;
@@ -90,26 +85,52 @@ function LoginInner() {
     return true;
   }, [oauthQuery]);
 
+  /**
+   * Drives the provider sign-in for a pending authorization request.
+   *
+   * The provider verifies the signed query, signs the user in and resumes the
+   * authorization request once the provider returns. The browser comes back
+   * here with a session, and the flow continues from there.
+   */
+  const beginProviderSignIn = useCallback(async () => {
+    if (!oauthQuery || !provider) return false;
+    const url = await startProviderSignIn(provider, oauthQuery);
+    if (!url) return false;
+    window.location.assign(url);
+    return true;
+  }, [oauthQuery, provider]);
+
+  const flowStarted = useRef(false);
+
   useEffect(() => {
-    if (loading || !session || !oauthQuery) return;
+    if (loading || !oauthQuery || flowStarted.current) return;
+    flowStarted.current = true;
+
     void (async () => {
-      const resumed = await resumeAuthorization();
-      if (!resumed) {
-        setOauthError(
-          "We could not finish connecting that app. Please try again.",
-        );
+      // With a provider session the authorization request can be resumed.
+      if (await hasProviderSession()) {
+        if (await resumeAuthorization()) return;
       }
+
+      // Without one the provider has to sign the user in first.
+      if (await beginProviderSignIn()) return;
+
+      setOauthError("We could not start the sign-in. Please try again.");
     })();
-  }, [loading, session, oauthQuery, resumeAuthorization]);
+  }, [
+    loading,
+    oauthQuery,
+    resumeAuthorization,
+    beginProviderSignIn,
+  ]);
 
   const continueWithGoogle = async () => {
-    const trimmed = email.trim();
     setGoogleBusy(true);
     try {
       const returnTo = oauthQuery
         ? `${window.location.pathname}${window.location.search}`
         : next;
-      const started = await signInWithGoogle(trimmed, returnTo);
+      const started = await signInWithGoogle(returnTo);
       if (!started) {
         toast.push("Google sign-in is not available right now", "danger");
       }
@@ -147,12 +168,6 @@ function LoginInner() {
           "danger",
         );
         return;
-      }
-      const linkGoogleAccount =
-        mode === "signin" && notice === "existing";
-      if (linkGoogleAccount) {
-        const linked = await linkGoogle(next);
-        if (linked) return;
       }
       if (await resumeAuthorization()) return;
       toast.push(mode === "signin" ? "Welcome back" : "Account created", "success");
@@ -225,15 +240,13 @@ function LoginInner() {
                 margin: "0 0 1rem",
                 padding: "0.7rem 0.8rem",
                 borderRadius: "var(--radius-sm)",
-                background: notice === "existing" ? "var(--warning-soft)" : "var(--danger-soft)",
+                background: "var(--danger-soft)",
                 color: "var(--text)",
                 fontSize: "0.82rem",
                 lineHeight: 1.5,
               }}
             >
-              {notice === "existing"
-                ? "That email already has a Job Radar account. Enter your email and password to sign in — we will connect Google automatically."
-                : "Google sign-in did not finish. Try again or sign in with email."}
+              Sign-in did not finish. Try again or sign in with email.
             </p>
           ) : null}
           {oauthError ? (
@@ -331,6 +344,18 @@ function LoginInner() {
             <Button type="submit" loading={busy} style={{ justifyContent: "center" }}>
               {mode === "signin" ? "Sign in" : "Create account"} <ArrowRight size={15} />
             </Button>
+
+            {mode === "signin" ? (
+              <p style={{ textAlign: "center", marginTop: "0.2rem" }}>
+                <Link
+                  href="/reset-password"
+                  className="btn btn-ghost btn-sm"
+                  style={{ fontSize: "0.78rem" }}
+                >
+                  Forgot your password?
+                </Link>
+              </p>
+            ) : null}
           </form>
 
           <p

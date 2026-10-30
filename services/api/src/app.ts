@@ -24,7 +24,9 @@ import { publicRouter } from "./routes/public.js";
 import { contentRouter } from "./routes/content.js";
 import { invitationRouter } from "./routes/invitations.js";
 import { v1Router } from "./routes/v1.js";
+import { authRouter } from "./routes/auth.js";
 import { webhookRouter } from "./routes/webhooks.js";
+import { n8nRouter } from "./routes/n8n.js";
 import { API_VERSION, API_VERSION_HEADER } from "./version.js";
 
 export const app = express();
@@ -187,7 +189,20 @@ app.use("/v1/invitations", invitationRouter);
 app.use("/api/v1/invitations", invitationRouter);
 app.use("/v1/content", contentRouter);
 app.use("/api/v1/content", contentRouter);
+app.use("/v1/n8n", n8nRouter);
+app.use("/api/v1/n8n", n8nRouter);
 app.use(flyReplayMiddleware);
+
+/**
+ * Auth is mounted before identity on purpose.
+ *
+ * Identity rejects requests that carry no token, which is correct for every
+ * resource — but the auth endpoints are how a client *gets* a token, so they
+ * have to be reachable without one. The auth router resolves the caller itself
+ * and only rejects where a session is genuinely required.
+ */
+app.use("/v1/auth", authRouter);
+app.use("/api/v1/auth", authRouter);
 
 app.use(identity);
 app.use("/v1/mcp", mcpRouter);

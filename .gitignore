@@ -12,8 +12,22 @@ coverage/
 .env.example
 **/.env.example
 tree.*
-docs/
-db/
+# OAuth / provider client secrets. These must never be committed.
+config/client_secret_*.json
+config/*_secret_*.json
+**/client_secret_*.json
+**/service-account*.json
+**/gha-creds-*.json
+
+# Templates that only document the required keys. Everything real above stays
+# ignored; these carry placeholder values only and belong in the repo.
+!infra/n8n/.env.example
+!apps/mobile/android/key.properties.example
+
+# NOTE: docs/ and db/ are intentionally NOT ignored.
+# db/migrations and db/seeds are the schema history and must be versioned;
+# docs/ holds the architecture contracts. Both were previously ignored by a
+# blanket rule, which silently kept migrations 008-012 out of the repo.
 
 # Logs
 *.log
@@ -36,8 +50,13 @@ apps/mobile/ios/.symlinks/
 apps/mobile/ios/Flutter/Flutter.framework
 apps/mobile/ios/Flutter/Flutter.podspec
 apps/mobile/android/.gradle/
+apps/mobile/android/build/
 apps/mobile/android/local.properties
 apps/mobile/android/key.properties
+
+# Machine-local DevTools / Gradle toolchain settings
+apps/mobile/devtools_options.yaml
+apps/mobile/android/gradle/gradle-daemon-jvm.properties
 
 # Local data
 .infisical/

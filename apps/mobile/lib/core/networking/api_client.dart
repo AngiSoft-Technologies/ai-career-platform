@@ -4,7 +4,7 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
-import '../authentication/neon_auth_service.dart';
+import '../authentication/api_auth_service.dart';
 import '../authentication/token_storage.dart';
 import '../configuration/app_settings.dart';
 import 'api_exception.dart';
@@ -13,7 +13,7 @@ class ApiClient {
   ApiClient({
     required AppSettings settings,
     required TokenStorage tokenStorage,
-    required NeonAuthService authService,
+    required ApiAuthService authService,
     http.Client? client,
   }) : _settings = settings,
        _tokenStorage = tokenStorage,
@@ -22,7 +22,7 @@ class ApiClient {
 
   final AppSettings _settings;
   final TokenStorage _tokenStorage;
-  final NeonAuthService _authService;
+  final ApiAuthService _authService;
   final http.Client _client;
 
   Future<T> get<T>(String path, {Map<String, String>? query}) {
@@ -74,13 +74,25 @@ class ApiClient {
     return decoded;
   }
 
+  /// Refreshes the session through the API.
+  ///
+  /// The API rotates the refresh token on every use, so the rotated pair is
+  /// persisted before the request is retried.
   Future<bool> _tryRefreshToken() async {
-    final cookie = await _tokenStorage.readCookie();
-    if (cookie == null || cookie.isEmpty) return false;
-    final newToken = await _authService.refreshToken(cookie);
-    if (newToken == null || newToken.isEmpty) return false;
-    await _tokenStorage.writeToken(newToken);
-    return true;
+    final refreshToken = await _tokenStorage.readRefreshToken();
+    if (refreshToken == null || refreshToken.isEmpty) return false;
+    try {
+      final session = await _authService.refresh(refreshToken);
+      if (session.token.isEmpty) return false;
+      await _tokenStorage.writeSession(
+        token: session.token,
+        refreshToken: session.refreshToken,
+      );
+      return true;
+    } on AuthException {
+      await _tokenStorage.clearAll();
+      return false;
+    }
   }
 
   Future<http.Response> _send(

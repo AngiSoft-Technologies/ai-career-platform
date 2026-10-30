@@ -150,7 +150,7 @@ flutter analyze       # Static analysis (lints)
 
 - **Package ID**: `ke.co.angisoft.job_radar` (Android) / `ke.co.angisoft.job_radar` (iOS)
 - **Play Store**: `https://play.google.com/store/apps/details?id=ke.co.angisoft.job_radar`
-- **Release signing**: Configure `android/key.properties` (see `android/key.properties.example`)
+- **Release signing**: Configure `android/key.properties` (see `android/key.properties`)
 
 ## License
 

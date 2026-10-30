@@ -16,22 +16,9 @@ class BrandMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final mark = Image.asset(
-      'assets/branding/logo_mark.png',
-      width: size,
-      height: size,
-      fit: BoxFit.contain,
-      semanticLabel: 'Job Radar',
-      filterQuality: FilterQuality.high,
-    );
-
-    if (!showWordmark) return mark;
-
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        mark,
-        SizedBox(width: size * 0.34),
         ConstrainedBox(
           constraints: BoxConstraints(maxWidth: size * 6.4),
           child: Image.asset(

@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
-
-import '../../../core/authentication/auth_session.dart';
-import '../../../core/authentication/neon_auth_service.dart';
-import '../../../shared/widgets/brand_mark.dart';
-
 import 'package:provider/provider.dart';
 
+import '../../../core/authentication/auth_session.dart';
+import '../../../shared/widgets/brand_mark.dart';
 import '../domain/onboarding_form_state.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -58,13 +55,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    Text(
-                      'Job Radar',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.headlineMedium
-                          ?.copyWith(fontWeight: FontWeight.w800),
-                    ),
-                    const SizedBox(height: 8),
+
                     Text(
                       'Find focused opportunities and prepare every application with AI.',
                       textAlign: TextAlign.center,
@@ -196,33 +187,34 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             ),
                     ),
                     const SizedBox(height: 12),
-                    OutlinedButton.icon(
+                    OutlinedButton(
                       onPressed: _formState.isSubmitting
                           ? null
                           : () => context
                                 .read<AuthSession>()
                                 .continueInDemoMode(),
-                      icon: const Icon(Icons.explore_outlined),
-                      label: const Text('Continue in demo mode'),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(Icons.explore_outlined, size: 20),
+                          SizedBox(width: 12),
+                          Text('Continue in demo mode'),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 12),
-                    OutlinedButton.icon(
+                    OutlinedButton(
                       onPressed: _formState.isSubmitting
                           ? null
                           : _signInWithGoogle,
-                      icon: Image.asset(
-                        'assets/branding/google_logo.png',
-                        width: 20,
-                        height: 20,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(Icons.g_mobiledata_rounded, size: 24),
+                          SizedBox(width: 8),
+                          Text('Continue with Google'),
+                        ],
                       ),
-                      label: const Text('Continue with Google'),
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      'Your session token is stored in encrypted device storage and sent only to the Job Radar API.',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(color: scheme.onSurfaceVariant),
                     ),
                   ],
                 ),
@@ -239,10 +231,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       _formState = _formState.copyWith(isSubmitting: true, clearError: true);
     });
     final auth = context.read<AuthSession>();
-    final authService = context.read<NeonAuthService>();
     try {
-      final result = await authService.signInWithGoogle();
-      await auth.signIn(email: result.email, password: result.token);
+      await auth.signInWithGoogle();
     } catch (error) {
       if (!mounted) return;
       setState(() {
