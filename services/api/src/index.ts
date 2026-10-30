@@ -29,6 +29,10 @@ async function main(): Promise<void> {
   startRedis();
   if (await waitForRedis()) {
     await ensureRedisQueuePolicy(redis);
+  } else {
+    logger.warn(
+      "Redis was not connected at startup, so its eviction policy was not checked. BullMQ jobs are durable only when it is noeviction.",
+    );
   }
 
   const databaseReady = await warmPool();
