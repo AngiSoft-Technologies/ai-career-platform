@@ -13,7 +13,15 @@ const schema = z.object({
   API_URL: z.string().default("http://localhost:8088"),
   WEB_ORIGIN: z
     .string()
-    .default("http://localhost:3000,http://localhost:3100"),
+    .default(
+      "https://jobs-radar.angisoft.co.ke,https://job-radar-ke.netlify.app,http://localhost:3000,http://localhost:3100",
+    ),
+  /**
+   * Region that owns the write path. Unset by default: replaying a write to
+   * another region only helps once that region holds a database the current
+   * one does not. See `middleware/error-handler.ts`.
+   */
+  WRITE_REPLAY_REGION: z.string().optional(),
   DATABASE_URL: z
     .string()
     .default("postgresql://jobradar:jobradar@localhost:5432/jobradar"),
