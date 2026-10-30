@@ -139,7 +139,33 @@ export function cachedSession(): Session | null {
   return readJson<Session>(SESSION_KEY);
 }
 
+/**
+ * Cached reads and queued writes live in `jr.cache:<userId>:…` and
+ * `jr.outbox:<userId>`. They are scoped per account, so the only remaining
+ * hazard is orphaned data from a previous account lingering in storage. Purge
+ * it when the identity actually changes.
+ */
+const USER_SCOPED_PREFIXES = ["jr.cache:", "jr.outbox:"];
+
+function purgeOtherAccounts(nextUserId: string | undefined): void {
+  if (typeof window === "undefined") return;
+  const previous = cachedSession()?.user.id;
+  if (!nextUserId || previous === nextUserId) return;
+  try {
+    for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
+      const key = window.localStorage.key(index);
+      if (!key) continue;
+      if (USER_SCOPED_PREFIXES.some((prefix) => key.startsWith(prefix))) {
+        window.localStorage.removeItem(key);
+      }
+    }
+  } catch {
+    // Storage can be unavailable in private mode; the namespacing still holds.
+  }
+}
+
 export function storeSession(session: Session): void {
+  purgeOtherAccounts(session.user?.id);
   writeJson(SESSION_KEY, session);
 }
 

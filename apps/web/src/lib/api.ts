@@ -28,6 +28,20 @@ export class ApiRequestError extends Error implements ApiError {
 const CACHE_PREFIX = "jr.cache:";
 const OUTBOX_KEY = "jr.outbox";
 
+/** Cached reads older than this are ignored rather than shown as current. */
+const MAX_CACHE_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Cache and outbox entries are namespaced by account.
+ *
+ * Without this, a second user signing in on the same browser inherits the
+ * first user's cached responses — and worse, their queued writes would be
+ * replayed under the new session.
+ */
+function namespace(): string {
+  return cachedSession()?.user.id ?? "anonymous";
+}
+
 export interface OutboxItem {
   id: string;
   method: string;
@@ -41,7 +55,7 @@ export interface OutboxItem {
 function readOutbox(): OutboxItem[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(OUTBOX_KEY);
+    const raw = window.localStorage.getItem(`${OUTBOX_KEY}:${namespace()}`);
     return raw ? (JSON.parse(raw) as OutboxItem[]) : [];
   } catch {
     return [];
@@ -50,7 +64,10 @@ function readOutbox(): OutboxItem[] {
 
 function writeOutbox(items: OutboxItem[]): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(OUTBOX_KEY, JSON.stringify(items));
+  window.localStorage.setItem(
+    `${OUTBOX_KEY}:${namespace()}`,
+    JSON.stringify(items),
+  );
 }
 
 export function outboxSize(): number {
@@ -66,7 +83,7 @@ export function clearOutbox(): void {
 }
 
 function cacheKey(path: string): string {
-  return `${CACHE_PREFIX}${path}`;
+  return `${CACHE_PREFIX}${namespace()}:${path}`;
 }
 
 export function readCache<T>(path: string): { data: T; at: number } | null {
@@ -170,7 +187,9 @@ export async function request<T>(
   } catch (error) {
     if (method === "GET" && options.cache !== false) {
       const cached = readCache<T>(path);
-      if (cached) return cached.data;
+      if (cached && Date.now() - cached.at <= MAX_CACHE_AGE_MS) {
+        return cached.data;
+      }
     }
     throw new ApiRequestError({
       error: error instanceof Error ? error.message : "Network request failed",
