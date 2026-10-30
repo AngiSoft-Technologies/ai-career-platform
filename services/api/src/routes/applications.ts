@@ -9,6 +9,7 @@ import {
   listApplications,
   updateApplicationStatus,
 } from "../services/applications.js";
+import { humanizeStatus, notify } from "../services/notifications.js";
 import { query } from "../db/pool.js";
 
 const statuses = [
@@ -58,6 +59,11 @@ applicationsRouter.post("/", async (request, response) => {
     input.status as ApplicationStatus | undefined,
   );
   await cacheDelByPrefix(`opportunities:${userId}:`);
+  await notify(userId, {
+    type: "application",
+    title: "Application tracked",
+    body: "Next step: tailor your CV for this role.",
+  });
   response.status(201).json({ application });
 });
 
@@ -139,5 +145,10 @@ applicationsRouter.patch("/:id/status", async (request, response) => {
     userId,
   );
   await cacheDelByPrefix(`opportunities:${userId}:`);
+  await notify(userId, {
+    type: "application",
+    title: `Application moved to ${humanizeStatus(application.status)}`,
+    body: "Open the application to see what changed and what to do next.",
+  });
   response.json({ application });
 });

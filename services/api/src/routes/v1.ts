@@ -12,10 +12,14 @@ import { connectionsRouter } from "./connections.js";
 import { adminRouter } from "./admin.js";
 import { matchesRouter, companiesRouter } from "./matches.js";
 import { meRouter } from "./me.js";
+import { notificationsRouter } from "./notifications.js";
 import { streamRouter } from "./stream.js";
 
 export const v1Router = Router();
 
+// Mounted before `/me` so `/me/notifications` resolves here rather than being
+// swallowed by the account router.
+v1Router.use("/me/notifications", notificationsRouter);
 v1Router.use("/me", meRouter);
 v1Router.use("/profile", profileRouter);
 v1Router.use("/profile/preferences", preferencesRouter);

@@ -895,6 +895,79 @@ paths:
       tags: [profile]
       responses:
         "200": { description: Current user and roles }
+  /me/notifications:
+    get:
+      tags: [notifications]
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 30 }
+        - name: before
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Notifications for the current user, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, unreadCount]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, type, title, body, isRead, createdAt]
+                      properties:
+                        id: { type: string, format: uuid }
+                        type: { type: string, enum: [application, document, match, followup, system] }
+                        title: { type: string }
+                        body: { type: string }
+                        isRead: { type: boolean }
+                        createdAt: { type: string, format: date-time }
+                  unreadCount: { type: integer }
+                  nextCursor:
+                    type: string
+                    format: date-time
+                    nullable: true
+  /me/notifications/unread-count:
+    get:
+      tags: [notifications]
+      responses:
+        "200":
+          description: Unread notification count
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [unreadCount]
+                properties:
+                  unreadCount: { type: integer }
+  /me/notifications/read:
+    post:
+      tags: [notifications]
+      responses:
+        "200":
+          description: All notifications marked read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated: { type: integer }
+                  unreadCount: { type: integer }
+  /me/notifications/{id}/read:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [notifications]
+      responses:
+        "200": { description: Notification marked read }
+        "404": { description: Notification not found }
   /stats:
     get:
       tags: [public]

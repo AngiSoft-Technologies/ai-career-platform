@@ -11,6 +11,7 @@ import {
   prepareDocumentTailoring,
 } from "../services/documents.js";
 import { createUploadTarget } from "../services/storage.js";
+import { humanizeStatus, notify } from "../services/notifications.js";
 
 const generateSchema = z.object({
   opportunityId: z.string().uuid(),
@@ -53,6 +54,11 @@ documentsRouter.post("/generate", async (request, response) => {
     },
     response.locals.userId as string,
   );
+  await notify(response.locals.userId as string, {
+    type: "document",
+    title: "Your document is ready",
+    body: `${humanizeStatus(document.type)} generated — review it before you send it.`,
+  });
   response.status(201).json({ document });
 });
 

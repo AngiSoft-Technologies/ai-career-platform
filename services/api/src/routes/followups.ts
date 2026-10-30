@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { query } from "../db/pool.js";
 import { broadcast } from "../realtime/hub.js";
+import { notify } from "../services/notifications.js";
 
 export const followupsRouter = Router();
 
@@ -129,6 +130,11 @@ applicationFollowupsRouter.post("/:id/followups", async (request, response, next
     );
 
     broadcast("followup.created", { followupId: result.rows[0]?.id }, userId);
+    await notify(userId, {
+      type: "followup",
+      title: "Follow-up scheduled",
+      body: `We will remind you on ${new Date(input.dueAt).toDateString()}.`,
+    });
 
     response.status(201).json({ followup: result.rows[0] });
   } catch (error) {
