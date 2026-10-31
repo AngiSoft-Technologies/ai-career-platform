@@ -8,6 +8,7 @@ import {
   BadgeCheck,
   Bell,
   Briefcase,
+  ChevronLeft,
   ChevronRight,
   Compass,
   FileText,
@@ -394,13 +395,7 @@ function Brand({ compact = false }: { compact?: boolean }) {
       />
       {!compact ? (
         <span style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
-          <img
-            src="/brand/logo-wordmark-light.png"
-            alt="Job Radar"
-            width={132}
-            height={37}
-            style={{ width: 132, height: "auto", marginBlock: -2 }}
-          />
+          <span style={{ fontWeight: 700, fontSize: "0.9rem" }}>Job Radar</span>
           <span style={{ fontSize: "0.62rem", color: "var(--text-muted)", letterSpacing: "0.14em" }}>
             ANGISOFT
           </span>
@@ -529,13 +524,22 @@ function AuroraShell({ children, session }: { children: ReactNode; session: Sess
   const pathname = usePathname();
   const { connected, pending } = useConnection();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const closeMenu = useCallback(() => setMenuOpen(false), []);
 
   return (
     <div className="aurora-grid">
-      <aside className="glass aurora-side">
-        <Brand />
-        <NavStack nav={nav} pathname={pathname} />
+      <aside className={`glass aurora-side ${sidebarCollapsed ? "collapsed" : ""}`}>
+        <Brand compact={sidebarCollapsed} />
+        <button
+          type="button"
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className="sidebar-toggle"
+        >
+          {sidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+        </button>
+        <NavStack nav={nav} pathname={pathname} collapsed={sidebarCollapsed} />
         <div style={{ marginTop: "auto" }} className="stack">
           <ConnectionPill connected={connected} pending={pending} />
           <UserBlock session={session} role={role} />
@@ -1006,7 +1010,7 @@ function AtlasShell({ children, session }: { children: ReactNode; session: Sessi
 /* Shared pieces                                                             */
 /* ========================================================================== */
 
-function NavStack({ nav, pathname }: { nav: NavItem[]; pathname: string }) {
+function NavStack({ nav, pathname, collapsed }: { nav: NavItem[]; pathname: string; collapsed?: boolean }) {
   const groups = useMemo(() => {
     const map = new Map<string, NavItem[]>();
     for (const item of nav) {
@@ -1026,7 +1030,12 @@ function NavStack({ nav, pathname }: { nav: NavItem[]; pathname: string }) {
           </div>
           <div className="stack" style={{ gap: "0.12rem" }}>
             {items.map((item) => (
-              <NavLink key={item.href} item={item} active={pathname.startsWith(item.href)} />
+              <NavLink
+                key={item.href}
+                item={item}
+                active={pathname.startsWith(item.href)}
+                collapsed={collapsed}
+              />
             ))}
           </div>
         </div>
@@ -1039,10 +1048,12 @@ function NavLink({
   item,
   active,
   onClick,
+  collapsed,
 }: {
   item: NavItem;
   active: boolean;
   onClick?: () => void;
+  collapsed?: boolean;
 }) {
   return (
     <Link
@@ -1051,17 +1062,18 @@ function NavLink({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: "0.55rem",
-        padding: "0.46rem 0.6rem",
+        gap: collapsed ? 0 : "0.55rem",
+        padding: collapsed ? "0.6rem 0.4rem" : "0.46rem 0.6rem",
         borderRadius: "var(--radius-md)",
         fontSize: "0.86rem",
         fontWeight: active ? 700 : 500,
         color: active ? "var(--accent)" : "var(--text-soft)",
         background: active ? "var(--accent-soft)" : "transparent",
+        justifyContent: collapsed ? "center" : "flex-start",
       }}
     >
       <item.icon size={16} />
-      {item.label}
+      {!collapsed && item.label}
     </Link>
   );
 }

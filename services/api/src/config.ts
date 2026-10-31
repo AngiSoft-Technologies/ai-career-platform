@@ -14,7 +14,7 @@ const schema = z.object({
   WEB_ORIGIN: z
     .string()
     .default(
-      "https://jobs-radar.angisoft.co.ke,https://job-radar-ke.netlify.app,http://localhost:3000,http://localhost:3100",
+      "https://jobs-radar.angisoft.co.ke,https://job-radar-ke.netlify.app,http://localhost:3003,http://localhost:3100",
     ),
   /**
    * Region that owns the write path. Unset by default: replaying a write to
@@ -113,6 +113,10 @@ const schema = z.object({
   N8N_API_URL: z.string().url().optional(),
   N8N_API_KEY: z.string().optional(),
   N8N_WEBHOOK_SECRET: z.string().optional(),
+
+  // Firecrawl (web search & scraping)
+  FIRECRAWL_API_KEY: z.string().optional(),
+  FIRECRAWL_BASE_URL: z.string().url().default("https://api.firecrawl.dev"),
 });
 
 const parsed = schema.parse(process.env);

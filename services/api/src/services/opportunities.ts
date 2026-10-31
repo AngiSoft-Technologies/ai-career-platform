@@ -5,6 +5,7 @@ export interface OpportunityFilters {
   country?: string;
   q?: string;
   workMode?: string;
+  employmentType?: string;
   seniority?: string;
   limit?: number;
 }
@@ -99,6 +100,10 @@ export async function listOpportunities(
   if (filters.seniority) {
     values.push(filters.seniority);
     clauses.push(`o.seniority = $${values.length}`);
+  }
+  if (filters.employmentType) {
+    values.push(filters.employmentType);
+    clauses.push(`o.employment_type = $${values.length}`);
   }
 
   const limit = Math.min(Math.max(filters.limit ?? 30, 1), 100);

@@ -16,7 +16,7 @@ function authBaseUrl(): string {
 }
 
 function requestOrigin(): string {
-  return config.INVITE_BASE_URL ?? config.WEB_ORIGINS[0] ?? "http://localhost:3000";
+  return config.INVITE_BASE_URL ?? config.WEB_ORIGINS[0] ?? "http://localhost:3003";
 }
 
 async function authPost(path: string, body: Record<string, unknown>) {

@@ -1,6 +1,7 @@
 export type WorkMode = "onsite" | "hybrid" | "remote";
 export type Seniority = "intern" | "junior" | "mid" | "senior" | "lead";
 export type ApplicationMethod = "email" | "website" | "form" | "ats" | "unknown";
+export type EmploymentType = "full_time" | "part_time" | "contract" | "internship" | "industrial_attachment" | "trainee" | "freelance";
 
 export type ApplicationStatus =
   | "DISCOVERED"
@@ -141,6 +142,7 @@ export interface OpportunitySearch {
   country?: string;
   q?: string;
   workMode?: WorkMode;
+  employmentType?: EmploymentType;
   seniority?: Seniority;
   limit?: number;
 }

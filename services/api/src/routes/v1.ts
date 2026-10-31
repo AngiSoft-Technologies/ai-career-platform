@@ -14,6 +14,7 @@ import { matchesRouter, companiesRouter } from "./matches.js";
 import { meRouter } from "./me.js";
 import { notificationsRouter } from "./notifications.js";
 import { streamRouter } from "./stream.js";
+import { userLocationRouter } from "./user-location.js";
 
 export const v1Router = Router();
 
@@ -36,3 +37,4 @@ v1Router.use("/admin", adminRouter);
 v1Router.use("/matches", matchesRouter);
 v1Router.use("/companies", companiesRouter);
 v1Router.use("/stream", streamRouter);
+v1Router.use("/user-location", userLocationRouter);

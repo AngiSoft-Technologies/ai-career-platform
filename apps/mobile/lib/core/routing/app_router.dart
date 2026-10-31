@@ -7,6 +7,8 @@ import '../../features/applications/presentation/application_list_screen.dart';
 import '../../features/career_profile/presentation/profile_screen.dart';
 import '../../features/documents/presentation/document_list_screen.dart';
 import '../../features/documents/presentation/document_viewer_screen.dart';
+import '../../features/documents/presentation/resume_builder_screen.dart';
+import '../../features/documents/presentation/template_gallery_screen.dart';
 import '../../features/job_matching/presentation/matches_screen.dart';
 import '../../features/job_preferences/presentation/preferences_screen.dart';
 import '../../features/notifications/presentation/notification_screen.dart';
@@ -113,6 +115,22 @@ GoRouter createAppRouter(AuthSession authSession) {
         path: '/documents/:id',
         builder: (context, state) =>
             DocumentViewerScreen(documentId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/builder/resume',
+        builder: (context, state) => ResumeBuilderScreen(
+          opportunityId: state.uri.queryParameters['opportunityId']!,
+          opportunityTitle:
+              state.uri.queryParameters['opportunityTitle'] ?? 'Untitled role',
+          companyName: state.uri.queryParameters['companyName'] ?? 'Company',
+          applicationId: state.uri.queryParameters['applicationId'],
+        ),
+      ),
+      GoRoute(
+        path: '/builder/template-gallery',
+        builder: (context, state) => TemplateGalleryScreen(
+          documentType: (state.extra as Map?)?['documentType'] ?? 'cv',
+        ),
       ),
       GoRoute(
         path: '/preferences',

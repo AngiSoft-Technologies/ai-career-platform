@@ -140,6 +140,22 @@ class _ApplicationWorkspaceScreenState
                   ),
                 ],
               ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _isGenerating || workspace.opportunityId.isEmpty
+                      ? null
+                      : () => context.push(
+                          '/builder/resume?opportunityId=${Uri.encodeComponent(workspace.opportunityId)}&opportunityTitle=${Uri.encodeComponent(opportunity?.title ?? 'Untitled role')}&companyName=${Uri.encodeComponent(opportunity?.companyName ?? 'Company')}&applicationId=${Uri.encodeComponent(widget.applicationId ?? '')}',
+                        ),
+                  icon: const Icon(
+                    Icons.auto_awesome_rounded,
+                    color: Colors.green,
+                  ),
+                  label: const Text('Build tailored resume (AI)'),
+                ),
+              ),
               if (_isGenerating) ...[
                 const SizedBox(height: 12),
                 const LinearProgressIndicator(),

@@ -1,16 +1,11 @@
-import type { JobSourceAdapter, RawJob } from "./types.js";
-import { arbeitnowAdapter } from "./sources/arbeitnow.js";
-import { remoteokAdapter } from "./sources/remoteok.js";
-import { remotiveAdapter } from "./sources/remotive.js";
+/**
+ * Ingestion module — agent-based job discovery.
+ *
+ * No hardcoded source adapters. Agents discover jobs dynamically through
+ * search engines across ALL platforms.
+ *
+ * Discovery is handled entirely by agents registered in `discovery_agents`
+ * and run by `services/agents/runner.ts`.
+ */
 
-export const jobSourceAdapters: JobSourceAdapter[] = [
-  remotiveAdapter,
-  arbeitnowAdapter,
-  remoteokAdapter,
-];
-
-export const adaptersByName = new Map(
-  jobSourceAdapters.map((adapter) => [adapter.name.toLowerCase(), adapter]),
-);
-
-export type { JobSourceAdapter, RawJob } from "./types.js";
+export type { IngestionStats } from "./pipeline.js";

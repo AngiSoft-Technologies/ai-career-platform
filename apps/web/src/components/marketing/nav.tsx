@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { API_URL } from "@/lib/auth";
 import {
   Menu,
   X,
@@ -11,7 +10,6 @@ import {
   Globe,
   HelpCircle,
   Info,
-  Zap,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
@@ -28,7 +26,6 @@ export function MarketingNav() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const [cohort, setCohort] = useState<{remaining: number; cap: number} | null>(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -36,31 +33,8 @@ export function MarketingNav() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  useEffect(() => {
-    fetch(`${API_URL}/public/cohort`)
-      .then((r) => r.ok && r.json())
-      .then((d) => setCohort(d))
-      .catch(() => {});
-  }, []);
-
   return (
     <>
-      {cohort && (
-        <div
-          className="mk-cohort-bar"
-          role="status"
-          aria-live="polite"
-          aria-label={`Founding cohort: ${cohort.remaining} of ${cohort.cap} seats left`}
-        >
-          <Zap className="mk-cohort-icon" aria-hidden="true" />
-          <span className="mk-cohort-text">
-            Founding cohort: <strong>{cohort.remaining}</strong> of <strong>{cohort.cap}</strong> free seats left
-          </span>
-          <span className="mk-cohort-progress" role="progressbar" aria-valuenow={Math.round((cohort.cap - cohort.remaining) / cohort.cap * 100)} aria-valuemin={0} aria-valuemax={100}>
-            <span style={{ width: `${Math.max(0, Math.min(100, (cohort.cap - cohort.remaining) / cohort.cap * 100))}%` }} />
-          </span>
-        </div>
-      )}
       <header className={clsx("mk-nav", scrolled && "mk-nav--scrolled")} role="banner">
         <div className="mk-nav__inner">
           <Link href="/" className="mk-nav__logo" aria-label="Job Radar — Home">

@@ -29,6 +29,11 @@ config/*_secret_*.json
 # docs/ holds the architecture contracts. Both were previously ignored by a
 # blanket rule, which silently kept migrations 008-012 out of the repo.
 
+# Test artifacts / temp files (local only)
+test-results/
+apps/web/test-results/
+check_jobs_detailed.ts
+
 # Logs
 *.log
 npm-debug.log*

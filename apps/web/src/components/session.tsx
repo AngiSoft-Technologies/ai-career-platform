@@ -123,6 +123,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return "job_seeker" as RoleKey;
   }, [roles]);
 
+  const { setRole: setThemeRole } = useTheme();
+
+  // Sync backend-assigned roles into the theme context so the shell renders
+  // the correct navigation for the user's actual role (not job_seeker by default).
+  useEffect(() => {
+    setThemeRole(primaryRole);
+  }, [primaryRole, setThemeRole]);
+
   const value = useMemo<SessionContextValue>(
     () => ({
       session,

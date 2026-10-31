@@ -24,6 +24,7 @@ import 'features/career_profile/presentation/profile_controller.dart';
 import 'features/company_intelligence/data/company_intelligence_repository.dart';
 import 'features/documents/data/document_repository.dart';
 import 'features/documents/presentation/document_controller.dart';
+import 'features/documents/presentation/template_controller.dart';
 import 'features/followups/data/follow_up_repository.dart';
 import 'features/followups/presentation/follow_up_controller.dart';
 import 'features/job_matching/data/match_repository.dart';
@@ -148,6 +149,9 @@ Future<void> main() async {
         ),
         ChangeNotifierProvider<DocumentController>.value(
           value: documentController,
+        ),
+        ChangeNotifierProvider<TemplateController>.value(
+          value: TemplateController(repository: documentRepository),
         ),
         ChangeNotifierProvider<FollowUpController>.value(
           value: followUpController,

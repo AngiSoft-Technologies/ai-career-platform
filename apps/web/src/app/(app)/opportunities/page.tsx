@@ -25,6 +25,7 @@ interface OpportunitiesResponse {
 
 const WORK_MODES = ["remote", "hybrid", "onsite"];
 const SENIORITIES = ["intern", "junior", "mid", "senior", "lead"];
+const EMPLOYMENT_TYPES = ["full_time", "part_time", "contract", "internship", "industrial_attachment", "trainee", "freelance"];
 
 function OpportunitiesPageInner() {
   const router = useRouter();
@@ -32,6 +33,7 @@ function OpportunitiesPageInner() {
   const [search, setSearch] = useState(params.get("q") ?? "");
   const [country, setCountry] = useState(params.get("country") ?? "");
   const [workMode, setWorkMode] = useState(params.get("workMode") ?? "");
+  const [employmentType, setEmploymentType] = useState(params.get("employmentType") ?? "");
   const [seniority, setSeniority] = useState(params.get("seniority") ?? "");
   const [semantic, setSemantic] = useState(false);
 
@@ -41,11 +43,12 @@ function OpportunitiesPageInner() {
       q: debounced || undefined,
       country: country || undefined,
       workMode: workMode || undefined,
+      employmentType: employmentType || undefined,
       seniority: seniority || undefined,
       semantic: semantic ? "true" : undefined,
       limit: 40,
     }),
-    [debounced, country, workMode, seniority, semantic],
+    [debounced, country, workMode, employmentType, seniority, semantic],
   );
 
   useEffect(() => {
@@ -53,11 +56,12 @@ function OpportunitiesPageInner() {
     if (debounced) next.set("q", debounced);
     if (country) next.set("country", country);
     if (workMode) next.set("workMode", workMode);
+    if (employmentType) next.set("employmentType", employmentType);
     if (seniority) next.set("seniority", seniority);
     if (semantic) next.set("semantic", "true");
     const suffix = next.toString();
     router.replace(suffix ? `/opportunities?${suffix}` : "/opportunities", { scroll: false });
-  }, [country, debounced, router, semantic, seniority, workMode]);
+  }, [country, debounced, router, semantic, seniority, workMode, employmentType]);
 
   const { data, loading, error, offline, refresh } = useApi<OpportunitiesResponse>(
     "/opportunities",
@@ -171,6 +175,18 @@ function OpportunitiesPageInner() {
                 ))}
               </>
             ) : null}
+            <span className="eyebrow" style={{ margin: "0 0.3rem 0 0.8rem" }}>
+              Employment Type
+            </span>
+            {EMPLOYMENT_TYPES.map((type) => (
+              <Chip
+                key={type}
+                active={employmentType === type}
+                onClick={() => toggle("employmentType", type, setEmploymentType)}
+              >
+                {titleCase(type)}
+              </Chip>
+            ))}
             <span className="spacer" />
             <Chip active={semantic} onClick={() => setSemantic((value) => !value)}>
               Semantic AI search

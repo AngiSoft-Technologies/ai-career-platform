@@ -12,6 +12,9 @@ const searchSchema = z.object({
   country: z.string().min(1).optional(),
   q: z.string().min(1).optional(),
   workMode: z.enum(["onsite", "hybrid", "remote"]).optional(),
+  employmentType: z
+    .enum(["full_time", "part_time", "contract", "internship", "trainee", "industrial_attachment"])
+    .optional(),
   seniority: z.enum(["intern", "junior", "mid", "senior", "lead"]).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
   semantic: z

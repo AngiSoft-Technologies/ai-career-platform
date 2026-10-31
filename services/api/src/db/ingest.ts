@@ -1,24 +1,14 @@
 import { runIngestion } from "../services/ingestion/run.js";
 
 async function main(): Promise<void> {
-  const only = process.argv[2];
-  const { jobSourceAdapters } = await import(
-    "../services/ingestion/index.js"
+  const result = await runIngestion();
+  console.log(
+    `[ingest] status=${result.status} fetched=${result.fetched} inserted=${result.inserted} updated=${result.updated} failed=${result.failed}`,
   );
-  const adapters = only
-    ? jobSourceAdapters.filter(
-        (adapter) => adapter.name.toLowerCase() === only.toLowerCase(),
-      )
-    : jobSourceAdapters;
-
-  if (adapters.length === 0) {
-    console.error(`unknown source: ${only}`);
+  if (result.error) {
+    console.error(`[ingest] error: ${result.error}`);
     process.exit(1);
   }
-
-  const results = await runIngestion(adapters);
-  const failed = results.filter((result) => result.error);
-  process.exit(failed.length === results.length ? 1 : 0);
 }
 
 main().catch((error) => {

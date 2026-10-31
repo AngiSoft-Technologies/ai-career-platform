@@ -22,6 +22,80 @@ function normalize(value: string): string {
   return value.trim().toLowerCase();
 }
 
+/**
+ * Location-based filtering and scoring.
+ * Location is the PRIMARY factor (50 points out of 100).
+ *
+ * Rules:
+ * 1. Remote jobs are ALWAYS shown (they work from anywhere)
+ * 2. Onsite/hybrid jobs are ONLY shown if they match the user's country
+ *    OR preferred locations
+ * 3. Location is weighted at 50 points (50% of total score)
+ * 4. Distance decay: closer jobs score higher
+ */
+function calculateLocationScore(
+  profile: CandidateProfile,
+  opportunity: Opportunity,
+): { score: number; shown: boolean; reason: string } {
+  const isRemote = opportunity.workMode === "remote";
+  const isHybrid = opportunity.workMode === "hybrid";
+  const isOnsite = opportunity.workMode === "onsite";
+
+  // Remote jobs are always shown - they work from anywhere
+  if (isRemote) {
+    return { score: 50, shown: true, reason: "remote work" };
+  }
+
+  // Check if the job is in the user's country
+  const countryMatch =
+    profile.country &&
+    opportunity.country &&
+    normalize(profile.country) === normalize(opportunity.country);
+
+  // Check if the job is in one of the user's preferred locations
+  const preferredLocationMatch =
+    profile.preferredLocations &&
+    profile.preferredLocations.some((loc) =>
+      opportunity.city && normalize(loc) === normalize(opportunity.city),
+    ) ||
+    (opportunity.city &&
+      profile.preferredLocations?.some(
+        (loc) => normalize(loc) === normalize(opportunity.city),
+      ));
+
+  // Check if the job is in the user's current city
+  const cityMatch =
+    profile.location &&
+    opportunity.city &&
+    normalize(profile.location) === normalize(opportunity.city);
+
+  // For onsite/hybrid jobs: ONLY show if in candidate's country or preferred location
+  if (!isRemote && !countryMatch && !preferredLocationMatch && !cityMatch) {
+    return { score: 0, shown: false, reason: "not in your location" };
+  }
+
+  // Calculate location score (0-50)
+  let score = 0;
+
+  // Same city = 50 points
+  if (cityMatch) {
+    score = 50;
+  } else if (countryMatch) {
+    // Same country but different city = 30 points
+    score = 30;
+  } else if (preferredLocationMatch) {
+    // Preferred location = 40 points
+    score = 40;
+  }
+
+  // Hybrid jobs get a small bonus if in country/preferred location
+  if (isHybrid && (countryMatch || preferredLocationMatch || cityMatch)) {
+    score = Math.min(50, score + 5);
+  }
+
+  return { score, shown: true, reason: "location match" };
+}
+
 function calculate(
   profile: CandidateProfile,
   opportunity: Opportunity,
@@ -29,9 +103,7 @@ function calculate(
   const profileSkills = new Set(profile.skills.map(normalize));
   const required = opportunity.skills.map(normalize);
   const matched = required.filter((skill) => profileSkills.has(skill));
-  const missing = opportunity.skills.filter(
-    (skill) => !profileSkills.has(normalize(skill)),
-  );
+  const missing = required.filter((skill) => !profileSkills.has(normalize(skill)));
 
   const skillScore =
     required.length === 0 ? 20 : (matched.length / required.length) * 45;
@@ -40,24 +112,6 @@ function calculate(
   const opportunityRank = seniorityRank[opportunity.seniority] ?? 2;
   const rankDiff = Math.abs(profileRank - opportunityRank);
   const seniorityScore = rankDiff === 0 ? 15 : rankDiff === 1 ? 11 : 4;
-
-  const countryMatch = normalize(profile.country) === normalize(opportunity.country);
-  const locationMatch =
-    normalize(profile.location) === normalize(opportunity.city) ||
-    profile.preferredLocations.some(
-      (location) => normalize(location) === normalize(opportunity.city),
-    );
-  const remoteMatch =
-    profile.remotePreferred && opportunity.workMode === "remote";
-
-  let locationScore = 0;
-  if (countryMatch) locationScore += 6;
-  if (locationMatch) locationScore += 6;
-  if (remoteMatch) locationScore += 6;
-  if (opportunity.workMode === "hybrid" && (locationMatch || countryMatch)) {
-    locationScore = Math.max(locationScore, 10);
-  }
-  locationScore = Math.min(locationScore, 15);
 
   const title = normalize(opportunity.title);
   const roleHits = profile.desiredRoles.filter((role) => {
@@ -73,25 +127,43 @@ function calculate(
   const freshnessScore =
     ageDays <= 7 ? 10 : ageDays <= 14 ? 8 : ageDays <= 30 ? 5 : 2;
 
+  // Location is now the PRIMARY factor (50 points)
+  const location = calculateLocationScore(profile, opportunity);
+
+  // If the job shouldn't be shown (not remote, not in user's location),
+  // return a score of 0 so it gets filtered out
+  if (!location.shown) {
+    return {
+      opportunityId: opportunity.id,
+      score: 0,
+      factors: {
+        skills: 0,
+        seniority: 0,
+        location: 0,
+        role: 0,
+        freshness: 0,
+      },
+      explanation: "Not in your location",
+      gaps: required,
+    };
+  }
+
   const factors: MatchFactors = {
     skills: Math.round(skillScore * 10) / 10,
     seniority: seniorityScore,
-    location: locationScore,
+    location: location.score,
     role: roleScore,
     freshness: freshnessScore,
   };
 
-  const score = Math.round(
-    (factors.skills +
-      factors.seniority +
-      factors.location +
-      factors.role +
-      factors.freshness) *
-      10,
-  ) / 10;
+  // Total score: location (50) + skills (45) + seniority (15) + role (15) + freshness (10)
+  // Max possible = 130, but we cap at 100
+  const rawScore =
+    factors.skills + factors.seniority + factors.location + factors.role + factors.freshness;
+  const score = Math.min(100, Math.round(rawScore));
 
   const explanationParts = [
-    `${score.toFixed(0)}% match`,
+    `${score}% match`,
     required.length > 0
       ? `${matched.length}/${required.length} required skills`
       : "no hard skill requirements",
@@ -154,6 +226,7 @@ export async function rankedOpportunities(
   const profile = await getProfile(userId);
   if (!profile) throw new Error("PROFILE_NOT_FOUND");
 
+  // Get all active opportunities (we'll filter by location in memory)
   const opportunities = listOpportunities(filters);
   const [results, semantic] = await Promise.all([
     opportunities,
@@ -167,23 +240,53 @@ export async function rankedOpportunities(
 
   const similarityById = new Map(semantic.map((hit) => [hit.id, hit.similarity]));
 
-  const ranked = results.map((opportunity) => {
-    const match = calculate(profile, opportunity);
-    const similarity = similarityById.get(opportunity.id);
-    if (similarity === undefined) return { ...opportunity, match };
+  // Filter and rank opportunities by location first
+  const ranked = results
+    .map((opportunity) => {
+      const match = calculate(profile, opportunity);
 
-    const blended = match.score * 0.65 + Math.max(similarity, 0) * 100 * 0.35;
-    return {
-      ...opportunity,
-      match: {
-        ...match,
-        score: Math.round(blended * 10) / 10,
-        explanation: `${match.explanation} · ${(similarity * 100).toFixed(0)}% semantic relevance`,
-      },
-    };
+      // Filter out jobs that shouldn't be shown (not remote, not in user's location)
+      if (!locationShown(match)) {
+        return null;
+      }
+
+      const similarity = similarityById.get(opportunity.id);
+      const blended =
+        similarity !== undefined
+          ? match.score * 0.6 + Math.max(similarity, 0) * 100 * 0.4
+          : match.score;
+
+      return {
+        ...opportunity,
+        match: {
+          ...match,
+          score: Math.min(100, Math.round(blended * 10) / 10),
+          explanation:
+            similarity !== undefined
+              ? `${match.explanation} · ${(similarity * 100).toFixed(0)}% semantic relevance`
+              : match.explanation,
+        },
+      };
+    })
+    .filter((item): item is (Opportunity & { match: MatchResult }) => item !== null);
+
+  // Sort by: location score first (descending), then total score (descending)
+  // This ensures jobs closer to the user appear first
+  ranked.sort((a, b) => {
+    // First sort by location score (higher = closer = better)
+    const locationDiff = b.match.factors.location - a.match.factors.location;
+    if (locationDiff !== 0) return locationDiff;
+
+    // Then sort by total score
+    return b.match.score - a.match.score;
   });
 
-  return ranked.sort((a, b) => b.match.score - a.match.score);
+  return ranked;
+}
+
+function locationShown(match: MatchResult): boolean {
+  // If score is 0, the job was filtered out by location
+  return match.score > 0;
 }
 
 export async function getOpportunityWithMatch(

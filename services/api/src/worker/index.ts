@@ -77,11 +77,16 @@ export async function enqueue(
   return job.id ?? "";
 }
 
-async function handleIngest(): Promise<{ sources: number; inserted: number }> {
-  const stats = await runIngestion();
+async function handleIngest(): Promise<{
+  sources: number;
+  inserted: number;
+  status: string;
+}> {
+  const result = await runIngestion();
   return {
-    sources: stats.length,
-    inserted: stats.reduce((sum, entry) => sum + entry.inserted, 0),
+    sources: 1,
+    inserted: result.inserted,
+    status: result.status,
   };
 }
 
