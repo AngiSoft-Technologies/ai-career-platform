@@ -40,8 +40,20 @@ import {
   relayToNeon,
 } from "../auth/providers/neon-gateway.js";
 import { AuthProviderError } from "../auth/providers/errors.js";
+import { randomUUID } from "node:crypto";
 import { config } from "../config.js";
 import { getUserPermissions, getUserRoles } from "../services/rbac/index.js";
+import {
+  exchangeCodeForToken,
+  fetchLinkedInProfile,
+  getLinkedInAuthUrl,
+  isLinkedInConfigured,
+  mapLinkedInToResume,
+} from "../auth/providers/linkedin.js";
+import { importLinkedInByUrl } from "../services/documents/linkedin-import.js";
+import { generateDocumentFromProfile } from "../services/documents.js";
+import { runAtsVerification } from "../services/documents/ats-agent.js";
+import { query } from "../db/pool.js";
 
 export const authRouter = Router();
 
@@ -702,6 +714,144 @@ authRouter.get("/session", async (request, response, next) => {
       permissions,
       mode: config.DEMO_MODE && !authenticated ? "demo" : "live",
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Starts the LinkedIn sign-in flow for resume import.
+ */
+const startLinkedInFlow = async (
+  _request: unknown,
+  response: Response,
+  next: (error: unknown) => void,
+): Promise<void> => {
+  try {
+    if (!isLinkedInConfigured()) {
+      response.status(503).json({
+        error: "LINKEDIN_NOT_CONFIGURED",
+        message:
+          "LinkedIn sign-in is not available yet. Upload your resume or build it manually instead.",
+      });
+      return;
+    }
+    const state = randomUUID();
+    const authUrl = getLinkedInAuthUrl(state);
+    noStore(response);
+    response.json({ authUrl, state });
+  } catch (error) {
+    next(error);
+  }
+};
+
+authRouter.get("/linkedin", startLinkedInFlow);
+authRouter.post("/linkedin", startLinkedInFlow);
+
+/**
+ * Imports a public LinkedIn profile URL as a fallback when OAuth credentials
+ * are not configured. The page is scraped and converted into a resume.
+ */
+authRouter.post("/linkedin/import", async (request, response, next) => {
+  try {
+    const userId = response.locals.userId as string;
+    if (!userId) {
+      response.status(401).json({ error: "Unauthorized", code: "UNAUTHORIZED" });
+      return;
+    }
+    const { profileUrl } = z
+      .object({ profileUrl: z.string().url() })
+      .parse(request.body ?? {});
+    const result = await importLinkedInByUrl({ userId, profileUrl });
+    noStore(response);
+    response.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Handles LinkedIn OAuth callback and imports profile as resume.
+ */
+authRouter.post("/linkedin/callback", async (request, response, next) => {
+  try {
+    const { code } = z
+      .object({
+        code: z.string().min(1),
+        state: z.string().min(1).optional(),
+      })
+      .parse(request.body ?? {});
+
+    const userId = response.locals.userId as string;
+    if (!userId) {
+      noStore(response);
+      response.status(401).json({ error: "Unauthorized", code: "UNAUTHORIZED" });
+      return;
+    }
+
+    if (!isLinkedInConfigured()) {
+      response.status(503).json({ error: "LINKEDIN_NOT_CONFIGURED" });
+      return;
+    }
+
+    const { access_token } = await exchangeCodeForToken(code);
+    const linkedinProfile = await fetchLinkedInProfile(access_token);
+    const resumeData = mapLinkedInToResume(linkedinProfile);
+
+    await query(
+      `INSERT INTO candidate_profiles (user_id, full_name, headline, email, linkedin_url, years_experience, seniority)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (user_id) DO UPDATE SET
+         full_name = EXCLUDED.full_name,
+         headline = EXCLUDED.headline,
+         email = EXCLUDED.email,
+         linkedin_url = EXCLUDED.linkedin_url,
+         years_experience = EXCLUDED.years_experience,
+         seniority = EXCLUDED.seniority`,
+      [
+        userId,
+        resumeData.fullName,
+        resumeData.headline,
+        resumeData.email,
+        resumeData.linkedin,
+        Math.round(resumeData.yearsExperience),
+        resumeData.yearsExperience >= 8
+          ? "senior"
+          : resumeData.yearsExperience >= 3
+            ? "mid"
+            : "junior",
+      ],
+    );
+
+    if (resumeData.skills.length > 0) {
+      await query(
+        "DELETE FROM candidate_skills WHERE profile_id = (SELECT id FROM candidate_profiles WHERE user_id = $1)",
+        [userId],
+      );
+      for (const skill of resumeData.skills.slice(0, 100)) {
+        await query(
+          "INSERT INTO candidate_skills (profile_id, name, level) SELECT id, $2, 'working' FROM candidate_profiles WHERE user_id = $1",
+          [userId, skill],
+        );
+      }
+    }
+
+    const { id, document } = await generateDocumentFromProfile({
+      userId,
+      type: "cv",
+      title: `${resumeData.fullName || "My"} Resume`,
+      profileData: resumeData,
+      origin: "linkedin",
+    });
+
+    void runAtsVerification({
+      userId,
+      documentId: id,
+      content: document.content,
+    }).catch(() => undefined);
+
+    noStore(response);
+    response.status(201).json({ profile: linkedinProfile, document });
   } catch (error) {
     next(error);
   }

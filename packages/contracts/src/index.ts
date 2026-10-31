@@ -59,6 +59,10 @@ export interface CandidateProfile {
   preferredCountries: string[];
   preferredLocations: string[];
   remotePreferred: boolean;
+  /** Commitments the candidate is willing to accept. */
+  employmentTypes: string[];
+  willingToRelocate: boolean;
+  notificationsEnabled: boolean;
   updatedAt: string;
   version: number;
 }

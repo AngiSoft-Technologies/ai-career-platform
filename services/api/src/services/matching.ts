@@ -96,10 +96,46 @@ function calculateLocationScore(
   return { score, shown: true, reason: "location match" };
 }
 
+/**
+ * A commitment the candidate did not ask for is not a match.
+ *
+ * `full_time` is treated as the default interest because the profile column
+ * defaults to it, and a candidate who has not expressed a preference should
+ * still see ordinary permanent roles.
+ */
+function employmentTypeMatches(
+  profile: CandidateProfile,
+  opportunity: Opportunity,
+): boolean {
+  const wanted = profile.employmentTypes ?? ["full_time"];
+  if (wanted.length === 0) return true;
+  return wanted.some(
+    (type) => normalize(type) === normalize(opportunity.employmentType),
+  );
+}
+
 function calculate(
   profile: CandidateProfile,
   opportunity: Opportunity,
 ): MatchResult {
+  // Employment type is a hard gate: a candidate targeting internships only
+  // should never see a permanent contract, and vice versa.
+  if (!employmentTypeMatches(profile, opportunity)) {
+    return {
+      opportunityId: opportunity.id,
+      score: 0,
+      factors: {
+        skills: 0,
+        seniority: 0,
+        location: 0,
+        role: 0,
+        freshness: 0,
+      },
+      explanation: "Not the kind of role you are looking for",
+      gaps: opportunity.skills.map(normalize),
+    };
+  }
+
   const profileSkills = new Set(profile.skills.map(normalize));
   const required = opportunity.skills.map(normalize);
   const matched = required.filter((skill) => profileSkills.has(skill));

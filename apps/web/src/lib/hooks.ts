@@ -105,3 +105,24 @@ export function useOnlineStatus(): boolean {
   }, []);
   return online;
 }
+
+interface OnboardingState {
+  step: "welcome" | "upload" | "manual" | "linkedin" | "complete";
+  setStep: (step: "welcome" | "upload" | "manual" | "linkedin" | "complete") => void;
+  completeOnboarding: (path?: "upload" | "linkedin" | "manual") => Promise<void>;
+}
+
+export function useOnboarding(): OnboardingState {
+  const [step, setStep] = useState<OnboardingState["step"]>("welcome");
+
+  const completeOnboarding = async (path?: "upload" | "linkedin" | "manual") => {
+    setStep("complete");
+    try {
+      await api.post("/profile/onboarding-complete", path ? { path } : {});
+    } catch {
+      // Onboarding completion is best-effort; the resume itself is saved.
+    }
+  };
+
+  return { step, setStep, completeOnboarding };
+}

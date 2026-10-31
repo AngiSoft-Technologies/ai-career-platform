@@ -100,15 +100,20 @@ export function Card({
   hover = false,
   as: Tag = "div",
   style,
+  ...rest
 }: {
   className?: string;
   children: ReactNode;
   hover?: boolean;
   as?: "div" | "article" | "section" | "li";
   style?: React.CSSProperties;
-}) {
+} & Omit<React.HTMLAttributes<HTMLElement>, "className" | "style" | "children">) {
   return (
-    <Tag className={cx("surface", hover && "surface-hover", className)} style={style}>
+    <Tag
+      className={cx("surface", hover && "surface-hover", className)}
+      style={style}
+      {...rest}
+    >
       {children}
     </Tag>
   );

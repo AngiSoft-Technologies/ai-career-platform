@@ -13,6 +13,7 @@ import '../../features/job_matching/presentation/matches_screen.dart';
 import '../../features/job_preferences/presentation/preferences_screen.dart';
 import '../../features/notifications/presentation/notification_screen.dart';
 import '../../features/onboarding/presentation/onboarding_screen.dart';
+import '../../features/onboarding/presentation/resume_start_screen.dart';
 import '../../features/opportunities/presentation/opportunity_detail_screen.dart';
 import '../../features/opportunities/presentation/opportunity_list_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
@@ -26,11 +27,20 @@ GoRouter createAppRouter(AuthSession authSession) {
     refreshListenable: authSession,
     redirect: (context, state) {
       final location = state.matchedLocation;
-      final isOnboarding = location == '/onboarding';
+      final isSignIn = location == '/onboarding';
+      final isResumeFlow =
+          location == '/resume' || location.startsWith('/resume/');
+      final isPreferences = location == '/onboarding/preferences';
+
       if (!authSession.isSignedIn) {
-        return isOnboarding ? null : '/onboarding';
+        return isSignIn ? null : '/onboarding';
       }
-      if (isOnboarding) return '/home/opportunities';
+      if (isSignIn) return '/home/opportunities';
+
+      // First sign-in: the candidate picks a resume path before anything else.
+      if (!authSession.resumeOnboarded && !isResumeFlow && !isPreferences) {
+        return '/resume';
+      }
       return null;
     },
     routes: [
@@ -42,6 +52,22 @@ GoRouter createAppRouter(AuthSession authSession) {
       GoRoute(
         path: '/onboarding',
         builder: (context, state) => const OnboardingScreen(),
+      ),
+      GoRoute(
+        path: '/resume',
+        builder: (context, state) => const ResumeStartScreen(),
+      ),
+      GoRoute(
+        path: '/resume/upload',
+        builder: (context, state) => const ResumePathScreen(path: 'upload'),
+      ),
+      GoRoute(
+        path: '/resume/linkedin',
+        builder: (context, state) => const ResumePathScreen(path: 'linkedin'),
+      ),
+      GoRoute(
+        path: '/resume/manual',
+        builder: (context, state) => const ResumePathScreen(path: 'manual'),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
@@ -134,6 +160,10 @@ GoRouter createAppRouter(AuthSession authSession) {
       ),
       GoRoute(
         path: '/preferences',
+        builder: (context, state) => const PreferencesScreen(),
+      ),
+      GoRoute(
+        path: '/onboarding/preferences',
         builder: (context, state) => const PreferencesScreen(),
       ),
       GoRoute(

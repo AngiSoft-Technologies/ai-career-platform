@@ -35,6 +35,8 @@ import {
 } from "@/lib/document";
 import { formatDateTime, titleCase } from "@/lib/format";
 import type { AtsReport, JobDocument, Opportunity } from "@/lib/types";
+import { TemplateGallery } from "@/components/documents/TemplateGallery";
+import { ATSSidebar } from "@/components/documents/ATSSidebar";
 
 interface DocumentsResponse {
   documents: JobDocument[];
@@ -65,7 +67,8 @@ export default function DocumentEditorPage() {
   const [report, setReport] = useState<AtsReport | null>(null);
   const [tab, setTab] = useState("edit");
   const [dragging, setDragging] = useState<string | null>(null);
-  const [template, setTemplate] = useState<"classic" | "modern" | "minimal">("classic");
+  const [template, setTemplate] = useState<string>("ats-classic");
+  const [autoAtsCheck, setAutoAtsCheck] = useState(false);
   const [tailorOpen, setTailorOpen] = useState(false);
   const [tailorBusy, setTailorBusy] = useState(false);
   const [tailoringProposal, setTailoringProposal] = useState<TailoringProposal | null>(null);
@@ -164,6 +167,10 @@ export default function DocumentEditorPage() {
       await api.patch(`/documents/${params.id}`, { title, content });
       setDirty(false);
       toast.push("Document saved", "success");
+      if (autoAtsCheck) {
+        // Trigger background ATS check
+        validate().catch(() => {});
+      }
     } catch (caught) {
       toast.push(
         caught instanceof Error ? caught.message : "Could not save the document",
@@ -334,14 +341,7 @@ export default function DocumentEditorPage() {
       </div>
 
       <div className="row row-wrap" style={{ gap: "0.4rem" }}>
-        <label className="row" style={{ gap: "0.4rem", marginRight: "0.5rem" }}>
-          <span className="eyebrow">Template</span>
-          <select className="select" value={template} onChange={(event) => setTemplate(event.target.value as typeof template)} style={{ width: 130, padding: "0.35rem 0.5rem" }}>
-            <option value="classic">Classic</option>
-            <option value="modern">Modern</option>
-            <option value="minimal">Minimal</option>
-          </select>
-        </label>
+        <TemplateGallery selectedTemplate={template} onSelect={setTemplate} style={{ flex: 1, minWidth: 280 }} />
         <span className="eyebrow">Export</span>
         {(["pdf", "docx", "pptx", "png"] as const).map((format) => (
           <Button
@@ -479,33 +479,36 @@ export default function DocumentEditorPage() {
           </div>
 
           <div style={{ position: "sticky", top: "5.5rem" }}>
-            <Card style={{ padding: "0" }}>
-              <div style={{ padding: "0.8rem 1rem", borderBottom: "1px solid var(--border)" }}>
-                <SectionTitle eyebrow="Live preview" title="How it prints" />
-              </div>
-              <div style={{ padding: "1rem", background: "var(--surface)" }}>
-                <div className={`paper paper-${template}`}>
-                  <h1>{title}</h1>
-                  <div
-                    style={{
-                      fontSize: "0.8rem",
-                      color: "#5b6472",
-                      borderBottom: "1px solid #e3e6eb",
-                      paddingBottom: "0.6rem",
-                      marginBottom: "0.4rem",
-                    }}
-                    dangerouslySetInnerHTML={{
-                      __html: buildPreviewHtml(title, sections.slice(0, 1)),
-                    }}
-                  />
-                  <div
-                    dangerouslySetInnerHTML={{
-                      __html: buildPreviewHtml(title, sections.slice(1)),
-                    }}
-                  />
+            <div className="stack" style={{ gap: "0.75rem" }}>
+              <ATSSidebar documentId={params.id} content={content} opportunityId={tailoringOpportunityId || data.opportunityId} />
+              <Card style={{ padding: "0" }}>
+                <div style={{ padding: "0.8rem 1rem", borderBottom: "1px solid var(--border)" }}>
+                  <SectionTitle eyebrow="Live preview" title="How it prints" />
                 </div>
-              </div>
-            </Card>
+                <div style={{ padding: "1rem", background: "var(--surface)" }}>
+                  <div className={`paper paper-${template}`}>
+                    <h1>{title}</h1>
+                    <div
+                      style={{
+                        fontSize: "0.8rem",
+                        color: "#5b6472",
+                        borderBottom: "1px solid #e3e6eb",
+                        paddingBottom: "0.6rem",
+                        marginBottom: "0.4rem",
+                      }}
+                      dangerouslySetInnerHTML={{
+                        __html: buildPreviewHtml(title, sections.slice(0, 1)),
+                      }}
+                    />
+                    <div
+                      dangerouslySetInnerHTML={{
+                        __html: buildPreviewHtml(title, sections.slice(1)),
+                      }}
+                    />
+                  </div>
+                </div>
+              </Card>
+            </div>
           </div>
         </div>
       ) : null}

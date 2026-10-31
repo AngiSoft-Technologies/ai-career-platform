@@ -22,6 +22,36 @@ interface ProfileRow {
   skills: string[];
 }
 
+interface PreferenceRow {
+  preferred_countries: string[];
+  preferred_locations: string[];
+  preferred_roles: string[];
+  employment_types: string[] | null;
+  remote_only: boolean | null;
+  willing_to_relocate: boolean | null;
+  notifications_enabled: boolean | null;
+  min_salary: number | null;
+  currency: string | null;
+}
+
+/**
+ * Reads the candidate's matching preferences. Missing columns are tolerated so
+ * the matcher keeps working before the employment-type migration is applied.
+ */
+async function getPreferences(
+  userId: string,
+): Promise<PreferenceRow | null> {
+  const result = await query<PreferenceRow>(
+    `SELECT preferred_countries, preferred_locations, preferred_roles,
+            employment_types, remote_only, willing_to_relocate,
+            notifications_enabled, min_salary, currency
+       FROM candidate_preferences
+      WHERE user_id = $1`,
+    [userId],
+  ).catch(() => ({ rows: [] as PreferenceRow[] }));
+  return result.rows[0] ?? null;
+}
+
 export async function getProfile(
   userId: string,
 ): Promise<CandidateProfile | null> {
@@ -40,6 +70,9 @@ export async function getProfile(
   const row = result.rows[0];
   if (!row) return null;
 
+  const preferences = await getPreferences(userId);
+  const employmentTypes = preferences?.employment_types ?? ["full_time"];
+
   return {
     id: row.id,
     userId: row.user_id,
@@ -54,9 +87,18 @@ export async function getProfile(
     seniority: row.seniority as CandidateProfile["seniority"],
     desiredRoles: row.desired_roles,
     skills: row.skills,
-    preferredCountries: row.preferred_countries,
-    preferredLocations: row.preferred_locations,
-    remotePreferred: row.remote_preferred,
+    preferredCountries:
+      preferences?.preferred_countries?.length
+        ? preferences.preferred_countries
+        : row.preferred_countries,
+    preferredLocations:
+      preferences?.preferred_locations?.length
+        ? preferences.preferred_locations
+        : row.preferred_locations,
+    remotePreferred: preferences?.remote_only ?? row.remote_preferred,
+    employmentTypes,
+    willingToRelocate: preferences?.willing_to_relocate ?? false,
+    notificationsEnabled: preferences?.notifications_enabled ?? true,
     updatedAt: row.updated_at.toISOString(),
     version: row.version,
   };

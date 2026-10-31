@@ -117,6 +117,11 @@ const schema = z.object({
   // Firecrawl (web search & scraping)
   FIRECRAWL_API_KEY: z.string().optional(),
   FIRECRAWL_BASE_URL: z.string().url().default("https://api.firecrawl.dev"),
+
+  // LinkedIn OAuth
+  LINKEDIN_CLIENT_ID: z.string().optional(),
+  LINKEDIN_CLIENT_SECRET: z.string().optional(),
+  LINKEDIN_REDIRECT_URI: z.string().url().optional(),
 });
 
 const parsed = schema.parse(process.env);

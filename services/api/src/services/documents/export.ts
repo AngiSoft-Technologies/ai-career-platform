@@ -4,7 +4,15 @@ import PptxGenJS from "pptxgenjs";
 import sharp from "sharp";
 
 export type DocumentFormat = "pdf" | "docx" | "pptx" | "png";
-export type DocumentTemplate = "classic" | "modern" | "minimal";
+export type DocumentTemplate = string;
+
+export interface TemplateStyle {
+  accent?: string;
+  fontFamily?: string;
+  margins?: "standard" | "narrow" | "comfortable";
+  bodySize?: number;
+  headingSize?: number;
+}
 
 export interface ExportableDocument {
   title: string;
@@ -82,13 +90,21 @@ export function contentToExportSections(content: string): ExportableDocument["se
 export async function renderPdf(
   document: ExportableDocument,
   template: DocumentTemplate = "classic",
+  style: TemplateStyle = {},
 ): Promise<Buffer> {
   const chunks: Buffer[] = [];
+  const accent = /^#[0-9a-f]{6}$/i.test(style.accent ?? "")
+    ? (style.accent as string)
+    : undefined;
+  const margin =
+    style.margins === "narrow" ? 44 : style.margins === "comfortable" ? 72 : 64;
   const palette = template === "modern"
-    ? { title: "#0f766e", heading: "#115e59", rule: "#99f6e4", margin: 54 }
+    ? { title: accent ?? "#0f766e", heading: accent ?? "#115e59", rule: "#99f6e4", margin }
     : template === "minimal"
-      ? { title: "#111827", heading: "#374151", rule: "#d1d5db", margin: 72 }
-      : { title: "#0f172a", heading: "#0f172a", rule: "#d7dde6", margin: 64 };
+      ? { title: "#111827", heading: "#374151", rule: "#d1d5db", margin: Math.max(margin, 72) }
+      : { title: accent ?? "#0f172a", heading: accent ?? "#0f172a", rule: "#d7dde6", margin };
+  const bodySize = style.bodySize ?? (template === "minimal" ? 10 : 10);
+  const headingSize = style.headingSize ?? (template === "minimal" ? 11 : 12.5);
   const doc = new PDFDocument({
     size: "A4",
     margins: { top: 56, bottom: 56, left: palette.margin, right: palette.margin },
@@ -105,16 +121,16 @@ export async function renderPdf(
 
   for (const section of document.sections) {
     if (section.heading) {
-      doc.font("Helvetica-Bold").fontSize(template === "minimal" ? 11 : 12.5).fillColor(palette.heading).text(section.heading);
+      doc.font("Helvetica-Bold").fontSize(headingSize).fillColor(palette.heading).text(section.heading);
       doc.moveDown(0.25);
     }
     for (const paragraph of section.paragraphs) {
-      doc.font("Helvetica").fontSize(10).fillColor("#1f2937");
+      doc.font("Helvetica").fontSize(bodySize).fillColor("#1f2937");
       doc.text(wrapText(paragraph, 88).join("\n"), { align: "left", lineGap: 2 });
       doc.moveDown(0.4);
     }
     for (const bullet of section.bullets ?? []) {
-      doc.font("Helvetica").fontSize(10).fillColor("#1f2937");
+      doc.font("Helvetica").fontSize(bodySize).fillColor("#1f2937");
       doc.text(`•  ${wrapText(bullet, 82).join("\n      ")}`, { lineGap: 1.5 });
       doc.moveDown(0.15);
     }
@@ -357,10 +373,11 @@ export async function renderDocument(
   document: ExportableDocument,
   format: DocumentFormat,
   template: DocumentTemplate = "classic",
+  style: TemplateStyle = {},
 ): Promise<{ body: Buffer; mimeType: string; extension: string }> {
   switch (format) {
     case "pdf":
-      return { body: await renderPdf(document, template), mimeType: EXPORT_MIME.pdf, extension: "pdf" };
+      return { body: await renderPdf(document, template, style), mimeType: EXPORT_MIME.pdf, extension: "pdf" };
     case "docx":
       return { body: await renderDocx(document), mimeType: EXPORT_MIME.docx, extension: "docx" };
     case "pptx":

@@ -1,22 +1,69 @@
 "use client";
 
 import { useRouter, usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useSession } from "@/components/session";
 import { Button, Spinner } from "@/components/ui";
+import { api } from "@/lib/api";
+
+/** Routes that belong to onboarding itself and must not be redirected. */
+const ONBOARDING_PREFIX = "/onboarding";
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const { session, loading } = useSession();
   const router = useRouter();
   const pathname = usePathname();
+  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
 
   useEffect(() => {
     if (loading) return;
     if (!session) {
       const next = encodeURIComponent(pathname);
       router.replace(`/login?next=${next}`);
+      return;
     }
+
+    // First sign-in: send the candidate through resume onboarding before
+    // anything else. Declining still works — /onboarding is re-reachable.
+    if (pathname.startsWith(ONBOARDING_PREFIX)) {
+      setCheckingOnboarding(false);
+      return;
+    }
+
+    let cancelled = false;
+    api
+      .get<{ completed: boolean }>("/profile/onboarding")
+      .then((response) => {
+        if (cancelled) return;
+        if (!response.completed) {
+          router.replace(`${ONBOARDING_PREFIX}?next=${encodeURIComponent(pathname)}`);
+          return;
+        }
+        setCheckingOnboarding(false);
+      })
+      .catch(() => {
+        if (!cancelled) setCheckingOnboarding(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [loading, session, pathname, router]);
+
+  if (loading || checkingOnboarding) {
+    return (
+      <div
+        style={{
+          minHeight: "100dvh",
+          display: "grid",
+          placeItems: "center",
+          background: "var(--bg)",
+        }}
+      >
+        <Spinner />
+      </div>
+    );
+  }
 
   if (loading) {
     return (

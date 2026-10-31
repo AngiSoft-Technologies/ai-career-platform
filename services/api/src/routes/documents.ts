@@ -5,6 +5,8 @@ import { broadcast } from "../realtime/hub.js";
 import { contentToExportSections, renderDocument } from "../services/documents/export.js";
 import { slugify } from "../services/ingestion/pipeline.js";
 import { validateDocumentForAts, validateRequestSchema } from "../services/documents/validate.js";
+import { runAtsVerification } from "../services/documents/ats-agent.js";
+import { importResume } from "../services/documents/extract.js";
 import {
   generateDocument,
   listDocuments,
@@ -38,6 +40,147 @@ documentsRouter.get("/", async (request, response) => {
   response.json({ items: documents, documents });
 });
 
+const FALLBACK_RESUME_TEMPLATES = [
+  { key: "ats-classic", label: "ATS Classic", category: "ats", description: "Single column, standard headings. The safest possible layout.", atsSafe: true, accent: "#1f2937", sortOrder: 10 },
+  { key: "ats-compact", label: "ATS Compact", category: "ats", description: "Single column with tighter spacing.", atsSafe: true, accent: "#111827", sortOrder: 20 },
+  { key: "ats-modern", label: "ATS Modern", category: "ats", description: "Modern typography, still one column.", atsSafe: true, accent: "#1d4ed8", sortOrder: 30 },
+  { key: "ats-minimal", label: "ATS Minimal", category: "ats", description: "No rules or colour. Pure text.", atsSafe: true, accent: "#000000", sortOrder: 40 },
+  { key: "chronological", label: "Chronological", category: "chronological", description: "Reverse-chronological history.", atsSafe: true, accent: "#334155", sortOrder: 50 },
+  { key: "hybrid", label: "Hybrid", category: "hybrid", description: "Skills summary, then history.", atsSafe: true, accent: "#0f766e", sortOrder: 60 },
+  { key: "executive", label: "Executive", category: "executive", description: "Profile-led layout for senior roles.", atsSafe: true, accent: "#111827", sortOrder: 80 },
+  { key: "technical", label: "Technical", category: "technical", description: "Skills and projects for engineering.", atsSafe: true, accent: "#065f46", sortOrder: 90 },
+];
+
+const FALLBACK_COVER_TEMPLATES = [
+  { key: "professional", label: "Professional", tone: "professional", description: "Standard business letter.", sortOrder: 10 },
+  { key: "concise", label: "Concise", tone: "concise", description: "Three short paragraphs.", sortOrder: 20 },
+  { key: "enthusiastic", label: "Enthusiastic", tone: "enthusiastic", description: "Warmer opening.", sortOrder: 30 },
+  { key: "technical", label: "Technical", tone: "technical", description: "Leads with evidence.", sortOrder: 40 },
+];
+
+documentsRouter.get("/templates", async (_request, response, next) => {
+  try {
+    interface ResumeRow {
+      key: string;
+      label: string;
+      category: string;
+      description: string;
+      ats_safe: boolean;
+      accent: string;
+      sort_order: number;
+      layout_definition: Record<string, unknown> | null;
+    }
+    interface CoverRow {
+      key: string;
+      label: string;
+      tone: string;
+      description: string;
+      sort_order: number;
+      layout_definition: Record<string, unknown> | null;
+    }
+
+    let resumeRows: ResumeRow[] = [];
+    let coverRows: CoverRow[] = [];
+    try {
+      resumeRows = (
+        await query<ResumeRow>(
+          `SELECT key, label, category, description, ats_safe, accent, sort_order, layout_definition
+             FROM resume_templates WHERE active = true ORDER BY sort_order, label`,
+        )
+      ).rows;
+    } catch {
+      resumeRows = [];
+    }
+    try {
+      coverRows = (
+        await query<CoverRow>(
+          `SELECT key, label, tone, description, sort_order, layout_definition
+             FROM cover_letter_templates WHERE active = true ORDER BY sort_order, label`,
+        )
+      ).rows;
+    } catch {
+      coverRows = [];
+    }
+
+    response.json({
+      resume:
+        resumeRows.length > 0
+          ? resumeRows.map((row) => ({
+              key: row.key,
+              label: row.label,
+              category: row.category,
+              description: row.description,
+              atsSafe: row.ats_safe,
+              accent: row.accent,
+              sortOrder: row.sort_order,
+              layoutDefinition: row.layout_definition ?? {},
+            }))
+          : FALLBACK_RESUME_TEMPLATES,
+      coverLetter:
+        coverRows.length > 0
+          ? coverRows.map((row) => ({
+              key: row.key,
+              label: row.label,
+              tone: row.tone,
+              description: row.description,
+              sortOrder: row.sort_order,
+              layoutDefinition: row.layout_definition ?? {},
+            }))
+          : FALLBACK_COVER_TEMPLATES,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+const createDocumentSchema = z.object({
+  type: z.enum(["cv", "cover_letter", "application_email", "answer"]).default("cv"),
+  title: z.string().min(1).max(240),
+  content: z.string().max(200_000).default(""),
+  template: z.string().min(1).max(120).optional(),
+});
+
+documentsRouter.post("/", async (request, response, next) => {
+  try {
+    const userId = response.locals.userId as string;
+    const input = createDocumentSchema.parse(request.body ?? {});
+    const inserted = await query<{
+      id: string;
+      type: string;
+      title: string;
+      content: string;
+      template: string;
+      created_at: Date;
+    }>(
+      `INSERT INTO documents (user_id, type, title, content, origin, template)
+       VALUES ($1, $2, $3, $4, 'manual', $5)
+       RETURNING id, type, title, content, template, created_at`,
+      [userId, input.type, input.title, input.content, input.template ?? "ats-classic"],
+    );
+    const row = inserted.rows[0];
+    if (!row) throw new Error("DOCUMENT_CREATE_FAILED");
+
+    void runAtsVerification({
+      userId,
+      documentId: row.id,
+      content: row.content,
+    }).catch(() => undefined);
+
+    response.status(201).json({
+      document: {
+        id: row.id,
+        type: row.type,
+        title: row.title,
+        content: row.content,
+        template: row.template,
+        createdAt: row.created_at.toISOString(),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 documentsRouter.post("/generate", async (request, response) => {
   const input = generateSchema.parse(request.body);
   const document = await generateDocument({
@@ -65,6 +208,7 @@ documentsRouter.post("/generate", async (request, response) => {
 const updateSchema = z.object({
   title: z.string().min(1).max(240).optional(),
   content: z.string().max(200_000).optional(),
+  template: z.string().min(1).max(120).optional(),
 });
 
 const tailorSchema = z.object({ opportunityId: z.string().uuid() });
@@ -118,10 +262,11 @@ documentsRouter.patch("/:id", async (request, response, next) => {
     const result = await query(
       `UPDATE documents
           SET title = COALESCE($3, title),
-              content = COALESCE($4, content)
+              content = COALESCE($4, content),
+              template = COALESCE($5, template)
         WHERE id = $1 AND user_id = $2
-        RETURNING id, opportunity_id, type, title, content, created_at`,
-      [documentId, response.locals.userId as string, input.title ?? null, input.content ?? null],
+        RETURNING id, opportunity_id, type, title, content, template, created_at`,
+      [documentId, response.locals.userId as string, input.title ?? null, input.content ?? null, input.template ?? null],
     );
     const row = result.rows[0];
     if (!row) {
@@ -129,12 +274,29 @@ documentsRouter.patch("/:id", async (request, response, next) => {
       return;
     }
     broadcast("document.updated", { documentId }, response.locals.userId as string);
+    if (input.content !== undefined) {
+      void runAtsVerification({
+        userId: response.locals.userId as string,
+        documentId,
+        opportunityId: row.opportunity_id ?? null,
+        content: input.content,
+      })
+        .then((report) =>
+          broadcast(
+            "document.ats.ready",
+            { documentId, score: report.score, grade: report.grade },
+            response.locals.userId as string,
+          ),
+        )
+        .catch(() => undefined);
+    }
     response.json({
       id: row.id,
       opportunityId: row.opportunity_id,
       type: row.type,
       title: row.title,
       content: row.content,
+      template: row.template,
       createdAt: row.created_at,
     });
   } catch (error) {
@@ -271,9 +433,123 @@ documentsRouter.post("/upload-url", async (request, response) => {
   response.json({ target });
 });
 
+const importSchema = z.object({
+  storageKey: z.string().min(1).max(1024),
+  filename: z.string().min(1).max(255),
+  contentType: z.string().min(1).max(120),
+});
+
+documentsRouter.post("/import", async (request, response, next) => {
+  try {
+    const userId = response.locals.userId as string;
+    const input = importSchema.parse(request.body);
+
+    if (!input.storageKey.startsWith(`users/${userId}/`)) {
+      response.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    const result = await importResume({
+      userId,
+      storageKey: input.storageKey,
+      filename: input.filename,
+      contentType: input.contentType,
+    });
+
+    broadcast(
+      "document.generated",
+      { documentId: result.document.id, type: "cv" },
+      userId,
+    );
+    await notify(userId, {
+      type: "document",
+      title: "Your resume is ready",
+      body: "We imported your resume and ran an ATS check. Review the suggestions before you apply.",
+    });
+
+    response.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+documentsRouter.get("/:id/ats", async (request, response, next) => {
+  try {
+    const documentId = z.string().uuid().parse(request.params.id);
+    const result = await query(
+      `SELECT score, grade, passed, verdict, outcome, issues, matched_keywords,
+              missing_keywords, keyword_coverage, sections, metrics, created_at
+         FROM ats_reports
+        WHERE document_id = $1 AND user_id = $2
+        ORDER BY created_at DESC
+        LIMIT 1`,
+      [documentId, response.locals.userId as string],
+    );
+    const row = result.rows[0];
+    if (!row) {
+      response.json({ report: null });
+      return;
+    }
+    response.json({
+      report: {
+        score: Number(row.score),
+        grade: row.grade,
+        passed: row.passed,
+        verdict: row.verdict,
+        outcome: row.outcome,
+        issues: row.issues,
+        matchedKeywords: row.matched_keywords,
+        missingKeywords: row.missing_keywords,
+        keywordCoverage: Number(row.keyword_coverage),
+        sections: row.sections,
+        metrics: row.metrics,
+        createdAt: row.created_at,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+documentsRouter.post("/:id/ats/run", async (request, response, next) => {
+  try {
+    const documentId = z.string().uuid().parse(request.params.id);
+    const userId = response.locals.userId as string;
+    const input = z
+      .object({
+        keywords: z.array(z.string().max(80)).max(60).optional(),
+        opportunityId: z.string().uuid().optional(),
+      })
+      .parse(request.body ?? {});
+    const result = await query<{
+      content: string;
+      opportunity_id: string | null;
+    }>(
+      "SELECT content, opportunity_id FROM documents WHERE id = $1 AND user_id = $2",
+      [documentId, userId],
+    );
+    const document = result.rows[0];
+    if (!document) {
+      response.status(404).json({ error: "Document not found" });
+      return;
+    }
+    const report = await runAtsVerification({
+      userId,
+      documentId,
+      opportunityId:
+        input.opportunityId ?? document.opportunity_id,
+      content: document.content,
+      targetKeywords: input.keywords,
+    });
+    response.json({ report });
+  } catch (error) {
+    next(error);
+  }
+});
+
 const exportSchema = z.object({
   format: z.enum(["pdf", "docx", "pptx", "png"]),
-  template: z.enum(["classic", "modern", "minimal"]).default("classic"),
+  template: z.string().min(1).max(120).default("classic"),
 });
 
 documentsRouter.post("/:id/export", async (request, response, next) => {
@@ -287,8 +563,9 @@ documentsRouter.post("/:id/export", async (request, response, next) => {
       title: string;
       content: string;
       type: string;
+      template: string;
     }>(
-      `SELECT id, user_id, title, content, type FROM documents WHERE id = $1`,
+      `SELECT id, user_id, title, content, type, template FROM documents WHERE id = $1`,
       [documentId],
     );
     const document = result.rows[0];
@@ -301,13 +578,57 @@ documentsRouter.post("/:id/export", async (request, response, next) => {
       return;
     }
 
+    const templateKey = input.template || document.template || "classic";
+    let style: {
+      accent?: string;
+      fontFamily?: string;
+      margins?: "standard" | "narrow" | "comfortable";
+      bodySize?: number;
+      headingSize?: number;
+    } = {};
+    try {
+      const templateRow = await query<{
+        accent: string;
+        layout_definition: {
+          typography?: {
+            accentColor?: string;
+            fontFamily?: string;
+            bodySize?: number;
+            headingSize?: number;
+          };
+          layout?: { margins?: string };
+        } | null;
+      }>(
+        "SELECT accent, layout_definition FROM resume_templates WHERE key = $1",
+        [templateKey],
+      );
+      const row = templateRow.rows[0];
+      if (row) {
+        style = {
+          accent: row.layout_definition?.typography?.accentColor ?? row.accent,
+          fontFamily: row.layout_definition?.typography?.fontFamily,
+          bodySize: row.layout_definition?.typography?.bodySize,
+          headingSize: row.layout_definition?.typography?.headingSize,
+          margins:
+            row.layout_definition?.layout?.margins === "narrow"
+              ? "narrow"
+              : row.layout_definition?.layout?.margins === "comfortable"
+                ? "comfortable"
+                : "standard",
+        };
+      }
+    } catch {
+      style = {};
+    }
+
     const rendered = await renderDocument(
       {
         title: document.title,
         sections: contentToExportSections(document.content),
       },
       input.format,
-      input.template,
+      templateKey,
+      style,
     );
 
     await query(

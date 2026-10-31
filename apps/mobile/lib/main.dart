@@ -33,6 +33,7 @@ import 'features/job_preferences/presentation/preferences_controller.dart';
 import 'features/notifications/data/notification_repository.dart';
 import 'features/notifications/presentation/notification_controller.dart';
 import 'features/onboarding/data/onboarding_repository.dart';
+import 'features/onboarding/presentation/resume_onboarding_controller.dart';
 import 'features/opportunities/data/opportunity_repository.dart';
 import 'features/opportunities/presentation/opportunity_controller.dart';
 import 'features/settings/data/settings_repository.dart';
@@ -152,6 +153,9 @@ Future<void> main() async {
         ),
         ChangeNotifierProvider<TemplateController>.value(
           value: TemplateController(repository: documentRepository),
+        ),
+        ChangeNotifierProvider<ResumeOnboardingController>.value(
+          value: ResumeOnboardingController(repository: documentRepository),
         ),
         ChangeNotifierProvider<FollowUpController>.value(
           value: followUpController,

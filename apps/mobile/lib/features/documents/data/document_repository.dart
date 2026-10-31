@@ -1,4 +1,7 @@
 import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:http/http.dart' as http;
 
 import '../../../core/networking/api_client.dart';
 import '../../../core/networking/api_exception.dart';
@@ -195,6 +198,95 @@ class DocumentRepository {
     }
     if (response is Map) return Map<String, dynamic>.from(response);
     return <String, dynamic>{};
+  }
+
+  // ---------------------------------------------------------------------------
+  // Resume onboarding — upload / LinkedIn / manual, then matching preferences.
+  // ---------------------------------------------------------------------------
+
+  /// True once the candidate has been through the resume-onboarding flow.
+  Future<bool> resumeOnboardingComplete() async {
+    final response = await _apiClient.get('/profile/onboarding');
+    final map = Map<String, dynamic>.from(response as Map);
+    return map['completed'] as bool? ?? false;
+  }
+
+  Future<void> completeResumeOnboarding({String? path}) async {
+    await _apiClient.post(
+      '/profile/onboarding-complete',
+      body: <String, dynamic>{if (path != null) 'path': path},
+    );
+  }
+
+  /// Saves the manually built resume. The API owns the schema, so the client
+  /// only sends a loosely typed map.
+  Future<GeneratedDocument> saveManualResume(
+    Map<String, dynamic> resume,
+  ) async {
+    final response = await _apiClient.post('/profile/resume', body: resume);
+    return GeneratedDocument.fromJson(_documentMap(response));
+  }
+
+  /// Uploads a picked file straight to its signed slot, then asks the resume
+  /// builder agent to extract and structure it.
+  Future<GeneratedDocument> importResumeFile({
+    required String filename,
+    required String contentType,
+    required Uint8List bytes,
+  }) async {
+    final target = await _apiClient.post(
+      '/documents/upload-url',
+      body: <String, dynamic>{'filename': filename, 'contentType': contentType},
+    );
+    final upload = Map<String, dynamic>.from(target['target'] as Map);
+    final uploadResponse = await http.put(
+      Uri.parse(upload['url'] as String),
+      headers: {'Content-Type': contentType},
+      body: bytes,
+    );
+    if (uploadResponse.statusCode >= 400) {
+      throw ApiException(
+        statusCode: uploadResponse.statusCode,
+        message: 'The file could not be uploaded. Try another one.',
+      );
+    }
+
+    final response = await _apiClient.post(
+      '/documents/import',
+      body: <String, dynamic>{
+        'storageKey': upload['key'] as String,
+        'filename': filename,
+        'contentType': contentType,
+      },
+    );
+    return GeneratedDocument.fromJson(_documentMap(response));
+  }
+
+  /// Imports a public profile URL. Used when LinkedIn OAuth is unavailable.
+  Future<GeneratedDocument> importLinkedInProfile(String profileUrl) async {
+    final response = await _apiClient.post(
+      '/auth/linkedin/import',
+      body: <String, dynamic>{'profileUrl': profileUrl},
+    );
+    return GeneratedDocument.fromJson(_documentMap(response));
+  }
+
+  /// Reads the latest ATS verdict the verifier agent stored for a document.
+  Future<Map<String, dynamic>?> latestAtsReport(String documentId) async {
+    final response = await _apiClient.get('/documents/$documentId/ats');
+    final map = Map<String, dynamic>.from(response as Map);
+    final report = map['report'];
+    if (report is Map) return Map<String, dynamic>.from(report);
+    return null;
+  }
+
+  /// Re-runs the verifier on demand — the system also runs it automatically.
+  Future<Map<String, dynamic>> runAtsCheck(String documentId) async {
+    final response = await _apiClient.post('/documents/$documentId/ats/run');
+    final map = Map<String, dynamic>.from(response as Map);
+    final report = map['report'];
+    if (report is Map) return Map<String, dynamic>.from(report);
+    return map;
   }
 
   List<Map<String, dynamic>> _documentList(dynamic response) {

@@ -30,11 +30,15 @@ class AuthSession extends ChangeNotifier {
   List<String> _roles = const [];
   List<String> _permissions = const [];
 
+  /// True until the candidate finishes the resume-onboarding flow.
+  bool _resumeOnboarded = false;
+
   SessionState get state => _state;
   String get name => _name;
   String get email => _email;
   List<String> get roles => _roles;
   List<String> get permissions => _permissions;
+  bool get resumeOnboarded => _resumeOnboarded;
   bool get isSignedIn => _state != SessionState.signedOut;
   bool get isDemoMode => _state == SessionState.demo;
   bool get isAuthenticated => _state == SessionState.authenticated;
@@ -61,12 +65,28 @@ class AuthSession extends ChangeNotifier {
     _state = SessionState.authenticated;
     try {
       await _loadIdentity();
+      await _loadResumeOnboarding();
     } on ApiException catch (error) {
       if (error.isUnauthorized) {
         await _tokenStorage.clearAll();
         _state = SessionState.signedOut;
       }
     }
+    notifyListeners();
+  }
+
+  /// Reads whether the resume-onboarding flow is already done.
+  Future<void> _loadResumeOnboarding() async {
+    final data = await _apiClient.get<Map<String, dynamic>>(
+      '/profile/onboarding',
+    );
+    _resumeOnboarded = data['completed'] as bool? ?? false;
+  }
+
+  /// Called once the candidate finishes the onboarding flow.
+  void markResumeOnboarded() {
+    if (_resumeOnboarded) return;
+    _resumeOnboarded = true;
     notifyListeners();
   }
 

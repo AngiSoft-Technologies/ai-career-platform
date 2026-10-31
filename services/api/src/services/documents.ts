@@ -16,7 +16,7 @@ export interface PreparedDocumentTailoring extends TailoringProposal {
 interface DocumentRow {
   id: string;
   application_id: string | null;
-  opportunity_id: string;
+  opportunity_id: string | null;
   parent_document_id?: string | null;
   type: DocumentType;
   title: string;
@@ -170,7 +170,7 @@ export async function generateDocument(input: {
   return {
     id: row.id,
     applicationId: row.application_id ?? undefined,
-    opportunityId: row.opportunity_id,
+    opportunityId: row.opportunity_id ?? "",
     type: row.type,
     title: row.title,
     content: row.content,
@@ -240,10 +240,92 @@ export async function listDocuments(
   return result.rows.map((row) => ({
     id: row.id,
     applicationId: row.application_id ?? undefined,
-    opportunityId: row.opportunity_id,
+    opportunityId: row.opportunity_id ?? "",
     parentDocumentId: row.parent_document_id ?? undefined,
     type: row.type,
     title: row.title,
     content: row.content,
   }));
+}
+
+export async function generateDocumentFromProfile(input: {
+  userId: string;
+  type: "cv" | "cover_letter";
+  title: string;
+  profileData: any;
+  origin?: string;
+}): Promise<{ id: string; document: DocumentDraft }> {
+  const { userId, type, title, profileData } = input;
+
+  let content: string;
+
+  if (type === "cv") {
+    content = buildCvFromProfile(profileData);
+  } else {
+    content = buildCoverLetterFromProfile(profileData);
+  }
+
+  const inserted = await query<DocumentRow>(
+    `INSERT INTO documents (user_id, type, title, content, origin)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING id, application_id, opportunity_id, type, title, content`,
+    [userId, type, title, content, input.origin ?? "generated"],
+  );
+  const row = inserted.rows[0];
+  if (!row) throw new Error("DOCUMENT_CREATE_FAILED");
+
+  return {
+    id: row.id,
+    document: {
+      id: row.id,
+      applicationId: row.application_id ?? undefined,
+      opportunityId: row.opportunity_id ?? "",
+      type: row.type,
+      title: row.title,
+      content: row.content,
+    },
+  };
+}
+
+function buildCvFromProfile(data: any): string {
+  const sections = [
+    { heading: "Professional Summary", body: data.summary || "Experienced professional seeking new opportunities." },
+    { 
+      heading: "Experience", 
+      body: (data.experiences || []).map((e: any) => 
+        `${e.title} at ${e.company}${e.location ? ` (${e.location})` : ""}\n${e.startDate} - ${e.current ? "Present" : e.endDate}\n${e.description}`
+      ).join("\n\n") || "No experience added yet."
+    },
+    { 
+      heading: "Education", 
+      body: (data.education || []).map((e: any) => 
+        `${e.degree}, ${e.institution}${e.location ? ` (${e.location})` : ""}\n${e.graduationDate}${e.gpa ? ` · GPA: ${e.gpa}` : ""}`
+      ).join("\n\n") || "No education added yet."
+    },
+    { heading: "Skills", body: (data.skills || []).join(", ") || "No skills added yet." },
+    { 
+      heading: "Projects", 
+      body: (data.projects || []).map((p: any) => 
+        `${p.name}\n${p.description}\nTechnologies: ${p.technologies}${p.url ? `\n${p.url}` : ""}`
+      ).join("\n\n") || "No projects added yet."
+    },
+  ];
+  return JSON.stringify({ title: data.fullName, sections });
+}
+
+function buildCoverLetterFromProfile(data: any): string {
+  return `Dear Hiring Team,
+
+${data.fullName}
+${data.headline}
+${data.email} | ${data.phone || ""} | ${data.linkedin || ""}
+
+I am writing to express my interest in opportunities that match my profile. As a ${data.headline.toLowerCase()}, I bring experience in ${(data.skills || []).slice(0, 5).join(", ")}.
+
+${data.summary}
+
+I would welcome the opportunity to discuss how my background and skills could contribute to your team.
+
+Sincerely,
+${data.fullName}`;
 }

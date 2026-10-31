@@ -6,7 +6,7 @@ import { config } from "../config.js";
 
 let client: S3Client | null = null;
 
-function getClient(): S3Client {
+export function getStorageClient(): S3Client {
   const accessKeyId = config.S3_ACCESS_KEY_ID ?? config.AWS_ACCESS_KEY_ID;
   const secretAccessKey =
     config.S3_SECRET_ACCESS_KEY ?? config.AWS_SECRET_ACCESS_KEY;
@@ -49,7 +49,25 @@ export async function createUploadTarget(input: {
   });
 
   const expiresIn = 900;
-  const url = await getSignedUrl(getClient(), command, { expiresIn });
+  const url = await getSignedUrl(getStorageClient(), command, { expiresIn });
 
   return { key, url, method: "PUT", expiresIn };
+}
+
+export async function downloadObject(
+  client: S3Client,
+  key: string
+): Promise<Buffer> {
+  const { GetObjectCommand } = await import("@aws-sdk/client-s3");
+  const command = new GetObjectCommand({
+    Bucket: config.S3_BUCKET,
+    Key: key,
+  });
+  const response = await client.send(command);
+  if (!response.Body) throw new Error("OBJECT_NOT_FOUND");
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of response.Body as AsyncIterable<Uint8Array>) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
 }
