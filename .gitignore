@@ -19,10 +19,8 @@ config/*_secret_*.json
 **/service-account*.json
 **/gha-creds-*.json
 
-# Templates that only document the required keys. Everything real above stays
-# ignored; these carry placeholder values only and belong in the repo.
-!infra/n8n/.env.example
-!apps/mobile/android/key.properties.example
+# NO example/env template files — this is a private project, not open source.
+# All internal structure, variable names, and config keys stay private.
 
 # DB migrations and seeds are NOT versioned (gatekept by owner)
 db/migrations/
