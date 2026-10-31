@@ -24,10 +24,9 @@ config/*_secret_*.json
 !infra/n8n/.env.example
 !apps/mobile/android/key.properties.example
 
-# NOTE: docs/ and db/ are intentionally NOT ignored.
-# db/migrations and db/seeds are the schema history and must be versioned;
-# docs/ holds the architecture contracts. Both were previously ignored by a
-# blanket rule, which silently kept migrations 008-012 out of the repo.
+# DB migrations and seeds are NOT versioned (gatekept by owner)
+db/migrations/
+db/seeds/
 
 # Test artifacts / temp files (local only)
 test-results/
