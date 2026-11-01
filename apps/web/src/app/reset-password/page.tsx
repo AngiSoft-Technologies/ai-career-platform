@@ -59,10 +59,10 @@ function ResetPasswordInner() {
   return (
     <main className="landing" style={{ minHeight: "100dvh" }}>
       <nav className="landing-nav">
-        <Link href="/" className="landing-brand" aria-label="Job Radar home">
+        <Link href="/" className="landing-brand" aria-label="MboQara home">
           <img
             src="/brand/logo-wordmark-light.png"
-            alt="Job Radar"
+            alt="MboQara"
             width={146}
             height={41}
           />

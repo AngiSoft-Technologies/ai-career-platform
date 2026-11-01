@@ -50,7 +50,7 @@ async function main(): Promise<void> {
 
     await client.query(
       `INSERT INTO users (id, email, display_name)
-       VALUES ($1, 'demo@jobradar.local', 'Prof Angera')
+       VALUES ($1, 'demo@mboqara.local', 'Prof Angera')
        ON CONFLICT (id) DO UPDATE SET display_name = excluded.display_name`,
       [config.DEMO_USER_ID],
     );
@@ -112,7 +112,7 @@ async function main(): Promise<void> {
 
       const source = await client.query<{ id: string }>(
         `INSERT INTO job_sources (company_id, type, name, url, external_id, health)
-         VALUES ($1, 'company_web', 'Job Radar seed data', $2, 'seed', 'healthy')
+         VALUES ($1, 'company_web', 'mboqara seed data', $2, 'seed', 'healthy')
          ON CONFLICT (type, url, external_id) DO UPDATE SET
            company_id = excluded.company_id,
            name = excluded.name,

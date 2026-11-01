@@ -7,13 +7,13 @@ import { Smartphone, HardDrive, Zap, ShieldCheck, Download, ExternalLink, Check,
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Download — Job Radar Android App",
-  description: "Get the Job Radar Android app. Browse roles, save favourites and keep your applications moving.",
+  title: "Download — mboqara Android App",
+  description: "Get the mboqara Android app. Browse roles, save favourites and keep your applications moving.",
   openGraph: {
-    title: "Download — Job Radar",
-    description: "Job Radar for Android. Browse roles, save favourites and keep your applications moving.",
+    title: "Download — mboqara",
+    description: "mboqara for Android. Browse roles, save favourites and keep your applications moving.",
     type: "website",
-    images: [{ url: "/media/og-cover.jpg", width: 1200, height: 630, alt: "Job Radar" }],
+    images: [{ url: "/media/og-cover.jpg", width: 1200, height: 630, alt: "mboqara" }],
   },
 };
 
@@ -79,7 +79,7 @@ export default function DownloadPage() {
               <div className="mk-frame mk-frame--phone" style={{ backgroundImage: "linear-gradient(180deg, #0a0e1a, #070b14)" }}>
                 <div className="mk-frame__bar">
                   <div className="mk-frame__dots"><span className="mk-frame__dot" /><span className="mk-frame__dot" /><span className="mk-frame__dot" /></div>
-                  <span className="mk-frame__title">Job Radar</span>
+                  <span className="mk-frame__title">MboQara</span>
                   <div className="mk-frame__dots" />
                 </div>
                 <div className="mk-frame__content">
@@ -97,7 +97,7 @@ export default function DownloadPage() {
                   <a href="/download" className="mk-badge">
                     <Download aria-hidden="true" /> Download for Android
                   </a>
-                  <a href="https://play.google.com/store/apps/details?id=ke.co.angisoft.job_radar" target="_blank" rel="noopener noreferrer" className="mk-badge">
+                  <a href="https://play.google.com/store/apps/details?id=co.angisoft.mboqara" target="_blank" rel="noopener noreferrer" className="mk-badge">
                     <ExternalLink aria-hidden="true" /> Get it on Google Play
                   </a>
                 </div>
@@ -142,7 +142,7 @@ export default function DownloadPage() {
             {[
               { step: "01", title: "Download", text: "Tap the button above to download the app." },
               { step: "02", title: "Allow unknown sources", text: "Settings → Security → Allow installation from unknown sources." },
-              { step: "03", title: "Install & open", text: "Open the downloaded file, install the app and sign in with your Job Radar account." },
+              { step: "03", title: "Install & open", text: "Open the downloaded file, install the app and sign in with your MboQara account." },
             ].map((s, i) => (
               <Reveal key={s.step} delay={i * 100} className="mk-card">
                 <div className="mk-card__icon" style={{ fontSize: "2rem", color: "var(--mk-accent)" }}>{s.step}</div>

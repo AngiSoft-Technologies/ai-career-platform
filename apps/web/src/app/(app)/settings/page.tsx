@@ -190,7 +190,7 @@ export default function SettingsPage() {
       </Card>
 
       <Card style={{ padding: "1.2rem" }}>
-        <SectionTitle eyebrow="Trust" title="How Job Radar treats your data" />
+        <SectionTitle eyebrow="Trust" title="How MboQara treats your data" />
         <ul style={{ paddingLeft: "1.1rem", marginTop: "0.9rem", lineHeight: 1.9, fontSize: "0.88rem" }}>
           <li>Your CV and personal documents are private. They are never public files.</li>
           <li>The AI never invents facts about you. It only rearranges what you wrote.</li>

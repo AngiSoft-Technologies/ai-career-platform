@@ -101,7 +101,7 @@ export default function AboutPage() {
               <>
                 <h1 id="about-title" className="mk-heading">Find your dream job. Faster.</h1>
                 <p className="mk-lede">
-                  Job Radar helps students, graduates and professionals find real openings worldwide, tailor resumes and
+                  MboQara helps students, graduates and professionals find real openings worldwide, tailor resumes and
                   cover letters to each role, and track every application — all in one place.
                 </p>
               </>
@@ -122,7 +122,7 @@ export default function AboutPage() {
         <div className="jr-about-highlight__copy">
           <span className="jr-eyebrow jr-eyebrow--dark">Made for the job seeker</span>
           <h2 id="about-highlight-title">Your experience is the starting point.</h2>
-          <p>Job Radar helps you connect the work you’ve already done with opportunities ahead. You stay in control of your profile, your documents and every application decision.</p>
+          <p>MboQara helps you connect the work you've already done with opportunities ahead. You stay in control of your profile, your documents and every application decision.</p>
           <Link href="/features" className="jr-button jr-button--primary">Explore how it works <ArrowRight aria-hidden="true" /></Link>
         </div>
       </section>
@@ -160,7 +160,7 @@ export default function AboutPage() {
       <section className="mk-section" style={{ background: "var(--mk-surface)", borderTop: "1px solid var(--mk-border)", borderBottom: "1px solid var(--mk-border)" }} aria-labelledby="vs-heading">
         <div className="mk-container">
           <header className="mk-section-header">
-            <span className="mk-section-eyebrow">Why Job Radar</span>
+            <span className="mk-section-eyebrow">Why MboQara</span>
             <h2 id="vs-heading" className="mk-section-heading">Built for you, not for recruiters</h2>
           </header>
           <div className="mk-grid mk-grid--3">
@@ -206,7 +206,7 @@ export default function AboutPage() {
         <div className="mk-container">
           <header className="mk-section-header">
             <span className="mk-section-eyebrow">Stories</span>
-            <h2 id="stories-heading" className="mk-section-heading">What Job Radar users are saying</h2>
+            <h2 id="stories-heading" className="mk-section-heading">What MboQara users are saying</h2>
             <p className="mk-lede">Real people finding real roles, preparing tailored applications and keeping every next step in view.</p>
           </header>
           <div className="mk-stories__grid">
@@ -222,7 +222,7 @@ export default function AboutPage() {
                 </div>
               ))
             ) : st.length === 0 ? (
-              <p className="jr-empty-stories">We’ll share real Job Radar experiences here as users choose to tell their stories.</p>
+              <p className="jr-empty-stories">We'll share real MboQara experiences here as users choose to tell their stories.</p>
             ) : (
               st.map((story, i) => (
                 <Reveal key={story.id} delay={i * 80} className="mk-story">

@@ -388,14 +388,14 @@ function Brand({ compact = false }: { compact?: boolean }) {
     <Link href="/dashboard" className="row" style={{ gap: "0.55rem" }}>
       <img
         src="/brand/logo-mark.png"
-        alt="Job Radar"
+        alt="MboQara"
         width={30}
         height={30}
         style={{ width: 30, height: 30, flexShrink: 0, objectFit: "contain" }}
       />
       {!compact ? (
         <span style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
-          <span style={{ fontWeight: 700, fontSize: "0.9rem" }}>Job Radar</span>
+          <span style={{ fontWeight: 700, fontSize: "0.9rem" }}>MboQara</span>
           <span style={{ fontSize: "0.62rem", color: "var(--text-muted)", letterSpacing: "0.14em" }}>
             ANGISOFT
           </span>
@@ -611,7 +611,7 @@ function EditorialShell({ children, session }: { children: ReactNode; session: S
               AngiSoft Technologies · Est. 2026
             </div>
             <h1 className="display" style={{ fontSize: "clamp(2.2rem, 6vw, 3.6rem)" }}>
-              Job Radar
+              MboQara
             </h1>
             <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginTop: 4 }}>
               The global employment gazette
@@ -683,7 +683,7 @@ function EditorialShell({ children, session }: { children: ReactNode; session: S
       >
         <span>© 2026 AngiSoft Technologies</span>
         <span className="spacer" />
-        <span>Job Radar prepares. You review, approve and submit.</span>
+        <span>MboQara prepares. You review, approve and submit.</span>
       </footer>
     </div>
   );
@@ -713,7 +713,7 @@ function TerminalShell({ children, session }: { children: ReactNode; session: Se
         }}
       >
         <span className="mono" style={{ color: "var(--accent)", fontWeight: 700 }}>
-          jobradar://shell
+          mboqara://shell
         </span>
         <span className="mono" style={{ color: "var(--text-muted)", fontSize: "0.76rem" }}>
           user={session?.user.email ?? "anonymous"}
@@ -805,7 +805,7 @@ function KineticShell({ children, session }: { children: ReactNode; session: Ses
           style={{ justifyContent: "space-between", padding: "1rem 1.2rem", gap: "0.8rem" }}
         >
           <h1 className="display" style={{ fontSize: "clamp(2.4rem, 8vw, 4.6rem)" }}>
-            JOB RADAR
+            MboQara
           </h1>
           <div className="row" style={{ gap: "0.6rem" }}>
             {pending > 0 ? <Badge tone="warning">{pending} queued</Badge> : null}
@@ -868,7 +868,7 @@ function KineticShell({ children, session }: { children: ReactNode; session: Ses
           <div className="marquee-track">
             {Array.from({ length: 2 }).map((_, index) => (
               <span key={index}>
-                JOB RADAR · AI PREPARES · YOU REVIEW · YOU APPROVE · YOU SUBMIT · GLOBAL
+                MBOQARA · AI PREPARES · YOU REVIEW · YOU APPROVE · YOU SUBMIT · GLOBAL
                 COVERAGE · ALL PROFESSIONS ·{' '}
               </span>
             ))}

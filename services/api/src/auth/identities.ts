@@ -97,7 +97,7 @@ export async function linkGoogleIdentity(
   const linked = existing.rows[0];
   if (linked && linked.user_id !== userId) {
     throw new AuthProviderError(
-      "That Google account is already connected to another Job Radar account",
+      "That Google account is already connected to another mboqara account",
       "IDENTITY_ALREADY_LINKED",
       409,
     );

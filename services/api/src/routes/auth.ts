@@ -504,7 +504,7 @@ authRouter.post(
 
 /**
  * Starts the provider sign-in that links a provider account to an existing
- * Job Radar account.
+ * mboqara account.
  */
 authRouter.get(
   "/google/link/start",

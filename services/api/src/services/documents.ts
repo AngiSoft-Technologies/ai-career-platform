@@ -1,8 +1,8 @@
-import type { DocumentDraft } from "@angisoft/job-radar-contracts";
+import type { DocumentDraft } from "@angisoft/mboqara-contracts";
 import {
   DEFAULT_COVER_LETTER_TEMPLATE_KEY,
   DEFAULT_RESUME_TEMPLATE_KEY,
-} from "@angisoft/job-radar-contracts";
+} from "@angisoft/mboqara-contracts";
 import { query } from "../db/pool.js";
 import { getOpportunity } from "./opportunities.js";
 import { getProfile } from "./profile.js";

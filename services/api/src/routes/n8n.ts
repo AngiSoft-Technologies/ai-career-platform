@@ -18,7 +18,7 @@ import type {
   N8nWorkflowUpdateInput,
   N8nDeployInput,
   N8nDeployResult,
-} from "@angisoft/job-radar-contracts";
+} from "@angisoft/mboqara-contracts";
 
 export const n8nRouter = Router();
 

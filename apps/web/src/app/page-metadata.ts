@@ -1,19 +1,19 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Find work that fits you | Job Radar",
+  title: "Find work that fits you | mboqara",
   description:
     "Find real jobs worldwide, tailor your resume and cover letter, and track every application in one place.",
   openGraph: {
-    title: "Job Radar",
-    description: "Find and apply to your dream job worldwide.",
+    title: "mboqara",
+    description: "Find the right opportunities. Shape strong applications. Move with clarity.",
     type: "website",
-    images: [{ url: "/media/og-cover.jpg", width: 1200, height: 630, alt: "Job Radar" }],
+    images: [{ url: "/media/og-cover.jpg", width: 1200, height: 630, alt: "mboqara" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Job Radar",
-    description: "Find and apply to your dream job worldwide.",
+    title: "mboqara",
+    description: "Find the right opportunities. Shape strong applications. Move with clarity.",
     images: ["/media/og-cover.jpg"],
   },
 };

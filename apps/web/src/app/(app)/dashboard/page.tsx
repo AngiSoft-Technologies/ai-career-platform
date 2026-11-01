@@ -904,7 +904,7 @@ function AdminDashboard() {
     <DashboardFrame
       eyebrow="Control room"
       title="Platform administration"
-      description="Access control, fraud calibration and system health across the whole Job Radar estate."
+      description="Access control, fraud calibration and system health across the whole MboQara estate."
       actions={
         <Link href="/admin">
           <Button size="sm" icon={<ShieldAlert size={15} />}>

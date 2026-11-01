@@ -38,14 +38,14 @@ const display = Archivo_Black({
 const themeBoot = `(function(){try{var t=localStorage.getItem("jr.theme");if(t&&/^[a-z]+$/.test(t)){document.documentElement.setAttribute("data-theme",t);}}catch(e){}})();`;
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://job-radar-ke.netlify.app"),
+  metadataBase: new URL("https://mboqara.angisoft.co.ke"),
   title: {
-    default: "Job Radar — Global job search, all professions",
-    template: "%s · Job Radar",
+    default: "mboqara — The clear path to your next opportunity",
+    template: "%s · mboqara",
   },
   description:
-    "Job Radar brings global roles together, ranks them for your profile, prepares your application documents and helps you track every application. You review and submit.",
-  applicationName: "Job Radar",
+    "mboqara brings global roles together, ranks them for your profile, prepares your application documents and helps you track every application. You review and submit.",
+  applicationName: "mboqara",
   category: "jobs",
   keywords: [
     "jobs",
@@ -58,16 +58,16 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "AngiSoft Technologies" }],
   openGraph: {
-    title: "Job Radar",
+    title: "mboqara",
     description:
-      "All jobs under one roof. Global coverage, every profession, AI-assisted applications you control.",
+      "Find the right opportunities. Shape strong applications. Move with clarity.",
     type: "website",
-    images: [{ url: "/brand/logo-wordmark.png", width: 1200, height: 338, alt: "Job Radar" }],
+    images: [{ url: "/brand/logo-wordmark.png", width: 1200, height: 338, alt: "mboqara" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Job Radar",
-    description: "All jobs under one roof — global coverage, every profession.",
+    title: "mboqara",
+    description: "Find the right opportunities. Shape strong applications. Move with clarity.",
     images: ["/brand/logo-wordmark.png"],
   },
   robots: { index: true, follow: true },

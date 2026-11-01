@@ -264,7 +264,7 @@ export default function OpportunityDetailPage() {
                   {item.applicationMethod === "email" ? "Prepare application email" : "Start guided application"}
                 </Button>
                 <p style={{ fontSize: "0.76rem", color: "var(--text-muted)", marginTop: "0.3rem" }}>
-                  Job Radar never submits on your behalf. We prepare, you review, you submit.
+                  MboQara never submits on your behalf. We prepare, you review, you submit.
                 </p>
               </div>
             </Card>

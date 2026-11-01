@@ -28,28 +28,28 @@ const featureSet: Feature[] = [
 ];
 
 const faq = [
-  { id: "what-is-job-radar", question: "What does Job Radar do?", answer: "Job Radar helps you discover job opportunities, understand how they fit your profile, prepare application documents and track your application steps." },
+  { id: "what-is-mboqara", question: "What does mboqara do?", answer: "mboqara helps you discover job opportunities, understand how they fit your profile, prepare application documents and track your application steps." },
   { id: "how-matching-works", question: "How are matches calculated?", answer: "We compare your skills, experience, preferences and location with each role, and give newer roles extra attention. Results are guidance to help you review a role, not a hiring guarantee." },
-  { id: "does-it-apply", question: "Does Job Radar submit applications for me?", answer: "No. Job Radar helps you prepare and organise your application. You review your materials and submit through the employer’s application channel." },
+  { id: "does-it-apply", question: "Does mboqara submit applications for me?", answer: "No. mboqara helps you prepare and organise your application. You review your materials and submit through the employer's application channel." },
   { id: "documents", question: "Can I edit generated documents?", answer: "Yes. Generated documents can be reviewed and edited before you export or use them." },
   { id: "mobile-offline", question: "Can I use the mobile app offline?", answer: "Yes. The app keeps your roles and application details available offline, and sends your changes across when your connection returns." },
-  { id: "data-control", question: "Who controls my application decisions?", answer: "You do. Job Radar provides information and preparation tools; you choose which roles to pursue and when to share or submit documents." },
+  { id: "data-control", question: "Who controls my application decisions?", answer: "You do. mboqara provides information and preparation tools; you choose which roles to pursue and when to share or submit documents." },
 ];
 
 const legalPrivacy: Section[] = [
   { id: "data-handled", title: "Information the app handles", body: "The service stores account identifiers and the candidate profile, preferences, saved opportunities, application activity, reminders and documents needed to provide its features." },
   { id: "feature-use", title: "How information is used", body: "Profile and preference information is used to filter and rank opportunities. Application and document records are used to provide the workspace, document generation and tracking features." },
   { id: "ai-assistance", title: "AI-assisted features", body: "Some features use AI to help draft summaries and documents. When you use them, the information you provide is used to produce the result. Review generated content before relying on it." },
-  { id: "service-providers", title: "Service providers", body: "We use trusted service providers to host Job Radar, store your uploads and keep your account secure. They process your information only to deliver those services." },
+  { id: "service-providers", title: "Service providers", body: "We use trusted service providers to host mboqara, store your uploads and keep your account secure. They process your information only to deliver those services." },
   { id: "choices", title: "Your choices", body: "Keep your profile and application details current, avoid adding information you do not want processed, and contact AngiSoft to ask about account or data requests." },
 ];
 
 const legalTerms: Section[] = [
-  { id: "service", title: "Using the service", body: "Job Radar provides opportunity discovery, profile-based matching, document preparation and application tracking tools. Use the service lawfully and keep your account credentials secure." },
+  { id: "service", title: "Using the service", body: "mboqara provides opportunity discovery, profile-based matching, document preparation and application tracking tools. Use the service lawfully and keep your account credentials secure." },
   { id: "third-party-listings", title: "Third-party job listings", body: "Listings are gathered from external sources. Availability, accuracy, deadlines and application requirements can change; verify details with the employer before applying." },
   { id: "ai-content", title: "Generated content", body: "AI-assisted summaries, match explanations and documents can contain errors or omit context. Review and correct generated material before using it." },
-  { id: "application-submission", title: "Your application decisions", body: "You choose whether to apply and submit materials through the employer’s channel. Job Radar does not guarantee interviews, offers or employment outcomes." },
-  { id: "beta", title: "Beta service", body: "Features and availability may change while Job Radar is in beta. Check the pricing page for the latest offer." },
+  { id: "application-submission", title: "Your application decisions", body: "You choose whether to apply and submit materials through the employer's channel. mboqara does not guarantee interviews, offers or employment outcomes." },
+  { id: "beta", title: "Beta service", body: "Features and availability may change while mboqara is in beta. Check the pricing page for the latest offer." },
 ];
 
 const content: Record<string, unknown> = {
@@ -70,12 +70,12 @@ const content: Record<string, unknown> = {
   ],
   "features/hero": hero("features-hero", "Find real jobs. Apply with confidence.", "Product features", "Discover opportunities, review your fit, prepare application documents and track your progress."),
   features: featureSet,
-  "faq/hero": hero("faq-hero", "Questions? We have answers", "Frequently asked questions", "Learn how Job Radar supports opportunity discovery, document preparation and application tracking."),
+  "faq/hero": hero("faq-hero", "Questions? We have answers", "Frequently asked questions", "Learn how mboqara supports opportunity discovery, document preparation and application tracking."),
   faq,
   "pricing/hero": hero("pricing-hero", "Free during beta. No credit card.", "Pricing", "Founding access is free during beta. We will publish updated pricing before any paid plans launch."),
   "pricing/plans": [{
     id: "beta-access", name: "Founding access", badge: "Free during beta", price: 0, period: "during beta",
-    description: "Use the current Job Radar features while we build and improve the service.",
+    description: "Use the current mboqara features while we build and improve the service.",
     features: [
       { id: "discovery", label: "Opportunity search and matching", included: true },
       { id: "tracking", label: "Application and follow-up tracking", included: true },
@@ -83,7 +83,7 @@ const content: Record<string, unknown> = {
     ],
     ctaLabel: "Create a profile", ctaHref: "/signup",
   }],
-  "stories/hero": hero("stories-hero", "Different paths. One place to keep moving.", "Career stories", "Job Radar supports the real work behind a job search: finding an opening, preparing your materials and following through."),
+  "stories/hero": hero("stories-hero", "Different paths. One place to keep moving.", "Career stories", "mboqara supports the real work behind a job search: finding an opening, preparing your materials and following through."),
   stories: [],
   "security/hero": hero("security-hero", "Your privacy and security", "Security", "We use authenticated access and role checks to protect account features. Review the details below and contact us with security questions."),
   security: [
@@ -91,11 +91,11 @@ const content: Record<string, unknown> = {
     { id: "transport", title: "Transport and configuration", body: "Your connection is encrypted, and service credentials are kept out of public code." },
     { id: "uploads", title: "Documents and uploads", body: "Your uploads are stored privately and shared through time-limited links. Keep exported copies in a location you control." },
   ],
-  "privacy/hero": hero("privacy-hero", "Privacy Policy", "Your information", "This summary describes the data handled by the current Job Radar implementation. Contact us with questions or requests."),
+  "privacy/hero": hero("privacy-hero", "Privacy Policy", "Your information", "This summary describes the data handled by the current mboqara implementation. Contact us with questions or requests."),
   privacy: legalPrivacy,
-  "terms/hero": hero("terms-hero", "Terms of Service", "Using Job Radar", "These terms describe the current beta service and its limitations."),
+  "terms/hero": hero("terms-hero", "Terms of Service", "Using mboqara", "These terms describe the current beta service and its limitations."),
   terms: legalTerms,
-  "download/hero": hero("download-hero", "Your job search, wherever you are", "Job Radar for Android", "Browse roles, track your applications, review your documents and pick up where you left off from your phone."),
+  "download/hero": hero("download-hero", "Your job search, wherever you are", "mboqara for Android", "Browse roles, track your applications, review your documents and pick up where you left off from your phone."),
   "download/features": [
     { id: "discover", title: "Browse opportunities", body: "Search and filter roles, then save opportunities for later.", icon: "Search" },
     { id: "track", title: "Track your applications", body: "Review application stages and connected follow-up reminders.", icon: "Briefcase" },

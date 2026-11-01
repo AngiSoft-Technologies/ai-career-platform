@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class AppSettings extends ChangeNotifier {
   AppSettings._({required this.baseUrl, required this.isDemoMode});
 
-  static const defaultBaseUrl = 'https://job-radar-api-angisoft.fly.dev/v1';
+  static const defaultBaseUrl = 'https://mboqara-api-angisoft.fly.dev/v1';
   static const _baseUrlKey = 'api_base_url';
   static const _demoModeKey = 'demo_mode';
 

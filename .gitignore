@@ -68,6 +68,7 @@ tmp/
 .env.local
 package-lock.json
 jobfinder.md
+docs/
 
 # Netlify build artifacts
 .netlify/

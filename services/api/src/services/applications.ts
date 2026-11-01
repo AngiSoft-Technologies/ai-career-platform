@@ -3,8 +3,8 @@ import type {
   ApplicationBlueprint,
   ApplicationStatus,
   Opportunity,
-} from "@angisoft/job-radar-contracts";
-import { APPLICATION_STATUS_TRANSITIONS } from "@angisoft/job-radar-contracts";
+} from "@angisoft/mboqara-contracts";
+import { APPLICATION_STATUS_TRANSITIONS } from "@angisoft/mboqara-contracts";
 import { query } from "../db/pool.js";
 import { getOpportunity } from "./opportunities.js";
 
@@ -100,7 +100,7 @@ function buildBlueprint(opportunity: Opportunity): {
         : ["Tell us about yourself"],
     instructions: isEmail
       ? `Email your application to the hiring team using the subject line "Application for ${opportunity.title}". Review the generated cover letter and CV before sending.`
-      : `Apply through the official ${opportunity.companyName} application page. Review the generated documents and answers before submitting. Job Radar never submits on your behalf.`,
+      : `Apply through the official ${opportunity.companyName} application page. Review the generated documents and answers before submitting. mboqara never submits on your behalf.`,
   };
 }
 

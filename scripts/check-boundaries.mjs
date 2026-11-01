@@ -50,8 +50,8 @@ const FORBIDDEN = [
 
 /** Hostnames a client is allowed to address. */
 const ALLOWED_CLIENT_HOSTS = [
-  /job-radar-api-angisoft\.fly\.dev/i,
-  /jobs-radar\.angisoft\.co\.ke/i,
+  /mboqara-api-angisoft\.fly\.dev/i,
+  /mboqara\.angisoft\.co\.ke/i,
   /localhost/i,
 ];
 

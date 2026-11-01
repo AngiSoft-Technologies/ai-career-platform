@@ -1,4 +1,4 @@
-import type { ApplicationStatus } from "@angisoft/job-radar-contracts";
+import type { ApplicationStatus } from "@angisoft/mboqara-contracts";
 
 export type ThemeKey = "aurora" | "editorial" | "terminal" | "kinetic" | "atlas";
 

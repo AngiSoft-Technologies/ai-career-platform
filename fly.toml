@@ -1,66 +1,79 @@
-app = "job-radar-api-angisoft"
-primary_region = "iad"
+# fly.toml app configuration for mboqara-api-angisoft
+# Primary market: Africa (Johannesburg), with EU presence for global coverage
+
+app = 'mboqara-api-angisoft'
+primary_region = 'jnb'  # Johannesburg - primary market
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = 'Dockerfile'
 
 [deploy]
-  release_command = "node dist/db/migrate.js"
-
-[processes]
-  app = "node dist/index.js"
-  worker = "PROCESS_ROLE=worker node dist/index.js"
+  release_command = 'node dist/db/migrate.js'
+  strategy = 'rolling'
 
 [env]
-  NODE_ENV = "production"
-  PORT = "8088"
-  API_URL = "https://job-radar-api-angisoft.fly.dev"
-  WEB_ORIGIN = "https://jobs-radar.angisoft.co.ke,https://job-radar-ke.netlify.app,http://localhost:3000,http://localhost:3100"
-  S3_BUCKET = "uploads"
-  GRPC_PORT = "50051"
-  DEMO_MODE = "false"
+  API_URL = 'https://mboqara-api-angisoft.fly.dev'
+  DEMO_MODE = 'false'
+  GRPC_PORT = '50051'
+  NODE_ENV = 'production'
+  PORT = '8088'
+  S3_BUCKET = 'uploads'
+  WEB_ORIGIN = 'https://mboqara.angisoft.co.ke,https://mboqara.netlify.app,http://localhost:3000,http://localhost:3100'
 
+[processes]
+  app = 'node dist/index.js'
+  worker = 'PROCESS_ROLE=worker node dist/index.js'
+
+# HTTP service for the API (app processes)
 [http_service]
   internal_port = 8088
   force_https = true
-  auto_stop_machines = "off"
+  auto_stop_machines = 'off'
   min_machines_running = 1
-  processes = ["app"]
+  processes = ['app']
 
   [http_service.concurrency]
-    type = "connections"
-    soft_limit = 200
+    type = 'connections'
     hard_limit = 250
+    soft_limit = 200
 
   [[http_service.checks]]
-    interval = "30s"
-    timeout = "5s"
-    grace_period = "10s"
-    method = "GET"
-    path = "/live"
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '10s'
+    method = 'GET'
+    path = '/live'
 
+# gRPC service
 [[services]]
+  protocol = ''
   internal_port = 50051
-  processes = ["app"]
-  protocols = ["tcp"]
+  processes = ['app']
 
   [[services.ports]]
     port = 50051
-    handlers = ["tls"]
+    handlers = ['tls']
 
   [[services.tcp_checks]]
-    interval = "30s"
-    timeout = "5s"
-    grace_period = "10s"
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '10s'
+
+# VM sizing - separate configs for app and worker
+[[vm]]
+  name = 'app'
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 1024
 
 [[vm]]
-  cpu_kind = "shared"
-  cpus = 1
-  memory = "1gb"
+  name = 'worker'
+  memory = '2gb'
+  cpu_kind = 'shared'
+  cpus = 2
+  memory_mb = 2048
 
-# Fly Metrics: exposes a Prometheus scrape endpoint on the app.
-# The built-in Grafana dashboards (fly dashboard metrics) read this.
-[[metrics]]
-  [metrics.http]
-    port = 9091
-    path = "/metrics"
+[metrics]
+  port = 9091
+  path = '/metrics'

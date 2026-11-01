@@ -6,11 +6,11 @@ import type {
   CoverLetterTemplateSummary as CoverLetterTemplate,
   ResumeTemplateSummary as ResumeTemplate,
   TemplateCatalogue,
-} from "@angisoft/job-radar-contracts";
+} from "@angisoft/mboqara-contracts";
 import {
   FALLBACK_COVER_LETTER_TEMPLATES,
   FALLBACK_RESUME_TEMPLATES,
-} from "@angisoft/job-radar-contracts";
+} from "@angisoft/mboqara-contracts";
 import { Badge, Button, Card, Input, SectionTitle, Skeleton } from "@/components/ui";
 import { useApi } from "@/lib/hooks";
 

@@ -1,4 +1,4 @@
-package ke.co.angisoft.job_radar
+package ke.co.angisoft.mboqara
 
 import io.flutter.embedding.android.FlutterActivity
 

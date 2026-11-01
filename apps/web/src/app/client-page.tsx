@@ -117,7 +117,7 @@ export default function LandingPage() {
   };
 
   useEffect(() => {
-    document.title = "Find work that fits you | Job Radar";
+    document.title = "Find work that fits you | MboQara";
   }, []);
 
   return (
@@ -225,7 +225,7 @@ export default function LandingPage() {
       <section className="mk-section" style={{ background: "var(--mk-surface)", borderTop: "1px solid var(--mk-border)", borderBottom: "1px solid var(--mk-border)" }} aria-labelledby="vs-heading">
         <div className="mk-container">
           <header className="mk-section-header">
-            <span className="mk-section-eyebrow">Why Job Radar</span>
+            <span className="mk-section-eyebrow">Why MboQara</span>
             <h2 id="vs-heading" className="mk-section-heading">Built for you, not for recruiters</h2>
           </header>
           <div className="mk-grid mk-grid--3">
@@ -274,7 +274,7 @@ export default function LandingPage() {
               <span className="jr-eyebrow jr-eyebrow--dark">Live opportunities</span>
               <h2 id="jobs-title">Roles worth a closer look.</h2>
             </div>
-            <p>A preview of active roles on Job Radar.</p>
+            <p>A preview of active roles on MboQara.</p>
           </div>
 
           <div className="jr-jobs__controls" aria-label="Job slider controls">

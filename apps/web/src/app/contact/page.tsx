@@ -7,13 +7,13 @@ import { Mail, MapPin, Clock, Globe, ArrowRight } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Contact — Job Radar",
-  description: "Get in touch with the Job Radar team. We're based in Nairobi, Kenya. Free during founding access.",
+  title: "Contact — mboqara",
+  description: "Get in touch with the mboqara team. We're based in Nairobi, Kenya. Free during founding access.",
   openGraph: {
-    title: "Contact — Job Radar",
-    description: "Get in touch with the Job Radar team. Nairobi, Kenya.",
+    title: "Contact — mboqara",
+    description: "Get in touch with the mboqara team. Nairobi, Kenya.",
     type: "website",
-    images: [{ url: "/media/og-cover.jpg", width: 1200, height: 630, alt: "Job Radar" }],
+    images: [{ url: "/media/og-cover.jpg", width: 1200, height: 630, alt: "mboqara" }],
   },
 };
 

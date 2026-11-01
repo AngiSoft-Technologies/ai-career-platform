@@ -7,12 +7,18 @@ COPY services/api/package.json services/api/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 
-RUN npm ci --no-audit --no-fund
-
+# Copy source for workspace link dependencies (required by npm ci with file: protocol)
 COPY packages/contracts packages/contracts
 COPY services/api services/api
+COPY apps/web apps/web
 
-RUN npm run build -w @angisoft/job-radar-api \
+RUN npm ci --no-audit --no-fund
+
+# Build contracts first (outputs to packages/contracts/dist)
+RUN npm run build -w @angisoft/mboqara-contracts
+
+# Build API (externalizes contracts, which now has dist/)
+RUN npm run build -w @angisoft/mboqara-api \
   && npm prune --omit=dev
 
 FROM node:24-bookworm-slim AS runtime

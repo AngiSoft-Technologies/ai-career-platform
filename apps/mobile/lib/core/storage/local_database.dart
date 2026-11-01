@@ -13,7 +13,7 @@ class LocalDatabase {
 
   static Future<LocalDatabase> open() async {
     final directory = await getApplicationDocumentsDirectory();
-    final databasePath = path.join(directory.path, 'job_radar.sqlite');
+    final databasePath = path.join(directory.path, 'mboqara.sqlite');
     final database = await openDatabase(
       databasePath,
       version: 1,

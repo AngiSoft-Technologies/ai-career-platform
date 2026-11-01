@@ -1,4 +1,4 @@
-import type { CandidateProfile, Opportunity } from "@angisoft/job-radar-contracts";
+import type { CandidateProfile, Opportunity } from "@angisoft/mboqara-contracts";
 import { aiChat, aiEmbed, isAiConfigured } from "./client.js";
 
 export interface JobInsight {

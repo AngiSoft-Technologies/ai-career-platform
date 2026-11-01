@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 
 /**
- * Registers the Job Radar service worker so the frontend owns its own
+ * Registers the mboqara service worker so the frontend owns its own
  * offline shell, cached reads and queued background writes. The backend on
  * Fly runs its own dependencies; the frontend runs its own worker.
  */

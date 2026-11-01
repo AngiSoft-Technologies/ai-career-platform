@@ -19,7 +19,7 @@ import {
   DEFAULT_RESUME_TEMPLATE_KEY,
   FALLBACK_COVER_LETTER_TEMPLATES,
   FALLBACK_RESUME_TEMPLATES,
-} from "@angisoft/job-radar-contracts";
+} from "@angisoft/mboqara-contracts";
 
 const generateSchema = z.object({
   opportunityId: z.string().uuid(),

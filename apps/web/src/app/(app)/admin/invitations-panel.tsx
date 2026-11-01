@@ -140,7 +140,7 @@ export function InvitationsPanel() {
       <Card style={{ padding: "1.1rem" }}>
         <SectionTitle
           eyebrow="People"
-          title="Invite someone to Job Radar"
+          title="Invite someone to MboQara"
           action={<UserPlus size={15} style={{ color: "var(--accent)" }} />}
         />
         <p

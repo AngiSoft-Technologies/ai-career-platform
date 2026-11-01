@@ -7,13 +7,13 @@ import { ShieldCheck, FileText, Mail, ChevronRight } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — Job Radar",
+  title: "Privacy Policy — mboqara",
   description: "Your data, your control. No sales, no training, signed URLs.",
   openGraph: {
-    title: "Privacy Policy — Job Radar",
+    title: "Privacy Policy — mboqara",
     description: "Your data, your control. No sales, no training.",
     type: "website",
-    images: [{ url: "/media/og-cover.jpg", width: 1200, height: 630, alt: "Job Radar" }],
+    images: [{ url: "/media/og-cover.jpg", width: 1200, height: 630, alt: "mboqara" }],
   },
 };
 

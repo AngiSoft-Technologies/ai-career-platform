@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package jobradar.matching.v1;
+package mboqara.matching.v1;
 
 service MatchingService {
   rpc CalculateMatch (MatchRequest) returns (MatchResponse);

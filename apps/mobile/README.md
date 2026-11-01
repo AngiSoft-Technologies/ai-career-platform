@@ -1,6 +1,6 @@
-# Job Radar — Mobile App
+# mboqara — Mobile App
 
-Job Radar is an AI-powered career intelligence platform. The mobile app lets job seekers discover opportunities, track applications, and generate tailored documents — all offline-first with background sync.
+mboqara is an AI-powered career intelligence platform. The mobile app lets job seekers discover opportunities, track applications, and generate tailored documents — all offline-first with background sync.
 
 ## Features
 
@@ -62,14 +62,14 @@ lib/
    ```
 
 2. **Configure Google Sign-In**
-   - Create OAuth 2.0 client IDs in Google Cloud Console for Android (`ke.co.angisoft.job_radar`) and iOS (`ke.co.angisoft.job_radar`).
+   - Create OAuth 2.0 client IDs in Google Cloud Console for Android (`co.angisoft.mboqara`) and iOS (`co.angisoft.mboqara`).
    - Add them to `android/app/build.gradle.kts` (already configured via `google_sign_in` defaults).
-   - For iOS, add `CFBundleURLTypes` with scheme `jobradar` (already in Info.plist).
+   - For iOS, add `CFBundleURLTypes` with scheme `mboqara` (already in Info.plist).
 
 3. **Configure Neon Auth**
    - The app uses Neon Auth (Managed Better Auth) at `https://ep-mute-glitter-b5uefleh.neonauth.c-7.us-east-2.aws.neon.tech/neondb/auth`.
    - Ensure the Google provider is enabled in the Neon Auth console.
-   - Add `jobradar://` as a trusted origin for deep links.
+   - Add `mboqara://` as a trusted origin for deep links.
 
 4. **Run the app**
    ```bash
@@ -80,7 +80,7 @@ lib/
 
 1. **Create a keystore** (once):
    ```bash
-   keytool -genkey -v -keystore android/release.keystore -alias jobradar -keyalg RSA -keysize 2048 -validity 10000
+   keytool -genkey -v -keystore android/release.keystore -alias mboqara -keyalg RSA -keysize 2048 -validity 10000
    ```
 
 2. **Create `android/key.properties`** (do not commit):
@@ -104,20 +104,20 @@ lib/
 
 ### Deep Links / App Links
 
-- **Custom scheme**: `jobradar://invite/<token>` — opens the invite acceptance screen.
-- **HTTPS App Links**: `https://jobs-radar.angisoft.co.ke/invite/<token>` — verified via `assetlinks.json` (hosted on the web app at `/.well-known/assetlinks.json`).
-- iOS Universal Links: `applinks:jobs-radar.angisoft.co.ke` (configured in `Info.plist`).
+- **Custom scheme**: `mboqara://invite/<token>` — opens the invite acceptance screen.
+- **HTTPS App Links**: `https://mboqara.angisoft.co.ke/invite/<token>` — verified via `assetlinks.json` (hosted on the web app at `/.well-known/assetlinks.json`).
+- iOS Universal Links: `applinks:mboqara.angisoft.co.ke` (configured in `Info.plist`).
 
 ### App Links Verification
 
-Host `assetlinks.json` at `https://jobs-radar.angisoft.co.ke/.well-known/assetlinks.json`:
+Host `assetlinks.json` at `https://mboqara.angisoft.co.ke/.well-known/assetlinks.json`:
 
 ```json
 [{
   "relation": ["delegate_permission/common.handle_all_urls"],
   "target": {
     "namespace": "android_app",
-    "package_name": "ke.co.angisoft.job_radar",
+    "package_name": "co.angisoft.mboqara",
     "sha256_cert_fingerprints": ["YOUR_SHA256_FINGERPRINT"]
   }
 }]
@@ -127,7 +127,7 @@ Host `assetlinks.json` at `https://jobs-radar.angisoft.co.ke/.well-known/assetli
 
 ### API Base URL
 
-Set via Settings screen → "API Connection" → Base URL. Defaults to `https://job-radar-api-angisoft.fly.dev/v1`.
+Set via Settings screen → "API Connection" → Base URL. Defaults to `https://mboqara-api-angisoft.fly.dev/v1`.
 
 ### Demo Mode
 
@@ -148,8 +148,8 @@ flutter analyze       # Static analysis (lints)
 
 ## Distribution
 
-- **Package ID**: `ke.co.angisoft.job_radar` (Android) / `ke.co.angisoft.job_radar` (iOS)
-- **Play Store**: `https://play.google.com/store/apps/details?id=ke.co.angisoft.job_radar`
+- **Package ID**: `co.angisoft.mboqara` (Android) / `co.angisoft.mboqara` (iOS)
+- **Play Store**: `https://play.google.com/store/apps/details?id=co.angisoft.mboqara`
 - **Release signing**: Configure `android/key.properties` (see `android/key.properties`)
 
 ## License
