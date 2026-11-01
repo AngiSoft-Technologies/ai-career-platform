@@ -1,4 +1,8 @@
 import type { DocumentDraft } from "@angisoft/job-radar-contracts";
+import {
+  DEFAULT_COVER_LETTER_TEMPLATE_KEY,
+  DEFAULT_RESUME_TEMPLATE_KEY,
+} from "@angisoft/job-radar-contracts";
 import { query } from "../db/pool.js";
 import { getOpportunity } from "./opportunities.js";
 import { getProfile } from "./profile.js";
@@ -99,6 +103,7 @@ export async function generateDocument(input: {
   opportunityId: string;
   type: DocumentType;
   applicationId?: string;
+  templateKey?: string;
 }): Promise<DocumentDraft> {
   const [profile, opportunity] = await Promise.all([
     getProfile(input.userId),
@@ -151,9 +156,17 @@ export async function generateDocument(input: {
       throw new Error("UNSUPPORTED_DOCUMENT_TYPE");
   }
 
+  // Resume and cover-letter templates are separate catalogues, so the default
+  // depends on the document type.
+  const template =
+    input.templateKey ??
+    (input.type === "cover_letter"
+      ? DEFAULT_COVER_LETTER_TEMPLATE_KEY
+      : DEFAULT_RESUME_TEMPLATE_KEY);
+
   const inserted = await query<DocumentRow>(
-    `INSERT INTO documents (user_id, opportunity_id, application_id, type, title, content)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO documents (user_id, opportunity_id, application_id, type, title, content, template)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING id, application_id, opportunity_id, type, title, content`,
     [
       input.userId,
@@ -162,6 +175,7 @@ export async function generateDocument(input: {
       input.type,
       title,
       content,
+      template,
     ],
   );
   const row = inserted.rows[0];
@@ -265,11 +279,16 @@ export async function generateDocumentFromProfile(input: {
     content = buildCoverLetterFromProfile(profileData);
   }
 
+  const template =
+    type === "cover_letter"
+      ? DEFAULT_COVER_LETTER_TEMPLATE_KEY
+      : DEFAULT_RESUME_TEMPLATE_KEY;
+
   const inserted = await query<DocumentRow>(
-    `INSERT INTO documents (user_id, type, title, content, origin)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO documents (user_id, type, title, content, origin, template)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING id, application_id, opportunity_id, type, title, content`,
-    [userId, type, title, content, input.origin ?? "generated"],
+    [userId, type, title, content, input.origin ?? "generated", template],
   );
   const row = inserted.rows[0];
   if (!row) throw new Error("DOCUMENT_CREATE_FAILED");

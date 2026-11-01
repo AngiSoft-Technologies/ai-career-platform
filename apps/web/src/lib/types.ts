@@ -93,6 +93,7 @@ export interface JobDocument {
   type: string;
   title: string;
   content: string;
+  template?: string;
   createdAt: string;
 }
 

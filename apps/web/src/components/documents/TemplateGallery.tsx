@@ -2,31 +2,19 @@
 
 import { useMemo, useState } from "react";
 import { Check, Search, ShieldCheck, Sparkles } from "lucide-react";
+import type {
+  CoverLetterTemplateSummary as CoverLetterTemplate,
+  ResumeTemplateSummary as ResumeTemplate,
+  TemplateCatalogue,
+} from "@angisoft/job-radar-contracts";
+import {
+  FALLBACK_COVER_LETTER_TEMPLATES,
+  FALLBACK_RESUME_TEMPLATES,
+} from "@angisoft/job-radar-contracts";
 import { Badge, Button, Card, Input, SectionTitle, Skeleton } from "@/components/ui";
 import { useApi } from "@/lib/hooks";
 
-interface ResumeTemplate {
-  key: string;
-  label: string;
-  category: string;
-  description: string;
-  atsSafe: boolean;
-  accent: string;
-  sortOrder: number;
-}
-
-interface CoverLetterTemplate {
-  key: string;
-  label: string;
-  tone: string;
-  description: string;
-  sortOrder: number;
-}
-
-interface TemplateResponse {
-  resume: ResumeTemplate[];
-  coverLetter: CoverLetterTemplate[];
-}
+interface TemplateResponse extends TemplateCatalogue {}
 
 const CATEGORY_LABELS: Record<string, string> = {
   ats: "ATS-safe",
@@ -43,22 +31,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   creative: "Creative",
   industry: "Industry",
 };
-
-const FALLBACK_RESUME: ResumeTemplate[] = [
-  { key: "ats-classic", label: "ATS Classic", category: "ats", description: "Single column with standard headings.", atsSafe: true, accent: "#1f2937", sortOrder: 10 },
-  { key: "ats-modern", label: "ATS Modern", category: "ats", description: "Modern type, still single column.", atsSafe: true, accent: "#1d4ed8", sortOrder: 20 },
-  { key: "ats-minimal", label: "ATS Minimal", category: "ats", description: "No rules, no colour, pure text.", atsSafe: true, accent: "#000000", sortOrder: 30 },
-  { key: "chronological", label: "Chronological", category: "chronological", description: "Reverse-chronological history.", atsSafe: true, accent: "#334155", sortOrder: 40 },
-  { key: "hybrid", label: "Hybrid", category: "hybrid", description: "Skills summary, then history.", atsSafe: true, accent: "#0f766e", sortOrder: 50 },
-  { key: "executive", label: "Executive", category: "executive", description: "Profile-led layout for senior roles.", atsSafe: true, accent: "#111827", sortOrder: 60 },
-  { key: "technical", label: "Technical", category: "technical", description: "Skills and projects for engineers.", atsSafe: true, accent: "#065f46", sortOrder: 70 },
-];
-
-const FALLBACK_COVER: CoverLetterTemplate[] = [
-  { key: "professional", label: "Professional", tone: "professional", description: "Standard business letter.", sortOrder: 10 },
-  { key: "concise", label: "Concise", tone: "concise", description: "Three short paragraphs.", sortOrder: 20 },
-  { key: "technical", label: "Technical", tone: "technical", description: "Leads with evidence.", sortOrder: 30 },
-];
 
 interface TemplateGalleryProps {
   selectedTemplate: string;
@@ -80,8 +52,12 @@ export function TemplateGallery({
   const [search, setSearch] = useState("");
 
   const isCoverLetter = documentType === "cover_letter";
-  const resumeTemplates = data?.resume?.length ? data.resume : FALLBACK_RESUME;
-  const coverTemplates = data?.coverLetter?.length ? data.coverLetter : FALLBACK_COVER;
+  const resumeTemplates: ResumeTemplate[] = data?.resume?.length
+    ? data.resume
+    : [...FALLBACK_RESUME_TEMPLATES];
+  const coverTemplates: CoverLetterTemplate[] = data?.coverLetter?.length
+    ? data.coverLetter
+    : [...FALLBACK_COVER_LETTER_TEMPLATES];
 
   const categories = useMemo(() => {
     if (isCoverLetter) return [];

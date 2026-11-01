@@ -2,6 +2,7 @@ import PDFDocument from "pdfkit";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from "docx";
 import PptxGenJS from "pptxgenjs";
 import sharp from "sharp";
+import { DEFAULT_RESUME_TEMPLATE_KEY } from "@angisoft/job-radar-contracts";
 
 export type DocumentFormat = "pdf" | "docx" | "pptx" | "png";
 export type DocumentTemplate = string;
@@ -89,7 +90,7 @@ export function contentToExportSections(content: string): ExportableDocument["se
 
 export async function renderPdf(
   document: ExportableDocument,
-  template: DocumentTemplate = "classic",
+  template: DocumentTemplate = DEFAULT_RESUME_TEMPLATE_KEY,
   style: TemplateStyle = {},
 ): Promise<Buffer> {
   const chunks: Buffer[] = [];
@@ -98,13 +99,17 @@ export async function renderPdf(
     : undefined;
   const margin =
     style.margins === "narrow" ? 44 : style.margins === "comfortable" ? 72 : 64;
-  const palette = template === "modern"
+  // Template keys come from the `resume_templates` catalogue, so the variants
+  // must match catalogue keys (`ats-modern` / `ats-minimal`), not bare words.
+  const isModern = template === "ats-modern";
+  const isMinimal = template === "ats-minimal";
+  const palette = isModern
     ? { title: accent ?? "#0f766e", heading: accent ?? "#115e59", rule: "#99f6e4", margin }
-    : template === "minimal"
+    : isMinimal
       ? { title: "#111827", heading: "#374151", rule: "#d1d5db", margin: Math.max(margin, 72) }
       : { title: accent ?? "#0f172a", heading: accent ?? "#0f172a", rule: "#d7dde6", margin };
-  const bodySize = style.bodySize ?? (template === "minimal" ? 10 : 10);
-  const headingSize = style.headingSize ?? (template === "minimal" ? 11 : 12.5);
+  const bodySize = style.bodySize ?? (isMinimal ? 10 : 10);
+  const headingSize = style.headingSize ?? (isMinimal ? 11 : 12.5);
   const doc = new PDFDocument({
     size: "A4",
     margins: { top: 56, bottom: 56, left: palette.margin, right: palette.margin },
@@ -112,7 +117,7 @@ export async function renderPdf(
 
   doc.on("data", (chunk: Buffer) => chunks.push(chunk));
 
-  doc.font("Helvetica-Bold").fontSize(template === "minimal" ? 22 : 19).fillColor(palette.title).text(document.title, { align: "left" });
+  doc.font("Helvetica-Bold").fontSize(isMinimal ? 22 : 19).fillColor(palette.title).text(document.title, { align: "left" });
   if (document.subtitle) {
     doc.moveDown(0.2).font("Helvetica").fontSize(11).fillColor("#3f4a56").text(document.subtitle);
   }
@@ -372,7 +377,7 @@ export async function renderImage(
 export async function renderDocument(
   document: ExportableDocument,
   format: DocumentFormat,
-  template: DocumentTemplate = "classic",
+  template: DocumentTemplate = DEFAULT_RESUME_TEMPLATE_KEY,
   style: TemplateStyle = {},
 ): Promise<{ body: Buffer; mimeType: string; extension: string }> {
   switch (format) {

@@ -1,5 +1,19 @@
 import 'dart:convert';
 
+/// Fallback resume template key, used when a document has no saved template.
+///
+/// Keep in sync with `DEFAULT_RESUME_TEMPLATE_KEY` in
+/// `packages/contracts/src/templates.ts` — that is the shared source of truth
+/// for the API and web default.
+const String defaultResumeTemplateKey = 'ats-classic';
+
+/// Fallback cover-letter template key.
+///
+/// Keep in sync with `DEFAULT_COVER_LETTER_TEMPLATE_KEY` in
+/// `packages/contracts/src/templates.ts`. Cover letters and resumes are
+/// separate catalogues, so a resume default is wrong for a letter.
+const String defaultCoverLetterTemplateKey = 'professional';
+
 /// A resume template from the server catalogue.
 ///
 /// The catalogue is served by `GET /documents/templates` so web, mobile and

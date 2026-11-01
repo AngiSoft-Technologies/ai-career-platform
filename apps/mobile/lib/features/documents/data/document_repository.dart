@@ -69,10 +69,7 @@ class DocumentRepository {
       if (userGuidance != null) 'userGuidance': userGuidance,
     };
     try {
-      final response = await _apiClient.post(
-        '/documents/ai/generate',
-        body: body,
-      );
+      final response = await _apiClient.post('/documents/generate', body: body);
       final document = _aiDocumentMap(response);
       return GeneratedDocument(
         id: document['id'] as String? ?? '',
@@ -119,28 +116,33 @@ class DocumentRepository {
     }
   }
 
-  /// Save edits to an existing document (title / content).
+  /// Save edits to an existing document (title / content / template).
   Future<GeneratedDocument> updateDocument({
     required String id,
     String? title,
     String? content,
+    String? templateKey,
   }) async {
     final body = <String, dynamic>{};
     if (title != null) body['title'] = title;
     if (content != null) body['content'] = content;
+    if (templateKey != null) body['template'] = templateKey;
     final response = await _apiClient.patch('/documents/$id', body: body);
     return GeneratedDocument.fromJson(Map<String, dynamic>.from(response));
   }
 
   /// Export a document to PDF / DOCX / PPTX / PNG. Returns the raw bytes.
+  ///
+  /// [template] is the catalogue key to render with. Leave it null to use the
+  /// document's saved template, which is what the editor already picked.
   Future<List<int>> exportDocument({
     required String id,
     required String format,
-    String template = 'classic',
+    String? template,
   }) async {
     final response = await _apiClient.post(
       '/documents/$id/export',
-      body: {'format': format, 'template': template},
+      body: {'format': format, if (template != null) 'template': template},
     );
     if (response is Map && response['data'] is String) {
       return base64Decode(response['data'] as String);

@@ -14,11 +14,20 @@ import {
 } from "../services/documents.js";
 import { createUploadTarget } from "../services/storage.js";
 import { humanizeStatus, notify } from "../services/notifications.js";
+import {
+  DEFAULT_COVER_LETTER_TEMPLATE_KEY,
+  DEFAULT_RESUME_TEMPLATE_KEY,
+  FALLBACK_COVER_LETTER_TEMPLATES,
+  FALLBACK_RESUME_TEMPLATES,
+} from "@angisoft/job-radar-contracts";
 
 const generateSchema = z.object({
   opportunityId: z.string().uuid(),
   applicationId: z.string().uuid().optional(),
   type: z.enum(["cv", "cover_letter", "application_email", "answer"]),
+  // Key from `resume_templates` or `cover_letter_templates`. Omitted means the
+  // service picks the default for the document type.
+  templateKey: z.string().min(1).max(120).optional(),
 });
 
 const uploadSchema = z.object({
@@ -40,23 +49,8 @@ documentsRouter.get("/", async (request, response) => {
   response.json({ items: documents, documents });
 });
 
-const FALLBACK_RESUME_TEMPLATES = [
-  { key: "ats-classic", label: "ATS Classic", category: "ats", description: "Single column, standard headings. The safest possible layout.", atsSafe: true, accent: "#1f2937", sortOrder: 10 },
-  { key: "ats-compact", label: "ATS Compact", category: "ats", description: "Single column with tighter spacing.", atsSafe: true, accent: "#111827", sortOrder: 20 },
-  { key: "ats-modern", label: "ATS Modern", category: "ats", description: "Modern typography, still one column.", atsSafe: true, accent: "#1d4ed8", sortOrder: 30 },
-  { key: "ats-minimal", label: "ATS Minimal", category: "ats", description: "No rules or colour. Pure text.", atsSafe: true, accent: "#000000", sortOrder: 40 },
-  { key: "chronological", label: "Chronological", category: "chronological", description: "Reverse-chronological history.", atsSafe: true, accent: "#334155", sortOrder: 50 },
-  { key: "hybrid", label: "Hybrid", category: "hybrid", description: "Skills summary, then history.", atsSafe: true, accent: "#0f766e", sortOrder: 60 },
-  { key: "executive", label: "Executive", category: "executive", description: "Profile-led layout for senior roles.", atsSafe: true, accent: "#111827", sortOrder: 80 },
-  { key: "technical", label: "Technical", category: "technical", description: "Skills and projects for engineering.", atsSafe: true, accent: "#065f46", sortOrder: 90 },
-];
-
-const FALLBACK_COVER_TEMPLATES = [
-  { key: "professional", label: "Professional", tone: "professional", description: "Standard business letter.", sortOrder: 10 },
-  { key: "concise", label: "Concise", tone: "concise", description: "Three short paragraphs.", sortOrder: 20 },
-  { key: "enthusiastic", label: "Enthusiastic", tone: "enthusiastic", description: "Warmer opening.", sortOrder: 30 },
-  { key: "technical", label: "Technical", tone: "technical", description: "Leads with evidence.", sortOrder: 40 },
-];
+// The catalogue lives in the database; these shared fallbacks only cover a
+// failed catalogue read and must stay in sync with the 020 migration.
 
 documentsRouter.get("/templates", async (_request, response, next) => {
   try {
@@ -115,7 +109,7 @@ documentsRouter.get("/templates", async (_request, response, next) => {
               sortOrder: row.sort_order,
               layoutDefinition: row.layout_definition ?? {},
             }))
-          : FALLBACK_RESUME_TEMPLATES,
+          : [...FALLBACK_RESUME_TEMPLATES],
       coverLetter:
         coverRows.length > 0
           ? coverRows.map((row) => ({
@@ -126,7 +120,7 @@ documentsRouter.get("/templates", async (_request, response, next) => {
               sortOrder: row.sort_order,
               layoutDefinition: row.layout_definition ?? {},
             }))
-          : FALLBACK_COVER_TEMPLATES,
+          : [...FALLBACK_COVER_LETTER_TEMPLATES],
     });
   } catch (error) {
     next(error);
@@ -155,7 +149,13 @@ documentsRouter.post("/", async (request, response, next) => {
       `INSERT INTO documents (user_id, type, title, content, origin, template)
        VALUES ($1, $2, $3, $4, 'manual', $5)
        RETURNING id, type, title, content, template, created_at`,
-      [userId, input.type, input.title, input.content, input.template ?? "ats-classic"],
+      [
+        userId,
+        input.type,
+        input.title,
+        input.content,
+        input.template ?? DEFAULT_RESUME_TEMPLATE_KEY,
+      ],
     );
     const row = inserted.rows[0];
     if (!row) throw new Error("DOCUMENT_CREATE_FAILED");
@@ -188,6 +188,7 @@ documentsRouter.post("/generate", async (request, response) => {
     opportunityId: input.opportunityId,
     applicationId: input.applicationId,
     type: input.type,
+    templateKey: input.templateKey,
   });
   broadcast(
     "document.generated",
@@ -232,7 +233,7 @@ documentsRouter.get("/:id", async (request, response, next) => {
   try {
     const documentId = z.string().uuid().parse(request.params.id);
     const result = await query(
-      `SELECT id, opportunity_id, parent_document_id, type, title, content, created_at
+      `SELECT id, opportunity_id, parent_document_id, type, title, content, template, created_at
          FROM documents WHERE id = $1 AND user_id = $2`,
       [documentId, response.locals.userId as string],
     );
@@ -248,6 +249,7 @@ documentsRouter.get("/:id", async (request, response, next) => {
       type: row.type,
       title: row.title,
       content: row.content,
+      template: row.template,
       createdAt: row.created_at,
     });
   } catch (error) {
@@ -266,7 +268,13 @@ documentsRouter.patch("/:id", async (request, response, next) => {
               template = COALESCE($5, template)
         WHERE id = $1 AND user_id = $2
         RETURNING id, opportunity_id, type, title, content, template, created_at`,
-      [documentId, response.locals.userId as string, input.title ?? null, input.content ?? null, input.template ?? null],
+      [
+        documentId,
+        response.locals.userId as string,
+        input.title ?? null,
+        input.content ?? null,
+        input.template ?? null,
+      ],
     );
     const row = result.rows[0];
     if (!row) {
@@ -319,8 +327,9 @@ documentsRouter.post("/:id/versions", async (request, response, next) => {
       type: string;
       title: string;
       content: string;
+      template: string | null;
     }>(
-      `SELECT opportunity_id, parent_document_id, application_id, type, title, content
+      `SELECT opportunity_id, parent_document_id, application_id, type, title, content, template
          FROM documents WHERE id = $1 AND user_id = $2`,
       [documentId, response.locals.userId as string],
     );
@@ -351,11 +360,12 @@ documentsRouter.post("/:id/versions", async (request, response, next) => {
       applicationId = targetApplication.rows[0]?.id ?? null;
     }
     const inserted = await query(
-      `INSERT INTO documents (user_id, opportunity_id, application_id, parent_document_id, type, title, content)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO documents (user_id, opportunity_id, application_id, parent_document_id, type, title, content, template)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id, opportunity_id AS "opportunityId", parent_document_id AS "parentDocumentId", type, title, content, created_at AS "createdAt"`,
       [response.locals.userId as string, opportunityId, applicationId, row.parent_document_id ?? documentId, row.type,
-        input.title ?? `${row.title} — tailored copy`, input.content ?? row.content],
+        input.title ?? `${row.title} — tailored copy`, input.content ?? row.content,
+        row.template ?? DEFAULT_RESUME_TEMPLATE_KEY],
     );
     const document = inserted.rows[0];
     if (!document) throw new Error("DOCUMENT_VERSION_CREATE_FAILED");
@@ -549,7 +559,7 @@ documentsRouter.post("/:id/ats/run", async (request, response, next) => {
 
 const exportSchema = z.object({
   format: z.enum(["pdf", "docx", "pptx", "png"]),
-  template: z.string().min(1).max(120).default("classic"),
+  template: z.string().min(1).max(120).default(DEFAULT_RESUME_TEMPLATE_KEY),
 });
 
 documentsRouter.post("/:id/export", async (request, response, next) => {
@@ -578,7 +588,10 @@ documentsRouter.post("/:id/export", async (request, response, next) => {
       return;
     }
 
-    const templateKey = input.template || document.template || "classic";
+    // Fall back to the default only when the requested key has no catalogue
+    // row, so an unknown or retired key still exports instead of rendering
+    // unstyled. Valid keys are never rewritten.
+    let templateKey = input.template || document.template || DEFAULT_RESUME_TEMPLATE_KEY;
     let style: {
       accent?: string;
       fontFamily?: string;
@@ -586,23 +599,34 @@ documentsRouter.post("/:id/export", async (request, response, next) => {
       bodySize?: number;
       headingSize?: number;
     } = {};
+
+    interface TemplateRow {
+      accent: string;
+      layout_definition: {
+        typography?: {
+          accentColor?: string;
+          fontFamily?: string;
+          bodySize?: number;
+          headingSize?: number;
+        };
+        layout?: { margins?: string };
+      } | null;
+    }
+
+    const lookupTemplate = async (key: string) =>
+      (
+        await query<TemplateRow>(
+          "SELECT accent, layout_definition FROM resume_templates WHERE key = $1",
+          [key],
+        )
+      ).rows[0];
+
     try {
-      const templateRow = await query<{
-        accent: string;
-        layout_definition: {
-          typography?: {
-            accentColor?: string;
-            fontFamily?: string;
-            bodySize?: number;
-            headingSize?: number;
-          };
-          layout?: { margins?: string };
-        } | null;
-      }>(
-        "SELECT accent, layout_definition FROM resume_templates WHERE key = $1",
-        [templateKey],
-      );
-      const row = templateRow.rows[0];
+      let row = await lookupTemplate(templateKey);
+      if (!row && templateKey !== DEFAULT_RESUME_TEMPLATE_KEY) {
+        templateKey = DEFAULT_RESUME_TEMPLATE_KEY;
+        row = await lookupTemplate(templateKey);
+      }
       if (row) {
         style = {
           accent: row.layout_definition?.typography?.accentColor ?? row.accent,

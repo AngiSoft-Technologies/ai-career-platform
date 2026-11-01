@@ -6,6 +6,7 @@ class GeneratedDocument {
     required this.title,
     required this.content,
     this.applicationId,
+    this.template,
   });
 
   final String id;
@@ -14,6 +15,9 @@ class GeneratedDocument {
   final String type;
   final String title;
   final String content;
+
+  /// Catalogue key of the template this document is styled with.
+  final String? template;
 
   String get typeLabel {
     return switch (type) {
@@ -33,6 +37,7 @@ class GeneratedDocument {
       type: json['type'] as String? ?? 'cv',
       title: json['title'] as String? ?? 'Generated document',
       content: json['content'] as String? ?? '',
+      template: json['template'] as String?,
     );
   }
 
@@ -43,5 +48,6 @@ class GeneratedDocument {
     'type': type,
     'title': title,
     'content': content,
+    if (template != null) 'template': template,
   };
 }

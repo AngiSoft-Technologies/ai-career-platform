@@ -1,3 +1,5 @@
+export * from "./templates";
+
 export type WorkMode = "onsite" | "hybrid" | "remote";
 export type Seniority = "intern" | "junior" | "mid" | "senior" | "lead";
 export type ApplicationMethod = "email" | "website" | "form" | "ats" | "unknown";

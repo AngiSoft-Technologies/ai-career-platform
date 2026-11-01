@@ -35,6 +35,10 @@ import {
 } from "@/lib/document";
 import { formatDateTime, titleCase } from "@/lib/format";
 import type { AtsReport, JobDocument, Opportunity } from "@/lib/types";
+import {
+  DEFAULT_COVER_LETTER_TEMPLATE_KEY,
+  DEFAULT_RESUME_TEMPLATE_KEY,
+} from "@angisoft/job-radar-contracts";
 import { TemplateGallery } from "@/components/documents/TemplateGallery";
 import { ATSSidebar } from "@/components/documents/ATSSidebar";
 
@@ -67,7 +71,9 @@ export default function DocumentEditorPage() {
   const [report, setReport] = useState<AtsReport | null>(null);
   const [tab, setTab] = useState("edit");
   const [dragging, setDragging] = useState<string | null>(null);
-  const [template, setTemplate] = useState<string>("ats-classic");
+  // Definite value so the gallery can highlight a selection; overwritten by the
+  // document's saved template once it loads (type-aware).
+  const [template, setTemplate] = useState<string>(DEFAULT_RESUME_TEMPLATE_KEY);
   const [autoAtsCheck, setAutoAtsCheck] = useState(false);
   const [tailorOpen, setTailorOpen] = useState(false);
   const [tailorBusy, setTailorBusy] = useState(false);
@@ -93,14 +99,23 @@ export default function DocumentEditorPage() {
     setTailoringOpportunityId(data.opportunityId);
   }, [data]);
 
+  // The server is the source of truth for the template. Adopt the saved key
+  // once per document so switching documents does not inherit the previous
+  // document's layout (the old localStorage key was global and never restored
+  // a real catalogue key).
+  const templateLoadFor = useRef<string | null>(null);
   useEffect(() => {
-    const saved = window.localStorage.getItem("job-radar-document-template");
-    if (saved === "classic" || saved === "modern" || saved === "minimal") setTemplate(saved);
-  }, []);
-
-  useEffect(() => {
-    window.localStorage.setItem("job-radar-document-template", template);
-  }, [template]);
+    if (!data || templateLoadFor.current === data.id) return;
+    templateLoadFor.current = data.id;
+    // Resume and cover-letter templates are separate catalogues, so the
+    // default depends on the document type.
+    setTemplate(
+      data.template ??
+        (data.type === "cover_letter"
+          ? DEFAULT_COVER_LETTER_TEMPLATE_KEY
+          : DEFAULT_RESUME_TEMPLATE_KEY),
+    );
+  }, [data]);
 
   const content = useMemo(() => serialiseDocument(title, sections), [title, sections]);
   const latestDraft = useRef({ title, content });
@@ -264,7 +279,7 @@ export default function DocumentEditorPage() {
 
   const exportDocument = async (format: "pdf" | "docx" | "pptx" | "png") => {
     try {
-      await api.patch(`/documents/${params.id}`, { title, content });
+      await api.patch(`/documents/${params.id}`, { title, content, template });
       const blob = await api.postBlob(`/documents/${params.id}/export`, { format, template });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -341,7 +356,21 @@ export default function DocumentEditorPage() {
       </div>
 
       <div className="row row-wrap" style={{ gap: "0.4rem" }}>
-        <TemplateGallery selectedTemplate={template} onSelect={setTemplate} style={{ flex: 1, minWidth: 280 }} />
+        <TemplateGallery
+          selectedTemplate={template}
+          onSelect={(key) => {
+            setTemplate(key);
+            void api
+              .patch(`/documents/${params.id}`, { template: key })
+              .catch((caught) =>
+                toast.push(
+                  caught instanceof Error ? caught.message : "Could not save template",
+                  "danger",
+                ),
+              );
+          }}
+          style={{ flex: 1, minWidth: 280 }}
+        />
         <span className="eyebrow">Export</span>
         {(["pdf", "docx", "pptx", "png"] as const).map((format) => (
           <Button

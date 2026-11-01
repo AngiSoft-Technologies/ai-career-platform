@@ -9,7 +9,11 @@ import 'package:provider/provider.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../data/document_repository.dart';
 import '../domain/generated_document.dart';
-import '../domain/resume_template.dart';
+import '../domain/resume_template.dart'
+    show
+        ResumeTemplate,
+        defaultCoverLetterTemplateKey,
+        defaultResumeTemplateKey;
 
 /// Resume / cover letter builder.
 ///
@@ -59,8 +63,9 @@ class _ResumeBuilderScreenState extends State<ResumeBuilderScreen> {
       _documentType == 'cv' ? 'CV / Resume' : 'Cover letter';
 
   /// Default template key for the document type.
-  String get _defaultTemplateKey =>
-      _documentType == 'cv' ? 'ats-classic' : 'professional';
+  String get _defaultTemplateKey => _documentType == 'cv'
+      ? defaultResumeTemplateKey
+      : defaultCoverLetterTemplateKey;
 
   Future<void> _generate() async {
     if (_isGenerating) return;
@@ -150,7 +155,12 @@ class _ResumeBuilderScreenState extends State<ResumeBuilderScreen> {
       final bytes = await context.read<DocumentRepository>().exportDocument(
         id: _document!.id,
         format: format,
-        template: 'classic',
+        // Fall back to the selected/default key; the server stores whichever
+        // of the two it used most recently, so this is the user's choice.
+        template:
+            _document?.template ??
+            _selectedTemplate?.key ??
+            _defaultTemplateKey,
       );
       if (!mounted) return;
       setState(() => _isGenerating = false);
