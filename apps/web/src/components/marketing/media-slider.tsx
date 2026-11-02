@@ -1,13 +1,19 @@
 "use client";
 
 import Image from "next/image";
+import type { ReactNode } from "react";
 import { Slider } from "./slider";
 
 export interface MediaSlide {
   id: string;
-  /** Image path under /public, used with a real caption for SEO/accessibility. */
-  image: string;
-  alt: string;
+  /** Path under /public for a photograph, with a caption for SEO and a11y. */
+  image?: string;
+  alt?: string;
+  /**
+   * Optional visual that replaces the photograph — used for product
+   * illustrations so the slider can show what the app itself does.
+   */
+  illustration?: ReactNode;
   eyebrow: string;
   title: string;
   body: string;
@@ -37,14 +43,24 @@ export function MediaSlider({
     >
       {slides.map((slide) => (
         <article className="jr-media-slide" key={slide.id}>
-          <div className="jr-media-slide__figure">
-            <Image
-              src={slide.image}
-              alt={slide.alt}
-              fill
-              sizes="(max-width: 900px) 100vw, 46vw"
-              className="jr-media-slide__image"
-            />
+          <div
+            className={
+              slide.illustration
+                ? "jr-media-slide__figure jr-media-slide__figure--illustration"
+                : "jr-media-slide__figure"
+            }
+          >
+            {slide.illustration ? (
+              slide.illustration
+            ) : (
+              <Image
+                src={slide.image ?? ""}
+                alt={slide.alt ?? ""}
+                fill
+                sizes="(max-width: 900px) 100vw, 46vw"
+                className="jr-media-slide__image"
+              />
+            )}
           </div>
           <div className="jr-media-slide__copy">
             <span className="jr-eyebrow">{slide.eyebrow}</span>
