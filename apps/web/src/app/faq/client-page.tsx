@@ -43,7 +43,7 @@ export default function FAQPage() {
               <>
                 <h1 id="faq-title" className="mk-heading">Questions? We have answers</h1>
                 <p className="mk-lede">
-                  Everything you need to know about finding jobs, tailoring resumes and tracking applications with Job Radar.
+                  Everything you need to know about finding jobs, tailoring resumes and tracking applications with MboQara.
                   Can't find yours? <a href="/contact" className="mk-link">Contact us</a>.
                 </p>
               </>

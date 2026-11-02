@@ -104,7 +104,7 @@ function InviteInner({ token }: { token: string }) {
         return;
       }
 
-      toast.push("Welcome to Job Radar", "success");
+      toast.push("Welcome to MboQara", "success");
       window.location.assign("/dashboard");
     } catch {
       toast.push("We could not set your password. Try again.", "danger");
@@ -120,10 +120,10 @@ function InviteInner({ token }: { token: string }) {
   return (
     <main className="landing" style={{ minHeight: "100dvh" }}>
       <nav className="landing-nav">
-        <Link href="/" className="landing-brand" aria-label="Job Radar home">
+        <Link href="/" className="landing-brand" aria-label="MboQara home">
           <img
             src="/brand/logo-wordmark-light.png"
-            alt="Job Radar"
+            alt="MboQara"
             width={146}
             height={41}
           />
@@ -155,7 +155,7 @@ function InviteInner({ token }: { token: string }) {
               lineHeight: 1.05,
             }}
           >
-            Join Job Radar
+            Join MboQara
           </h1>
           {invitation ? (
             <p

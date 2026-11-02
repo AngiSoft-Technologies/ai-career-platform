@@ -64,7 +64,7 @@ export default function FeaturesPage() {
       <section className="mk-section" style={{ paddingTop: "140px" }} aria-labelledby="features-title">
         <div className="mk-container">
           <header className="mk-section-header">
-            <span className="mk-section-eyebrow">What Job Radar does for you</span>
+            <span className="mk-section-eyebrow">What MboQara does for you</span>
             {h && (
               <>
                 <h1 id="features-title" className="mk-heading" style={{ fontSize: "clamp(2.5rem, 5vw, 4rem)" }}>
@@ -79,7 +79,7 @@ export default function FeaturesPage() {
                   Find real jobs. Apply with confidence.
                 </h1>
                 <p className="mk-lede">
-                  Job Radar helps students, graduates and professionals find openings worldwide, tailor resumes and
+                  MboQara helps students, graduates and professionals find openings worldwide, tailor resumes and
                   cover letters to each role, and track every application — all in one place.
                 </p>
               </>
@@ -95,7 +95,7 @@ export default function FeaturesPage() {
         <div className="jr-feature-story__copy">
           <span className="jr-eyebrow jr-eyebrow--dark">One search, connected steps</span>
           <h2 id="feature-story-title">Know what fits. Show why you fit.</h2>
-          <p>Job Radar brings opportunity discovery, match insights, resume preparation and application tracking into one job-seeker workspace.</p>
+          <p>MboQara brings opportunity discovery, match insights, resume preparation and application tracking into one job-seeker workspace.</p>
           <div className="jr-feature-story__chips"><span><Search aria-hidden="true" /> Relevant roles</span><span><Target aria-hidden="true" /> Clear match details</span><span><FileText aria-hidden="true" /> Resume support</span></div>
           <Link href="/signup" className="jr-button jr-button--primary">Create my profile <ArrowRight aria-hidden="true" /></Link>
         </div>

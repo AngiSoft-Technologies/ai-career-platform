@@ -59,7 +59,7 @@ export default function OnboardingPage() {
     >
       <div style={{ textAlign: "center", paddingTop: "2rem" }}>
         <div className="eyebrow" style={{ justifyContent: "center" }}>
-          <Sparkles size={16} /> Welcome to Job Radar
+          <Sparkles size={16} /> Welcome to MboQara
         </div>
         <h1
           className="display"

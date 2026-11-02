@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Job Radar End-to-End Testing', () => {
+test.describe('mboqara End-to-End Testing', () => {
 
   test.beforeEach(async ({ page }) => {
     // Navigate to the opportunities page

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { CandidateProfile, Opportunity } from "@angisoft/job-radar-contracts";
+import type { CandidateProfile, Opportunity } from "@angisoft/mboqara-contracts";
 import { aiChat } from "../ai/client.js";
 import { trackAiTask } from "../ai/task-bus.js";
 

@@ -3,10 +3,10 @@ import { SignJWT, jwtVerify } from "jose";
 import { config } from "../config.js";
 import { query } from "../db/pool.js";
 
-const ISSUER = "job-radar";
-const AUDIENCE = "job-radar";
+const ISSUER = "mboqara";
+const AUDIENCE = "mboqara";
 const ACCESS_TYPE = "access";
-const DEVELOPMENT_SECRET = "job-radar-development-secret";
+const DEVELOPMENT_SECRET = "mboqara-development-secret";
 
 export class AuthNotConfiguredError extends Error {
   constructor(message: string) {

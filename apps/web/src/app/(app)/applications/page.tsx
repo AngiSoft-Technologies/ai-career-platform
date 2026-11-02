@@ -17,8 +17,8 @@ import { useApi } from "@/lib/hooks";
 import { api } from "@/lib/api";
 import { formatDateTime, titleCase } from "@/lib/format";
 import type { Application, Opportunity } from "@/lib/types";
-import { APPLICATION_STATUS_TRANSITIONS } from "@angisoft/job-radar-contracts";
-import type { ApplicationStatus } from "@angisoft/job-radar-contracts";
+import { APPLICATION_STATUS_TRANSITIONS } from "@angisoft/mboqara-contracts";
+import type { ApplicationStatus } from "@angisoft/mboqara-contracts";
 
 interface ApplicationsResponse {
   items: Application[];

@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "ke.co.angisoft.job_radar"
+    namespace = "ke.co.angisoft.mboqara"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -17,7 +17,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "ke.co.angisoft.job_radar"
+        applicationId = "ke.co.angisoft.mboqara"
         minSdk = 26
         targetSdk = 35
         versionCode = flutter.versionCode
@@ -26,8 +26,12 @@ android {
 
     signingConfigs {
         create("release") {
-            val keyPropsFile = file("key.properties")
-            if (keyPropsFile.isFile()) {
+            // The release key lives in `android/`, next to this module, so the
+            // properties file and the `storeFile` path recorded inside it are
+            // both relative to `android/app/`.
+            val keyPropsFile = listOf(file("../key.properties"), file("key.properties"))
+                .firstOrNull { it.isFile() }
+            if (keyPropsFile != null) {
                 val keyProps = Properties()
                 keyProps.load(keyPropsFile.inputStream())
                 storeFile = file(keyProps["storeFile"] as String)
@@ -35,7 +39,17 @@ android {
                 keyAlias = keyProps["keyAlias"] as String
                 keyPassword = keyProps["keyPassword"] as String
             } else {
-                storeFile = file("../debug.keystore")
+                // No release key on this machine. Fall back to the standard
+                // Android debug keystore so a release build still produces an
+                // installable bundle -- it is not uploadable to Play.
+                val debugKeystore = file("${System.getProperty("user.home")}/.android/debug.keystore")
+                if (!debugKeystore.isFile) {
+                    throw GradleException(
+                        "No release signing key found. Add apps/mobile/android/key.properties " +
+                            "and its .keystore, or create the Android debug keystore at $debugKeystore."
+                    )
+                }
+                storeFile = debugKeystore
                 storePassword = "android"
                 keyAlias = "androiddebugkey"
                 keyPassword = "android"

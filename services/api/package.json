@@ -1,5 +1,5 @@
 {
-  "name": "@angisoft/job-radar-api",
+  "name": "@angisoft/mboqara-api",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -18,7 +18,7 @@
     "db:seed:invite-service": "tsx src/db/seed-invite-service.ts"
   },
   "dependencies": {
-    "@angisoft/job-radar-contracts": "*",
+    "@angisoft/mboqara-contracts": "*",
     "@aws-sdk/client-s3": "^3.1156.0",
     "@aws-sdk/s3-request-presigner": "^3.1156.0",
     "@grpc/grpc-js": "^1.14.6",

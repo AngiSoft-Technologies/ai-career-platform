@@ -38,7 +38,7 @@ import type { AtsReport, JobDocument, Opportunity } from "@/lib/types";
 import {
   DEFAULT_COVER_LETTER_TEMPLATE_KEY,
   DEFAULT_RESUME_TEMPLATE_KEY,
-} from "@angisoft/job-radar-contracts";
+} from "@angisoft/mboqara-contracts";
 import { TemplateGallery } from "@/components/documents/TemplateGallery";
 import { ATSSidebar } from "@/components/documents/ATSSidebar";
 
@@ -748,7 +748,7 @@ export default function DocumentEditorPage() {
       >
         <div className="stack" style={{ gap: "0.9rem" }}>
           <p style={{ color: "var(--text-muted)", fontSize: "0.86rem" }}>
-            Job Radar analyses this document against the role title, posting, requirements and responsibilities. It creates a separate draft, keeps the original intact, and leaves the final review to you.
+            MboQara analyses this document against the role title, posting, requirements and responsibilities. It creates a separate draft, keeps the original intact, and leaves the final review to you.
           </p>
           <label className="field">
             <span className="label">Target job</span>

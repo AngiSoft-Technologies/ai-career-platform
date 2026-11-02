@@ -1,9 +1,9 @@
 openapi: 3.1.0
 info:
-  title: Job Radar API
+  title: mboqara API
   version: "1.0.0"
   description: |
-    Versioned REST API for the Job Radar platform (AngiSoft Technologies).
+    Versioned REST API for the mboqara platform (AngiSoft Technologies).
 
     Base URL: `{backend_url}/v1`. The legacy `/api/v1` prefix remains as a
     compatibility alias. Every response carries `x-api-version: v1`.
@@ -14,10 +14,10 @@ info:
     presented token is single-use. Requests without a token run in demo mode
     (single seeded candidate) while `DEMO_MODE=true`.
 
-    The API owns identity. Clients exchange credentials for Job Radar tokens
+    The API owns identity. Clients exchange credentials for mboqara tokens
     and never contact the identity provider directly.
 servers:
-  - url: https://job-radar-api-angisoft.fly.dev/v1
+  - url: https://mboqara-api-angisoft.fly.dev/v1
     description: Production
   - url: http://localhost:8088/v1
     description: Local
@@ -97,7 +97,7 @@ paths:
       tags: [auth]
       summary: Sign in with a Google ID token
       description: |
-        Exchanges a Google ID token for Job Radar tokens. The token is verified
+        Exchanges a Google ID token for mboqara tokens. The token is verified
         server-side against Google's JWKS and never leaves the API.
 
         Most clients use `/auth/google/start` instead, which runs the whole
@@ -133,7 +133,7 @@ paths:
         session in the URL fragment.
 
         `redirect_uri` must be on the API's allowlist. App schemes such as
-        `jobradar://auth/callback` are allowed for mobile.
+        `mboqara://auth/callback` are allowed for mobile.
       security: []
       parameters:
         - name: redirect_uri

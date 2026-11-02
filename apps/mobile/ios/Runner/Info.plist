@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Job Radar</string>
+	<string>mboqara</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>job_radar</string>
+	<string>mboqara</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -71,15 +71,15 @@
 		<dict>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>jobradar</string>
+				<string>mboqara</string>
 			</array>
 			<key>CFBundleURLName</key>
-			<string>co.angisoft.jobradar</string>
+			<string>co.angisoft.mboqara</string>
 		</dict>
 	</array>
 	<key>com.apple.developer.associated-domains</key>
 	<array>
-		<string>applinks:jobs-radar.angisoft.co.ke</string>
+		<string>applinks:mboqara.angisoft.co.ke</string>
 	</array>
 </dict>
 </plist>

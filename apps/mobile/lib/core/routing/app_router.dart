@@ -177,7 +177,7 @@ GoRouter createAppRouter(AuthSession authSession) {
       ),
     ],
     errorBuilder: (context, state) => Scaffold(
-      appBar: AppBar(title: const Text('Job Radar')),
+      appBar: AppBar(title: const Text('MboQara')),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),

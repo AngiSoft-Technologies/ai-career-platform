@@ -17,7 +17,7 @@
 const BASE = (
   process.argv[2] ??
   process.env.PROBE_BASE ??
-  "https://job-radar-api-angisoft.fly.dev"
+  "https://mboqara-api-angisoft.fly.dev"
 ).replace(/\/+$/, "");
 const COUNT = Number(process.argv[3] ?? 20);
 

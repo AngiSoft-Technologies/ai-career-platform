@@ -48,7 +48,7 @@ async function main(): Promise<void> {
     server.listen(config.PORT, () => {
       logger.info(
         { port: config.PORT, env: config.NODE_ENV, role },
-        "Job Radar API listening",
+        "mboqara API listening",
       );
     });
 
@@ -75,7 +75,7 @@ async function main(): Promise<void> {
 
   logger.info(
     { role, bootMs: Date.now() - startedAt },
-    "Job Radar backend ready",
+    "mboqara backend ready",
   );
 }
 

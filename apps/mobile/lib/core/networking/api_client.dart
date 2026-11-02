@@ -141,7 +141,7 @@ class ApiClient {
     } on SocketException catch (error) {
       throw ApiException(
         statusCode: 0,
-        message: 'Unable to reach the Job Radar service',
+        message: 'Unable to reach the MboQara service',
         cause: error,
       );
     } on TimeoutException {
@@ -152,7 +152,7 @@ class ApiClient {
     } on http.ClientException catch (error) {
       throw ApiException(
         statusCode: 0,
-        message: 'Unable to reach the Job Radar service',
+        message: 'Unable to reach the MboQara service',
         cause: error,
       );
     }

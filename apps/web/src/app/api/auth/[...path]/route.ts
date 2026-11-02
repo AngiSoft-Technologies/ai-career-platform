@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
  * forwards it to the provider and returns the response untouched.
  */
 const API_URL = (
-  process.env.NEXT_PUBLIC_API_URL ?? "https://job-radar-api-angisoft.fly.dev/v1"
+  process.env.NEXT_PUBLIC_API_URL ?? "https://mboqara-api-angisoft.fly.dev/v1"
 ).replace(/\/$/, "");
 
 export const dynamic = "force-dynamic";

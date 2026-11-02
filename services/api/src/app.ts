@@ -118,7 +118,7 @@ function buildYoga(endpoint: string) {
 app.get("/live", (_request, response) => {
   response.json({
     status: "ok",
-    service: "job-radar-api",
+    service: "mboqara-api",
     apiVersion: API_VERSION,
   });
 });
@@ -151,7 +151,7 @@ const protectedResource = (resource: string) => ({
   authorization_servers: mcpAuthorizationServer ? [mcpAuthorizationServer] : [],
   scopes_supported: ["openid", "profile", "email", "offline_access"],
   bearer_methods_supported: ["header"],
-  resource_name: "Job Radar",
+  resource_name: "mboqara",
 });
 
 app.get("/.well-known/oauth-protected-resource/v1/mcp", (_request, response) => {

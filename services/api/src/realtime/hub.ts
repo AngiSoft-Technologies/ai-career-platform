@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Server } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
-import type { EventEnvelope, RealtimeEvent } from "@angisoft/job-radar-contracts";
+import type { EventEnvelope, RealtimeEvent } from "@angisoft/mboqara-contracts";
 import { resolveIdentity } from "../auth/resolve-identity.js";
 import { logger } from "../logger.js";
 

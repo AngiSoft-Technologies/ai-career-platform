@@ -53,11 +53,11 @@ async function sendViaSmtp(input: {
   await transporter.sendMail({
     from: config.SMTP_FROM,
     to: input.to,
-    subject: "You have been invited to Job Radar",
+    subject: "You have been invited to mboqara",
     text: [
       greeting,
       "",
-      `You have been invited to Job Radar as ${input.roleLabel}.`,
+      `You have been invited to mboqara as ${input.roleLabel}.`,
       "",
       `Set your password and join here: ${input.inviteUrl}`,
       "",
@@ -65,8 +65,8 @@ async function sendViaSmtp(input: {
     ].join("\n"),
     html: [
       `<p>${greeting}</p>`,
-      `<p>You have been invited to Job Radar as <strong>${escapeHtml(input.roleLabel)}</strong>.</p>`,
-      `<p><a href="${escapeHtml(input.inviteUrl)}">Set your password and join Job Radar</a></p>`,
+      `<p>You have been invited to mboqara as <strong>${escapeHtml(input.roleLabel)}</strong>.</p>`,
+      `<p><a href="${escapeHtml(input.inviteUrl)}">Set your password and join mboqara</a></p>`,
       "<p>This link expires in 7 days.</p>",
     ].join(""),
   });
@@ -103,7 +103,7 @@ export async function sendPasswordResetEmail(input: {
   await transporter.sendMail({
     from: config.SMTP_FROM,
     to: input.to,
-    subject: "Reset your Job Radar password",
+    subject: "Reset your mboqara password",
     text: [
       greeting,
       "",

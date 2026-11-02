@@ -8,8 +8,8 @@ class TokenStorage {
   TokenStorage({FlutterSecureStorage? storage})
     : _storage = storage ?? const FlutterSecureStorage();
 
-  static const _tokenKey = 'job_radar_access_token';
-  static const _refreshTokenKey = 'job_radar_refresh_token';
+  static const _tokenKey = 'mboqara_access_token';
+  static const _refreshTokenKey = 'mboqara_refresh_token';
 
   final FlutterSecureStorage _storage;
 

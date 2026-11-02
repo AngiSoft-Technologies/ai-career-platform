@@ -52,7 +52,7 @@ export default function SecurityPage() {
               <Reveal delay={0}>
                 <h1 id="security-title" className="mk-legal__section-title">Your privacy and security</h1>
                 <p className="mk-legal__text">
-                  Job Radar is built for you — not for recruiters, not for advertisers, not for AI training companies.
+                  MboQara is built for you — not for recruiters, not for advertisers, not for AI training companies.
                   Your profile, resumes and documents belong to you, and we keep them private.
                 </p>
               </Reveal>

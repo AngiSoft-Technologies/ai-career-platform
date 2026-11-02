@@ -1,4 +1,4 @@
-// n8n Integration Service for Job Radar API
+// n8n Integration Service for mboqara API
 // Triggers n8n workflows from the API
 
 import { config } from "../config.js";
@@ -146,7 +146,7 @@ export async function setWorkflowActive(workflowId: string, active: boolean): Pr
 }
 
 /**
- * Pre-built workflow triggers for Job Radar
+ * Pre-built workflow triggers for mboqara
  */
 export const N8nTriggers = {
   /** Trigger when new job is scraped/fetched */

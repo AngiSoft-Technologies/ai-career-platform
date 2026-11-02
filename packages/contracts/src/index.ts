@@ -1,4 +1,4 @@
-export * from "./templates";
+export * from "./templates.js";
 
 export type WorkMode = "onsite" | "hybrid" | "remote";
 export type Seniority = "intern" | "junior" | "mid" | "senior" | "lead";
@@ -421,7 +421,7 @@ export const N8N_WORKFLOW_CATEGORIES: readonly N8nWorkflowCategory[] = [
 // ---------------------------------------------------------------------------
 // Auth contract
 //
-// The API owns identity. Clients exchange credentials for Job Radar tokens at
+// The API owns identity. Clients exchange credentials for mboqara tokens at
 // /v1/auth/* and never contact the identity provider directly.
 // ---------------------------------------------------------------------------
 
@@ -503,7 +503,7 @@ export interface AuthErrorResponse {
 
 /** Where the API may send the browser after a social sign-in completes. */
 export const AUTH_CALLBACK_REDIRECT_ALLOWLIST = [
-  "jobradar://auth/callback",
+  "mboqara://auth/callback",
 ] as const;
 
 export interface PasswordResetRequest {

@@ -25,8 +25,8 @@ export class ApiRequestError extends Error implements ApiError {
   }
 }
 
-const CACHE_PREFIX = "jr.cache:";
-const OUTBOX_KEY = "jr.outbox";
+const CACHE_PREFIX = "mboqara.cache:";
+const OUTBOX_KEY = "mboqara.outbox";
 
 /** Cached reads older than this are ignored rather than shown as current. */
 const MAX_CACHE_AGE_MS = 7 * 24 * 60 * 60 * 1000;

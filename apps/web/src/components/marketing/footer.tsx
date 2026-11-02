@@ -51,7 +51,7 @@ export function MarketingFooter() {
     <footer className="mk-footer" role="contentinfo">
       <div className="mk-footer__grid">
         <div className="mk-footer__brand">
-          <Link href="/" className="mk-footer__logo" aria-label="Job Radar — Home">
+          <Link href="/" className="mk-footer__logo" aria-label="MboQara — Home">
             <img src="/brand/logo-wordmark-light.png" alt="" width={148} height={41} />
           </Link>
           <p className="mk-footer__tagline">
@@ -103,7 +103,7 @@ export function MarketingFooter() {
 
       <div className="mk-footer__bottom">
         <p className="mk-footer__copyright">
-          &copy; {year} Job Radar by AngiSoft Technologies. All rights reserved.
+          &copy; {year} MboQara by AngiSoft Technologies. All rights reserved.
         </p>
         <p className="mk-footer__motto">
           Global roles, scam screening, ATS-ready documents.

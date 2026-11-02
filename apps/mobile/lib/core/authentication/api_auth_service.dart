@@ -7,7 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../configuration/app_settings.dart';
 
 /// Deep-link scheme the API redirects back to after a social sign-in.
-const String kAuthCallbackScheme = 'jobradar';
+const String kAuthCallbackScheme = 'mboqara';
 
 /// Full callback URL registered with the API.
 const String kAuthCallbackUri = '$kAuthCallbackScheme://auth/callback';
@@ -42,7 +42,7 @@ class AuthResult {
   final DateTime? refreshExpiresAt;
 }
 
-/// Talks to the Job Radar API and nothing else.
+/// Talks to the mboqara API and nothing else.
 ///
 /// The API owns identity. This service never contacts Neon Auth, Google or
 /// any other provider directly: social sign-in is completed in the system

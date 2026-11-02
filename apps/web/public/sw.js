@@ -1,4 +1,4 @@
-/* Job Radar service worker: offline shell plus runtime caching.
+/* mboqara service worker: offline shell plus runtime caching.
  *
  * The data layer lives in `lib/api.ts` (localStorage read cache + outbox),
  * because API calls are cross-origin and a service worker may not intercept
@@ -12,7 +12,7 @@
  *      next account that signs in on the same browser.
  */
 
-const VERSION = "jr-v2";
+const VERSION = "mboqara-v2";
 const SHELL_CACHE = `${VERSION}-shell`;
 const STATIC_CACHE = `${VERSION}-static`;
 

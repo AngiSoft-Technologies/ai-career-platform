@@ -219,7 +219,7 @@ class _JobRadarAppState extends State<JobRadarApp> {
   Widget build(BuildContext context) {
     if (_showSplash) {
       return MaterialApp(
-        title: 'Job Radar',
+        title: 'MboQara',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light(),
         darkTheme: AppTheme.dark(),
@@ -235,7 +235,7 @@ class _JobRadarAppState extends State<JobRadarApp> {
     }
 
     return MaterialApp.router(
-      title: 'Job Radar',
+      title: 'MboQara',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),

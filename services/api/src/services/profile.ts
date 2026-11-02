@@ -1,4 +1,4 @@
-import type { CandidateProfile } from "@angisoft/job-radar-contracts";
+import type { CandidateProfile } from "@angisoft/mboqara-contracts";
 import { query } from "../db/pool.js";
 
 interface ProfileRow {

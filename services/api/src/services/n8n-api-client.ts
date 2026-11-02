@@ -17,7 +17,7 @@ import type {
   N8nExecutionStatus,
   N8nWorkflowListResponse,
   N8nWebhookRegistration,
-} from "@angisoft/job-radar-contracts";
+} from "@angisoft/mboqara-contracts";
 
 export class N8nApiError extends Error {
   constructor(

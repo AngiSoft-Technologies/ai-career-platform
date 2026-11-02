@@ -1,4 +1,4 @@
-import type { Opportunity } from "@angisoft/job-radar-contracts";
+import type { Opportunity } from "@angisoft/mboqara-contracts";
 import { query } from "../db/pool.js";
 
 export interface OpportunityFilters {

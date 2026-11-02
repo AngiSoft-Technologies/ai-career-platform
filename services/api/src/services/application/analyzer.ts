@@ -1,6 +1,6 @@
 import { safeFetch } from "../sources/http.js";
 import { stripHtml } from "../sources/connectors/html.js";
-import type { CandidateProfile } from "@angisoft/job-radar-contracts";
+import type { CandidateProfile } from "@angisoft/mboqara-contracts";
 
 export type ApplicationPlatform =
   | "greenhouse"
@@ -301,7 +301,7 @@ export async function analyseApplicationPage(input: {
       instructions: [
         "Attach your CV and a tailored cover letter.",
         "Send from an email address you check daily.",
-        "Log the application in Job Radar so follow-ups are tracked.",
+        "Log the application in mboqara so follow-ups are tracked.",
       ],
       requiresUserInput: [],
       rawTitle: recipient,
@@ -437,7 +437,7 @@ function buildInstructions(
   }
 
   instructions.push(
-    "Job Radar prepares and assists. You review, approve and submit - nothing is sent without your action.",
+    "mboqara prepares and assists. You review, approve and submit - nothing is sent without your action.",
   );
 
   return instructions;

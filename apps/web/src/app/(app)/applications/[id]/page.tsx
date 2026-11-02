@@ -308,7 +308,7 @@ export default function ApplicationWorkspacePage() {
           <Card style={{ padding: "1.2rem" }}>
             <SectionTitle eyebrow="Promise" title="How this works" />
             <ul style={{ paddingLeft: "1.1rem", marginTop: "0.9rem", lineHeight: 1.9, fontSize: "0.88rem" }}>
-              <li>Job Radar prepares the documents and the field answers.</li>
+              <li>MboQara prepares the documents and the field answers.</li>
               <li>You review every suggestion and correct anything.</li>
               <li>You approve, then submit on the employer&apos;s own page.</li>
               <li>We track the outcome and remind you to follow up.</li>
@@ -335,7 +335,7 @@ export default function ApplicationWorkspacePage() {
             <div className="application-guide__intro-copy">
               <div className="eyebrow">Your application, step by step</div>
               <h2>{application.status === "APPLIED" ? "Submission recorded" : opportunity?.applicationMethod === "email" ? "Prepare and send your email" : "Complete the employer’s application"}</h2>
-              <p>{application.status === "APPLIED" ? `You marked this application as submitted${application.appliedAt ? ` on ${formatDateTime(application.appliedAt)}` : ""}.` : opportunity?.applicationMethod === "email" ? "We’ll prepare the details and documents. You review everything, then send it from your email app." : "Keep these instructions beside the employer’s form. Job Radar will never submit the form for you."}</p>
+              <p>{application.status === "APPLIED" ? `You marked this application as submitted${application.appliedAt ? ` on ${formatDateTime(application.appliedAt)}` : ""}.` : opportunity?.applicationMethod === "email" ? "We'll prepare the details and documents. You review everything, then send it from your email app." : "Keep these instructions beside the employer's form. MboQara will never submit the form for you."}</p>
             </div>
             <div className="application-guide__progress" aria-label={`Application status: ${titleCase(application.status)}`}>
               <CheckCircle2 size={18} />
@@ -406,7 +406,7 @@ export default function ApplicationWorkspacePage() {
                     </div>
                     <div className="row row-wrap">
                       <Button type="button" size="sm" variant="outline" onClick={() => setEmployerPageOpen((open) => !open)}>
-                        {employerPageOpen ? "Hide employer page" : "Open inside Job Radar"}
+                        {employerPageOpen ? "Hide employer page" : "Open inside MboQara"}
                       </Button>
                       {employerUrl ? <a className="btn btn-ghost btn-sm" href={employerUrl} target="_blank" rel="noopener noreferrer">New tab <ExternalLink size={13} /></a> : null}
                     </div>

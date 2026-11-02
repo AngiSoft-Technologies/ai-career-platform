@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The browser talks to the Job Radar API and to nothing else.
+ * The browser talks to the mboqara API and to nothing else.
  *
  * The API owns identity: it verifies credentials, runs the social sign-in
  * handshake with the identity provider and mints the tokens this app uses. No
@@ -9,7 +9,7 @@
  */
 
 export const API_URL = (
-  process.env.NEXT_PUBLIC_API_URL ?? "https://job-radar-api-angisoft.fly.dev/v1"
+  process.env.NEXT_PUBLIC_API_URL ?? "https://mboqara-api-angisoft.fly.dev/v1"
 ).replace(/\/$/, "");
 
 export const WS_URL = API_URL.replace(/\/v1$/, "") + "/v1/ws";
@@ -23,11 +23,11 @@ export const WS_URL = API_URL.replace(/\/v1$/, "") + "/v1/ws";
  */
 export const AUTH_RELAY_URL = "/api/auth";
 
-const TOKEN_KEY = "jr.auth.token";
-const REFRESH_TOKEN_KEY = "jr.auth.refresh";
-const SESSION_KEY = "jr.auth.session";
-const TOKEN_TTL_KEY = "jr.auth.token.exp";
-const NEXT_KEY = "jr.auth.next";
+const TOKEN_KEY = "mboqara.auth.token";
+const REFRESH_TOKEN_KEY = "mboqara.auth.refresh";
+const SESSION_KEY = "mboqara.auth.session";
+const TOKEN_TTL_KEY = "mboqara.auth.token.exp";
+const NEXT_KEY = "mboqara.auth.next";
 
 export interface Session {
   user: {
@@ -140,12 +140,12 @@ export function cachedSession(): Session | null {
 }
 
 /**
- * Cached reads and queued writes live in `jr.cache:<userId>:…` and
- * `jr.outbox:<userId>`. They are scoped per account, so the only remaining
+ * Cached reads and queued writes live in `mboqara.cache:<userId>:…` and
+ * `mboqara.outbox:<userId>`. They are scoped per account, so the only remaining
  * hazard is orphaned data from a previous account lingering in storage. Purge
  * it when the identity actually changes.
  */
-const USER_SCOPED_PREFIXES = ["jr.cache:", "jr.outbox:"];
+const USER_SCOPED_PREFIXES = ["mboqara.cache:", "mboqara.outbox:"];
 
 function purgeOtherAccounts(nextUserId: string | undefined): void {
   if (typeof window === "undefined") return;

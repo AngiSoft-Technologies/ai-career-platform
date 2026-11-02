@@ -31,7 +31,7 @@ const packageDefinition = protoLoader.loadSync(protoPath, {
 });
 
 const loaded = grpc.loadPackageDefinition(packageDefinition) as unknown as {
-  jobradar: {
+  mboqara: {
     matching: {
       v1: {
         MatchingService: grpc.ServiceClientConstructor;
@@ -40,7 +40,7 @@ const loaded = grpc.loadPackageDefinition(packageDefinition) as unknown as {
   };
 };
 
-const MatchingService = loaded.jobradar.matching.v1.MatchingService;
+const MatchingService = loaded.mboqara.matching.v1.MatchingService;
 
 export interface GrpcHandle {
   port: number;

@@ -1,16 +1,16 @@
 {
-  "name": "@angisoft/job-radar-web",
+  "name": "@angisoft/mboqara-web",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "next dev -p 3003",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 3003",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@angisoft/job-radar-contracts": "*",
+    "@angisoft/mboqara-contracts": "*",
     "clsx": "^2.1.1",
     "lucide-react": "^0.545.0",
     "next": "^16.4.3",

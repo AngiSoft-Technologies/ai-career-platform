@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Canonical Job Radar mark. Every screen that shows branding uses this widget
+/// Canonical mboqara mark. Every screen that shows branding uses this widget
 /// so the asset, padding and semantics stay consistent across the app.
 class BrandMark extends StatelessWidget {
   const BrandMark({

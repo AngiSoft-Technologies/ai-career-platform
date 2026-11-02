@@ -14,7 +14,7 @@ const schema = z.object({
   WEB_ORIGIN: z
     .string()
     .default(
-      "https://jobs-radar.angisoft.co.ke,https://job-radar-ke.netlify.app,http://localhost:3003,http://localhost:3100",
+      "https://mboqara.angisoft.co.ke,https://mboqara.netlify.app,http://localhost:3003,http://localhost:3100",
     ),
   /**
    * Region that owns the write path. Unset by default: replaying a write to
@@ -24,7 +24,7 @@ const schema = z.object({
   WRITE_REPLAY_REGION: z.string().optional(),
   DATABASE_URL: z
     .string()
-    .default("postgresql://jobradar:jobradar@localhost:5432/jobradar"),
+    .default("postgresql://mboqara:mboqara@localhost:5432/mboqara"),
   DATABASE_URL_UNPOOLED: z.string().optional(),
   DIRECT_DATABASE_URL: z.string().optional(),
   REDIS_URL: z.string().default("redis://localhost:6379"),
@@ -55,7 +55,7 @@ const schema = z.object({
   /**
    * Where the API may send the browser once a social sign-in completes.
    * Comma separated. Entries are exact origins (web) or app schemes such as
-   * `jobradar://auth/callback` (mobile).
+   * `mboqara://auth/callback` (mobile).
    */
   AUTH_OAUTH_REDIRECT_ALLOWLIST: z.string().default(""),
   NEON_REALTIME_URL: z.string().optional(),
@@ -74,7 +74,7 @@ const schema = z.object({
     .string()
     .uuid()
     .default("00000000-0000-0000-0000-000000000001"),
-  JWT_SECRET: z.string().default("job-radar-development-secret"),
+  JWT_SECRET: z.string().default("mboqara-development-secret"),
   AUTH_ACCESS_TOKEN_TTL_SECONDS: z.coerce
     .number()
     .int()

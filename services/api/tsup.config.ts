@@ -13,8 +13,9 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   target: "node24",
-  // Document rendering libraries are CJS/native and must load from node_modules.
+  // Externalize workspace packages that are TypeScript source
   external: [
+    "@angisoft/mboqara-contracts",
     "sharp",
     "pdfkit",
     "docx",

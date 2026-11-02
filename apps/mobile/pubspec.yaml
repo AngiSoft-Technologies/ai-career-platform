@@ -1,8 +1,8 @@
-name: job_radar
-description: "Job Radar - AI-powered career intelligence by AngiSoft Technologies"
+name: mboqara
+description: "mboqara - AI-powered career intelligence by AngiSoft Technologies"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
 
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
@@ -50,7 +50,7 @@ dependencies:
   file_picker: ^13.3.0
   # NOTE: google_sign_in was removed. The app no longer talks to Google (or any
   # other identity provider) directly. Social sign-in runs in the system
-  # browser against the Job Radar API, which owns the provider handshake.
+  # browser against the mboqara API, which owns the provider handshake.
 
 dev_dependencies:
   flutter_test:
@@ -62,6 +62,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

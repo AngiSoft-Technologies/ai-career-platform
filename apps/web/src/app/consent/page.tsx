@@ -30,7 +30,7 @@ function ConsentInner() {
    * Whether the provider has a session for this browser.
    *
    * The decision is submitted inside the session the provider created, so it
-   * is that session — not the Job Radar session — that decides whether consent
+   * is that session — not the MboQara session — that decides whether consent
    * can be answered here. A user who signed in at the provider but whose app
    * session has not been minted yet still has to be able to consent.
    */
@@ -106,7 +106,7 @@ function ConsentInner() {
             start again.
           </p>
           <Link href="/" className="btn btn-primary" style={{ marginTop: "1rem" }}>
-            Back to Job Radar
+            Back to MboQara
           </Link>
         </div>
       </main>
@@ -119,10 +119,10 @@ function ConsentInner() {
   return (
     <main className="landing" style={{ minHeight: "100dvh" }}>
       <nav className="landing-nav">
-        <Link href="/" className="landing-brand" aria-label="Job Radar home">
+        <Link href="/" className="landing-brand" aria-label="MboQara home">
           <img
             src="/brand/logo-wordmark-light.png"
-            alt="Job Radar"
+            alt="MboQara"
             width={146}
             height={41}
           />
@@ -141,7 +141,7 @@ function ConsentInner() {
           className="display"
           style={{ fontSize: "1.6rem", marginTop: 6, lineHeight: 1.1 }}
         >
-          Let {clientName} use your Job Radar account?
+          Let {clientName} use your MboQara account?
         </h1>
         <p style={{ color: "var(--text-muted)", marginTop: "0.7rem", lineHeight: 1.6 }}>
           It will only see what you approve below. You can disconnect it any time

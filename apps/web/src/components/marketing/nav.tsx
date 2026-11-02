@@ -37,7 +37,7 @@ export function MarketingNav() {
     <>
       <header className={clsx("mk-nav", scrolled && "mk-nav--scrolled")} role="banner">
         <div className="mk-nav__inner">
-          <Link href="/" className="mk-nav__logo" aria-label="Job Radar — Home">
+          <Link href="/" className="mk-nav__logo" aria-label="MboQara — Home">
             <img src="/brand/logo-wordmark-light.png" alt="" width={128} height={36} loading="eager" />
           </Link>
 

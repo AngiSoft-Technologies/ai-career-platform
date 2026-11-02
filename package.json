@@ -1,8 +1,8 @@
 {
-  "name": "job-radar",
+  "name": "MboQara",
   "version": "0.1.0",
   "private": true,
-  "description": "Job Radar - AI-powered career intelligence by AngiSoft Technologies",
+  "description": "MboQara - AI-powered career intelligence by AngiSoft Technologies",
   "workspaces": [
     "services/api",
     "apps/web",
@@ -10,24 +10,24 @@
   ],
   "scripts": {
     "dev": "concurrently -n api,web -c cyan,magenta \"npm:dev:api\" \"npm:dev:web\"",
-    "dev:api": "npm run dev -w @angisoft/job-radar-api",
-    "dev:web": "npm run dev -w @angisoft/job-radar-web",
-    "build": "npm run build -w @angisoft/job-radar-api && npm run build -w @angisoft/job-radar-web",
-    "typecheck": "npm run typecheck -w @angisoft/job-radar-api",
-    "typecheck:web": "npm run typecheck -w @angisoft/job-radar-web",
+    "dev:api": "npm run dev -w @angisoft/mboqara-api",
+    "dev:web": "npm run dev -w @angisoft/mboqara-web",
+    "build": "npm run build -w @angisoft/mboqara-api && npm run build -w @angisoft/mboqara-web",
+    "typecheck": "npm run typecheck -w @angisoft/mboqara-api",
+    "typecheck:web": "npm run typecheck -w @angisoft/mboqara-web",
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "check": "npm run check:boundaries && npm run typecheck && npm run typecheck:web",
-    "db:migrate": "npm run db:migrate -w @angisoft/job-radar-api",
-    "db:seed": "npm run db:seed -w @angisoft/job-radar-api",
-    "grpc": "npm run grpc -w @angisoft/job-radar-api",
-    "web": "npm run dev -w @angisoft/job-radar-web",
-    "worker": "npm run worker -w @angisoft/job-radar-api"
+    "db:migrate": "npm run db:migrate -w @angisoft/mboqara-api",
+    "db:seed": "npm run db:seed -w @angisoft/mboqara-api",
+    "grpc": "npm run grpc -w @angisoft/mboqara-api",
+    "web": "npm run dev -w @angisoft/mboqara-web",
+    "worker": "npm run worker -w @angisoft/mboqara-api"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   },
   "dependencies": {
     "@neon/config": "^1.9.4",

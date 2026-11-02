@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:job_radar/shared/formatting/app_formatters.dart';
+import 'package:mboqara/shared/formatting/app_formatters.dart';
 
 void main() {
   test('formats salary ranges', () {

@@ -198,7 +198,7 @@ mcpRouter.post("/", async (request, response) => {
               result: {
                 protocolVersion: PROTOCOL_VERSION,
                 capabilities: { tools: {} },
-                serverInfo: { name: "job-radar", version: "1.0.0" },
+                serverInfo: { name: "mboqara", version: "1.0.0" },
               },
             };
           case "notifications/initialized":

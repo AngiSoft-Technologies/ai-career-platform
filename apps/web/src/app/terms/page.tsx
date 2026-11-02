@@ -7,13 +7,13 @@ import { FileText, Mail, ChevronRight } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Terms of Service — Job Radar",
-  description: "Terms of service for Job Radar. Free during beta. No warranty.",
+  title: "Terms of Service — mboqara",
+  description: "Terms of service for mboqara. Free during beta. No warranty.",
   openGraph: {
-    title: "Terms of Service — Job Radar",
-    description: "Terms of service for Job Radar. Free during beta.",
+    title: "Terms of Service — mboqara",
+    description: "Terms of service for mboqara. Free during beta.",
     type: "website",
-    images: [{ url: "/media/og-cover.jpg", width: 1200, height: 630, alt: "Job Radar" }],
+    images: [{ url: "/media/og-cover.jpg", width: 1200, height: 630, alt: "mboqara" }],
   },
 };
 

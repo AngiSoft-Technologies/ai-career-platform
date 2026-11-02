@@ -3,7 +3,7 @@ import type {
   MatchFactors,
   MatchResult,
   Opportunity,
-} from "@angisoft/job-radar-contracts";
+} from "@angisoft/mboqara-contracts";
 import { query } from "../db/pool.js";
 import { semanticHits, type SemanticHit } from "./ai/semantic-search.js";
 import { getOpportunity, listOpportunities } from "./opportunities.js";

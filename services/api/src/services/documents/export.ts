@@ -2,7 +2,7 @@ import PDFDocument from "pdfkit";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from "docx";
 import PptxGenJS from "pptxgenjs";
 import sharp from "sharp";
-import { DEFAULT_RESUME_TEMPLATE_KEY } from "@angisoft/job-radar-contracts";
+import { DEFAULT_RESUME_TEMPLATE_KEY } from "@angisoft/mboqara-contracts";
 
 export type DocumentFormat = "pdf" | "docx" | "pptx" | "png";
 export type DocumentTemplate = string;
