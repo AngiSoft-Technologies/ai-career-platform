@@ -1244,3 +1244,168 @@
   height: auto;
   max-height: 320px;
 }
+
+/* ==========================================================================
+   Hero — full-bleed video, glass panels, aurora
+   ========================================================================== */
+.jr-hero { position: relative; isolation: isolate; overflow: hidden; background: var(--mk-bg); }
+.jr-hero__bg { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.jr-hero__video {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  opacity: .92;
+  filter: saturate(.9) contrast(1.03) brightness(.96);
+}
+/* Two light passes only: a bottom fade into the next section and a gentle
+   left edge for the headline. The video stays clearly visible in the middle. */
+.jr-hero__scrim {
+  position: absolute; inset: 0;
+  background:
+    linear-gradient(180deg, rgba(6,9,17,.05) 0%, rgba(6,9,17,.05) 45%, rgba(6,9,17,.78) 100%),
+    linear-gradient(90deg, rgba(6,9,17,.55) 0%, rgba(6,9,17,.12) 38%, rgba(6,9,17,.05) 65%);
+}
+
+/* Text legibility without washing out the video. */
+.jr-hero__copy h1, .jr-hero__copy > p { text-shadow: 0 2px 24px rgba(6,9,17,.9), 0 1px 3px rgba(6,9,17,.9); }
+.jr-hero__copy .jr-eyebrow { text-shadow: 0 1px 12px rgba(6,9,17,.9); }
+.jr-hero__inner { position: relative; z-index: 2; }
+
+/* Glass panel primitive — used by the hero cards and the job cards. */
+.jr-glass {
+  background: linear-gradient(160deg, rgba(255,255,255,.11), rgba(255,255,255,.045));
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  border: 1px solid rgba(255,255,255,.14);
+  box-shadow:
+    0 1px 0 0 rgba(255,255,255,.06) inset,
+    0 28px 80px rgba(0,0,0,.5);
+  border-radius: var(--mk-radius-lg);
+}
+.jr-hero__visual { position: relative; min-height: 500px; display: flex; align-items: flex-end; }
+.jr-hero__photo {
+  position: absolute; inset: 0;
+  border-radius: var(--mk-radius-lg);
+  overflow: hidden;
+}
+.jr-hero__photo img { object-fit: cover; }
+.jr-hero__visual::after { display: none; }
+
+.jr-match-preview {
+  position: relative; z-index: 2;
+  left: auto; bottom: auto;
+  width: min(370px, 88%);
+  margin: 0 0 -46px -46px;
+  padding: 20px 21px 16px;
+  color: var(--mk-text);
+  background: linear-gradient(160deg, rgba(255,255,255,.14), rgba(255,255,255,.05));
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: var(--mk-radius-lg);
+  box-shadow: 0 28px 80px rgba(0,0,0,.55);
+}
+.jr-hero__photo-caption { position: absolute; z-index: 3; right: 26px; bottom: 18px; display: grid; gap: 4px; text-align: right; color: #fff; }
+
+/* ==========================================================================
+   Jobs carousel — 15 cards per slide (3 rows x 5)
+   ========================================================================== */
+.jr-jobs__inner { position: relative; max-width: 1280px; margin: 0 auto; }
+.jr-jobs__heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+.jr-jobs__nav { display: flex; align-items: center; gap: 10px; }
+.jr-jobs__nav .jr-jobs__arrow { position: static; transform: none; }
+.jr-jobs__slide { padding: 14px 0 8px; }
+.jr-jobs__grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-auto-rows: auto;
+  gap: 14px;
+}
+@media (max-width: 1180px) { .jr-jobs__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 900px)  { .jr-jobs__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 620px)  { .jr-jobs__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Compact glass job card */
+.jr-job-card {
+  display: flex; flex-direction: column; gap: 10px;
+  height: 100%; padding: 16px 15px 14px;
+  border-radius: var(--mk-radius-md);
+  background: linear-gradient(165deg, rgba(255,255,255,.09), rgba(255,255,255,.035));
+  backdrop-filter: blur(16px) saturate(130%);
+  -webkit-backdrop-filter: blur(16px) saturate(130%);
+  border: 1px solid rgba(255,255,255,.10);
+  box-shadow: 0 10px 30px rgba(0,0,0,.28);
+  transition: transform var(--mk-dur) var(--mk-ease), border-color var(--mk-dur) var(--mk-ease), box-shadow var(--mk-dur) var(--mk-ease);
+}
+.jr-job-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(255,255,255,.22);
+  box-shadow: 0 20px 50px rgba(0,0,0,.42), var(--mk-glow);
+}
+.jr-job-card__top { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--mk-text-muted); font-size: .68rem; font-weight: 700; letter-spacing: .02em; }
+.jr-job-card__live { display: inline-flex; align-items: center; gap: 5px; color: var(--mk-success); }
+.jr-job-card__live::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--mk-success); box-shadow: 0 0 0 3px var(--mk-success-soft); }
+.jr-job-card__title { margin: 0; font-size: .95rem; font-weight: 700; line-height: 1.3; letter-spacing: -.01em; color: var(--mk-text); }
+.jr-job-card__meta { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--mk-text-soft); font-size: .72rem; }
+.jr-job-card__meta span { display: inline-flex; align-items: center; gap: 5px; }
+.jr-job-card__meta svg { width: 13px; height: 13px; opacity: .7; }
+.jr-job-card__tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
+.jr-job-card__tags span { padding: 4px 8px; border-radius: var(--mk-radius-pill); background: var(--mk-accent-soft); color: var(--mk-accent); font-size: .66rem; font-weight: 700; }
+.jr-job-card__cta { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .jr-hero__video { display: none; }
+  .jr-job-card:hover { transform: none; }
+}
+
+/* ==========================================================================
+   Jobs pager — arrows, dots, count
+   ========================================================================== */
+.jr-jobs__pager {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--mk-border);
+}
+.jr-jobs__pager .jr-jobs__arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--mk-border);
+  background: var(--mk-surface);
+  color: var(--mk-text);
+  cursor: pointer;
+  transition: transform var(--mk-dur) var(--mk-ease), border-color var(--mk-dur) var(--mk-ease), background var(--mk-dur) var(--mk-ease);
+}
+.jr-jobs__pager .jr-jobs__arrow:hover {
+  background: var(--mk-bg-elevated);
+  border-color: var(--mk-border-strong);
+  transform: scale(1.06);
+}
+.jr-jobs__pager .jr-jobs__arrow svg { width: 17px; height: 17px; }
+.jr-jobs__dots { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.jr-jobs__dots button {
+  width: 8px; height: 8px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--mk-surface-2);
+  cursor: pointer;
+  transition: transform var(--mk-dur) var(--mk-ease), background var(--mk-dur) var(--mk-ease);
+}
+.jr-jobs__dots button:hover { transform: scale(1.3); background: var(--mk-border-strong); }
+.jr-jobs__dots button.is-active {
+  background: var(--mk-accent);
+  transform: scale(1.35);
+  box-shadow: 0 0 0 3px var(--mk-accent-soft);
+}
+.jr-jobs__count { margin-left: auto; color: var(--mk-text-muted); font-size: .78rem; font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+  .jr-jobs__pager .jr-jobs__arrow:hover { transform: none; }
+  .jr-jobs__dots button:hover { transform: none; }
+}

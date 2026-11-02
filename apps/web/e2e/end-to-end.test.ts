@@ -165,7 +165,7 @@ test.describe('mboqara End-to-End Testing', () => {
 
   test('Offline capabilities - service worker and cache headers present', async ({ page }) => {
     // Check service worker registration
-    const swResponse = await page.request.get('http://localhost:3003/site.webmanifest');
+    const swResponse = await page.request.get('http://localhost:3003/manifest.webmanifest');
     console.log('Web manifest status:', swResponse.status());
     
     // Check for PWA manifest

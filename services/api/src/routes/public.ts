@@ -81,6 +81,52 @@ interface FeaturedRow {
   risk_score: number | null;
 }
 
+/**
+ * Africa-first country list. Kenya is the home market, so it sorts ahead of
+ * everything else; the rest of Africa is next; everywhere else follows.
+ */
+const AFRICA_COUNTRIES = [
+  "Kenya",
+  "Nigeria",
+  "Ghana",
+  "Uganda",
+  "Tanzania",
+  "Rwanda",
+  "Ethiopia",
+  "Egypt",
+  "Morocco",
+  "Senegal",
+  "Cameroon",
+  "Zambia",
+  "Zimbabwe",
+  "Ivory Coast",
+  "Côte d'Ivoire",
+  "South Africa",
+  "Botswana",
+  "Namibia",
+  "Mozambique",
+  "Angola",
+  "Tunisia",
+  "Algeria",
+  "Mali",
+  "Burkina Faso",
+  "Benin",
+  "Togo",
+  "Sierra Leone",
+  "Liberia",
+  "Gambia",
+  "Guinea",
+  "Somalia",
+  "Sudan",
+  "South Sudan",
+  "Malawi",
+  "Burundi",
+  "Djibouti",
+  "Mauritius",
+];
+
+const FEATURED_LIMIT = Number(process.env.FEATURED_LIMIT ?? 300);
+
 let featuredCache: { value: unknown; expiresAt: number } | null = null;
 
 publicRouter.get("/featured", async (_request, response, next) => {
@@ -90,15 +136,28 @@ publicRouter.get("/featured", async (_request, response, next) => {
       return;
     }
 
-    const result = await query<FeaturedRow>(
+    // Live from the database:
+    //  - hide anything whose application deadline has passed
+    //  - order Kenya first, then Africa, then the rest — newest first inside
+    //    each band so recently added roles always lead
+    const result = await query<FeaturedRow & { kenya_eligible: boolean }>(
       `SELECT o.id, o.title, c.name AS company, o.country, o.city, o.work_mode,
               o.seniority, o.platform, o.posted_at, o.salary_min, o.salary_max,
-              o.currency, o.risk_score
+              o.currency, o.risk_score,
+              (o.country = 'Kenya') AS kenya_eligible
          FROM opportunities o
          JOIN companies c ON c.id = o.company_id
         WHERE o.status = 'active'
-        ORDER BY o.posted_at DESC
-        LIMIT 12`,
+          AND (o.expires_at IS NULL OR o.expires_at > now())
+        ORDER BY
+          CASE
+            WHEN o.country = 'Kenya' THEN 0
+            WHEN o.country = ANY($1::text[]) THEN 1
+            ELSE 2
+          END ASC,
+          o.posted_at DESC
+        LIMIT $2`,
+      [AFRICA_COUNTRIES, FEATURED_LIMIT],
     );
 
     const value = {
@@ -116,6 +175,7 @@ publicRouter.get("/featured", async (_request, response, next) => {
         salaryMax: row.salary_max,
         currency: row.currency,
         riskScore: row.risk_score,
+        kenyaEligible: row.kenya_eligible === true,
       })),
       generatedAt: new Date().toISOString(),
     };

@@ -26,7 +26,7 @@ const SHELL_ASSETS = [
   "/followups",
   "/profile",
   "/settings",
-  "/site.webmanifest",
+  "/manifest.webmanifest",
   "/favicon.ico",
 ];
 

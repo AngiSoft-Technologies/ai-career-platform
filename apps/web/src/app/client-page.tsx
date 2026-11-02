@@ -2,10 +2,17 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Reveal } from "@/components/marketing/reveal";
 import { MarketingLayout } from "@/components/marketing/layout";
 import { MediaSlider, type MediaSlide } from "@/components/marketing/media-slider";
+import { Slider } from "@/components/marketing/slider";
+import {
+  DiscoveryIllustration,
+  DocumentIllustration,
+  MatchIllustration,
+  TrackerIllustration,
+} from "@/components/marketing/illustrations";
 import { useApi } from "@/lib/hooks";
 import { useSession } from "@/components/session";
 import {
@@ -38,6 +45,7 @@ interface FeaturedJob {
   salaryMin: number | null;
   salaryMax: number | null;
   currency: string | null;
+  kenyaEligible?: boolean;
 }
 
 interface Benefit {
@@ -57,12 +65,15 @@ interface ComparisonContent {
   columns: ComparisonColumn[];
 }
 
-/** The four moments a job seeker moves through, paired with real photography. */
-const JOURNEY_SLIDES: MediaSlide[] = [
+/**
+ * The four moments a job seeker moves through, drawn as the product itself
+ * behaves. Swap `illustration` for a screenshot or short clip as those land —
+ * the carousel only needs a visual and a caption.
+ */
+const CAPABILITY_SLIDES: MediaSlide[] = [
   {
     id: "discover",
-    image: "/media/careers/technology-professional.webp",
-    alt: "A technology professional working at a desk with a laptop",
+    illustration: <DiscoveryIllustration />,
     eyebrow: "Step one — discover",
     title: "Find the roles that are actually worth your time",
     body:
@@ -70,8 +81,7 @@ const JOURNEY_SLIDES: MediaSlide[] = [
   },
   {
     id: "understand",
-    image: "/media/careers/engineering-professional.webp",
-    alt: "An engineering professional reviewing plans on a laptop",
+    illustration: <MatchIllustration />,
     eyebrow: "Step two — understand your fit",
     title: "See why a role fits before you spend an evening on it",
     body:
@@ -79,8 +89,7 @@ const JOURNEY_SLIDES: MediaSlide[] = [
   },
   {
     id: "prepare",
-    image: "/media/careers/women-in-tech.webp",
-    alt: "A woman in technology working on a laptop in a dark studio",
+    illustration: <DocumentIllustration />,
     eyebrow: "Step three — prepare",
     title: "A CV and cover letter written for that exact role",
     body:
@@ -88,8 +97,7 @@ const JOURNEY_SLIDES: MediaSlide[] = [
   },
   {
     id: "track",
-    image: "/media/careers/healthcare-professional.webp",
-    alt: "A healthcare professional in a hospital corridor",
+    illustration: <TrackerIllustration />,
     eyebrow: "Step four — track",
     title: "Every next step, and every follow-up, in one place",
     body:
@@ -128,6 +136,16 @@ function salaryLabel(job: FeaturedJob): string | null {
   return `${currency}${format((job.salaryMin ?? job.salaryMax) as number)}`;
 }
 
+/** 15 roles per slide: 3 rows x 5. */
+const JOBS_PER_SLIDE = 15;
+
+function chunk<T>(items: T[], size: number): T[][] {
+  if (items.length === 0) return [];
+  const pages: T[][] = [];
+  for (let i = 0; i < items.length; i += size) pages.push(items.slice(i, i + size));
+  return pages;
+}
+
 export default function LandingPage({
   initialBenefits = null,
   initialComparison = null,
@@ -154,16 +172,10 @@ export default function LandingPage({
     { label: "Your choice at every step", items: ["Review before you share", "Apply through the original channel"], check: true },
   ];
   const jobs = featuredJobs.data?.jobs ?? [];
-  const jobSlider = useRef<HTMLDivElement>(null);
+  const jobPages = chunk(jobs, JOBS_PER_SLIDE);
+  const [page, setPage] = useState(0);
   const gate = (path: string) =>
     session ? path : `/signup?next=${encodeURIComponent(path)}`;
-  const slideJobs = (direction: 1 | -1) => {
-    const track = jobSlider.current;
-    if (!track) return;
-    const card = track.querySelector<HTMLElement>(".jr-job-card");
-    const distance = card ? card.offsetWidth + 16 : track.clientWidth * 0.8;
-    track.scrollBy({ left: direction * distance, behavior: "smooth" });
-  };
 
   useEffect(() => {
     document.title = "Find work that fits you | MboQara";
@@ -172,6 +184,24 @@ export default function LandingPage({
   return (
     <MarketingLayout>
       <section className="jr-hero" aria-labelledby="hero-title">
+        {/* Background video. Decorative: no controls, no sound, and it never
+            receives pointer events. The poster covers the first paint. */}
+        <div className="jr-hero__bg" aria-hidden="true">
+          <video
+            className="jr-hero__video"
+            poster="/media/radar-poster.jpg"
+            preload="metadata"
+            muted
+            loop
+            autoPlay
+            playsInline
+            disablePictureInPicture
+            disableRemotePlayback
+          >
+            <source src="/media/radar-loop.mp4" type="video/mp4" />
+          </video>
+          <div className="jr-hero__scrim" />
+        </div>
         <div className="jr-hero__inner">
           <div className="jr-hero__copy">
             <span className="jr-eyebrow"><Sparkles aria-hidden="true" /> Your next move, made clearer</span>
@@ -184,15 +214,18 @@ export default function LandingPage({
             <p className="jr-hero__note">Your experience stays yours. You choose what to share and when to apply.</p>
           </div>
 
+          {/* Photograph in a glass panel, floating over the hero video. */}
           <div className="jr-hero__visual">
-            <Image
-              src="/media/careers/lagos-career-story.webp"
-              alt="A professional working on her laptop in a Lagos café"
-              fill
-              priority
-              sizes="(max-width: 760px) 100vw, 52vw"
-              className="jr-hero__photo"
-            />
+            <div className="jr-hero__photo jr-glass" style={{ padding: 10 }}>
+              <Image
+                src="/media/careers/lagos-career-story.webp"
+                alt="A professional working on her laptop in a Lagos café"
+                fill
+                priority
+                sizes="(max-width: 760px) 100vw, 52vw"
+                style={{ borderRadius: "calc(var(--mk-radius-lg) - 6px)", objectFit: "cover" }}
+              />
+            </div>
             <div className="jr-match-preview" aria-label="Job match preview">
               <div className="jr-match-preview__top"><span className="jr-live-dot" /> Example match <span className="jr-match-preview__fit">Strong fit</span></div>
               <div className="jr-match-preview__job">{jobs[0]?.title ?? "Product Designer"}</div>
@@ -201,7 +234,108 @@ export default function LandingPage({
               <div className="jr-match-preview__bar"><span /></div>
               <div className="jr-match-preview__bottom"><span>Review match details</span><ArrowRight aria-hidden="true" /></div>
             </div>
-            <div className="jr-hero__photo-caption"><span>CAREERS TAKE MANY SHAPES</span><span>One place to move yours forward</span></div>
+            <div className="jr-hero__photo-caption"><span>EVERY STAGE IN ONE PLACE</span><span>Discovery, documents and follow-through</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section className="jr-jobs" aria-labelledby="jobs-title">
+        <div className="jr-jobs__inner">
+          <div className="jr-jobs__heading">
+            <div>
+              <span className="jr-eyebrow jr-eyebrow--dark">Live opportunities</span>
+              <h2 id="jobs-title">Roles worth a closer look.</h2>
+            </div>
+            <div className="jr-jobs__nav">
+              <p style={{ margin: 0 }}>A preview of active roles on MboQara.</p>
+            </div>
+          </div>
+
+          {/* 15 roles per slide: 3 rows x 5. Only the visible page is in the
+              DOM, so a 300-role preview stays cheap. */}
+          {featuredJobs.loading ? (
+            <div className="jr-jobs__grid">
+              {Array.from({ length: 15 }).map((_, index) => (
+                <div key={index} className="jr-job-card jr-job-card--loading" aria-hidden="true">
+                  <span className="jr-job-card__top"><span /></span>
+                  <span className="jr-job-card__title">Loading…</span>
+                  <span className="jr-job-card__meta"><span /></span>
+                </div>
+              ))}
+            </div>
+          ) : jobs.length === 0 ? (
+            <p className="jr-jobs__empty">New roles are being added. Check back shortly.</p>
+          ) : (
+            <>
+              <div className="jr-jobs__grid">
+                {jobPages[Math.min(page, jobPages.length - 1)]?.map((job) => {
+                  const salary = salaryLabel(job);
+                  return (
+                    <Link
+                      key={job.id}
+                      href={gate(`/opportunities/${job.id}`)}
+                      className="jr-job-card"
+                    >
+                      <div className="jr-job-card__top">
+                        <span>{job.company}</span>
+                        <span className="jr-job-card__live">Live</span>
+                      </div>
+                      <h3 className="jr-job-card__title">{job.title}</h3>
+                      <div className="jr-job-card__meta">
+                        <span><MapPin aria-hidden="true" />{job.city || job.country}</span>
+                        <span><Briefcase aria-hidden="true" />{job.workMode}</span>
+                      </div>
+                      <div className="jr-job-card__tags">
+                        {job.kenyaEligible ? <span>Kenya eligible</span> : null}
+                        <span>{job.seniority}</span>
+                        {salary ? <span>{salary}</span> : null}
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+
+              <div className="jr-jobs__pager">
+                <button
+                  type="button"
+                  className="jr-jobs__arrow"
+                  onClick={() => setPage((p) => (p - 1 + jobPages.length) % jobPages.length)}
+                  aria-label="Previous roles"
+                >
+                  <ArrowLeft aria-hidden="true" />
+                </button>
+                <div className="jr-jobs__dots" role="tablist" aria-label="Role pages">
+                  {jobPages.map((_, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      role="tab"
+                      aria-selected={i === page}
+                      aria-label={`Page ${i + 1} of ${jobPages.length}`}
+                      className={i === page ? "is-active" : undefined}
+                      onClick={() => setPage(i)}
+                    />
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="jr-jobs__arrow"
+                  onClick={() => setPage((p) => (p + 1) % jobPages.length)}
+                  aria-label="Next roles"
+                >
+                  <ArrowRight aria-hidden="true" />
+                </button>
+                <span className="jr-jobs__count">
+                  {Math.min(page * JOBS_PER_SLIDE + 1, jobs.length)}–{Math.min((page + 1) * JOBS_PER_SLIDE, jobs.length)} of {jobs.length}
+                </span>
+              </div>
+            </>
+          )}
+
+          <div className="jr-jobs__more">
+            <Link href={gate("/opportunities")} className="mk-btn mk-btn--primary mk-btn--lg">
+              {session ? "View all jobs" : "Create a free account"} <ArrowRight aria-hidden="true" />
+            </Link>
           </div>
         </div>
       </section>
@@ -281,30 +415,9 @@ export default function LandingPage({
             </p>
           </header>
           <MediaSlider
-            slides={JOURNEY_SLIDES}
-            label="How MboQara carries you from job discovery to application tracking"
+            slides={CAPABILITY_SLIDES}
+            label="What MboQara does at each step of your job search"
           />
-          <figure className="jr-media-reel">
-            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-            <video
-              className="jr-media-reel__video"
-              poster="/media/radar-poster.jpg"
-              preload="metadata"
-              muted
-              loop
-              playsInline
-              controls
-              aria-label="Short loop showing the MboQara workspace in motion"
-            >
-              <source src="/media/radar-loop.mp4" type="video/mp4" />
-              Your browser cannot play the video. The same walkthrough is described
-              in the steps above.
-            </video>
-            <figcaption className="jr-media-reel__caption">
-              A short look at the MboQara workspace — roles, match details, documents and
-              follow-ups kept together. Sound is not needed.
-            </figcaption>
-          </figure>
         </div>
       </section>
 
@@ -353,79 +466,7 @@ export default function LandingPage({
         </div>
       </section>
 
-      <section className="jr-jobs" aria-labelledby="jobs-title">
-        <div className="jr-jobs__inner">
-          <div className="jr-jobs__heading">
-            <div>
-              <span className="jr-eyebrow jr-eyebrow--dark">Live opportunities</span>
-              <h2 id="jobs-title">Roles worth a closer look.</h2>
-            </div>
-            <p>A preview of active roles on MboQara.</p>
-          </div>
 
-          <div className="jr-jobs__controls" aria-label="Job slider controls">
-            <button type="button" className="jr-jobs__arrow" onClick={() => slideJobs(-1)} aria-label="Previous jobs">
-              <ArrowLeft aria-hidden="true" />
-            </button>
-            <button type="button" className="jr-jobs__arrow" onClick={() => slideJobs(1)} aria-label="Next jobs">
-              <ArrowRight aria-hidden="true" />
-            </button>
-          </div>
-
-          <div
-            className="jr-jobs__track"
-            ref={jobSlider}
-            tabIndex={0}
-            aria-label="Available jobs"
-          >
-            {featuredJobs.loading
-              ? [0, 1, 2].map((item) => (
-                  <div key={item} className="jr-job-card jr-job-card--loading" aria-hidden="true">
-                    <span />
-                    <span />
-                    <span />
-                  </div>
-                ))
-              : jobs.map((job) => {
-                  const salary = salaryLabel(job);
-                  return (
-                    <Link
-                      key={job.id}
-                      href={gate(`/opportunities/${job.id}`)}
-                      className="jr-job-card"
-                    >
-                      <div className="jr-job-card__top">
-                        <span>{job.company}</span>
-                        <span className="jr-job-card__live">Live</span>
-                      </div>
-                      <h3 className="jr-job-card__title">{job.title}</h3>
-                      <div className="jr-job-card__meta">
-                        <span><MapPin aria-hidden="true" />{job.city || job.country}</span>
-                        <span><Briefcase aria-hidden="true" />{job.workMode}</span>
-                      </div>
-                      <div className="jr-job-card__tags">
-                        <span>{job.seniority}</span>
-                        {salary ? <span>{salary}</span> : null}
-                      </div>
-                      <div className="jr-job-card__cta">
-                        View role
-                        <ArrowRight aria-hidden="true" />
-                      </div>
-                    </Link>
-                  );
-                })}
-            {!featuredJobs.loading && jobs.length === 0 ? (
-              <p className="jr-jobs__empty">New roles are being added. Check back shortly.</p>
-            ) : null}
-          </div>
-
-          <div className="jr-jobs__more">
-            <Link href={gate("/opportunities")} className="mk-btn mk-btn--primary mk-btn--lg">
-              {session ? "View all jobs" : "Create a free account"} <ArrowRight aria-hidden="true" />
-            </Link>
-          </div>
-        </div>
-      </section>
 
     </MarketingLayout>
   );

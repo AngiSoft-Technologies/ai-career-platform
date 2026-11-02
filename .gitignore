@@ -73,3 +73,6 @@ docs/
 # Netlify build artifacts
 .netlify/
 apps/web/.netlify/
+
+# Playwright CLI session snapshots
+.playwright-cli/
