@@ -11,6 +11,7 @@ import {
   Upload,
 } from "lucide-react";
 import { Card, SectionTitle } from "@/components/ui";
+import { useOnboarding } from "@/lib/hooks";
 
 interface StartPath {
   href: string;
@@ -51,6 +52,18 @@ const PATHS: StartPath[] = [
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const { completeOnboarding } = useOnboarding();
+
+  /**
+   * Skips the whole resume step. The caller still lands in the app with a
+   * usable account; they can build a resume later from Documents.
+   */
+  const skip = () => {
+    void (async () => {
+      await completeOnboarding();
+      router.push("/dashboard");
+    })();
+  };
 
   return (
     <div
@@ -146,6 +159,24 @@ export default function OnboardingPage() {
             </Card>
           );
         })}
+      </div>
+
+      <div style={{ textAlign: "center" }}>
+        <button
+          type="button"
+          onClick={skip}
+          style={{
+            background: "none",
+            border: "none",
+            color: "var(--text-muted)",
+            fontSize: "0.9rem",
+            cursor: "pointer",
+            padding: "0.5rem 0.75rem",
+            borderRadius: 8,
+          }}
+        >
+          Skip for now — I'll build my resume later
+        </button>
       </div>
 
       <SectionTitle
