@@ -1409,3 +1409,97 @@
   .jr-jobs__pager .jr-jobs__arrow:hover { transform: none; }
   .jr-jobs__dots button:hover { transform: none; }
 }
+
+/* ==========================================================================
+   Job card — dates, urgency, share
+   ========================================================================== */
+.jr-job-card__company { color: var(--mk-accent); font-size: .74rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.jr-job-card__title a { color: inherit; text-decoration: none; }
+.jr-job-card__title a:hover { color: var(--mk-accent); }
+.jr-job-card__dates { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0; padding: 10px 0; border-top: 1px solid rgba(255,255,255,.08); border-bottom: 1px solid rgba(255,255,255,.08); }
+.jr-job-card__dates dt { color: var(--mk-text-muted); font-size: .6rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.jr-job-card__dates dd { margin: 3px 0 0; color: var(--mk-text); font-size: .8rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+.jr-job-card__dates dd.is-open { color: var(--mk-success); }
+.jr-job-card__dates dd.is-urgent { color: var(--mk-warning); }
+.jr-job-card__dates dd.is-passed { color: var(--mk-danger); text-decoration: line-through; }
+.jr-job-card__ke { background: var(--mk-success-soft) !important; color: var(--mk-success) !important; }
+.jr-job-card__actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.08); }
+.jr-job-card__view { display: inline-flex; align-items: center; gap: 6px; color: var(--mk-accent); font-size: .78rem; font-weight: 700; text-decoration: none; }
+.jr-job-card__view svg { width: 14px; height: 14px; }
+.jr-job-card__view:hover { text-decoration: underline; }
+
+.jr-share { display: flex; align-items: center; gap: 5px; }
+.jr-share__btn { display: inline-flex; align-items: center; gap: 4px; padding: 5px 8px; border-radius: var(--mk-radius-pill); border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.05); color: var(--mk-text-soft); font-size: .66rem; font-weight: 650; text-decoration: none; cursor: pointer; transition: background var(--mk-dur) var(--mk-ease), color var(--mk-dur) var(--mk-ease), border-color var(--mk-dur) var(--mk-ease); }
+.jr-share__btn svg { width: 12px; height: 12px; }
+.jr-share__btn:hover { background: rgba(255,255,255,.12); color: #fff; border-color: rgba(255,255,255,.28); }
+.jr-share__btn--whatsapp:hover { background: rgba(37,211,102,.22); color: #a7f3c4; border-color: rgba(37,211,102,.5); }
+
+/* ==========================================================================
+   Journey slider — visible illustration panel
+   ========================================================================== */
+.jr-media-slider .jr-media-slide__figure--illustration {
+  padding: clamp(14px, 3vw, 28px);
+  background:
+    radial-gradient(120% 120% at 30% 10%, rgba(109,139,255,.14), transparent 60%),
+    var(--mk-bg-elevated);
+}
+.jr-media-slider .jr-media-slide__figure--illustration svg {
+  width: 100%; height: auto; max-height: 340px;
+  filter: drop-shadow(0 12px 30px rgba(0,0,0,.45));
+}
+
+/* ==========================================================================
+   Reviews / testimonials
+   ========================================================================== */
+.jr-reviews__stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 32px 0; }
+.jr-reviews__stats > div { display: grid; gap: 6px; padding: 22px 20px; border-radius: var(--mk-radius-lg); background: linear-gradient(160deg, rgba(255,255,255,.09), rgba(255,255,255,.035)); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,.10); text-align: center; }
+.jr-reviews__stats strong { font-size: clamp(1.9rem, 4vw, 2.7rem); font-weight: 800; letter-spacing: -.03em; color: var(--mk-text); }
+.jr-reviews__stats span:not([class]) { color: var(--mk-text-muted); font-size: .82rem; }
+
+.jr-stars { display: inline-flex; gap: 3px; color: var(--mk-accent); }
+.jr-stars svg { width: 15px; height: 15px; }
+.jr-stars .is-empty { color: rgba(255,255,255,.18); }
+.jr-reviews__stats .jr-stars { justify-content: center; }
+
+.jr-reviews__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+@media (max-width: 980px) { .jr-reviews__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 620px) { .jr-reviews__grid { grid-template-columns: minmax(0, 1fr); } .jr-reviews__stats { grid-template-columns: minmax(0, 1fr); } }
+
+.jr-review { display: flex; flex-direction: column; gap: 12px; padding: 22px 20px; border-radius: var(--mk-radius-lg); background: linear-gradient(160deg, rgba(255,255,255,.08), rgba(255,255,255,.03)); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border: 1px solid rgba(255,255,255,.10); }
+.jr-review__title { margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--mk-text); }
+.jr-review__body { margin: 0; flex: 1; color: var(--mk-text-soft); font-size: .92rem; line-height: 1.65; }
+.jr-review__author { display: flex; align-items: center; gap: 10px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.08); }
+.jr-review__avatar { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%; background: var(--mk-accent-soft); color: var(--mk-accent); font-size: .74rem; font-weight: 800; }
+.jr-review__author > span:nth-child(2) { display: grid; }
+.jr-review__author strong { font-size: .88rem; color: var(--mk-text); }
+.jr-review__author small { color: var(--mk-text-muted); font-size: .74rem; }
+.jr-review__badge { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; padding: 4px 9px; border-radius: var(--mk-radius-pill); background: var(--mk-success-soft); color: var(--mk-success); font-size: .66rem; font-weight: 700; }
+.jr-review__badge svg { width: 12px; height: 12px; }
+.jr-reviews__empty { color: var(--mk-text-muted); text-align: center; padding: 32px 0; }
+.jr-reviews__cta { display: flex; justify-content: center; margin-top: 32px; }
+
+.jr-review-form { display: grid; gap: 16px; width: min(680px, 100%); padding: 26px; border-radius: var(--mk-radius-lg); background: linear-gradient(160deg, rgba(255,255,255,.10), rgba(255,255,255,.04)); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); border: 1px solid rgba(255,255,255,.12); text-align: left; }
+.jr-review-form__row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 620px) { .jr-review-form__row { grid-template-columns: minmax(0, 1fr); } }
+.jr-review-form label { display: grid; gap: 6px; }
+.jr-review-form label > span { color: var(--mk-text-soft); font-size: .78rem; font-weight: 650; }
+.jr-review-form input[type="text"], .jr-review-form input[type="email"], .jr-review-form input:not([type]), .jr-review-form textarea {
+  width: 100%; padding: 11px 13px; border-radius: var(--mk-radius-md);
+  background: rgba(6,9,17,.6); border: 1px solid var(--mk-border); color: var(--mk-text);
+  font: inherit; font-size: .92rem;
+}
+.jr-review-form input:focus-visible, .jr-review-form textarea:focus-visible { outline: 2px solid var(--mk-accent); outline-offset: 2px; border-color: var(--mk-accent); }
+.jr-review-form__rating { display: grid; gap: 6px; align-content: start; }
+.jr-review-form__stars { display: flex; gap: 4px; }
+.jr-review-form__stars button { padding: 4px; background: none; border: none; color: rgba(255,255,255,.22); cursor: pointer; border-radius: 6px; }
+.jr-review-form__stars button:hover { color: var(--mk-accent); }
+.jr-review-form__stars button .is-filled { color: var(--mk-accent); }
+.jr-review-form__stars svg { width: 20px; height: 20px; }
+.jr-review-form__check { display: flex; align-items: center; gap: 10px; color: var(--mk-text-soft); font-size: .86rem; }
+.jr-review-form__check input { width: 16px; height: 16px; accent-color: var(--mk-accent); }
+.jr-review-form__check span { display: inline-flex; align-items: center; gap: 6px; }
+.jr-review-form__check svg { width: 14px; height: 14px; }
+.jr-review-form__error { margin: 0; color: var(--mk-danger); font-size: .84rem; }
+.jr-review-form--done { text-align: center; }
+.jr-review-form--done h3 { margin: 0 0 8px; font-size: 1.3rem; color: var(--mk-text); }
+.jr-review-form--done p { margin: 0; color: var(--mk-text-soft); }

@@ -18,7 +18,7 @@ primary_region = 'jnb'  # Johannesburg - primary market
   NODE_ENV = 'production'
   PORT = '8088'
   S3_BUCKET = 'uploads'
-  WEB_ORIGIN = 'https://mboqara.angisoft.co.ke,https://mboqara.netlify.app,http://localhost:3000,http://localhost:3100'
+  WEB_ORIGIN = 'https://mboqara.angisoft.co.ke,https://mboqara.netlify.app,http://localhost:3000,http://localhost:3003,http://localhost:3100'
 
 # The role is derived from FLY_PROCESS_GROUP (see services/api/src/index.ts).
 # Do not use inline `PROCESS_ROLE=... node ...` here: Fly stores the command as

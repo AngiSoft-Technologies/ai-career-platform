@@ -75,6 +75,7 @@ interface FeaturedRow {
   seniority: string;
   platform: string;
   posted_at: string;
+  expires_at: string | null;
   salary_min: number | null;
   salary_max: number | null;
   currency: string | null;
@@ -142,7 +143,7 @@ publicRouter.get("/featured", async (_request, response, next) => {
     //    each band so recently added roles always lead
     const result = await query<FeaturedRow & { kenya_eligible: boolean }>(
       `SELECT o.id, o.title, c.name AS company, o.country, o.city, o.work_mode,
-              o.seniority, o.platform, o.posted_at, o.salary_min, o.salary_max,
+              o.seniority, o.platform, o.posted_at, o.expires_at, o.salary_min, o.salary_max,
               o.currency, o.risk_score,
               (o.country = 'Kenya') AS kenya_eligible
          FROM opportunities o
@@ -171,6 +172,7 @@ publicRouter.get("/featured", async (_request, response, next) => {
         seniority: row.seniority,
         platform: row.platform,
         postedAt: row.posted_at,
+        expiresAt: row.expires_at,
         salaryMin: row.salary_min,
         salaryMax: row.salary_max,
         currency: row.currency,

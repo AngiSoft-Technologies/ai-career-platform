@@ -7,6 +7,8 @@ import { Reveal } from "@/components/marketing/reveal";
 import { MarketingLayout } from "@/components/marketing/layout";
 import { MediaSlider, type MediaSlide } from "@/components/marketing/media-slider";
 import { Slider } from "@/components/marketing/slider";
+import { ShareLinks } from "@/components/marketing/share-links";
+import { ReviewsSection } from "@/components/marketing/reviews-section";
 import {
   DiscoveryIllustration,
   DocumentIllustration,
@@ -46,6 +48,8 @@ interface FeaturedJob {
   salaryMax: number | null;
   currency: string | null;
   kenyaEligible?: boolean;
+  expiresAt?: string | null;
+  postedAt?: string | null;
 }
 
 interface Benefit {
@@ -134,6 +138,32 @@ function salaryLabel(job: FeaturedJob): string | null {
     return `${currency}${format(job.salaryMin)} – ${format(job.salaryMax)}`;
   }
   return `${currency}${format((job.salaryMin ?? job.salaryMax) as number)}`;
+}
+
+/** "12 Oct" — compact and unambiguous. */
+function formatPosted(value?: string | null): string {
+  if (!value) return "New";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "New";
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+/** "23 Oct" / "3 days left" / "No deadline". Urgency drives the colour class. */
+function formatDeadline(value?: string | null): string {
+  if (!value) return "No deadline";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "No deadline";
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+function deadlineUrgency(value?: string | null): string {
+  if (!value) return "";
+  const d = new Date(value).getTime();
+  if (Number.isNaN(d)) return "";
+  const days = Math.ceil((d - Date.now()) / 86_400_000);
+  if (days < 0) return "is-passed";
+  if (days <= 7) return "is-urgent";
+  return "is-open";
 }
 
 /** 15 roles per slide: 3 rows x 5. */
@@ -271,26 +301,42 @@ export default function LandingPage({
                 {jobPages[Math.min(page, jobPages.length - 1)]?.map((job) => {
                   const salary = salaryLabel(job);
                   return (
-                    <Link
-                      key={job.id}
-                      href={gate(`/opportunities/${job.id}`)}
-                      className="jr-job-card"
-                    >
+                    <article key={job.id} className="jr-job-card">
                       <div className="jr-job-card__top">
-                        <span>{job.company}</span>
+                        <span className="jr-job-card__company">{job.company}</span>
                         <span className="jr-job-card__live">Live</span>
                       </div>
-                      <h3 className="jr-job-card__title">{job.title}</h3>
+                      <h3 className="jr-job-card__title">
+                        <Link href={gate(`/opportunities/${job.id}`)}>{job.title}</Link>
+                      </h3>
                       <div className="jr-job-card__meta">
                         <span><MapPin aria-hidden="true" />{job.city || job.country}</span>
                         <span><Briefcase aria-hidden="true" />{job.workMode}</span>
                       </div>
+                      <dl className="jr-job-card__dates">
+                        <div>
+                          <dt>Posted</dt>
+                          <dd>{formatPosted(job.postedAt)}</dd>
+                        </div>
+                        <div>
+                          <dt>Deadline</dt>
+                          <dd className={deadlineUrgency(job.expiresAt)}>
+                            {formatDeadline(job.expiresAt)}
+                          </dd>
+                        </div>
+                      </dl>
                       <div className="jr-job-card__tags">
-                        {job.kenyaEligible ? <span>Kenya eligible</span> : null}
+                        {job.kenyaEligible ? <span className="jr-job-card__ke">Kenya eligible</span> : null}
                         <span>{job.seniority}</span>
                         {salary ? <span>{salary}</span> : null}
                       </div>
-                    </Link>
+                      <div className="jr-job-card__actions">
+                        <Link href={gate(`/opportunities/${job.id}`)} className="jr-job-card__view">
+                          View role <ArrowRight aria-hidden="true" />
+                        </Link>
+                        <ShareLinks title={job.title} company={job.company} />
+                      </div>
+                    </article>
                   );
                 })}
               </div>
@@ -468,6 +514,8 @@ export default function LandingPage({
 
 
 
+
+      <ReviewsSection />
     </MarketingLayout>
   );
 }

@@ -21,6 +21,7 @@ import { mcpRouter } from "./routes/mcp.js";
 import { metricsRouter, recordHttpRequest } from "./routes/metrics.js";
 import { statsRouter } from "./routes/stats.js";
 import { publicRouter } from "./routes/public.js";
+import { reviewsRouter } from "./routes/reviews.js";
 import { contentRouter } from "./routes/content.js";
 import { invitationRouter } from "./routes/invitations.js";
 import { v1Router } from "./routes/v1.js";
@@ -183,7 +184,10 @@ app.use(metricsRouter);
 // identity because it must not require a session.
 app.use("/v1/stats", statsRouter);
 app.use("/api/v1/stats", statsRouter);
+app.use("/v1/reviews", reviewsRouter);
 app.use("/v1/public", publicRouter);
+
+app.use("/api/v1/reviews", reviewsRouter);
 app.use("/api/v1/public", publicRouter);
 app.use("/v1/invitations", invitationRouter);
 app.use("/api/v1/invitations", invitationRouter);

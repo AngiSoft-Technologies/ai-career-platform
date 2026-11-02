@@ -1,0 +1,17 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls",
+      "delegate_permission/common.get_login_creds"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "ke.co.angisoft.mboqara",
+      "sha256_cert_fingerprints": [
+        "76:5A:AD:64:03:38:C7:4B:0C:9D:1D:7A:62:4E:CE:C8:40:35:D5:89:2D:CF:C7:45:DD:8F:74:03:FD:63:65:A2",
+        "3B:4F:A2:28:A4:0E:82:7E:59:8C:C3:58:FB:92:84:6F:7D:1E:E9:9D:76:0C:ED:4C:F4:BB:C5:E5:20:FD:6B:CF",
+        "54:98:EE:71:8B:51:C5:5D:3B:65:5C:1B:9F:8E:9A:9F:C8:60:D1:16:A9:C3:19:8D:3A:F3:55:08:EC:B5:26:66"
+      ]
+    }
+  }
+]
