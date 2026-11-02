@@ -16,10 +16,19 @@ import { startWorkers, type WorkerHandle } from "./worker/index.js";
  *   worker             background consumers only (scale-out replica)
  *
  * One image, one entrypoint, one `fly deploy`. Nothing is started by hand.
+ *
+ * Fly.io injects FLY_PROCESS_GROUP into every Machine, so the process group
+ * decides the role and the container command can stay a plain
+ * `node dist/index.js` (an inline `PROCESS_ROLE=worker node ...` command is
+ * exec'd as an argv array and fails with ENOENT). `app` machines serve HTTP
+ * only; background jobs run on the dedicated `worker` group so app replicas
+ * do not each poll Redis. PROCESS_ROLE still overrides this when set.
  */
 type ProcessRole = "app" | "api" | "worker";
 
-const role = (process.env.PROCESS_ROLE ?? "app") as ProcessRole;
+const group = process.env.FLY_PROCESS_GROUP;
+const role = (process.env.PROCESS_ROLE ??
+  (group === "worker" ? "worker" : group === "app" ? "api" : "app")) as ProcessRole;
 
 async function main(): Promise<void> {
   const startedAt = Date.now();

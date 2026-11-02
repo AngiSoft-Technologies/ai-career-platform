@@ -20,16 +20,20 @@ primary_region = 'jnb'  # Johannesburg - primary market
   S3_BUCKET = 'uploads'
   WEB_ORIGIN = 'https://mboqara.angisoft.co.ke,https://mboqara.netlify.app,http://localhost:3000,http://localhost:3100'
 
+# The role is derived from FLY_PROCESS_GROUP (see services/api/src/index.ts).
+# Do not use inline `PROCESS_ROLE=... node ...` here: Fly stores the command as
+# an argv array, so `PROCESS_ROLE=worker` becomes argv[0] and exec fails (ENOENT).
 [processes]
   app = 'node dist/index.js'
-  worker = 'PROCESS_ROLE=worker node dist/index.js'
+  worker = 'node dist/index.js'
 
 # HTTP service for the API (app processes)
 [http_service]
   internal_port = 8088
   force_https = true
   auto_stop_machines = 'off'
-  min_machines_running = 1
+  # Keep the Africa-heavy fleet (3x jnb) always warm.
+  min_machines_running = 3
   processes = ['app']
 
   [http_service.concurrency]
@@ -59,20 +63,18 @@ primary_region = 'jnb'  # Johannesburg - primary market
     timeout = '5s'
     grace_period = '10s'
 
-# VM sizing - separate configs for app and worker
+# VM sizing - separate configs for app and worker.
+# Fly matches per-process VM config with `processes`, not `name`; using `name`
+# silently applied the app sizing to the worker group as well.
 [[vm]]
-  name = 'app'
+  size = 'shared-cpu-1x'
   memory = '1gb'
-  cpu_kind = 'shared'
-  cpus = 1
-  memory_mb = 1024
+  processes = ['app']
 
 [[vm]]
-  name = 'worker'
+  size = 'shared-cpu-2x'
   memory = '2gb'
-  cpu_kind = 'shared'
-  cpus = 2
-  memory_mb = 2048
+  processes = ['worker']
 
 [metrics]
   port = 9091
