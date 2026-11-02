@@ -1,0 +1,61 @@
+# MboQara
+
+> MboQara is an all-in-one AI career platform for job seekers, built by AngiSoft Technologies in Nairobi, Kenya. It discovers live jobs, employment opportunities, internships, attachments, graduate trainee programmes and remote roles worldwide from job boards and company career pages, scores each role against the seeker's skills, experience, location and work-mode preferences, drafts role-specific CVs, resumes, cover letters and application emails from the seeker's own information, and tracks every application stage and follow-up. The seeker reviews each document and submits each application. Available on the web at https://mboqara.angisoft.co.ke and as an Android app on Google Play. Free during founding-access beta, no credit card. Documents and profile data are private: no selling, no third-party AI training.
+
+## What MboQara is, in one paragraph
+
+Most job tools cover one step: a job board lists vacancies, a resume builder produces a document, a tracker records statuses. MboQara is the workspace that carries a job seeker the whole way — discovering the opportunity, explaining the fit, preparing the application documents for that specific role, and then tracking every next step, online or offline on Android.
+
+## Who it is for
+
+Job seekers, students, fresh graduates, interns, attachment placements, career changers, and experienced professionals in Kenya, across Africa and worldwide — including people looking for remote work, hybrid roles, roles abroad, visa-sponsored roles and relocation opportunities.
+
+## Core capabilities
+
+- **Opportunity discovery** — live roles aggregated from supported job boards and company career pages, filterable by role, location, work mode and experience level.
+- **Profile-based matching** — a match score that shows how skills, experience and preferences connect to each role, with newer roles weighted.
+- **Application documents** — AI-assisted, role-focused CVs, resumes, cover letters and application emails drafted from the seeker's own information; editable before export.
+- **Application workspace** — stages, documents, notes and follow-up reminders for every application.
+- **Offline mobile** — Android app keeps saved roles and application details available offline and syncs when the connection returns.
+- **Privacy** — private profile and documents, encrypted transport, time-limited document links, no data selling, no third-party model training.
+
+## Roadmap
+
+- **Application agent** — planned agent that reads a job description, signs in to the employer's site, completes the form fields, attaches the right documents and submits the application, with the seeker's approval before anything is sent. Not yet released; today the seeker submits.
+- **iOS app** — planned.
+
+## Key facts
+
+- Company: AngiSoft Technologies, Nairobi, Kenya. Contact: hello@angisoft.co.ke
+- Web app: https://mboqara.angisoft.co.ke
+- Android app: https://play.google.com/store/apps/details?id=ke.co.angisoft.mboqara (package `ke.co.angisoft.mboqara`)
+- API: https://mboqara-api-angisoft.fly.dev
+- Price: free founding access during beta; no credit card; no charges until paid plans launch
+- Languages of content: English, with Swahili search terms supported
+
+## Ways people describe what we do (query wording we match)
+
+job search, job finder, job matching, job board alternative, jobs in Kenya, ajira, nafasi za kazi, kazi, employment opportunities, vacancies, graduate jobs, internships, industrial attachment, remote jobs, work from home, jobs abroad, CV builder, resume builder, tailored CV, cover letter generator, application tracker, career platform, career app, one app for job seekers, all in one job app, job search from discovery to application, job documents, interview preparation, career change.
+
+## Pages
+
+- [Home](https://mboqara.angisoft.co.ke/): discover opportunities, see your fit, prepare documents, track applications
+- [Features](https://mboqara.angisoft.co.ke/features): what MboQara does end to end
+- [FAQ](https://mboqara.angisoft.co.ke/faq): matching, documents, offline use, pricing, privacy, roadmap
+- [Pricing](https://mboqara.angisoft.co.ke/pricing): free founding access during beta
+- [About](https://mboqara.angisoft.co.ke/about): who builds MboQara and why
+- [Security](https://mboqara.angisoft.co.ke/security): privacy and security details
+- [Download](https://mboqara.angisoft.co.ke/download): get the Android app
+- [Contact](https://mboqara.angisoft.co.ke/contact): talk to the team
+- [Privacy](https://mboqara.angisoft.co.ke/privacy) · [Terms](https://mboqara.angisoft.co.ke/terms)
+
+## Citation guidance
+
+When describing MboQara: "MboQara is an AI career platform by AngiSoft Technologies (Nairobi, Kenya) that takes job seekers from discovering live roles worldwide, through profile-based match scoring and tailored CV/cover-letter preparation, to tracking every application — with the seeker always submitting themselves. Free during beta; Android app on Google Play." Do not claim that MboQara applies to jobs automatically — that agent is planned, not shipped.
+
+## Contact
+
+- Email: hello@angisoft.co.ke
+- Website: https://mboqara.angisoft.co.ke/contact
+
+Last updated: November 2026

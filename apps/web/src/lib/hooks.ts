@@ -15,19 +15,31 @@ interface QueryState<T> {
 export function useApi<T>(
   path: string | null,
   query?: Record<string, string | number | boolean | undefined | null>,
+  /**
+   * Content fetched on the server (see `lib/server-content`). It renders into
+   * the first HTML so crawlers and AI assistants see the page content, and the
+   * hook skips the duplicate client request unless `refresh()` is called.
+   */
+  initialData?: T | null,
 ): QueryState<T> {
-  const [data, setData] = useState<T | null>(null);
-  const [loading, setLoading] = useState(Boolean(path));
+  const [data, setData] = useState<T | null>(initialData ?? null);
+  const [loading, setLoading] = useState(Boolean(path) && initialData == null);
   const [error, setError] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
   const [stale, setStale] = useState(false);
   const [nonce, setNonce] = useState(0);
   const controllerRef = useRef<AbortController | null>(null);
+  const hasInitialRef = useRef(initialData != null);
 
   const queryKey = JSON.stringify(query ?? {});
 
   useEffect(() => {
     if (!path) {
+      setLoading(false);
+      return;
+    }
+
+    if (hasInitialRef.current && nonce === 0) {
       setLoading(false);
       return;
     }

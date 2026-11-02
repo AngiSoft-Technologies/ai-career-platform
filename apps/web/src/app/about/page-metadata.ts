@@ -1,12 +1,17 @@
-import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "About mboqara",
-  description: "mboqara helps you find real jobs worldwide, tailor resumes and cover letters, and track every application. Free during beta.",
-  openGraph: {
-    title: "About mboqara",
-    description: "Find the right opportunities. Shape strong applications. Move with clarity.",
-    type: "website",
-    images: [{ url: "/media/og-cover.jpg", width: 1200, height: 630, alt: "mboqara" }],
-  },
-};
+export const metadata = pageMetadata({
+  title: "About MboQara — a career platform built around job seekers",
+  description:
+    "MboQara is built by AngiSoft Technologies in Nairobi, Kenya. Discover roles worldwide, understand your fit, prepare role-focused documents and keep every application in one workspace.",
+  path: "/about",
+  keywords: [
+    "about MboQara",
+    "career platform Kenya",
+    "job search tool Kenya",
+    "AI job app Kenya",
+    "who builds MboQara",
+    "AngiSoft careers",
+    "Nairobi tech company",
+  ],
+});

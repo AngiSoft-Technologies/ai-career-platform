@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useEffect, useRef } from "react";
 import { Reveal } from "@/components/marketing/reveal";
 import { MarketingLayout } from "@/components/marketing/layout";
+import { MediaSlider, type MediaSlide } from "@/components/marketing/media-slider";
 import { useApi } from "@/lib/hooks";
 import { useSession } from "@/components/session";
 import {
@@ -56,6 +57,46 @@ interface ComparisonContent {
   columns: ComparisonColumn[];
 }
 
+/** The four moments a job seeker moves through, paired with real photography. */
+const JOURNEY_SLIDES: MediaSlide[] = [
+  {
+    id: "discover",
+    image: "/media/careers/technology-professional.webp",
+    alt: "A technology professional working at a desk with a laptop",
+    eyebrow: "Step one — discover",
+    title: "Find the roles that are actually worth your time",
+    body:
+      "MboQara searches live jobs, employment opportunities, internships, attachments and remote roles across the boards and career pages you would have to check one by one — then filters them by role, location, work mode and experience.",
+  },
+  {
+    id: "understand",
+    image: "/media/careers/engineering-professional.webp",
+    alt: "An engineering professional reviewing plans on a laptop",
+    eyebrow: "Step two — understand your fit",
+    title: "See why a role fits before you spend an evening on it",
+    body:
+      "Each opportunity carries a match score built from your skills, experience, location and work-mode preferences, with newer roles weighted. You get the reasoning, not a black box.",
+  },
+  {
+    id: "prepare",
+    image: "/media/careers/women-in-tech.webp",
+    alt: "A woman in technology working on a laptop in a dark studio",
+    eyebrow: "Step three — prepare",
+    title: "A CV and cover letter written for that exact role",
+    body:
+      "MboQara drafts role-focused CVs, resumes, cover letters and application emails from your own information, so your most relevant experience leads. Review, edit, export — your words, your approval.",
+  },
+  {
+    id: "track",
+    image: "/media/careers/healthcare-professional.webp",
+    alt: "A healthcare professional in a hospital corridor",
+    eyebrow: "Step four — track",
+    title: "Every next step, and every follow-up, in one place",
+    body:
+      "Applications move through clear stages with their documents, notes and reminders attached, so nothing is lost between the day you apply and the day they reply.",
+  },
+];
+
 const ICON_MAP: Record<string, React.ElementType> = {
   Target,
   FileText,
@@ -87,11 +128,19 @@ function salaryLabel(job: FeaturedJob): string | null {
   return `${currency}${format((job.salaryMin ?? job.salaryMax) as number)}`;
 }
 
-export default function LandingPage() {
+export default function LandingPage({
+  initialBenefits = null,
+  initialComparison = null,
+  initialFeaturedJobs = null,
+}: {
+  initialBenefits?: Benefit[] | null;
+  initialComparison?: ComparisonContent | null;
+  initialFeaturedJobs?: { jobs: FeaturedJob[] } | null;
+}) {
   const { session } = useSession();
-  const benefits = useApi<Benefit[]>("/content/benefits");
-  const comparison = useApi<ComparisonContent>("/content/comparison");
-  const featuredJobs = useApi<{ jobs: FeaturedJob[] }>("/public/featured");
+  const benefits = useApi<Benefit[]>("/content/benefits", undefined, initialBenefits);
+  const comparison = useApi<ComparisonContent>("/content/comparison", undefined, initialComparison);
+  const featuredJobs = useApi<{ jobs: FeaturedJob[] }>("/public/featured", undefined, initialFeaturedJobs);
 
   const b = benefits.data?.length ? benefits.data : [
     { id: "discover", title: "Find relevant opportunities", body: "Explore roles that fit your skills, experience and preferences.", icon: "Search" },
@@ -219,6 +268,43 @@ export default function LandingPage() {
               ))
             )}
           </div>
+        </div>
+      </section>
+
+      <section className="mk-section" aria-labelledby="journey-heading">
+        <div className="mk-container">
+          <header className="mk-section-header">
+            <span className="mk-section-eyebrow">The whole journey</span>
+            <h2 id="journey-heading" className="mk-section-heading">From the first role you discover to the offer that follows</h2>
+            <p className="mk-lede">
+              Four moments, one workspace. Swipe or use the arrows to walk through them.
+            </p>
+          </header>
+          <MediaSlider
+            slides={JOURNEY_SLIDES}
+            label="How MboQara carries you from job discovery to application tracking"
+          />
+          <figure className="jr-media-reel">
+            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+            <video
+              className="jr-media-reel__video"
+              poster="/media/radar-poster.jpg"
+              preload="metadata"
+              muted
+              loop
+              playsInline
+              controls
+              aria-label="Short loop showing the MboQara workspace in motion"
+            >
+              <source src="/media/radar-loop.mp4" type="video/mp4" />
+              Your browser cannot play the video. The same walkthrough is described
+              in the steps above.
+            </video>
+            <figcaption className="jr-media-reel__caption">
+              A short look at the MboQara workspace — roles, match details, documents and
+              follow-ups kept together. Sound is not needed.
+            </figcaption>
+          </figure>
         </div>
       </section>
 

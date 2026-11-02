@@ -1,25 +1,40 @@
-import { Metadata } from "next";
 import { Reveal } from "@/components/marketing/reveal";
 import { MarketingLayout } from "@/components/marketing/layout";
 import { ContactForm } from "@/components/marketing/contact-form";
-import { Mail, MapPin, Clock, Globe, ArrowRight } from "lucide-react";
+import { Mail, MapPin, Clock, Globe, ArrowRight, Download } from "lucide-react";
+import { pageMetadata, SITE } from "@/lib/seo";
+import { JsonLd, breadcrumbSchema, organizationSchema, webPageSchema } from "@/components/seo/json-ld";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "Contact — mboqara",
-  description: "Get in touch with the mboqara team. We're based in Nairobi, Kenya. Free during founding access.",
-  openGraph: {
-    title: "Contact — mboqara",
-    description: "Get in touch with the mboqara team. Nairobi, Kenya.",
-    type: "website",
-    images: [{ url: "/media/og-cover.jpg", width: 1200, height: 630, alt: "mboqara" }],
-  },
-};
+export const metadata = pageMetadata({
+  title: "Contact MboQara — job search, CV and application tracker support",
+  description:
+    "Talk to the MboQara team in Nairobi, Kenya. Questions about job search, matching, CVs and cover letters, application tracking, privacy or the Android app — we reply.",
+  path: "/contact",
+  keywords: ["contact MboQara", "MboQara support", "MboQara help", "job app support Kenya", "career platform contact"],
+});
 
 export default function ContactPage() {
   return (
-    <MarketingLayout>
+    <>
+      <JsonLd
+        data={[
+          webPageSchema({
+            name: "Contact MboQara",
+            description:
+              "Talk to the MboQara team in Nairobi, Kenya about job search, matching, documents, application tracking and privacy.",
+            path: "/contact",
+            type: "ContactPage",
+          }),
+          organizationSchema(),
+          breadcrumbSchema([
+            { name: "Home", path: "/" },
+            { name: "Contact", path: "/contact" },
+          ]),
+        ]}
+      />
+      <MarketingLayout>
       <section className="mk-section" style={{ paddingTop: "140px" }} aria-labelledby="contact-title">
         <div className="mk-container">
           <header className="mk-section-header">
@@ -78,12 +93,16 @@ export default function ContactPage() {
           <h2 id="cta-heading" className="mk-cta__title">Ready to join the beta?</h2>
           <p className="mk-cta__text">Free during development. No credit card. Help us build the honest job search you deserve.</p>
           <div className="mk-cta__actions">
-            <a href="/download" className="mk-btn mk-btn--primary mk-btn--lg">
-              <ArrowRight aria-hidden="true" /> Get the Android app
+            <a href={SITE.playStoreUrl} target="_blank" rel="noopener noreferrer" className="mk-btn mk-btn--primary mk-btn--lg">
+              <Download aria-hidden="true" /> Get the Android app
+            </a>
+            <a href="/signup" className="mk-btn mk-btn--ghost mk-btn--lg">
+              Try the web app <ArrowRight aria-hidden="true" />
             </a>
           </div>
         </div>
       </section>
-    </MarketingLayout>
+      </MarketingLayout>
+    </>
   );
 }

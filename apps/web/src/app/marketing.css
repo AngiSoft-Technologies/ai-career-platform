@@ -1140,3 +1140,107 @@
   .jr-stories-hero__images { min-height: 320px; }
   .jr-stories-hero__image--main { inset: 0 42px 23px 0; }
 }
+
+/* ---------- Media slider (public pages) ---------- */
+.jr-media-slider .jr-media-slide {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: clamp(20px, 4vw, 56px);
+  align-items: center;
+  padding: 8px 4px 48px;
+}
+
+.jr-media-slider .jr-media-slide__figure {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--mk-radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--mk-border);
+  box-shadow: var(--mk-shadow-lg);
+  background: var(--mk-surface-solid);
+}
+
+.jr-media-slider .jr-media-slide__image {
+  object-fit: cover;
+  transform: scale(1.01);
+  transition: transform var(--mk-dur) var(--mk-ease);
+}
+
+.jr-media-slider .jr-media-slide__figure:hover .jr-media-slide__image {
+  transform: scale(1.04);
+}
+
+.jr-media-slider .jr-media-slide__title {
+  font-size: clamp(1.6rem, 3vw, 2.35rem);
+  line-height: 1.15;
+  margin: 10px 0 14px;
+  color: var(--mk-text);
+}
+
+.jr-media-slider .jr-media-slide__body {
+  color: var(--mk-text-soft);
+  font-size: 1.05rem;
+  line-height: 1.7;
+  max-width: 46ch;
+}
+
+.jr-media-slider .jr-media-slide__copy .jr-eyebrow { color: var(--mk-accent); }
+
+.jr-media-reel {
+  position: relative;
+  border-radius: var(--mk-radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--mk-border);
+  margin-top: 32px;
+  background: var(--mk-bg-elevated);
+}
+
+.jr-media-reel__video {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: var(--mk-bg);
+}
+
+.jr-media-reel__caption {
+  padding: 14px 20px;
+  color: var(--mk-text-soft);
+  font-size: 0.92rem;
+  border-top: 1px solid var(--mk-border);
+  background: var(--mk-surface);
+}
+
+/* Reduced motion: keep the pictures, drop the movement. */
+@media (prefers-reduced-motion: reduce) {
+  .jr-media-slider .jr-media-slider__image,
+  .jr-media-slider .jr-media-slider__figure:hover .jr-media-slide__image {
+    transform: none;
+    transition: none;
+  }
+  .jr-media-slider .mk-slider__viewport {
+    transition: none;
+  }
+}
+
+@media (max-width: 860px) {
+  .jr-media-slider .jr-media-slide {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+}
+
+.jr-media-slider .jr-media-slide__figure--illustration {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(16px, 4vw, 40px);
+  background: var(--mk-bg-elevated);
+}
+
+.jr-media-slider .jr-media-slide__figure--illustration svg {
+  width: 100%;
+  height: auto;
+  max-height: 320px;
+}

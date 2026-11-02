@@ -20,9 +20,15 @@ interface HeroContent {
   description: string;
 }
 
-export default function SecurityPage() {
-  const hero = useApi<HeroContent>("/content/security/hero");
-  const sections = useApi<SecuritySection[]>("/content/security");
+export default function SecurityPage({
+  initialHero = null,
+  initialSections = null,
+}: {
+  initialHero?: HeroContent | null;
+  initialSections?: SecuritySection[] | null;
+}) {
+  const hero = useApi<HeroContent>("/content/security/hero", undefined, initialHero);
+  const sections = useApi<SecuritySection[]>("/content/security", undefined, initialSections);
 
   const h = hero.data;
   const s = sections.data ?? [];

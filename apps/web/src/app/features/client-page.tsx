@@ -4,6 +4,13 @@ import Link from "next/link";
 import Image from "next/image";
 import { Reveal } from "@/components/marketing/reveal";
 import { MarketingLayout } from "@/components/marketing/layout";
+import { Slider } from "@/components/marketing/slider";
+import {
+  DiscoveryIllustration,
+  DocumentIllustration,
+  MatchIllustration,
+  TrackerIllustration,
+} from "@/components/marketing/illustrations";
 import { useApi } from "@/lib/hooks";
 import {
   Target,
@@ -47,9 +54,47 @@ function IconFromName(name: string) {
   return <Comp aria-hidden="true" />;
 }
 
-export default function FeaturesPage() {
-  const hero = useApi<HeroContent>("/content/features/hero");
-  const features = useApi<FeatureContent[]>("/content/features");
+/** Product illustrations that show what each feature actually looks like. */
+const PRODUCT_STEPS = [
+  {
+    id: "discovery",
+    Illustration: DiscoveryIllustration,
+    title: "One search, every source",
+    body:
+      "Roles from supported job boards and company career pages, filtered by what you want — role, location, work mode, experience level. No more opening nine tabs.",
+  },
+  {
+    id: "matching",
+    Illustration: MatchIllustration,
+    title: "A score that explains itself",
+    body:
+      "Your skills, experience, location and work-mode preferences compared with each role, newest roles weighted — with the reasons attached so you can judge it.",
+  },
+  {
+    id: "documents",
+    Illustration: DocumentIllustration,
+    title: "Documents drafted for the role",
+    body:
+      "A CV, resume, cover letter or application email written from your own information and shaped to that specific job. Edit it, then export to PDF or Word.",
+  },
+  {
+    id: "workspace",
+    Illustration: TrackerIllustration,
+    title: "Follow through, stage by stage",
+    body:
+      "Every application keeps its documents, notes and reminders in one workspace, so you always know the next move — online or offline on Android.",
+  },
+];
+
+export default function FeaturesPage({
+  initialHero = null,
+  initialFeatures = null,
+}: {
+  initialHero?: HeroContent | null;
+  initialFeatures?: FeatureContent[] | null;
+}) {
+  const hero = useApi<HeroContent>("/content/features/hero", undefined, initialHero);
+  const features = useApi<FeatureContent[]>("/content/features", undefined, initialFeatures);
 
   const h = hero.data;
   const f = features.data?.length ? features.data : [
@@ -98,6 +143,34 @@ export default function FeaturesPage() {
           <p>MboQara brings opportunity discovery, match insights, resume preparation and application tracking into one job-seeker workspace.</p>
           <div className="jr-feature-story__chips"><span><Search aria-hidden="true" /> Relevant roles</span><span><Target aria-hidden="true" /> Clear match details</span><span><FileText aria-hidden="true" /> Resume support</span></div>
           <Link href="/signup" className="jr-button jr-button--primary">Create my profile <ArrowRight aria-hidden="true" /></Link>
+        </div>
+      </section>
+
+      <section className="mk-section" aria-labelledby="product-reel-heading">
+        <div className="mk-container">
+          <header className="mk-section-header">
+            <span className="mk-section-eyebrow">Inside the product</span>
+            <h2 id="product-reel-heading" className="mk-section-heading">What each step actually looks like</h2>
+            <p className="mk-lede">Discovery, matching, documents and tracking — drawn as they appear in the app.</p>
+          </header>
+          <Slider
+            label="How each MboQara feature works"
+            autoPlay
+            autoPlayInterval={6000}
+            className="jr-media-slider"
+          >
+            {PRODUCT_STEPS.map(({ id, Illustration, title, body }) => (
+              <article className="jr-media-slide" key={id}>
+                <div className="jr-media-slide__figure jr-media-slide__figure--illustration">
+                  <Illustration />
+                </div>
+                <div className="jr-media-slide__copy">
+                  <h3 className="jr-media-slide__title">{title}</h3>
+                  <p className="jr-media-slide__body">{body}</p>
+                </div>
+              </article>
+            ))}
+          </Slider>
         </div>
       </section>
 
