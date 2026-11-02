@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Reveal } from "@/components/marketing/reveal";
 import { MarketingLayout } from "@/components/marketing/layout";
+import { MediaSlider, type MediaSlide } from "@/components/marketing/media-slider";
 import { useApi } from "@/lib/hooks";
 import { initials } from "@/lib/format";
 import {
@@ -19,21 +20,21 @@ import {
 
 ;
 
-interface BenefitContent {
+export interface BenefitContent {
   id: string;
   title: string;
   body: string;
   icon: string;
 }
 
-interface HeroContent {
+export interface HeroContent {
   id: string;
   title: string;
   subtitle: string;
   description: string;
 }
 
-interface TestimonialContent {
+export interface TestimonialContent {
   id: string;
   name: string;
   role: string;
@@ -41,12 +42,52 @@ interface TestimonialContent {
   tags: string[];
 }
 
-interface ComparisonColumn {
+export interface ComparisonColumn {
   id: string;
   label: string;
   items: string[];
   check: boolean;
 }
+
+/** Real photography, matched to the different job seekers we serve. */
+const ABOUT_SLIDES: MediaSlide[] = [
+  {
+    id: "technology",
+    image: "/media/careers/technology-professional.webp",
+    alt: "A technology professional working at a computer in a dark studio",
+    eyebrow: "Builders and engineers",
+    title: "People whose skills outpace their CV",
+    body:
+      "MboQara pulls the most relevant experience forward for each role, so a strong fit is not buried on page two of a document nobody rewrote.",
+  },
+  {
+    id: "engineering",
+    image: "/media/careers/engineering-professional.webp",
+    alt: "An engineering professional reviewing technical drawings",
+    eyebrow: "Technical roles",
+    title: "Roles described in specialist language",
+    body:
+      "Requirements are compared with your profile point by point, and the documents you prepare speak the language of the job description.",
+  },
+  {
+    id: "healthcare",
+    image: "/media/careers/healthcare-professional.webp",
+    alt: "A healthcare professional standing in a hospital corridor",
+    eyebrow: "Essential work",
+    title: "Careers that keep people busy all day",
+    body:
+      "Saved roles and application details stay available offline, so a job search survives a shift without signal and syncs afterwards.",
+  },
+  {
+    id: "career-change",
+    image: "/media/careers/lagos-career-story.webp",
+    alt: "A professional working on a laptop in a café",
+    eyebrow: "Career changers",
+    title: "The move from one field to another",
+    body:
+      "MboQara shows which skills actually transfer, and writes the CV that frames the change as direction rather than ambition.",
+  },
+];
 
 const ICON_MAP: Record<string, React.ElementType> = {
   Target,
@@ -62,11 +103,21 @@ function IconFromName(name: string) {
   return <Comp aria-hidden="true" />;
 }
 
-export default function AboutPage() {
-  const hero = useApi<HeroContent>("/content/about/hero");
-  const benefits = useApi<BenefitContent[]>("/content/about/benefits");
-  const comparison = useApi<ComparisonColumn[]>("/content/about/comparison");
-  const stories = useApi<TestimonialContent[]>("/content/stories");
+export default function AboutPage({
+  initialHero = null,
+  initialBenefits = null,
+  initialComparison = null,
+  initialStories = null,
+}: {
+  initialHero?: HeroContent | null;
+  initialBenefits?: BenefitContent[] | null;
+  initialComparison?: ComparisonColumn[] | null;
+  initialStories?: TestimonialContent[] | null;
+}) {
+  const hero = useApi<HeroContent>("/content/about/hero", undefined, initialHero);
+  const benefits = useApi<BenefitContent[]>("/content/about/benefits", undefined, initialBenefits);
+  const comparison = useApi<ComparisonColumn[]>("/content/about/comparison", undefined, initialComparison);
+  const stories = useApi<TestimonialContent[]>("/content/stories", undefined, initialStories);
 
   const h = hero.data;
   const b = benefits.data?.length ? benefits.data : [
@@ -112,6 +163,24 @@ export default function AboutPage() {
               <Rocket aria-hidden="true" /> Start finding jobs — free
             </Link>
           </div>
+        </div>
+      </section>
+
+      <section className="mk-section" aria-labelledby="people-heading">
+        <div className="mk-container">
+          <header className="mk-section-header">
+            <span className="mk-section-eyebrow">Who we build for</span>
+            <h2 id="people-heading" className="mk-section-heading">The people behind a job search</h2>
+            <p className="mk-lede">
+              Students, graduates, career changers and experienced professionals — each with a
+              different route to the next role.
+            </p>
+          </header>
+          <MediaSlider
+            slides={ABOUT_SLIDES}
+            label="The job seekers MboQara is built for"
+            interval={7000}
+          />
         </div>
       </section>
 

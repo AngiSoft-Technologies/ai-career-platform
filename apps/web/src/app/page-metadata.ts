@@ -1,19 +1,11 @@
-import type { Metadata } from "next";
+import { HOME_KEYWORDS, SITE, pageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Find work that fits you | mboqara",
+export const metadata = pageMetadata({
+  title: `Find work that fits you | MboQara — AI job search, tailored CVs and application tracking`,
   description:
-    "Find real jobs worldwide, tailor your resume and cover letter, and track every application in one place.",
-  openGraph: {
-    title: "mboqara",
-    description: "Find the right opportunities. Shape strong applications. Move with clarity.",
-    type: "website",
-    images: [{ url: "/media/og-cover.jpg", width: 1200, height: 630, alt: "mboqara" }],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "mboqara",
-    description: "Find the right opportunities. Shape strong applications. Move with clarity.",
-    images: ["/media/og-cover.jpg"],
-  },
-};
+    "Find live jobs and employment opportunities worldwide, see how each one fits your skills and experience, tailor your CV, resume and cover letter, and track every application — reviewed and submitted by you.",
+  path: "/",
+  keywords: HOME_KEYWORDS,
+  image: SITE.ogImage,
+  type: "website",
+});

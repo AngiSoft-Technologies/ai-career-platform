@@ -27,9 +27,15 @@ interface HeroContent {
   description: string;
 }
 
-export default function PricingPage() {
-  const hero = useApi<HeroContent>("/content/pricing/hero");
-  const plans = useApi<PlanContent[]>("/content/pricing/plans");
+export default function PricingPage({
+  initialHero = null,
+  initialPlans = null,
+}: {
+  initialHero?: HeroContent | null;
+  initialPlans?: PlanContent[] | null;
+}) {
+  const hero = useApi<HeroContent>("/content/pricing/hero", undefined, initialHero);
+  const plans = useApi<PlanContent[]>("/content/pricing/plans", undefined, initialPlans);
 
   const h = hero.data;
   const p = plans.data ?? [];

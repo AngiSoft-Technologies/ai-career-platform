@@ -20,9 +20,15 @@ interface HeroContent {
   description: string;
 }
 
-export default function FAQPage() {
-  const hero = useApi<HeroContent>("/content/faq/hero");
-  const faqs = useApi<FAQContent[]>("/content/faq");
+export default function FAQPage({
+  initialHero = null,
+  initialFaqs = null,
+}: {
+  initialHero?: HeroContent | null;
+  initialFaqs?: FAQContent[] | null;
+}) {
+  const hero = useApi<HeroContent>("/content/faq/hero", undefined, initialHero);
+  const faqs = useApi<FAQContent[]>("/content/faq", undefined, initialFaqs);
 
   const h = hero.data;
   const f = faqs.data ?? [];

@@ -1,28 +1,15 @@
-import { Metadata } from "next";
-import { Reveal } from "@/components/marketing/reveal";
-import { MarketingLayout } from "@/components/marketing/layout";
-import { useApi } from "@/lib/hooks";
-import { Smartphone, HardDrive, Zap, ShieldCheck, Download, ExternalLink, Check, ArrowRight, FileText, Globe } from "lucide-react";
+import ClientPage from "./client-page";
+import { metadata } from "./page-metadata";
+import { fetchPublicContent } from "@/lib/server-content";
+import {
+  JsonLd,
+  breadcrumbSchema,
+  mobileApplicationSchema,
+  webPageSchema,
+} from "@/components/seo/json-ld";
 
-export const dynamic = "force-dynamic";
-
-export const metadata: Metadata = {
-  title: "Download — mboqara Android App",
-  description: "Get the mboqara Android app. Browse roles, save favourites and keep your applications moving.",
-  openGraph: {
-    title: "Download — mboqara",
-    description: "mboqara for Android. Browse roles, save favourites and keep your applications moving.",
-    type: "website",
-    images: [{ url: "/media/og-cover.jpg", width: 1200, height: 630, alt: "mboqara" }],
-  },
-};
-
-interface FeatureContent {
-  id: string;
-  title: string;
-  body: string;
-  icon: string;
-}
+export { metadata };
+export const revalidate = 300;
 
 interface HeroContent {
   id: string;
@@ -31,140 +18,37 @@ interface HeroContent {
   description: string;
 }
 
-const ICON_MAP: Record<string, React.ElementType> = {
-  Smartphone,
-  HardDrive,
-  Zap,
-  ShieldCheck,
-  FileText,
-  Globe,
-};
-
-function IconFromName(name: string) {
-  const Comp = ICON_MAP[name] || Smartphone;
-  return <Comp aria-hidden="true" />;
+interface FeatureContent {
+  id: string;
+  title: string;
+  body: string;
+  icon: string;
 }
 
-export default function DownloadPage() {
-  const hero = useApi<HeroContent>("/content/download/hero");
-  const features = useApi<FeatureContent[]>("/content/download/features");
-
-  const h = hero.data;
-  const f = features.data ?? [];
+export default async function Page() {
+  const [hero, features] = await Promise.all([
+    fetchPublicContent<HeroContent>("/content/download/hero"),
+    fetchPublicContent<FeatureContent[]>("/content/download/features"),
+  ]);
 
   return (
-    <MarketingLayout>
-      <section className="mk-section mk-download" style={{ paddingTop: "140px" }} aria-labelledby="download-title">
-        <div className="mk-container">
-          <header className="mk-section-header">
-            <span className="mk-section-eyebrow">Download</span>
-            {h && (
-              <>
-                <h1 id="download-title" className="mk-heading">{h.title}</h1>
-                <p className="mk-lede">{h.description}</p>
-              </>
-            )}
-            {!h && (
-              <>
-                <h1 id="download-title" className="mk-heading">Your radar in your pocket</h1>
-                <p className="mk-lede">
-                  Browse roles, save favourites and pick up where you left off, even when your
-                  connection drops.
-                </p>
-              </>
-            )}
-          </header>
-          <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: "32px", alignItems: "flex-start" }}>
-            <Reveal delay={0}>
-              <div className="mk-frame mk-frame--phone" style={{ backgroundImage: "linear-gradient(180deg, #0a0e1a, #070b14)" }}>
-                <div className="mk-frame__bar">
-                  <div className="mk-frame__dots"><span className="mk-frame__dot" /><span className="mk-frame__dot" /><span className="mk-frame__dot" /></div>
-                  <span className="mk-frame__title">MboQara</span>
-                  <div className="mk-frame__dots" />
-                </div>
-                <div className="mk-frame__content">
-                  <div className="mk-mock-list" style={{ gap: "10px" }}>
-                    <div className="mk-mock-card"><div className="mk-mock-card__avatar" style={{ background: "var(--mk-accent-soft)", color: "var(--mk-accent)" }}><Smartphone aria-hidden="true" /></div><div className="mk-mock-card__info"><div className="mk-mock-card__title">3 new matches</div><div className="mk-mock-card__meta"><span>Updated 2m ago</span></div></div></div>
-                    <div className="mk-mock-card"><div className="mk-mock-card__avatar" style={{ background: "var(--mk-success-soft)", color: "var(--mk-success)" }}><FileText aria-hidden="true" /></div><div className="mk-mock-card__info"><div className="mk-mock-card__title">CV exported</div><div className="mk-mock-card__meta"><span>PDF ready</span></div></div></div>
-                    <div className="mk-mock-card"><div className="mk-mock-card__avatar" style={{ background: "var(--mk-info-soft)", color: "var(--mk-info)" }}><Globe aria-hidden="true" /></div><div className="mk-mock-card__info"><div className="mk-mock-card__title">Always up to date</div><div className="mk-mock-card__meta"><span>Last: 30s ago</span></div></div></div>
-                  </div>
-                </div>
-              </div>
-            </Reveal>
-            <Reveal delay={100}>
-              <div style={{ maxWidth: "420px" }}>
-                <div className="mk-download__badges">
-                  <a href="/download" className="mk-badge">
-                    <Download aria-hidden="true" /> Download for Android
-                  </a>
-                  <a href="https://play.google.com/store/apps/details?id=co.angisoft.mboqara" target="_blank" rel="noopener noreferrer" className="mk-badge">
-                    <ExternalLink aria-hidden="true" /> Get it on Google Play
-                  </a>
-                </div>
-                <div className="mk-download__features">
-                  {features.loading ? (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-                      {[1, 2, 3].map((i: number) => (
-                        <div key={i} className="mk-download__feature" style={{ opacity: 0.5 }}>
-                          <div className="mk-download__feature-icon"><HardDrive /></div>
-                          <div className="mk-download__feature-title">Loading…</div>
-                          <div className="mk-download__feature-text">Loading…</div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : f.length === 0 ? (
-                    <p style={{ color: "var(--mk-text-muted)" }}>More features coming soon.</p>
-                  ) : (
-                    f.map((feat: FeatureContent, i: number) => (
-                      <Reveal key={feat.id} delay={i * 80}>
-                        <div className="mk-download__feature">
-                          <div className="mk-download__feature-icon">{IconFromName(feat.icon)}</div>
-                          <div className="mk-download__feature-title">{feat.title}</div>
-                          <div className="mk-download__feature-text">{feat.body}</div>
-                        </div>
-                      </Reveal>
-                    ))
-                  )}
-                </div>
-              </div>
-            </Reveal>
-          </div>
-        </div>
-      </section>
-
-      <section className="mk-section" style={{ background: "var(--mk-surface)", borderTop: "1px solid var(--mk-border)", borderBottom: "1px solid var(--mk-border)" }} aria-labelledby="install-heading">
-        <div className="mk-container">
-          <header className="mk-section-header">
-            <span className="mk-section-eyebrow">Installation</span>
-            <h2 id="install-heading" className="mk-section-heading">How to install the app</h2>
-          </header>
-          <div className="mk-grid mk-grid--3">
-            {[
-              { step: "01", title: "Download", text: "Tap the button above to download the app." },
-              { step: "02", title: "Allow unknown sources", text: "Settings → Security → Allow installation from unknown sources." },
-              { step: "03", title: "Install & open", text: "Open the downloaded file, install the app and sign in with your MboQara account." },
-            ].map((s, i) => (
-              <Reveal key={s.step} delay={i * 100} className="mk-card">
-                <div className="mk-card__icon" style={{ fontSize: "2rem", color: "var(--mk-accent)" }}>{s.step}</div>
-                <h3 className="mk-card__title">{s.title}</h3>
-                <p className="mk-card__text">{s.text}</p>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="mk-section mk-cta" aria-labelledby="cta-heading">
-        <div className="mk-container">
-          <h2 id="cta-heading" className="mk-cta__title">Get the app — it's free</h2>
-          <p className="mk-cta__text">No credit card. No auto-renewal. Help us build the honest job search you deserve.</p>
-          <div className="mk-cta__actions">
-            <a href="/download" className="mk-btn mk-btn--primary mk-btn--lg">
-              <Download aria-hidden="true" /> Download for Android
-            </a>
-          </div>
-        </div>
-      </section>
-    </MarketingLayout>
+    <>
+      <JsonLd
+        data={[
+          webPageSchema({
+            name: "Download the MboQara Android app",
+            description:
+              "Get the MboQara job search app on Google Play: browse roles, save favourites, track applications and keep documents at hand, even offline.",
+            path: "/download",
+          }),
+          mobileApplicationSchema(),
+          breadcrumbSchema([
+            { name: "Home", path: "/" },
+            { name: "Download", path: "/download" },
+          ]),
+        ]}
+      />
+      <ClientPage initialHero={hero} initialFeatures={features} />
+    </>
   );
 }

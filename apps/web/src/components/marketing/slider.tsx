@@ -12,6 +12,8 @@ interface SliderProps {
   showDots?: boolean;
   className?: string;
   pauseOnHover?: boolean;
+  /** Accessible name for the carousel region. */
+  label?: string;
 }
 
 export function Slider({
@@ -22,6 +24,7 @@ export function Slider({
   showDots = true,
   className,
   pauseOnHover = true,
+  label = "Carousel",
 }: SliderProps) {
   const slides = Array.isArray(children) ? children : [children];
   const count = slides.length;
@@ -29,7 +32,9 @@ export function Slider({
   const [direction, setDirection] = useState<"next" | "prev">("next");
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const isHoveredRef = useRef(false);
+  const [hovered, setHovered] = useState(false);
+  const [hidden, setHidden] = useState(false);
+  const paused = hovered || hidden;
 
   const goTo = (i: number) => {
     setIndex(i);
@@ -44,12 +49,27 @@ export function Slider({
   const next = () => goTo(index + 1);
   const prev = () => goToPrev();
 
+  // Autoplay is paused while the pointer or keyboard focus is inside the
+  // carousel, while the tab is hidden, and whenever the visitor has asked for
+  // reduced motion.
   useEffect(() => {
-    if (!autoPlay || count <= 1) return;
+    if (!autoPlay || count <= 1 || paused) return;
+
+    const prefersReducedMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (prefersReducedMotion) return;
+
     const timer = setTimeout(next, autoPlayInterval);
     timerRef.current = timer;
     return () => clearTimeout(timer);
-  }, [index, autoPlay, autoPlayInterval, count, next]);
+  }, [index, autoPlay, autoPlayInterval, count, paused, next]);
+
+  useEffect(() => {
+    const onVisibility = () => setHidden(Boolean(document.hidden));
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
 
   // Keyboard navigation
   useEffect(() => {
@@ -61,18 +81,30 @@ export function Slider({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [prev, next]);
 
+  // Pointer, keyboard focus and a hidden tab each pause autoplay.
   useEffect(() => {
     const el = containerRef.current;
     if (!el || !pauseOnHover) return;
-    const onEnter = () => { isHoveredRef.current = true; };
-    const onLeave = () => { isHoveredRef.current = false; };
-    el.addEventListener("mouseenter", onEnter);
-    el.addEventListener("mouseleave", onLeave);
-    return () => { el.removeEventListener("mouseenter", onEnter); el.removeEventListener("mouseleave", onLeave); };
+    const stop = () => setHovered(true);
+    const resume = () => setHovered(false);
+    const onFocusIn = stop;
+    const onFocusOut = (event: FocusEvent) => {
+      if (!el.contains(event.relatedTarget as Node)) resume();
+    };
+    el.addEventListener("mouseenter", stop);
+    el.addEventListener("mouseleave", resume);
+    el.addEventListener("focusin", onFocusIn);
+    el.addEventListener("focusout", onFocusOut);
+    return () => {
+      el.removeEventListener("mouseenter", stop);
+      el.removeEventListener("mouseleave", resume);
+      el.removeEventListener("focusin", onFocusIn);
+      el.removeEventListener("focusout", onFocusOut);
+    };
   }, [pauseOnHover]);
 
   return (
-    <div ref={containerRef} className={clsx("mk-slider", className)} role="region" aria-label="Carousel" aria-roledescription="carousel">
+    <div ref={containerRef} className={clsx("mk-slider", className)} role="region" aria-label={label} aria-roledescription="carousel">
       <div className="mk-slider__viewport" style={{ transform: `translateX(-${index * 100}%)` }}>
         {slides.map((slide, i) => (
           <div key={i} className="mk-slider__slide" data-direction={direction} role="group" aria-roledescription="slide" aria-label={`Slide ${i + 1} of ${count}`}>
