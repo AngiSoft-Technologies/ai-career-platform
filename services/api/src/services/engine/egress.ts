@@ -197,8 +197,16 @@ let proxyPool: FreeProxy[] = [];
 let proxyRefreshAt = 0;
 let proxyRefreshing: Promise<void> | null = null;
 
+/**
+ * The self-discovered free proxy pool is opt-in.
+ *
+ * Our own machines already give us several distinct egress IPs across Fly
+ * regions, and public proxy lists are slow, mostly dead, and a liability for
+ * a crawler that has to stay polite. It stays available for operators who want
+ * it, but it is off by default so the common path is fast and predictable.
+ */
 function proxyEnabled(): boolean {
-  return (process.env.FREE_PROXY_ENABLED ?? "true") !== "false";
+  return (process.env.FREE_PROXY_ENABLED ?? "false") === "true";
 }
 
 async function validateProxy(proxyUrl: string): Promise<boolean> {

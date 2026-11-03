@@ -57,11 +57,9 @@ export class UserMatchingAgent extends BaseDiscoveryAgent {
       city: string | null;
       work_mode: string | null;
       skills: string[];
-      latitude: number | null;
-      longitude: number | null;
     }>(
       `SELECT dc.id, dc.title, dc.company, dc.country, dc.city, dc.work_mode,
-              dc.skills, dc.latitude, dc.longitude
+              dc.skills
          FROM discovery_candidates dc
         WHERE dc.status = 'verified'
           AND dc.imported_opportunity_id IS NULL
@@ -81,12 +79,14 @@ export class UserMatchingAgent extends BaseDiscoveryAgent {
         let score = 0;
         let reasons: string[] = [];
 
-        // Location matching
-        if (candidate.latitude != null && candidate.longitude != null && userLocation) {
-          const distance = haversineKm(userLocation, {
-            latitude: candidate.latitude,
-            longitude: candidate.longitude,
-          });
+        // Location matching. Candidates do not carry coordinates, so the
+        // city is resolved against `city_coordinates` when one is known.
+        const candidateLocation = candidate.city
+          ? await this.geocode(candidate.city)
+          : null;
+
+        if (candidateLocation && userLocation) {
+          const distance = haversineKm(userLocation, candidateLocation);
           if (distance <= userRadius) {
             score += 40;
             reasons.push(`~${Math.round(distance)} km from you`);
@@ -150,5 +150,23 @@ export class UserMatchingAgent extends BaseDiscoveryAgent {
       error: errors.length > 0 ? errors.join("; ") : undefined,
       payload: { usersProcessed: users.rows.length, candidatesMatched: candidates.rows.length, totalMatches },
     };
+  }
+
+  /** Resolves a city name to coordinates from the seeded city table. */
+  private async geocode(
+    city: string,
+  ): Promise<{ latitude: number; longitude: number } | null> {
+    const result = await query<{ latitude: number; longitude: number }>(
+      `SELECT latitude, longitude
+         FROM city_coordinates
+        WHERE lower(city_name) = lower($1)
+           OR lower(city_name) LIKE lower($1) || '%'
+        LIMIT 1`,
+      [city],
+    ).catch(() => ({ rows: [] as Array<{ latitude: number; longitude: number }> }));
+
+    const row = result.rows[0];
+    if (!row) return null;
+    return { latitude: Number(row.latitude), longitude: Number(row.longitude) };
   }
 }

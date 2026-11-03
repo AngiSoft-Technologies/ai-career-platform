@@ -63,7 +63,7 @@ export class LearningAgent extends BaseDiscoveryAgent {
       SELECT
         source_platform, total, imported, verified, duplicates, rejected,
         ROUND(
-          (imported::float * 1.0 + verified::float * 0.5) / NULLIF(total::float, 0) * 100,
+          (imported::numeric * 1.0 + verified::numeric * 0.5) / NULLIF(total::numeric, 0) * 100,
           2
         ) as quality_score,
         now()

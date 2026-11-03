@@ -52,11 +52,18 @@ export class DeduplicationAgent extends BaseDiscoveryAgent {
     let totalRejected = 0;
 
     // Check against existing opportunities
+    const batchIds = candidates.rows.map((c) => c.id);
     const opportunityFingerprints = candidates.rows
       .map((c) => c.fingerprint)
       .filter((f): f is string => Boolean(f));
     const existingOpps = await this.fingerprintExists(opportunityFingerprints);
-    const existingCandidates = await this.candidateFingerprintExists(opportunityFingerprints);
+    // Exclude this batch's own rows: otherwise a candidate matches itself and
+    // every single one is classified as a duplicate, so nothing is ever
+    // promoted. Within-batch duplicates are handled by `seenInBatch` below.
+    const existingCandidates = await this.candidateFingerprintExists(
+      opportunityFingerprints,
+      batchIds,
+    );
 
     // Within-batch dedup: track fingerprints seen in this batch
     const seenInBatch = new Set<string>();
@@ -282,15 +289,21 @@ export class DeduplicationAgent extends BaseDiscoveryAgent {
   }
 
   /**
-   * Checks whether a fingerprint already exists in discovery_candidates.
+   * Checks whether a fingerprint already exists in a discovery candidate we
+   * are *not* currently deciding on. Rows in the current batch are excluded —
+   * otherwise every candidate trivially matches itself and nothing verifies.
    */
   private async candidateFingerprintExists(
     fingerprints: string[],
+    excludeIds: string[],
   ): Promise<Set<string>> {
     if (fingerprints.length === 0) return new Set();
     const result = await query<{ fingerprint: string }>(
-      `SELECT fingerprint FROM discovery_candidates WHERE fingerprint = ANY($1::text[])`,
-      [fingerprints],
+      `SELECT fingerprint
+         FROM discovery_candidates
+        WHERE fingerprint = ANY($1::text[])
+          AND NOT (id = ANY($2::uuid[]))`,
+      [fingerprints, excludeIds],
     );
     return new Set(result.rows.map((row) => row.fingerprint));
   }

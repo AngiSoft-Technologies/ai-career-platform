@@ -3,22 +3,24 @@ import { logger } from "../../logger.js";
 import { BaseDiscoveryAgent, type AgentContext, type AgentRunResult } from "./base.js";
 import { searchWeb } from "../engine/search.js";
 import { buildDiscoveryQueries, type QuerySeeds } from "../engine/discover.js";
+import { pooled } from "../engine/index.js";
 
 /**
  * Search Engine Discovery Agent.
  *
- * Uses our own ported search stack (`services/engine/search.ts`): ACE's
- * DuckDuckGo HTML scraper (pagination + anti-bot retries), their multi-instance
- * SearXNG client, and a Bing HTML fallback — all through our own egress pool.
+ * Uses our own search stack (`services/engine/search.ts`): the DuckDuckGo HTML
+ * client with pagination and anti-bot retries, the multi-instance SearXNG
+ * client, and a Bing HTML fallback — all over our own egress.
  *
  * Queries are NOT a fixed list. Every run rebuilds them from:
  *   • what users actually want (desired roles, skills, preferred countries)
  *   • the profession taxonomy
  *   • domains learned by previous runs and the expansion agent
- *   • a few exploration queries that force brand-new domains to surface
+ *   • exploration queries that force brand-new domains to surface
  *
- * The agent turns results into `discovery_search_results` rows; the browse
- * agent reads them next.
+ * Results become `discovery_search_results` rows, which the browse agent reads
+ * next. The whole run is bounded by a wall-clock budget so a rate-limited
+ * engine can never stall the rest of the discovery cycle.
  */
 export class SearchEngineAgent extends BaseDiscoveryAgent {
   readonly key = "search_engine_agent";
@@ -48,61 +50,95 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
         )
       : [];
 
-    const queries = [...new Set([...configured, ...generated])].slice(0, 30);
+    // A cycle has a budget. A modest cap keeps the whole run inside a few
+    // minutes even when engines rate-limit us; the next cycle builds
+    // different queries, so coverage keeps expanding.
+    const maxQueries = Number(ctx.config.max_queries_per_run ?? 12);
+    const concurrency = Number(ctx.config.concurrency ?? 4);
+    const budgetMs = Number(ctx.config.budget_ms ?? 150_000);
+
+    const queries = [...new Set([...configured, ...generated])].slice(
+      0,
+      Math.max(1, maxQueries),
+    );
+
+    const started = Date.now();
+    const deadline = started + budgetMs;
 
     let totalFetched = 0;
     let totalStored = 0;
     let totalDuplicate = 0;
+    let timedOut = false;
     const errors: string[] = [];
     const engines = new Set<string>();
 
-    for (const queryText of queries) {
-      try {
-        const results = await searchWeb(queryText, {
-          limit: maxResultsPerQuery,
-          country,
-          freshness,
-        });
-        totalFetched += results.length;
-
-        for (const result of results) {
-          engines.add(result.engine);
-          try {
-            // The unique index on source_url makes this an upsert: a URL that
-            // was already seen is simply not re-queued.
-            const inserted = await query<{ id: string }>(
-              `INSERT INTO discovery_search_results
-                  (agent_id, query, source_platform, source_url, title, snippet, fetched_at)
-               VALUES ($1, $2, $3, $4, $5, $6, now())
-               ON CONFLICT (source_url) DO NOTHING
-               RETURNING id`,
-              [
-                ctx.agentId,
-                queryText,
-                result.engine,
-                result.url,
-                result.title.slice(0, 500),
-                result.description.slice(0, 1_500),
-              ],
-            );
-            if (inserted.rows.length > 0) totalStored += 1;
-            else totalDuplicate += 1;
-          } catch (insertError) {
-            errors.push(
-              `Insert failed for ${result.url}: ${
-                insertError instanceof Error ? insertError.message : String(insertError)
-              }`,
-            );
-          }
+    const settle = await pooled(
+      queries,
+      concurrency,
+      async (queryText) => {
+        // Stop starting new work once the budget is spent; in-flight ones
+        // still finish and are counted.
+        if (Date.now() > deadline) {
+          timedOut = true;
+          return null;
         }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        errors.push(`Search failed for "${queryText}": ${message}`);
-        logger.warn({ query: queryText, error: message }, "Search query failed");
+
+        try {
+          const remaining = Math.max(5_000, deadline - Date.now());
+          const results = await searchWeb(queryText, {
+            limit: maxResultsPerQuery,
+            country,
+            freshness,
+            timeoutMs: Math.min(remaining, 45_000),
+          });
+          return { queryText, results };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          logger.debug({ query: queryText, error: message }, "Search query failed");
+          errors.push(`Search failed for "${queryText}": ${message}`);
+          return null;
+        }
+      },
+    );
+
+    for (const result of settle) {
+      if (result.status !== "fulfilled" || !result.value) continue;
+      const { queryText, results } = result.value;
+      totalFetched += results.length;
+
+      for (const result of results) {
+        engines.add(result.engine);
+        try {
+          // The unique index on source_url makes this an upsert: a URL we have
+          // already seen is not re-queued.
+          const inserted = await query<{ id: string }>(
+            `INSERT INTO discovery_search_results
+                (agent_id, query, source_platform, source_url, title, snippet, fetched_at)
+             VALUES ($1, $2, $3, $4, $5, $6, now())
+             ON CONFLICT (source_url) DO NOTHING
+             RETURNING id`,
+            [
+              ctx.agentId,
+              queryText,
+              result.engine,
+              result.url,
+              result.title.slice(0, 500),
+              result.description.slice(0, 1_500),
+            ],
+          );
+          if (inserted.rows.length > 0) totalStored += 1;
+          else totalDuplicate += 1;
+        } catch (insertError) {
+          errors.push(
+            `Insert failed for ${result.url}: ${
+              insertError instanceof Error ? insertError.message : String(insertError)
+            }`,
+          );
+        }
       }
     }
 
-    // Record which engines actually returned data, so the learning agent can
+    // Record which engines actually returned data so the learning agent can
     // deprioritise blocked ones on this host.
     for (const engine of engines) {
       await query(
@@ -123,6 +159,8 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
       error: errors.length > 0 ? errors.slice(0, 10).join("; ") : undefined,
       payload: {
         queriesProcessed: queries.length,
+        elapsedMs: Date.now() - started,
+        budgetExceeded: timedOut,
         engines: [...engines],
         seedRoles: seeds.roles.slice(0, 10),
         seedCountries: seeds.countries,

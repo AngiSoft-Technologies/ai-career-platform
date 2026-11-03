@@ -47,6 +47,7 @@ COPY --from=build /app/services/api/package.json services/api/package.json
 COPY --from=build /app/services/api/dist services/api/dist
 COPY --from=build /app/packages/contracts packages/contracts
 COPY db db
+COPY services/api/skills services/api/skills
 
 WORKDIR /app/services/api
 

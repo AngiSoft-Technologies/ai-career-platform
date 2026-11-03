@@ -29,52 +29,101 @@ export async function runIngestion(): Promise<{
   expired: number;
   error?: string;
 }> {
-  // 1. Agents (direct feeds first, then search → browse)
-  const agentResult = await runDiscoveryAgents();
+  // 1. Agents (direct feeds first, then search → browse → expansion).
+  //
+  // Discovery is deliberately isolated: it is slow by nature and any failure
+  // here must not stop verified candidates from reaching the catalogue. The
+  // next cycle retries discovery on its own.
+  let agentResult: Awaited<ReturnType<typeof runDiscoveryAgents>>;
+  try {
+    agentResult = await runDiscoveryAgents();
+  } catch (error) {
+    logger.error(
+      { error: error instanceof Error ? error.message : String(error) },
+      "Discovery agents failed this cycle; promotion will still run",
+    );
+    agentResult = {
+      status: "partial",
+      fetched: 0,
+      inserted: 0,
+      updated: 0,
+      failed: 1,
+      error: error instanceof Error ? error.message : "DISCOVERY_FAILED",
+    };
+  }
 
-  // 2–3. Deduplicate + promote. Promotion must run even when the dedup agent
-  // was not due on this tick, otherwise verified rows sit forever.
+  // 2–3. Deduplicate + promote. Promotion must run even when the discovery
+  // phase failed or the dedup agent was not due on this tick.
   const dedup = new DeduplicationAgent();
+  let promotion = { promoted: 0, failed: 0 };
   const dedupRow = await query<{ id: string }>(
     `SELECT id FROM discovery_agents WHERE key = $1 AND status = 'active'`,
     [dedup.key],
-  );
-  const dedupAgentId = dedupRow.rows[0]?.id;
-  if (dedupAgentId) {
-    const dedupResult = await dedup.run({
-      agentId: dedupAgentId,
-      agentKey: dedup.key,
-      config: dedup.agentConfig,
-    });
-    await dedup.recordRun(dedupResult);
-  }
+  ).catch(() => ({ rows: [] as Array<{ id: string }> }));
 
-  const promotion = await dedup.promoteVerifiedCandidates();
+  try {
+    const dedupAgentId = dedupRow.rows[0]?.id;
+    if (dedupAgentId) {
+      const dedupResult = await dedup.run({
+        agentId: dedupAgentId,
+        agentKey: dedup.key,
+        config: dedup.agentConfig,
+      });
+      await dedup.recordRun(dedupResult);
+    }
+    promotion = await dedup.promoteVerifiedCandidates();
+  } catch (error) {
+    logger.error(
+      { error: error instanceof Error ? error.message : String(error) },
+      "Deduplication or promotion failed this cycle",
+    );
+  }
 
   // 4. Eligibility. Applied after promotion so it never blocks ingestion, and
   //    stored as columns the feed can filter and explain on.
-  const eligibility = await applyEligibility();
+  let eligibility = 0;
+  try {
+    eligibility = await applyEligibility();
+  } catch (error) {
+    logger.warn(
+      { error: error instanceof Error ? error.message : String(error) },
+      "Eligibility scoring failed this cycle",
+    );
+  }
 
-  // 5. Freshness: expire listings that no longer advertise a vacancy, and
-  //    drop anything whose body no longer looks like a job at all.
-  const expired = await query(
-    `UPDATE opportunities
-        SET status = 'expired'
-      WHERE status = 'active'
-        AND (
-          posted_at < now() - interval '60 days'
-          OR (
-            description IS NOT NULL
-            AND length(description) > 200
-            AND description !~* '(apply|hiring|vacanc|responsibilit|qualification|requirement)'
-            AND updated_at < now() - interval '14 days'
-          )
-        )`,
-  );
+  // 5. Freshness: expire listings that no longer advertise a vacancy.
+  let expiredCount = 0;
+  try {
+    const expired = await query(
+      `UPDATE opportunities
+          SET status = 'expired'
+        WHERE status = 'active'
+          AND (
+            posted_at < now() - interval '60 days'
+            OR (
+              description IS NOT NULL
+              AND length(description) > 200
+              AND description !~* '(apply|hiring|vacanc|responsibilit|qualification|requirement)'
+              AND updated_at < now() - interval '14 days'
+            )
+          )`,
+    );
+    expiredCount = expired.rowCount ?? 0;
+  } catch (error) {
+    logger.warn(
+      { error: error instanceof Error ? error.message : String(error) },
+      "Stale opportunity expiry failed this cycle",
+    );
+  }
 
   // 6. Flip sources that stopped producing anything to a backoff state rather
   //    than re-crawling a dead board every cycle.
-  const quietedSources = await quietEmptySources();
+  let quietedSources = 0;
+  try {
+    quietedSources = await quietEmptySources();
+  } catch {
+    // Purely advisory; never fails a cycle.
+  }
 
   logger.info(
     {
@@ -82,7 +131,7 @@ export async function runIngestion(): Promise<{
       candidatesPromoted: promotion.promoted,
       promotionFailures: promotion.failed,
       eligibilityScored: eligibility,
-      expired: expired.rowCount ?? 0,
+      expired: expiredCount,
       sourcesBackedOff: quietedSources,
     },
     "Ingestion cycle complete",
@@ -91,7 +140,7 @@ export async function runIngestion(): Promise<{
   return {
     ...agentResult,
     inserted: agentResult.inserted + promotion.promoted,
-    expired: expired.rowCount ?? 0,
+    expired: expiredCount,
   };
 }
 
