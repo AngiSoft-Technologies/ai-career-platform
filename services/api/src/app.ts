@@ -28,6 +28,8 @@ import { v1Router } from "./routes/v1.js";
 import { authRouter } from "./routes/auth.js";
 import { webhookRouter } from "./routes/webhooks.js";
 import { n8nRouter } from "./routes/n8n.js";
+import { agentRouter } from "./routes/agent.js";
+import { internalRouter } from "./routes/internal.js";
 import { API_VERSION, API_VERSION_HEADER } from "./version.js";
 
 export const app = express();
@@ -207,6 +209,10 @@ app.use(flyReplayMiddleware);
  */
 app.use("/v1/auth", authRouter);
 app.use("/api/v1/auth", authRouter);
+
+app.use("/v1/agent", agentRouter);
+app.use("/api/v1/agent", agentRouter);
+app.use("/internal", internalRouter);
 
 app.use(identity);
 app.use("/v1/mcp", mcpRouter);

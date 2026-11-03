@@ -1,0 +1,37 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "npm run build -w @angisoft/mboqara-contracts && npm run build",
+  "regions": ["cpt1"],
+  "crons": [
+    {
+      "path": "/api/cron/refresh-jobs",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/ai-insights",
+      "schedule": "0 */6 * * *"
+    }
+  ],
+  "functions": {
+    "app/api/agent/**/*.ts": {
+      "maxDuration": 60,
+      "memory": 1024
+    }
+  },
+  "headers": [
+    {
+      "source": "/sw.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" },
+        { "key": "Service-Worker-Allowed", "value": "/" }
+      ]
+    },
+    {
+      "source": "/manifest.webmanifest",
+      "headers": [
+        { "key": "Content-Type", "value": "application/manifest+json" }
+      ]
+    }
+  ]
+}

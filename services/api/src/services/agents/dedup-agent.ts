@@ -165,24 +165,48 @@ export class DeduplicationAgent extends BaseDiscoveryAgent {
 
     for (const row of verified.rows) {
       try {
-        // Insert into opportunities
+        // opportunities.company_id is NOT NULL. Discovered jobs come from
+        // arbitrary employers, so upsert a company row first (slug is unique).
+        const companyName = (row.company ?? "Unknown employer").trim() || "Unknown employer";
+        const slug =
+          companyName
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "")
+            .slice(0, 80) || `company-${row.id.slice(0, 8)}`;
+
+        const companyResult = await query<{ id: string }>(
+          `INSERT INTO companies (name, slug)
+           VALUES ($1, $2)
+           ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, updated_at = now()
+           RETURNING id`,
+          [companyName.slice(0, 200), slug],
+        );
+        const companyId = companyResult.rows[0]?.id;
+        if (!companyId) throw new Error("Could not resolve company");
+
+        const simhash =
+          row.simhash && /^\d+$/.test(row.simhash) ? BigInt(row.simhash) : BigInt(0);
+
         const result = await query<{ id: string }>(
           `INSERT INTO opportunities
-              (source_id, external_id, title, description, country, city,
+              (company_id, source_id, external_id, title, description, country, city,
                work_mode, seniority, employment_type, salary_min, salary_max,
                currency, apply_url, application_method, platform, posted_at,
                status, simhash, fingerprint, risk_score, risk_flags,
                risk_action, risk_scored_at, created_at, updated_at)
            VALUES (
-             (SELECT id FROM job_sources WHERE adapter = $2 LIMIT 1),
+             $1, (SELECT id FROM job_sources WHERE type = 'aggregator' AND url = $2 LIMIT 1),
              $3, $4, $5, $6, $7, $8, 'mid', $9, $10, $11, $12, $13, 'website',
              $14, $15, 'active', $16::bigint, $17, 0, '{}', 'publish', now(),
              now(), now()
            )
+           ON CONFLICT DO NOTHING
            RETURNING id`,
           [
-            row.source_platform,
-            row.external_id,
+            companyId,
+            `https://${row.source_platform}.com`,
+            row.external_id || row.source_url,
             row.title,
             row.description ?? "",
             row.country ?? "Remote",
@@ -192,15 +216,16 @@ export class DeduplicationAgent extends BaseDiscoveryAgent {
             row.salary_min,
             row.salary_max,
             row.currency ?? "USD",
-            row.apply_url,
-            row.skills,
+            row.apply_url ?? row.source_url,
+            row.source_platform,
             row.posted_at ?? new Date(),
-            row.simhash ? BigInt(row.simhash) : BigInt(0),
+            simhash,
             row.fingerprint,
           ],
         );
 
         const opportunityId = result.rows[0]?.id;
+
         if (opportunityId) {
           // Insert skills
           if (row.skills.length > 0) {
@@ -220,6 +245,14 @@ export class DeduplicationAgent extends BaseDiscoveryAgent {
             [opportunityId, row.id],
           );
           promoted += 1;
+        } else {
+          // ON CONFLICT DO NOTHING: already imported under the same source.
+          await query(
+            `UPDATE discovery_candidates
+                SET status = 'duplicate', updated_at = now()
+              WHERE id = $1`,
+            [row.id],
+          );
         }
       } catch (error) {
         failed += 1;

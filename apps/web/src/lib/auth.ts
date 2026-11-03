@@ -334,7 +334,7 @@ export async function signInWithGoogle(next = "/dashboard"): Promise<boolean> {
   if (typeof window === "undefined") return false;
   rememberNextPath(next);
   const redirectUri = encodeURIComponent(webAuthCallbackUrl());
-  window.location.assign(`${API_URL}/auth/google/start?redirect_uri=${redirectUri}`);
+  window.location.assign(`${API_URL}/v1/auth/google/start?redirect_uri=${redirectUri}`);
   return true;
 }
 
@@ -349,7 +349,7 @@ export async function linkGoogle(next = "/settings"): Promise<boolean> {
   const token = await getToken();
   if (!token) return false;
 
-  const response = await fetch(`${API_URL}/auth/google/link-ticket`, {
+  const response = await fetch(`${API_URL}/v1/auth/google/link-ticket`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -368,7 +368,7 @@ export async function linkGoogle(next = "/settings"): Promise<boolean> {
   rememberNextPath(next);
   const redirectUri = encodeURIComponent(webAuthCallbackUrl());
   window.location.assign(
-    `${API_URL}/auth/google/link/start?ticket=${encodeURIComponent(payload.ticket)}&redirect_uri=${redirectUri}`,
+    `${API_URL}/v1/auth/google/link/start?ticket=${encodeURIComponent(payload.ticket)}&redirect_uri=${redirectUri}`,
   );
   return true;
 }

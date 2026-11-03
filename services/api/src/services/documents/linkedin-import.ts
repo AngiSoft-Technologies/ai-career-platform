@@ -1,4 +1,4 @@
-import { FirecrawlClient } from "../firecrawl/client.js";
+import { scrapeUrl } from "../engine/fetch.js";
 import { query } from "../../db/pool.js";
 import { runAtsVerification } from "./ats-agent.js";
 import { structureResumeText } from "./extract.js";
@@ -23,14 +23,10 @@ export async function importLinkedInByUrl(input: {
   userId: string;
   profileUrl: string;
 }): Promise<LinkedInImportResult> {
-  const client = new FirecrawlClient();
-  if (!client.isConfigured) {
-    throw new Error(
-      "Profile import is not configured. Upload your resume or build it manually instead.",
-    );
-  }
-
-  const scraped = await client.scrape(input.profileUrl);
+  const scraped = await scrapeUrl(input.profileUrl, {
+    onlyMainContent: true,
+    preferProxy: true,
+  }).catch(() => null);
   const markdown = scraped?.markdown ?? "";
   if (markdown.trim().length < 120) {
     throw new Error(

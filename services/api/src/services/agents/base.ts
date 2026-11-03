@@ -42,12 +42,13 @@ export abstract class BaseDiscoveryAgent {
   abstract run(ctx: AgentContext): Promise<AgentRunResult>;
 
   async recordRun(result: AgentRunResult): Promise<void> {
-    const client = await query("BEGIN");
     try {
       await query(
         `INSERT INTO discovery_agent_runs
             (agent_id, started_at, finished_at, status, jobs_found, jobs_new, jobs_duplicate, error, payload)
-         VALUES ($1, now(), now(), $2, $3, $4, $5, $6, $7)`,
+         SELECT id, now(), now(), $2, $3, $4, $5, $6, $7
+           FROM discovery_agents
+          WHERE key = $1`,
         [
           this.key,
           result.status,
@@ -69,10 +70,7 @@ export abstract class BaseDiscoveryAgent {
           WHERE key = $1`,
         [this.key, result.status, result.jobsFound],
       );
-
-      await query("COMMIT");
     } catch (error) {
-      await query("ROLLBACK");
       logger.error(
         { agent: this.key, error },
         "Failed to record discovery agent run",

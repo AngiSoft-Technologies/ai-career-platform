@@ -1,21 +1,24 @@
 import { query } from "../../db/pool.js";
-import { firecrawl } from "../firecrawl/client.js";
-import { config } from "../../config.js";
+import { logger } from "../../logger.js";
 import { BaseDiscoveryAgent, type AgentContext, type AgentRunResult } from "./base.js";
+import { searchWeb } from "../engine/search.js";
+import { buildDiscoveryQueries, type QuerySeeds } from "../engine/discover.js";
 
 /**
- * Search Engine Agent
+ * Search Engine Discovery Agent.
  *
- * Discovers job opportunities across the ENTIRE web using Firecrawl search
- * (primary) and DuckDuckGo / SearXNG (fallback). No hardcoded source lists —
- * new platforms (LinkedIn, Facebook, NGO sites, company career pages,
- * Twitter, job boards, etc.) are found dynamically through search queries.
+ * Uses our own ported search stack (`services/engine/search.ts`): ACE's
+ * DuckDuckGo HTML scraper (pagination + anti-bot retries), their multi-instance
+ * SearXNG client, and a Bing HTML fallback — all through our own egress pool.
  *
- * MVP focus: Africa — queries target jobs worldwide that African citizens
- * can work on (remote, onsite, hybrid), plus Africa-specific job sites.
+ * Queries are NOT a fixed list. Every run rebuilds them from:
+ *   • what users actually want (desired roles, skills, preferred countries)
+ *   • the profession taxonomy
+ *   • domains learned by previous runs and the expansion agent
+ *   • a few exploration queries that force brand-new domains to surface
  *
- * Output: raw search results stored in `discovery_search_results` for the
- * BrowseAgent to visit and extract full job details via Firecrawl scrape.
+ * The agent turns results into `discovery_search_results` rows; the browse
+ * agent reads them next.
  */
 export class SearchEngineAgent extends BaseDiscoveryAgent {
   readonly key = "search_engine_agent";
@@ -24,115 +27,92 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
   readonly scheduleIntervalMinutes = 60;
 
   async run(ctx: AgentContext): Promise<AgentRunResult> {
-    const queries =
-      (ctx.config.queries as string[] ??
-        [
-          "site:linkedin.com/jobs Africa hiring remote",
-          "site:brightermonday.co.ke jobs",
-          "site:ajira.org jobs Kenya",
-          "NGO jobs Africa remote",
-          "remote jobs Africa hiring",
-          "site:facebook.com jobs Africa",
-          "UN jobs Africa",
-          "World Bank jobs Africa careers",
-          "remote software engineer jobs Africa",
-          "remote jobs African citizens worldwide",
-        ]);
-    const maxResultsPerQuery =
-      Number(ctx.config.max_results_per_query ?? 10);
+    const maxResultsPerQuery = Number(ctx.config.max_results_per_query ?? 8);
+    const country = String(ctx.config.country ?? "ke");
+    const freshness =
+      ctx.config.freshness === "day" ||
+      ctx.config.freshness === "week" ||
+      ctx.config.freshness === "month" ||
+      ctx.config.freshness === "year"
+        ? ctx.config.freshness
+        : "week";
+
+    const seeds = await this.loadSeeds();
+    const generated = buildDiscoveryQueries(seeds);
+
+    // Operators can pin extra queries in the agent config; they are additive,
+    // never a replacement for generated discovery.
+    const configured = Array.isArray(ctx.config.queries)
+      ? (ctx.config.queries as unknown[]).filter(
+          (value): value is string => typeof value === "string" && value.trim().length > 0,
+        )
+      : [];
+
+    const queries = [...new Set([...configured, ...generated])].slice(0, 30);
 
     let totalFetched = 0;
     let totalStored = 0;
     let totalDuplicate = 0;
     const errors: string[] = [];
+    const engines = new Set<string>();
 
     for (const queryText of queries) {
-      // Try Firecrawl search first
-      let results: Array<{ url: string; title: string; description: string }> =
-        [];
+      try {
+        const results = await searchWeb(queryText, {
+          limit: maxResultsPerQuery,
+          country,
+          freshness,
+        });
+        totalFetched += results.length;
 
-      if (firecrawl.isConfigured) {
-        try {
-          const firecrawlResults = await firecrawl.search(
-            queryText,
-            maxResultsPerQuery,
-          );
-          results = firecrawlResults.map((r) => ({
-            url: r.url,
-            title: r.title,
-            description: r.description,
-          }));
-        } catch (error) {
-          errors.push(
-            `Firecrawl search failed for "${queryText}": ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          );
-        }
-      }
-
-      // Fallback to DuckDuckGo if Firecrawl unavailable or empty
-      if (results.length === 0) {
-        try {
-          const ddgResults = await this.duckDuckGoSearch(
-            queryText,
-            maxResultsPerQuery,
-          );
-          results = ddgResults;
-        } catch (error) {
-          errors.push(
-            `DuckDuckGo search failed for "${queryText}": ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          );
-        }
-      }
-
-      totalFetched += results.length;
-
-      for (const result of results) {
-        try {
-          const existing = await query<{ id: string }>(
-            `SELECT id FROM discovery_search_results WHERE source_url = $1`,
-            [result.url],
-          );
-          if (existing.rows.length > 0) {
-            totalDuplicate += 1;
-            continue;
+        for (const result of results) {
+          engines.add(result.engine);
+          try {
+            // The unique index on source_url makes this an upsert: a URL that
+            // was already seen is simply not re-queued.
+            const inserted = await query<{ id: string }>(
+              `INSERT INTO discovery_search_results
+                  (agent_id, query, source_platform, source_url, title, snippet, fetched_at)
+               VALUES ($1, $2, $3, $4, $5, $6, now())
+               ON CONFLICT (source_url) DO NOTHING
+               RETURNING id`,
+              [
+                ctx.agentId,
+                queryText,
+                result.engine,
+                result.url,
+                result.title.slice(0, 500),
+                result.description.slice(0, 1_500),
+              ],
+            );
+            if (inserted.rows.length > 0) totalStored += 1;
+            else totalDuplicate += 1;
+          } catch (insertError) {
+            errors.push(
+              `Insert failed for ${result.url}: ${
+                insertError instanceof Error ? insertError.message : String(insertError)
+              }`,
+            );
           }
-
-          await query(
-            `INSERT INTO discovery_search_results
-                (agent_id, query, source_platform, source_url, title, snippet, fetched_at)
-             VALUES ($1, $2, $3, $4, $5, $6, now())`,
-            [
-              ctx.agentId,
-              queryText,
-              result.url.includes("linkedin.com")
-                ? "linkedin"
-                : result.url.includes("facebook.com")
-                  ? "facebook"
-                  : result.url.includes("brightermonday")
-                    ? "brightermonday"
-                    : result.url.includes("ajira")
-                      ? "ajira"
-                      : "web",
-              result.url,
-              result.title ?? null,
-              result.description ?? null,
-            ],
-          );
-          totalStored += 1;
-        } catch (insertError) {
-          errors.push(
-            `Insert failed for ${result.url}: ${
-              insertError instanceof Error
-                ? insertError.message
-                : String(insertError)
-            }`,
-          );
         }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        errors.push(`Search failed for "${queryText}": ${message}`);
+        logger.warn({ query: queryText, error: message }, "Search query failed");
       }
+    }
+
+    // Record which engines actually returned data, so the learning agent can
+    // deprioritise blocked ones on this host.
+    for (const engine of engines) {
+      await query(
+        `INSERT INTO discovery_source_quality (source_platform, total_jobs, updated_at)
+         VALUES ($1, $2, now())
+         ON CONFLICT (source_platform) DO UPDATE
+           SET total_jobs = discovery_source_quality.total_jobs + EXCLUDED.total_jobs,
+               updated_at = now()`,
+        [engine, totalStored],
+      ).catch(() => undefined);
     }
 
     return {
@@ -140,111 +120,102 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
       jobsFound: totalFetched,
       jobsNew: totalStored,
       jobsDuplicate: totalDuplicate,
-      error: errors.length > 0 ? errors.join("; ") : undefined,
+      error: errors.length > 0 ? errors.slice(0, 10).join("; ") : undefined,
       payload: {
         queriesProcessed: queries.length,
-        firecrawlConfigured: firecrawl.isConfigured,
+        engines: [...engines],
+        seedRoles: seeds.roles.slice(0, 10),
+        seedCountries: seeds.countries,
       },
     };
   }
 
   /**
-   * DuckDuckGo HTML search fallback (modeled after Firecrawl's ddgsearch.ts).
-   * Scrapes html.duckduckgo.com with rotating user agents and anti-bot handling.
+   * Seeds come from live product data. If nobody has a profile yet we fall
+   * back to the profession taxonomy, which is itself data-driven.
    */
-  private async duckDuckGoSearch(
-    query: string,
-    limit: number,
-  ): Promise<Array<{ url: string; title: string; description: string }>> {
-    const userAgents = [
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15",
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0",
-    ];
-
-    const userAgent =
-      userAgents[Math.floor(Math.random() * userAgents.length)]!;
-
-    const params = new URLSearchParams({ q: query, kp: "1" });
-    const url = `https://html.duckduckgo.com/html?${params.toString()}`;
+  private async loadSeeds(): Promise<QuerySeeds> {
+    const roles = new Set<string>();
+    const skills = new Set<string>();
+    const countries = new Set<string>();
 
     try {
-      const response = await fetch(url, {
-        headers: {
-          "User-Agent": userAgent,
-          Accept:
-            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "Accept-Language": "en-US,en;q=0.5",
-          "Accept-Encoding": "gzip, deflate, br",
-          "Upgrade-Insecure-Requests": "1",
-        },
-        signal: AbortSignal.timeout(20_000),
-      });
-
-      if (!response.ok) {
-        throw new Error(`DDG HTTP ${response.status}`);
+      const profiles = await query<{
+        desired_roles: string[] | null;
+        country: string | null;
+        preferred_countries: string[] | null;
+      }>(
+        `SELECT desired_roles, country, preferred_countries
+           FROM candidate_profiles
+          ORDER BY updated_at DESC
+          LIMIT 200`,
+      );
+      for (const row of profiles.rows) {
+        for (const role of row.desired_roles ?? []) roles.add(role);
+        if (row.country) countries.add(row.country);
+        for (const country of row.preferred_countries ?? []) countries.add(country);
       }
-
-      const html = await response.text();
-
-      // Check for anti-bot
-      if (html.includes("anomaly-modal")) {
-        throw new Error("DDG anti-bot detected");
-      }
-
-      const results: Array<{ url: string; title: string; description: string }> =
-        [];
-
-      // Parse result links — DuckDuckGo uses .result__a for titles and .result__snippet for descriptions
-      const resultRegex =
-        /<a rel="nofollow" class="result__a" href="([^"]+)"[^>]*>([^<]+)<\/a>/g;
-      const snippetRegex = /<a class="result__snippet"[^>]*>([^<]+)<\/a>/g;
-
-      const titles: string[] = [];
-      const urls: string[] = [];
-      const snippets: string[] = [];
-
-      let match: RegExpExecArray | null;
-      while ((match = resultRegex.exec(html)) !== null) {
-        let rawUrl = match[1]!;
-        const title = match[2]!.trim();
-
-        // DuckDuckGo wraps URLs in uddg parameter
-        if (rawUrl.includes("uddg=")) {
-          try {
-            const uddgUrl = new URL(rawUrl, "https://duckduckgo.com");
-            const uddg = uddgUrl.searchParams.get("uddg");
-            if (uddg) rawUrl = decodeURIComponent(uddg);
-          } catch {
-            // Keep original
-          }
-        }
-
-        urls.push(rawUrl);
-        titles.push(title);
-      }
-
-      let snippetMatch: RegExpExecArray | null;
-      while ((snippetMatch = snippetRegex.exec(html)) !== null) {
-        snippets.push(snippetMatch[1]!.trim());
-      }
-
-      for (let i = 0; i < Math.min(urls.length, limit); i++) {
-        const url = urls[i]!;
-        const title = titles[i] || "Untitled position";
-        const description = snippets[i] ?? "";
-        results.push({
-          url,
-          title,
-          description,
-        });
-      }
-
-      return results;
     } catch (error) {
-      throw error;
+      logger.debug({ error }, "Search seeds: candidate profiles unavailable");
     }
+
+    try {
+      const profileSkills = await query<{ name: string }>(
+        `SELECT s.name
+           FROM candidate_skills s
+           JOIN candidate_profiles p ON p.id = s.profile_id
+          ORDER BY p.updated_at DESC
+          LIMIT 300`,
+      );
+      for (const row of profileSkills.rows) skills.add(row.name);
+    } catch (error) {
+      logger.debug({ error }, "Search seeds: candidate skills unavailable");
+    }
+
+    try {
+      const preferences = await query<{
+        preferred_roles: string[] | null;
+        preferred_countries: string[] | null;
+      }>(
+        `SELECT preferred_roles, preferred_countries
+           FROM candidate_preferences
+          ORDER BY updated_at DESC
+          LIMIT 200`,
+      );
+      for (const row of preferences.rows) {
+        for (const role of row.preferred_roles ?? []) roles.add(role);
+        for (const country of row.preferred_countries ?? []) countries.add(country);
+      }
+    } catch (error) {
+      logger.debug({ error }, "Search seeds: preferences unavailable");
+    }
+
+    try {
+      const taxonomy = await query<{ name: string; slug: string }>(
+        `SELECT name, slug FROM profession_taxonomy ORDER BY random() LIMIT 12`,
+      );
+      for (const row of taxonomy.rows) {
+        roles.add(row.name);
+        if (row.slug) skills.add(row.slug.replace(/-/g, " "));
+      }
+    } catch (error) {
+      logger.debug({ error }, "Search seeds: profession taxonomy unavailable");
+    }
+
+    const known = await query<{ domain: string }>(
+      `SELECT domain FROM discovery_known_sources
+        WHERE source_type IN ('ats', 'careers_page')
+        ORDER BY jobs_found DESC, last_seen DESC
+        LIMIT 40`,
+    ).catch(() => ({ rows: [] as Array<{ domain: string }> }));
+
+    return {
+      roles: [...roles].slice(0, 12),
+      skills: [...skills].slice(0, 10),
+      countries: [...countries].slice(0, 6),
+      knownDomains: known.rows
+        .map((row) => row.domain)
+        .filter((domain) => !domain.includes(":")),
+    };
   }
 }

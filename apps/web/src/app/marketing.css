@@ -1434,6 +1434,223 @@
 .jr-share__btn:hover { background: rgba(255,255,255,.12); color: #fff; border-color: rgba(255,255,255,.28); }
 .jr-share__btn--whatsapp:hover { background: rgba(37,211,102,.22); color: #a7f3c4; border-color: rgba(37,211,102,.5); }
 
+/* ---------- Share Modal ---------- */
+.jr-share { display: inline-flex; }
+.jr-share__trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--mk-radius-pill);
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.05);
+  color: var(--mk-text-soft);
+  cursor: pointer;
+  transition: background var(--mk-dur) var(--mk-ease), color var(--mk-dur) var(--mk-ease), border-color var(--mk-dur) var(--mk-ease), box-shadow var(--mk-dur) var(--mk-ease);
+}
+.jr-share__trigger:hover,
+.jr-share__trigger:focus {
+  background: rgba(255,255,255,.12);
+  color: #fff;
+  border-color: rgba(255,255,255,.28);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--mk-accent-soft);
+}
+.jr-share__trigger svg { width: 18px; height: 18px; }
+
+.jr-share__modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: jr-share-fade-in 200ms var(--mk-ease);
+}
+@keyframes jr-share-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.jr-share__modal {
+  width: 100%;
+  max-width: 360px;
+  background: var(--mk-bg-elevated);
+  border: 1px solid var(--mk-border);
+  border-radius: var(--mk-radius-xl);
+  box-shadow: var(--mk-shadow-lg), 0 0 0 1px rgba(255,255,255,.05);
+  overflow: hidden;
+  animation: jr-share-slide-up 250ms var(--mk-ease);
+}
+@keyframes jr-share-slide-up {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.jr-share__modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--mk-border);
+}
+.jr-share__modal-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--mk-text);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.jr-share__modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--mk-radius-pill);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--mk-text-soft);
+  cursor: pointer;
+  transition: background var(--mk-dur), color var(--mk-dur), border-color var(--mk-dur);
+  flex-shrink: 0;
+}
+.jr-share__modal-close:hover {
+  background: var(--mk-surface);
+  color: var(--mk-text);
+  border-color: var(--mk-border);
+}
+
+.jr-share__tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px 0;
+  border-bottom: 1px solid var(--mk-border);
+}
+.jr-share__tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: var(--mk-radius-md);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--mk-text-soft);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--mk-dur), color var(--mk-dur), border-color var(--mk-dur);
+}
+.jr-share__tab:hover {
+  background: var(--mk-surface);
+  color: var(--mk-text);
+}
+.jr-share__tab--active {
+  background: var(--mk-accent-soft);
+  color: var(--mk-accent);
+  border-color: rgba(109, 139, 255, 0.3);
+}
+.jr-share__tab svg { width: 20px; height: 20px; }
+
+/* Brand icons sizing in share modal */
+.jr-share__fallback-icon svg,
+.jr-share__native-btn img,
+.jr-share__action-btn svg,
+.jr-share__generate-btn svg,
+.jr-share__modal-close svg,
+.jr-share__tab svg,
+.jr-share__trigger svg { width: 20px; height: 20px; }
+
+.jr-share__fallback-icon,
+.jr-share__action-btn { display: inline-flex; align-items: center; justify-content: center; }
+
+.jr-share__fallback-btn .jr-share__fallback-icon { margin-right: 2px; }
+
+.jr-share__section { padding: 12px 16px; }
+.jr-share__section:first-child { padding-top: 16px; }
+.jr-share__section:last-child { padding-bottom: 16px; }
+.jr-share__section-title {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mk-text-muted);
+  margin: 0 0 10px;
+}
+.jr-share__divider {
+  height: 1px;
+  background: var(--mk-border);
+  margin: 8px -16px;
+}
+
+.jr-share__native-targets { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; }
+.jr-share__native-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 12px;
+  border-radius: var(--mk-radius-md);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--mk-text-soft);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--mk-dur), border-color var(--mk-dur), color var(--mk-dur), transform var(--mk-dur);
+}
+.jr-share__native-btn:hover {
+  background: var(--mk-surface);
+  border-color: var(--mk-border);
+  color: var(--mk-text);
+  transform: translateY(-1px);
+}
+.jr-share__native-icon { width: 28px; height: 28px; border-radius: 8px; object-fit: cover; }
+
+.jr-share__fallback-targets { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.jr-share__fallback-item { display: contents; }
+.jr-share__fallback-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: var(--mk-radius-md);
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.08);
+  color: var(--mk-text-soft);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--mk-dur), border-color var(--mk-dur), color var(--mk-dur), transform var(--mk-dur);
+}
+.jr-share__fallback-btn:hover {
+  background: var(--mk-surface);
+  border-color: var(--mk-border);
+  color: var(--mk-text);
+  transform: translateY(-1px);
+}
+.jr-share__fallback-icon { display: flex; align-items: center; justify-content: center; }
+.jr-share__fallback-icon svg { width: 20px; height: 20px; }
+
+@media (max-width: 480px) {
+  .jr-share__modal {
+    max-width: calc(100vw - 32px);
+    border-radius: var(--mk-radius-lg);
+  }
+  .jr-share__fallback-targets { grid-template-columns: 1fr; }
+  .jr-share__native-targets { grid-template-columns: repeat(3, 1fr); }
+}
+
 /* ==========================================================================
    Journey slider — visible illustration panel
    ========================================================================== */

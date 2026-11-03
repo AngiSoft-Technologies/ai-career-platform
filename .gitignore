@@ -70,9 +70,12 @@ package-lock.json
 jobfinder.md
 docs/
 
-# Netlify build artifacts
+# Build/hosting artifacts
 .netlify/
 apps/web/.netlify/
+apps/web/apps/
+.vercel/
+apps/web/.vercel/
 
 # Playwright CLI session snapshots
 .playwright-cli/

@@ -1,0 +1,42 @@
+# Netlify build artifacts
+.netlify/
+apps/web/.netlify/
+apps/web/apps/
+
+# Next.js build cache
+.next/
+apps/web/.next/
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Flutter/Dart
+apps/mobile/.dart_tool/
+apps/mobile/.flutter-plugins
+apps/mobile/.flutter-plugins-dependencies
+apps/mobile/.packages
+apps/mobile/build/
+apps/mobile/ios/Pods/
+apps/mobile/android/.gradle/
+
+# OS/Editor
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Local env
+.env
+.env.local
+.env.production.local
+
+# Playwright
+.playwright-cli/
+test-results/
+apps/web/test-results/
+
+# IDE/build
+*.log
+npm-debug.log*
+*.tsbuildinfo

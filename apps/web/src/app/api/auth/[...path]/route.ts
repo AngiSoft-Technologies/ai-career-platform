@@ -95,7 +95,9 @@ async function proxy(
   context: { params: Promise<{ path: string[] }> },
 ): Promise<Response> {
   const { path } = await context.params;
-  const upstreamUrl = new URL(`${API_URL}/auth/neon/${path.join("/")}`);
+  // The API mounts at /v1/auth/neon/*, so we strip the leading "neon" from the path
+  const neonPath = path[0] === "neon" ? path.slice(1) : path;
+  const upstreamUrl = new URL(`${API_URL}/auth/neon/${neonPath.join("/")}`);
 
   request.nextUrl.searchParams.forEach((value, key) => {
     upstreamUrl.searchParams.append(key, value);

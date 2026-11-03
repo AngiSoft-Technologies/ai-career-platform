@@ -14,7 +14,7 @@ const schema = z.object({
   WEB_ORIGIN: z
     .string()
     .default(
-      "https://mboqara.angisoft.co.ke,https://mboqara.netlify.app,http://localhost:3003,http://localhost:3100",
+      "https://mboqara.angisoft.co.ke,https://mboqara.vercel.app,http://localhost:3000,http://localhost:3003,http://localhost:3100",
     ),
   /**
    * Region that owns the write path. Unset by default: replaying a write to
@@ -52,6 +52,10 @@ const schema = z.object({
    */
   NEON_AUTH_OAUTH_CLIENT_ID: z.string().optional(),
   NEON_AUTH_OAUTH_CLIENT_SECRET: z.string().optional(),
+  NEON_AUTH_OAUTH_CLIENT_ID_PRODUCTION: z.string().optional(),
+  NEON_AUTH_OAUTH_CLIENT_SECRET_PRODUCTION: z.string().optional(),
+  NEON_AUTH_GOOGLE_CLIENT_ID: z.string().optional(),
+  NEON_AUTH_GOOGLE_CLIENT_SECRET: z.string().optional(),
   /**
    * Where the API may send the browser once a social sign-in completes.
    * Comma separated. Entries are exact origins (web) or app schemes such as
@@ -114,9 +118,13 @@ const schema = z.object({
   N8N_API_KEY: z.string().optional(),
   N8N_WEBHOOK_SECRET: z.string().optional(),
 
-  // Firecrawl (web search & scraping)
-  FIRECRAWL_API_KEY: z.string().optional(),
-  FIRECRAWL_BASE_URL: z.string().url().default("https://api.firecrawl.dev"),
+  // Web discovery (self-hosted, no vendor keys)
+  SEARXNG_ENDPOINTS: z.string().optional(),
+  EGRESS_NODES: z.string().optional(),
+  EGRESS_TOKEN: z.string().optional(),
+  FREE_PROXY_ENABLED: z.string().optional(),
+  ROBOTS_TXT_ENFORCED: z.string().optional(),
+  CRAWL_DELAY_MS: z.coerce.number().int().min(0).default(900),
 
   // LinkedIn OAuth
   LINKEDIN_CLIENT_ID: z.string().optional(),
@@ -135,4 +143,13 @@ export const config = {
     parsed.DEMO_MODE === undefined
       ? parsed.NODE_ENV !== "production"
       : parsed.DEMO_MODE !== "false",
+  // Use production OAuth credentials in production
+  NEON_AUTH_OAUTH_CLIENT_ID:
+    parsed.NODE_ENV === "production" && parsed.NEON_AUTH_OAUTH_CLIENT_ID_PRODUCTION
+      ? parsed.NEON_AUTH_OAUTH_CLIENT_ID_PRODUCTION
+      : parsed.NEON_AUTH_OAUTH_CLIENT_ID,
+  NEON_AUTH_OAUTH_CLIENT_SECRET:
+    parsed.NODE_ENV === "production" && parsed.NEON_AUTH_OAUTH_CLIENT_SECRET_PRODUCTION
+      ? parsed.NEON_AUTH_OAUTH_CLIENT_SECRET_PRODUCTION
+      : parsed.NEON_AUTH_OAUTH_CLIENT_SECRET,
 };

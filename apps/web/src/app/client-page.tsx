@@ -334,7 +334,7 @@ export default function LandingPage({
                         <Link href={gate(`/opportunities/${job.id}`)} className="jr-job-card__view">
                           View role <ArrowRight aria-hidden="true" />
                         </Link>
-                        <ShareLinks title={job.title} company={job.company} />
+                        <ShareLinks job={job} />
                       </div>
                     </article>
                   );

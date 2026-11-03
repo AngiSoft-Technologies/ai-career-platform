@@ -6,18 +6,23 @@ import { BrowseAgent } from "./browse-agent.js";
 import { DeduplicationAgent } from "./dedup-agent.js";
 import { UserMatchingAgent } from "./match-agent.js";
 import { LearningAgent } from "./learning-agent.js";
+import { DirectSourcesAgent } from "./sources-agent.js";
+import { ExpansionAgent } from "./expansion-agent.js";
+import { KenyaPlatformAgent } from "./kenya-agent.js";
 
 /**
  * Agent registry — all discovery agents registered here.
  *
- * Agents are source-agnostic: they use search engines (Google, Bing, etc.)
- * and Firecrawl to find jobs across ALL platforms, not a hardcoded list of
- * URLs. New platforms (LinkedIn, Facebook, NGO sites, company career pages,
- * Twitter, etc.) are discovered by agents through search queries.
+ * None of these agents depends on a vendor API or a hardcoded list of job
+ * boards. Discovery works by search-engine probing, following ATS boards,
+ * crawling careers pages and sitemaps, and learning which sources pay off.
  */
 const AGENT_CLASSES: { new (): BaseDiscoveryAgent }[] = [
+  DirectSourcesAgent,
   SearchEngineAgent,
   BrowseAgent,
+  ExpansionAgent,
+  KenyaPlatformAgent,
   DeduplicationAgent,
   UserMatchingAgent,
   LearningAgent,
@@ -74,9 +79,14 @@ export async function runDiscoveryAgents(): Promise<{
   let anyError = false;
 
   for (const agent of agents) {
-    // Check if agent is due to run
-    const result = await query<{ next_run_at: Date | null; status: string }>(
-      `SELECT next_run_at, status FROM discovery_agents WHERE key = $1`,
+    // Check if agent is due to run. `agentId` must be the row UUID: the
+    // discovery tables use uuid foreign keys, not the agent's text key.
+    const result = await query<{
+      id: string;
+      next_run_at: Date | null;
+      status: string;
+    }>(
+      `SELECT id, next_run_at, status FROM discovery_agents WHERE key = $1`,
       [agent.key],
     );
 
@@ -88,7 +98,7 @@ export async function runDiscoveryAgents(): Promise<{
     let runResult: AgentRunResult;
     try {
       runResult = await agent.run({
-        agentId: agent.key,
+        agentId: row.id,
         agentKey: agent.key,
         config: agent.agentConfig,
       });

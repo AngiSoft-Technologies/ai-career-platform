@@ -50,6 +50,20 @@ function authBaseUrl(): string {
   return url.replace(/\/$/, "");
 }
 
+/**
+ * Neon Auth's Google OAuth client ID (registered in Neon Auth, not the API's).
+ * This is the client ID that Neon Auth uses when talking to Google.
+ */
+function neonAuthGoogleClientId(): string {
+  const id = config.NEON_AUTH_GOOGLE_CLIENT_ID;
+  if (!id) {
+    throw new AuthNotConfiguredError(
+      "NEON_AUTH_GOOGLE_CLIENT_ID is required for social sign-in via Neon Auth.",
+    );
+  }
+  return id;
+}
+
 function clientId(): string {
   const id = config.NEON_AUTH_OAUTH_CLIENT_ID;
   if (!id) {
@@ -156,7 +170,7 @@ export async function beginOAuthFlow(options: {
   );
 
   const params = new URLSearchParams({
-    client_id: clientId(),
+    client_id: neonAuthGoogleClientId(),
     redirect_uri: oauthCallbackUrl(),
     response_type: "code",
     scope: "openid profile email offline_access",
