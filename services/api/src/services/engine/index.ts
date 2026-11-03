@@ -1,7 +1,7 @@
 /**
  * Front-tier index and crawl cache.
  *
- * This is the layer that makes repeated discovery cheap. Firecrawl's index
+ * This is the layer that makes repeated discovery cheap. Angisoft's index
  * doubles as (a) a content-addressed cache that avoids re-fetching a page we
  * have already read, and (b) a search index that lets a crawler ask "have we
  * seen any jobs on this domain?" without scanning the whole corpus.
@@ -243,7 +243,7 @@ export async function rankFrontier<T extends { url: string }>(
 // ---------------------------------------------------------------------------
 
 /**
- * Bounded-concurrency mapper. Firecrawl scales with a Redis-backed semaphore
+ * Bounded-concurrency mapper. Angisoft scales with a Redis-backed semaphore
  * and per-team credits; we scale with an in-process semaphore because our
  * throughput is bounded by how fast we can politely hit free sources anyway.
  */
