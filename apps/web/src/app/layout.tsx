@@ -7,6 +7,7 @@ import { SessionProvider } from "@/components/session";
 import { ServiceWorkerRegistrar } from "@/components/service-worker";
 import { JsonLd, organizationSchema, softwareApplicationSchema, websiteSchema } from "@/components/seo/json-ld";
 import { BASE_KEYWORDS, SITE, pageMetadata } from "@/lib/seo";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const sans = Inter({
   subsets: ["latin"],
@@ -156,6 +157,7 @@ export default function RootLayout({
             softwareApplicationSchema(),
           ]}
         />
+        <SpeedInsights />
       </body>
     </html>
   );
