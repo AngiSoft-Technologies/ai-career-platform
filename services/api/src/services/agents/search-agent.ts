@@ -4,6 +4,7 @@ import { BaseDiscoveryAgent, type AgentContext, type AgentRunResult } from "./ba
 import { searchWebPlanned } from "../engine/search-orchestrator.js";
 import { buildDiscoveryQueries, type QuerySeeds } from "../engine/discover.js";
 import { pooled } from "../engine/index.js";
+import { cleanJobTitle } from "../engine/extract.js";
 
 /**
  * Search Engine Discovery Agent.
@@ -68,6 +69,7 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
     let totalFetched = 0;
     let totalStored = 0;
     let totalDuplicate = 0;
+    let totalNotAJob = 0;
     let timedOut = false;
     const errors: string[] = [];
     const engines = new Set<string>();
@@ -111,6 +113,26 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
 
       for (const result of results) {
         engines.add(result.engine);
+
+        // The title is checked before the URL is queued.
+        //
+        // The browse agent reads a page to find out whether it is a job
+        // posting, and a page read is the expensive part of the
+        // pipeline. A search-engine result carries its title, and the
+        // title of a page that is not about a role says so: "What is
+        // ERP?", "Krita | Creative Freedom for Digital Artists", "New
+        // Honda Ridgeline for Sale". Queueing those spends a request on
+        // a page we already know we will refuse, and the queue of
+        // unread URLs grew faster than the browse agent could drain it.
+        //
+        // The same rule the extractor applies is applied here, so a
+        // title that is refused at search time is also refused at
+        // browse time.
+        if (!cleanJobTitle(result.title)) {
+          totalNotAJob += 1;
+          continue;
+        }
+
         try {
           // The unique index on source_url makes this an upsert: a URL we have
           // already seen is not re-queued.
@@ -167,6 +189,9 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
         engines: [...engines],
         seedRoles: seeds.roles.slice(0, 10),
         seedCountries: seeds.countries,
+        // Results whose title said plainly that they are not about a
+        // role. They were never queued, so they cost nothing.
+        notAJobTitle: totalNotAJob,
       },
     };
   }

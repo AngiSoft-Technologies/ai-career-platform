@@ -1017,6 +1017,47 @@ async function main(): Promise<void> {
     missingRoleWords.slice(0, 10).join(", "),
   );
 
+  // The queue migration applies the same rule to the URLs that are
+  // already waiting to be read.
+  const queueMigrationSource = readFileSync(
+    new URL(
+      "../db/migrations/033_empty_non_job_queue.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const missingQueueRoleWords = roleWords.filter(
+    (word) => !queueMigrationSource.includes(`'${word}'`),
+  );
+  check(
+    "the queue migration knows every role word the application knows",
+    missingQueueRoleWords.length === 0,
+    missingQueueRoleWords.slice(0, 10).join(", "),
+  );
+  check(
+    "the queue migration leaves the title-less links alone",
+    queueMigrationSource.includes("title IS NOT NULL"),
+  );
+
+  // The search agent checks the title before it queues a URL: a page
+  // read is the expensive part of the pipeline, and the title of a page
+  // that is not about a role says so.
+  const searchAgentSource = readFileSync(
+    new URL(
+      "../services/api/src/services/agents/search-agent.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  check(
+    "the search agent checks the title before it queues a URL",
+    searchAgentSource.includes("cleanJobTitle(result.title)"),
+  );
+  check(
+    "the search agent counts what it refused",
+    searchAgentSource.includes("notAJobTitle"),
+  );
+
   for (const title of [
     "Warehouse Operative",
     "Telesales Advisor",
