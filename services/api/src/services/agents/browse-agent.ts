@@ -6,6 +6,10 @@ import { scrapeUrl } from "../engine/fetch.js";
 import { extractJob } from "../engine/extract.js";
 import { reserveDailyQuota } from "../engine/quota.js";
 import {
+  isUnreadableRedirectWrapper,
+  unwrapSearchRedirect,
+} from "../engine/redirect.js";
+import {
   judgeCandidateChange,
   looksLikeClosedListing,
   type CandidateSnapshot,
@@ -33,6 +37,19 @@ export class BrowseAgent extends BaseDiscoveryAgent {
     const batchSize = Number(ctx.config.batch_size ?? 25);
     const useLlm = ctx.config.use_llm !== false;
 
+    // A cycle has a wall-clock budget.
+    //
+    // The browse agent is the most scrape-heavy thing we run, and a cycle
+    // without a deadline is a cycle that can outlive the job that started
+    // it: the job's own deadline cannot fire while a page is being read,
+    // and the pages are the part that can take minutes. The budget is the
+    // agent's own promise to stop taking on work, so the job deadline stays
+    // a backstop rather than the primary control.
+    const budgetMs = Number(ctx.config.budget_ms ?? 300_000);
+    // One page gets one deadline. A page that cannot be read in this time
+    // is a page we do not have time for.
+    const pageTimeoutMs = Number(ctx.config.page_timeout_ms ?? 30_000);
+
     const results = await query<{
       id: string;
       source_url: string;
@@ -57,6 +74,8 @@ export class BrowseAgent extends BaseDiscoveryAgent {
       };
     }
 
+    const deadline = Date.now() + budgetMs;
+
     let totalFetched = 0;
     let totalStored = 0;
     let totalDuplicate = 0;
@@ -64,17 +83,41 @@ export class BrowseAgent extends BaseDiscoveryAgent {
     let totalClosed = 0;
     let totalSkipped = 0;
     let totalFailed = 0;
+    let stoppedOnBudget = false;
     const errors: string[] = [];
 
     for (const row of results.rows) {
+      if (Date.now() > deadline) {
+        // The rest of the batch stays pending; the next cycle picks it up.
+        stoppedOnBudget = true;
+        break;
+      }
+
       totalFetched += 1;
       try {
+        // A search-engine click-through wrapper is a redirect *page*, not a
+        // redirect: reading it returns a notice rather than the listing.
+        // The destination is decoded here, and a wrapper that cannot be
+        // decoded is dropped rather than crawled.
+        const target = unwrapSearchRedirect(row.source_url);
+        if (isUnreadableRedirectWrapper(target)) {
+          totalSkipped += 1;
+          await query(
+            `UPDATE discovery_search_results
+                SET status = 'failed', processed_at = now(),
+                    error = $2
+              WHERE id = $1`,
+            [row.id, "REDIRECT_WRAPPER"],
+          );
+          continue;
+        }
+
         // Per-host page budget. The browse agent is the most scrape-heavy
         // thing we run, and a single pathological domain must not spend the
         // whole day's budget.
         const host = (() => {
           try {
-            return new URL(row.source_url).host;
+            return new URL(target).host;
           } catch {
             return "unknown";
           }
@@ -98,9 +141,10 @@ export class BrowseAgent extends BaseDiscoveryAgent {
           continue;
         }
 
-        const scraped = await scrapeUrl(row.source_url, {
+        const scraped = await scrapeUrl(target, {
           onlyMainContent: true,
-          preferProxy: /linkedin\.com|facebook\.com|instagram\.com/i.test(row.source_url),
+          timeoutMs: pageTimeoutMs,
+          preferProxy: /linkedin\.com|facebook\.com|instagram\.com/i.test(target),
         });
 
         if (scraped.status < 200 || scraped.status >= 400) {
@@ -136,7 +180,7 @@ export class BrowseAgent extends BaseDiscoveryAgent {
             `SELECT id FROM discovery_candidates
               WHERE source_url = $1 OR source_url = $2
               LIMIT 1`,
-            [row.source_url, scraped.finalUrl],
+            [target, scraped.finalUrl],
           );
           const priorRow = prior.rows[0];
           if (priorRow) {
@@ -322,6 +366,8 @@ export class BrowseAgent extends BaseDiscoveryAgent {
         closed: totalClosed,
         skipped: totalSkipped,
         llm: useLlm,
+        budgetMs,
+        stoppedOnBudget,
       },
     };
   }

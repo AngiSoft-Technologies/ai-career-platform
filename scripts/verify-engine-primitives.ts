@@ -38,6 +38,11 @@ import {
   stripHeavyMarkup,
   truncateHtml,
 } from "../services/api/src/services/engine/html.js";
+import {
+  isBingRedirectWrapper,
+  isUnreadableRedirectWrapper,
+  unwrapSearchRedirect,
+} from "../services/api/src/services/engine/redirect.js";
 
 /** A document with the shape of a real job board page, at a given size. */
 function buildLargeHtml(bytes: number): string {
@@ -408,6 +413,58 @@ console.log("\n[13] bounded HTML processing");
   check("metadata reads the open-graph title", reversed.ogTitle === "OG title");
   check("metadata reads the canonical link", reversed.canonical === "https://example.test/canonical");
   check("metadata reads the language", reversed.language === "en");
+}
+
+console.log("\n[14] search-engine redirect wrappers");
+{
+  // Bing wraps every result in a click-through URL. The wrapper is a
+  // redirect *page*, not a redirect, so crawling it returns a notice
+  // instead of the listing — 3 307 queued rows were lost that way.
+  const bing =
+    "https://www.bing.com/ck/a?!&&p=79d7JmltdHM9MTc5MzU3NzYwMA&ptn=3&ver=2" +
+    "&u=a1aHR0cHM6Ly93d3cuYmFtYm9vaHIuY29tL2NhcmVlcnMvcHJvZHVjdC10ZWFt&ntb=1";
+
+  check("a Bing wrapper is recognised", isBingRedirectWrapper(bing));
+  check(
+    "a Bing wrapper is decoded to its destination",
+    unwrapSearchRedirect(bing) ===
+      "https://www.bamboohr.com/careers/product-team",
+    unwrapSearchRedirect(bing),
+  );
+  check(
+    "an unwrapped destination is not a wrapper",
+    !isUnreadableRedirectWrapper(unwrapSearchRedirect(bing)),
+  );
+  check(
+    "a wrapper that cannot be read is still recognised",
+    isUnreadableRedirectWrapper(
+      "https://www.bing.com/ck/a?u=a1not-base64-at-all!!&ntb=1",
+    ),
+  );
+  check(
+    "a wrapper without a payload is still recognised",
+    isUnreadableRedirectWrapper("https://www.bing.com/ck/a?ptn=3"),
+  );
+
+  // DuckDuckGo wraps the destination in a query parameter.
+  const ddg =
+    "https://duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.test%2Fjobs%2F1&rut=abc";
+  check(
+    "a DuckDuckGo wrapper is decoded",
+    unwrapSearchRedirect(ddg) === "https://example.test/jobs/1",
+    unwrapSearchRedirect(ddg),
+  );
+
+  // A plain URL is left alone.
+  check(
+    "a plain URL is untouched",
+    unwrapSearchRedirect("https://example.test/jobs/1") ===
+      "https://example.test/jobs/1",
+  );
+  check(
+    "a plain URL is not a wrapper",
+    !isUnreadableRedirectWrapper("https://example.test/jobs/1"),
+  );
 }
 
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);

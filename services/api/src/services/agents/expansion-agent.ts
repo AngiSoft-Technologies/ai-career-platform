@@ -41,13 +41,24 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
     const maxBoards = Number(ctx.config.max_boards_per_run ?? 15);
     const maxDomains = Number(ctx.config.max_domains_per_run ?? 3);
 
+    // A cycle has a wall-clock budget: expansion is the agent that fans out
+    // over the most hosts, and one slow board must not eat the whole
+    // ingestion window.
+    const budgetMs = Number(ctx.config.budget_ms ?? 180_000);
+    const deadline = Date.now() + budgetMs;
+
     const boards = await this.findBoards(maxBoards);
     let discovered = 0;
     let stored = 0;
     let duplicate = 0;
+    let stoppedOnBudget = false;
     const errors: string[] = [];
 
     for (const board of boards) {
+      if (Date.now() > deadline) {
+        stoppedOnBudget = true;
+        break;
+      }
       try {
         const jobs = await fetchAtsBoard(board);
         discovered += jobs.length;
@@ -72,6 +83,10 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
     // Careers/sitemap discovery for domains we know but have never expanded.
     const domains = await this.findUnexpandedDomains(maxDomains);
     for (const domain of domains) {
+      if (Date.now() > deadline) {
+        stoppedOnBudget = true;
+        break;
+      }
       try {
         const harvest = await discoverFromDomainDetailed(domain);
         const sitemapLinks = await discoverFromSitemap(domain);
@@ -139,7 +154,12 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
       jobsNew: stored,
       jobsDuplicate: duplicate,
       error: errors.length > 0 ? errors.slice(0, 10).join("; ") : undefined,
-      payload: { boards: boards.length, domains: domains.length },
+      payload: {
+        boards: boards.length,
+        domains: domains.length,
+        budgetMs,
+        stoppedOnBudget,
+      },
     };
   }
 

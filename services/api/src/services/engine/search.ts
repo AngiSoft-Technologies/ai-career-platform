@@ -20,6 +20,7 @@ import { config } from "../../config.js";
 import { browserHeaders, egressFetch, randomUserAgent } from "./egress.js";
 import { decodeBody, fetchJson } from "./fetch.js";
 import { reserveDailyQuota } from "./quota.js";
+import { unwrapSearchRedirect } from "./redirect.js";
 
 export interface WebSearchResult {
   url: string;
@@ -53,14 +54,7 @@ export class SearchBlockedError extends Error {
 // ---------------------------------------------------------------------------
 
 function cleanDdgUrl(href: string): string {
-  if (!href.includes("uddg=")) return href;
-  try {
-    const url = new URL(href, "https://duckduckgo.com");
-    const target = url.searchParams.get("uddg");
-    return target ? decodeURIComponent(target) : href;
-  } catch {
-    return href;
-  }
+  return unwrapSearchRedirect(href);
 }
 
 function parseDdgResults(html: string, seen: Set<string>): WebSearchResult[] {
@@ -296,10 +290,16 @@ export async function bingSearch(
 
   $("li.b_algo").each((_, item) => {
     const link = $(item).find("h2 a").first();
-    const href = link.attr("href")?.trim();
+    const rawHref = link.attr("href")?.trim();
     const title = link.text().trim();
     const description = $(item).find(".b_caption p").first().text().trim();
-    if (!href || !title || seen.has(href)) return;
+    if (!rawHref || !title) return;
+
+    // Bing wraps every result in a click-through URL. The wrapper is a
+    // redirect *page*, not a redirect, so it has to be decoded here: a
+    // crawler that fetches it sees a redirect notice, not the listing.
+    const href = unwrapSearchRedirect(rawHref);
+    if (seen.has(href)) return;
     if (!href.startsWith("http")) return;
     seen.add(href);
     results.push({ url: href, title, description, engine: "bing" });

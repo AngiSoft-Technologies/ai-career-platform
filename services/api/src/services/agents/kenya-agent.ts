@@ -45,14 +45,25 @@ export class KenyaPlatformAgent extends BaseDiscoveryAgent {
     const maxSitesPerCycle = Number(ctx.config.max_sites_per_cycle ?? 10);
     const includeMicroTask = ctx.config.micro_task_platforms !== false;
 
+    // A cycle has a wall-clock budget. One target can cost a crawl plus a
+    // screen capture plus a search fallback, so without a budget a dozen
+    // slow targets eat the whole ingestion window.
+    const budgetMs = Number(ctx.config.budget_ms ?? 240_000);
+    const deadline = Date.now() + budgetMs;
+
     const targets = await this.loadTargets(maxTargets, includeMicroTask);
     let discovered = 0;
     let stored = 0;
     let duplicate = 0;
     let eligible = 0;
+    let stoppedOnBudget = false;
     const errors: string[] = [];
 
     for (const target of targets) {
+      if (Date.now() > deadline) {
+        stoppedOnBudget = true;
+        break;
+      }
       try {
         const jobs = await this.harvestTarget(target, {
           maxSites: maxSitesPerCycle,
@@ -142,6 +153,8 @@ export class KenyaPlatformAgent extends BaseDiscoveryAgent {
         targetsProcessed: targets.length,
         eligibleForKenya: eligible,
         microTaskPlatforms: includeMicroTask,
+        budgetMs,
+        stoppedOnBudget,
       },
     };
   }
