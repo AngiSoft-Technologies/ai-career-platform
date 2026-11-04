@@ -488,7 +488,8 @@ function startContinuousPolling(
             {},
             {
               attempts: 1,
-              jobId: `periodic:${jobName}`,
+              // BullMQ rejects a custom id that contains a colon.
+              jobId: `periodic-${jobName}`,
               // Removed on completion so the id frees up for the next run;
               // kept on failure would block every later tick.
               removeOnComplete: true,
