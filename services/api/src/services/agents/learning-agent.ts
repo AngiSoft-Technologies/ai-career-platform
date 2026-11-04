@@ -84,28 +84,61 @@ export class LearningAgent extends BaseDiscoveryAgent {
    * them so future searches can prioritize known-good platforms.
    */
   private async discoverNewSources(): Promise<void> {
-    // Extract domains from imported candidates that aren't yet tracked
+    // The domain is the key, so there has to be exactly one row per
+    // domain.
+    //
+    // It used to group by the domain *and* the source type, and the type
+    // was derived from the full URL. The same domain could then land in
+    // the statement twice — once as a job board, once as an ATS — and
+    // PostgreSQL refuses that: "ON CONFLICT DO UPDATE command cannot
+    // affect row a second time". The type is now a function of the
+    // domain, so grouping by the domain alone is enough.
     await query(`
+      WITH normalised AS (
+        SELECT lower(
+                 split_part(
+                   split_part(split_part(source_url, '://', 2), '/', 1),
+                   ':',
+                   1
+                 )
+               ) AS domain
+          FROM discovery_candidates
+         WHERE status IN ('verified', 'imported')
+           AND source_url IS NOT NULL
+           AND source_url LIKE 'http%://%'
+      ),
+      typed AS (
+        SELECT
+          domain,
+          CASE
+            WHEN domain = 'linkedin.com' OR domain LIKE '%.linkedin.com'
+              THEN 'professional_network'
+            WHEN domain = 'facebook.com' OR domain LIKE '%.facebook.com'
+              THEN 'social_media'
+            WHEN domain = 'twitter.com' OR domain LIKE '%.twitter.com'
+              OR domain = 'x.com' OR domain LIKE '%.x.com'
+              THEN 'social_media'
+            WHEN domain LIKE '%ngo%' OR domain LIKE '%un.org'
+              OR domain LIKE '%worldbank.org'
+              THEN 'ngo'
+            WHEN domain = 'lever.co' OR domain LIKE '%.lever.co'
+              OR domain = 'greenhouse.io' OR domain LIKE '%.greenhouse.io'
+              OR domain = 'workable.com' OR domain LIKE '%.workable.com'
+              THEN 'ats'
+            ELSE 'job_board'
+          END AS source_type,
+          COUNT(*) AS jobs_found
+          FROM normalised
+         GROUP BY domain
+      )
       INSERT INTO discovery_known_sources (domain, source_type, jobs_found, last_seen, created_at)
-      SELECT
-        regexp_replace(source_url, '^https?://([^/]+)/.*$', '\\1') as domain,
-        CASE
-          WHEN source_url LIKE '%linkedin.com%' THEN 'professional_network'
-          WHEN source_url LIKE '%facebook.com%' THEN 'social_media'
-          WHEN source_url LIKE '%twitter.com%' OR source_url LIKE '%x.com%' THEN 'social_media'
-          WHEN source_url LIKE '%ngo%' OR source_url LIKE '%un.org%' OR source_url LIKE '%worldbank.org%' THEN 'ngo'
-          WHEN source_url LIKE '%lever.co%' OR source_url LIKE '%greenhouse.io%' OR source_url LIKE '%workable.com%' THEN 'ats'
-          ELSE 'job_board'
-        END,
-        COUNT(*),
-        now(),
-        now()
-      FROM discovery_candidates
-      WHERE status IN ('verified', 'imported')
-        AND source_url IS NOT NULL
-      GROUP BY 1, 2
+      SELECT domain, source_type, jobs_found, now(), now()
+        FROM typed
       ON CONFLICT (domain) DO UPDATE SET
-        jobs_found = discovery_known_sources.jobs_found + EXCLUDED.jobs_found,
+        -- A snapshot, not a running total. Adding the same candidates
+        -- again every cycle made the number grow forever, and a source
+        -- that was seen first always outranked a better one.
+        jobs_found = EXCLUDED.jobs_found,
         last_seen = now()
     `);
   }

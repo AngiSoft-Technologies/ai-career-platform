@@ -690,6 +690,11 @@ async function main(): Promise<void> {
     "the matching agent scores with the product's own rule",
     matchAgentSource.includes("scoreMatch("),
   );
+  check(
+    "the matching agent keeps each user's list to size",
+    matchAgentSource.includes("keepBestPerUser(") &&
+      matchAgentSource.includes("row_number() OVER ("),
+  );
 
   const runnerSource = readFileSync(
     new URL("../services/api/src/services/agents/runner.ts", import.meta.url),
@@ -714,6 +719,56 @@ async function main(): Promise<void> {
     "promotion runs before the agents that read the catalogue",
     promotionAt > 0 && matchingAt > promotionAt,
     `promotion@${promotionAt} matching@${matchingAt}`,
+  );
+
+  // -------------------------------------------------------------------------
+  // The learning agent's known-sources statement
+  //
+  // The domain is the key of the row, so the statement has to produce
+  // exactly one row per domain. Grouping by the domain *and* the source
+  // type — with the type derived from the full URL — produced the same
+  // domain twice, and PostgreSQL refuses that: "ON CONFLICT DO UPDATE
+  // command cannot affect row a second time". The agent failed on every
+  // cycle for as long as that was true.
+  // -------------------------------------------------------------------------
+
+  const learningSource = readFileSync(
+    new URL(
+      "../services/api/src/services/agents/learning-agent.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  check(
+    "the learning agent groups the known sources by the domain alone",
+    learningSource.includes("GROUP BY domain") &&
+      !learningSource.includes("GROUP BY 1, 2"),
+  );
+  check(
+    "the source type is a function of the domain, not of the URL",
+    learningSource.includes("FROM normalised") &&
+      learningSource.includes("GROUP BY domain"),
+  );
+  check(
+    "the known-source count is a snapshot, not a running total",
+    learningSource.includes("jobs_found = EXCLUDED.jobs_found") &&
+      !learningSource.includes(
+        "jobs_found = discovery_known_sources.jobs_found + EXCLUDED.jobs_found",
+      ),
+  );
+
+  const expansionSource = readFileSync(
+    new URL(
+      "../services/api/src/services/agents/expansion-agent.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  check(
+    "the expansion agent's known-source count is a snapshot too",
+    !expansionSource.includes(
+      "jobs_found = discovery_known_sources.jobs_found + EXCLUDED.jobs_found",
+    ),
   );
 
   // -------------------------------------------------------------------------

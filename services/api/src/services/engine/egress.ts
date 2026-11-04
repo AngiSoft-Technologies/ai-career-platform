@@ -20,6 +20,7 @@
 import { ProxyAgent, fetch as undiciFetch, type Dispatcher } from "undici";
 import { logger } from "../../logger.js";
 import { redactError, redactUrl } from "../../lib/redact.js";
+import { assertPublicUrl } from "../../lib/net-guard.js";
 
 export interface EgressResponse {
   status: number;
@@ -56,6 +57,105 @@ export function browserHeaders(extra: Record<string, string> = {}): Record<strin
     "Upgrade-Insecure-Requests": "1",
     ...extra,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Redirects
+// ---------------------------------------------------------------------------
+
+/** How many redirects we will follow before giving up. */
+const MAX_REDIRECT_HOPS = 5;
+
+/** One HTTP response, in the shape the redirect loop needs. */
+interface HopResponse {
+  status: number;
+  headers: Record<string, string>;
+  body: ArrayBuffer;
+  url: string;
+}
+
+/** Performs a single request, without following redirects. */
+type PerformHop = (url: string, init: RequestInit) => Promise<HopResponse>;
+
+/**
+ * Follows redirects, checking every hop.
+ *
+ * `fetch` follows redirects on its own, and it does not check them: a
+ * public URL can answer with a redirect to a private address — the
+ * cloud metadata endpoint, say — and the request that follows goes
+ * there unchecked. The same is true of the content policy: a redirect
+ * is a way around a blocked host.
+ *
+ * So the redirects are followed here, one hop at a time, and each
+ * destination goes through the network guard before it is requested.
+ *
+ * The guard runs with `onDnsFailure: "allow"`, the same as the scraper's
+ * own entry check: a transient resolver hiccup must not be recorded as
+ * a permanent refusal.
+ */
+async function fetchFollowingRedirects(
+  perform: PerformHop,
+  startUrl: string,
+  init: RequestInit,
+  via: string,
+): Promise<EgressResponse> {
+  let current = startUrl;
+  let method = init.method ?? "GET";
+  let body = init.body;
+
+  for (let hop = 0; hop <= MAX_REDIRECT_HOPS; hop += 1) {
+    const response = await perform(current, {
+      ...init,
+      method,
+      body,
+      redirect: "manual",
+    });
+
+    const location = response.headers["location"];
+    const isRedirect =
+      response.status >= 300 && response.status < 400 && Boolean(location);
+
+    if (!isRedirect) {
+      return {
+        status: response.status,
+        headers: response.headers,
+        body: response.body,
+        finalUrl: response.url || current,
+        via,
+      };
+    }
+
+    if (hop === MAX_REDIRECT_HOPS) {
+      throw new Error(`Too many redirects (${MAX_REDIRECT_HOPS})`);
+    }
+
+    let next: string;
+    try {
+      next = new URL(location ?? "", current).toString();
+    } catch {
+      throw new Error("Invalid redirect location");
+    }
+
+    // Every hop is checked: a redirect must not be a way around the
+    // network guard or the content policy.
+    const checked = await assertPublicUrl(next, { onDnsFailure: "allow" });
+    current = checked.toString();
+
+    // 303 always becomes GET; 301 and 302 do too when the method was
+    // not GET or HEAD. 307 and 308 keep the method and the body.
+    if (
+      response.status === 303 ||
+      ((response.status === 301 || response.status === 302) &&
+        method !== "GET" &&
+        method !== "HEAD")
+    ) {
+      method = "GET";
+      body = undefined;
+    }
+  }
+
+  // The loop always returns or throws.
+  throw new Error("Redirect loop ended unexpectedly");
 }
 
 // ---------------------------------------------------------------------------
@@ -305,27 +405,37 @@ async function fetchViaProxy(
     uri: proxy.url,
     requestTls: { rejectUnauthorized: true },
   });
+  // One timeout for the whole chain, not one per hop: five hops of
+  // twenty seconds each is a hundred seconds of a worker held up.
+  const signal = init.signal ?? AbortSignal.timeout(20_000);
   try {
-    const response = await undiciFetch(url, {
-      method: init.method ?? "GET",
-      headers: init.headers as Record<string, string>,
-      body: init.body as string | undefined,
-      dispatcher,
-      signal: AbortSignal.timeout(20_000),
-      redirect: "follow",
-    });
-    const body = await response.arrayBuffer();
-    recordSuccess(proxy.health);
-    return {
-      status: response.status,
-      headers: Object.fromEntries(response.headers.entries()),
-      body,
-      finalUrl: response.url,
+    const response = await fetchFollowingRedirects(
+      async (hopUrl, hopInit): Promise<HopResponse> => {
+        const hopResponse = await undiciFetch(hopUrl, {
+          method: hopInit.method ?? "GET",
+          headers: hopInit.headers as Record<string, string>,
+          body: hopInit.body as string | undefined,
+          dispatcher,
+          signal,
+          redirect: "manual",
+        });
+        const body = await hopResponse.arrayBuffer();
+        return {
+          status: hopResponse.status,
+          headers: Object.fromEntries(hopResponse.headers.entries()),
+          body,
+          url: hopResponse.url,
+        };
+      },
+      url,
+      init,
       // A free proxy URL carries its credentials in the userinfo section.
       // `via` ends up on the scrape result and in the cache, so it must not
       // contain the password.
-      via: `proxy:${redactUrl(proxy.url)}`,
-    };
+      `proxy:${redactUrl(proxy.url)}`,
+    );
+    recordSuccess(proxy.health);
+    return response;
   } catch (error) {
     recordFailure(proxy.health);
     logger.debug(
@@ -343,18 +453,25 @@ async function fetchViaProxy(
 // ---------------------------------------------------------------------------
 
 export async function directFetch(url: string, init: RequestInit): Promise<EgressResponse> {
-  const response = await fetch(url, {
-    ...init,
-    redirect: "follow",
-    signal: init.signal ?? AbortSignal.timeout(25_000),
-  });
-  return {
-    status: response.status,
-    headers: Object.fromEntries(response.headers.entries()),
-    body: await response.arrayBuffer(),
-    finalUrl: response.url,
-    via: "direct",
-  };
+  return fetchFollowingRedirects(
+    async (hopUrl, hopInit): Promise<HopResponse> => {
+      const hopResponse = await fetch(hopUrl, {
+        ...hopInit,
+        redirect: "manual",
+        signal: hopInit.signal ?? AbortSignal.timeout(25_000),
+      });
+      const body = await hopResponse.arrayBuffer();
+      return {
+        status: hopResponse.status,
+        headers: Object.fromEntries(hopResponse.headers.entries()),
+        body,
+        url: hopResponse.url,
+      };
+    },
+    url,
+    init,
+    "direct",
+  );
 }
 
 /**

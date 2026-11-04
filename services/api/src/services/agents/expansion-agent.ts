@@ -139,7 +139,10 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
           `INSERT INTO discovery_known_sources (domain, source_type, jobs_found, last_seen, created_at)
            VALUES ($1, 'careers_page', $2, now(), now())
            ON CONFLICT (domain) DO UPDATE
-             SET jobs_found = discovery_known_sources.jobs_found + EXCLUDED.jobs_found,
+             -- A snapshot of the last harvest, not a running total: adding
+             -- the same links again every cycle made the number grow
+             -- forever and made the ranking between sources meaningless.
+             SET jobs_found = EXCLUDED.jobs_found,
                  last_seen = now()`,
           [domain, links.size + harvest.jobs.length],
         );

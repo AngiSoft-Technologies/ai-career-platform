@@ -43,6 +43,11 @@ import {
   isUnreadableRedirectWrapper,
   unwrapSearchRedirect,
 } from "../services/api/src/services/engine/redirect.js";
+import { isBlockedHost } from "../services/api/src/lib/net-guard.js";
+import { directFetch } from "../services/api/src/services/engine/egress.js";
+import { createServer } from "node:http";
+import { readFileSync } from "node:fs";
+import type { AddressInfo } from "node:net";
 
 /** A document with the shape of a real job board page, at a given size. */
 function buildLargeHtml(bytes: number): string {
@@ -465,6 +470,131 @@ console.log("\n[14] search-engine redirect wrappers");
     "a plain URL is not a wrapper",
     !isUnreadableRedirectWrapper("https://example.test/jobs/1"),
   );
+}
+
+console.log("\n[15] content policy and checked redirects");
+{
+  // -------------------------------------------------------------------------
+  // The content policy
+  //
+  // A search-engine result can be anything. Some of what comes back has
+  // no place in a job platform, and the browse agent was crawling it.
+  // -------------------------------------------------------------------------
+  check("a blocked host is blocked", isBlockedHost("pornhub.com"));
+  check(
+    "a subdomain of a blocked host is blocked",
+    isBlockedHost("www.pornhub.com"),
+  );
+  check(
+    "a host that merely mentions a blocked host is not blocked",
+    !isBlockedHost("pornhub.com.example.test"),
+  );
+  check("a job board is not blocked", !isBlockedHost("linkedin.com"));
+  check("a job board subdomain is not blocked", !isBlockedHost("www.linkedin.com"));
+
+  // The migration that clears the queued URLs has to know the same
+  // hosts the application refuses, or the queue keeps handing back
+  // pages the crawler will not read.
+  const guardSource = readFileSync(
+    new URL(
+      "../services/api/src/lib/net-guard.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const blockBlock = /const BLOCKED_HOSTS = new Set\(\[([\s\S]*?)\]\);/.exec(
+    guardSource,
+  );
+  const blockedHosts = [
+    ...(blockBlock?.[1] ?? "").matchAll(/"([^"]+)"/g),
+  ].map((match) => match[1] ?? "");
+  check("the block list is not empty", blockedHosts.length > 10);
+
+  const migrationSource = readFileSync(
+    new URL(
+      "../db/migrations/032_blocked_host_queue.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const missingHosts = blockedHosts.filter(
+    (host) => !migrationSource.includes(`'${host}'`),
+  );
+  check(
+    "the queue migration knows every blocked host the guard knows",
+    missingHosts.length === 0,
+    missingHosts.slice(0, 10).join(", "),
+  );
+
+  // -------------------------------------------------------------------------
+  // Redirects are checked, hop by hop
+  //
+  // `fetch` follows redirects on its own and does not check them: a public
+  // URL can answer with a redirect to a private address — the cloud
+  // metadata endpoint — or to a blocked host, and the request that follows
+  // goes there unchecked.
+  // -------------------------------------------------------------------------
+  const server = createServer((request, response) => {
+    if (request.url === "/ok") {
+      response.writeHead(200, { "content-type": "text/plain" });
+      response.end("hello");
+      return;
+    }
+    if (request.url === "/to-private") {
+      response.writeHead(302, {
+        location: "http://169.254.169.254/latest/meta-data/",
+      });
+      response.end();
+      return;
+    }
+    if (request.url === "/to-blocked") {
+      response.writeHead(302, { location: "https://www.pornhub.com/" });
+      response.end();
+      return;
+    }
+    response.writeHead(404);
+    response.end();
+  });
+
+  await new Promise<void>((resolve) =>
+    server.listen(0, "127.0.0.1", resolve),
+  );
+  const port = (server.address() as AddressInfo).port;
+  const base = `http://127.0.0.1:${port}`;
+
+  const plain = await directFetch(`${base}/ok`, {});
+  check("a plain fetch still works", plain.status === 200);
+  check(
+    "a plain fetch reports the URL it read",
+    plain.finalUrl === `${base}/ok`,
+    plain.finalUrl,
+  );
+
+  let privateRefusal = "";
+  try {
+    await directFetch(`${base}/to-private`, {});
+  } catch (error) {
+    privateRefusal = error instanceof Error ? error.message : String(error);
+  }
+  check(
+    "a redirect to a private address is refused",
+    privateRefusal.includes("PRIVATE_ADDRESS"),
+    privateRefusal,
+  );
+
+  let blockedRefusal = "";
+  try {
+    await directFetch(`${base}/to-blocked`, {});
+  } catch (error) {
+    blockedRefusal = error instanceof Error ? error.message : String(error);
+  }
+  check(
+    "a redirect to a blocked host is refused",
+    blockedRefusal.includes("BLOCKED_HOST"),
+    blockedRefusal,
+  );
+
+  server.close();
 }
 
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);

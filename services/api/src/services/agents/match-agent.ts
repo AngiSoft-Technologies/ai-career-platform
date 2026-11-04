@@ -127,6 +127,7 @@ export class UserMatchingAgent extends BaseDiscoveryAgent {  readonly key = "use
     const kept = keepBestPerUser(payloads, maxPerUser);
 
     let totalMatches = 0;
+    let prunedMatches = 0;
     const errors: string[] = [];
 
     if (kept.length > 0) {
@@ -162,6 +163,38 @@ export class UserMatchingAgent extends BaseDiscoveryAgent {  readonly key = "use
           );
         }
       }
+
+      // Keep each user's list to the size it is meant to be.
+      //
+      // The write above only ever adds or updates a row, so without this
+      // the table grows with every cycle: each run considered a
+      // different window of the catalogue and left its matches behind.
+      // Thirty-one users had two hundred recommendations each — a
+      // recommendation list that nobody reads.
+      if (maxPerUser > 0) {
+        try {
+          const pruned = await query(
+            `DELETE FROM matches m
+              WHERE m.id IN (
+                SELECT id FROM (
+                  SELECT id,
+                         row_number() OVER (
+                           PARTITION BY user_id
+                           ORDER BY score DESC, updated_at DESC
+                         ) AS rank
+                    FROM matches
+                ) ranked
+                WHERE rank > $1
+              )`,
+            [maxPerUser],
+          );
+          prunedMatches = pruned.rowCount ?? 0;
+        } catch (error) {
+          errors.push(
+            `Match prune failed: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
     }
 
     return {
@@ -174,9 +207,11 @@ export class UserMatchingAgent extends BaseDiscoveryAgent {  readonly key = "use
         usersProcessed: profiles.length,
         opportunitiesConsidered: opportunities.length,
         totalMatches,
+        prunedMatches,
       },
     };
   }
+
   /**
    * Reads the candidates' profiles in one statement.
    *

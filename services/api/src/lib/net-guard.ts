@@ -49,6 +49,8 @@ export type BlockedUrlReason =
   | "PRIVATE_ADDRESS"
   | "PRIVATE_HOSTNAME"
   | "DNS_LOOKUP_FAILED"
+  /** The host is on the content-policy block list. */
+  | "BLOCKED_HOST"
   /** The target's robots.txt disallows this path for our user agent. */
   | "ROBOTS_DISALLOWED";
 
@@ -105,6 +107,63 @@ const PRIVATE_HOSTNAME_PATTERNS = [
   /^metadata\.google\.internal$/i,
 ];
 
+/**
+ * Hosts we never fetch.
+ *
+ * A search-engine result can be anything, and some of what comes back
+ * has no place in a job platform. The block is here rather than in one
+ * agent because every outbound request goes through this guard, and a
+ * host that is not worth crawling is not worth crawling anywhere.
+ */
+const BLOCKED_HOSTS = new Set([
+  "pornhub.com",
+  "pornhubpremium.com",
+  "xvideos.com",
+  "xhamster.com",
+  "redtube.com",
+  "youporn.com",
+  "tube8.com",
+  "spankbang.com",
+  "motherless.com",
+  "porntube.com",
+  "fapello.com",
+  "bellesa.com",
+  "onlyfans.com",
+  "fansly.com",
+  "chaturbate.com",
+  "stripchat.com",
+  "myfreecams.com",
+  "camsoda.com",
+  "bongacams.com",
+  "livejasmin.com",
+  "erome.com",
+  "nhentai.net",
+  "e-hentai.org",
+  "literotica.com",
+  "hanime.tv",
+  "hentaistream.com",
+  "adultfinder.com",
+]);
+
+/** Suffixes that are blocked whatever the host is called. */
+const BLOCKED_HOST_SUFFIXES = [".xxx"];
+
+/**
+ * True when the host is on the content-policy block list.
+ *
+ * A subdomain of a blocked host is the same host: "www.pornhub.com"
+ * is not a different site.
+ */
+export function isBlockedHost(hostname: string): boolean {
+  const host = hostname.trim().toLowerCase().replace(/\.$/, "");
+  if (!host) return false;
+  if (BLOCKED_HOSTS.has(host)) return true;
+  for (const blocked of BLOCKED_HOSTS) {
+    if (host.endsWith(`.${blocked}`)) return true;
+  }
+  return BLOCKED_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix));
+}
+
 export interface AssertPublicUrlOptions {
   /**
    * What a failed DNS lookup means. `throw` (default) treats it as a blocked
@@ -139,6 +198,13 @@ export async function assertPublicUrl(
 
   if (PRIVATE_HOSTNAME_PATTERNS.some((pattern) => pattern.test(hostname))) {
     throw new BlockedUrlError("PRIVATE_HOSTNAME", hostname);
+  }
+
+  // The content policy is checked before the DNS lookup: a blocked host
+  // is refused whatever its address resolves to, and the check costs
+  // nothing.
+  if (isBlockedHost(hostname)) {
+    throw new BlockedUrlError("BLOCKED_HOST", hostname);
   }
 
   if (net.isIP(hostname)) {
