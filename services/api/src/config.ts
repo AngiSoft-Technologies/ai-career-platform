@@ -27,6 +27,19 @@ const schema = z.object({
     .default("postgresql://mboqara:mboqara@localhost:5432/mboqara"),
   DATABASE_URL_UNPOOLED: z.string().optional(),
   DIRECT_DATABASE_URL: z.string().optional(),
+  /**
+   * Server-side statement timeout for every query (ms). Zero means "no
+   * limit" in Postgres, which is how a single blocked query holds a worker
+   * slot forever. Generous enough not to fail a legitimate heavy query —
+   * the job deadline is the outer bound.
+   */
+  DB_STATEMENT_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
+  /** Server-side lock wait timeout (ms). */
+  DB_LOCK_TIMEOUT_MS: z.coerce.number().int().positive().default(20_000),
+  /** Client-side query timeout (ms): the backstop for a dead socket. */
+  DB_QUERY_TIMEOUT_MS: z.coerce.number().int().positive().default(130_000),
+  /** How long a session may sit idle inside a transaction (ms). */
+  DB_IDLE_IN_TRANSACTION_MS: z.coerce.number().int().positive().default(120_000),
   REDIS_URL: z.string().default("redis://localhost:6379"),
   S3_ENDPOINT: z.string().optional(),
   S3_REGION: z.string().default("auto"),

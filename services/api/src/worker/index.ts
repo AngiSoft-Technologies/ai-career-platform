@@ -212,6 +212,80 @@ function describeError(error: unknown): Record<string, unknown> {
   return { name: "Unknown", message: String(error) };
 }
 
+/**
+ * How long a single job may run before it is failed.
+ *
+ * A worker slot is the scarcest resource in the queue: a job that never
+ * settles holds its slot for ever, the queue stops draining, and nothing
+ * reports an error anywhere. Every handler here does network and database
+ * work, so every handler gets a deadline. The work cannot be cancelled, but
+ * the slot is released — a stuck job must not be able to take the pipeline
+ * down with it.
+ */
+const JOB_TIMEOUTS: Record<JobName, number> = {
+  [JOB_NAMES.ingestSources]: 20 * 60_000,
+  [JOB_NAMES.refreshEmbeddings]: 10 * 60_000,
+  [JOB_NAMES.expireOpportunities]: 5 * 60_000,
+  [JOB_NAMES.pruneEvents]: 5 * 60_000,
+  [JOB_NAMES.dispatchWebhooks]: 2 * 60_000,
+  [JOB_NAMES.reapStaleRows]: 5 * 60_000,
+};
+
+class JobTimeoutError extends Error {
+  constructor(
+    readonly job: string,
+    readonly timeoutMs: number,
+  ) {
+    super(`JOB_TIMEOUT: ${job} exceeded ${timeoutMs}ms`);
+    this.name = "JobTimeoutError";
+  }
+}
+
+/** Runs `work` under a deadline, warning while it is still running. */
+export function withJobDeadline<T>(
+  jobName: JobName,
+  work: () => Promise<T>,
+  timeoutMs?: number,
+): Promise<T> {
+  const limitMs =
+    timeoutMs ??
+    JOB_TIMEOUTS[jobName] ??
+    Number(process.env.WORKER_JOB_TIMEOUT_MS ?? 10 * 60_000);
+
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new JobTimeoutError(jobName, limitMs));
+    }, limitMs);
+    // Deliberately *not* unref'd: the deadline is the reason this process
+    // must stay alive. An unref'd timer does not fire when nothing else
+    // keeps the event loop busy, which is exactly the case a stuck job
+    // creates — the deadline would never arrive.
+
+    // A job that is still running halfway to its deadline is worth knowing
+    // about before it fails.
+    const warnTimer = setTimeout(() => {
+      logger.warn(
+        { job: jobName, timeoutMs: limitMs },
+        "Background job is still running past half its deadline",
+      );
+    }, Math.floor(limitMs / 2));
+    warnTimer.unref?.();
+
+    work().then(
+      (value) => {
+        clearTimeout(timer);
+        clearTimeout(warnTimer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        clearTimeout(warnTimer);
+        reject(error);
+      },
+    );
+  });
+}
+
 const handlers: Record<JobName, () => Promise<unknown>> = {
   [JOB_NAMES.ingestSources]: handleIngest,
   [JOB_NAMES.refreshEmbeddings]: handleEmbeddings,
@@ -220,6 +294,52 @@ const handlers: Record<JobName, () => Promise<unknown>> = {
   [JOB_NAMES.dispatchWebhooks]: handleDispatchWebhooks,
   [JOB_NAMES.reapStaleRows]: handleReapStaleRows,
 };
+
+/** Last time a job finished on each queue, for the stall watchdog. */
+const lastCompletion = new Map<string, number>();
+
+/**
+ * Watches for a queue that has stopped making progress.
+ *
+ * The failure this exists to catch is completely silent: a job that never
+ * settles holds its worker slot, the queue stops draining, and the periodic
+ * tick keeps adding jobs to a backlog nobody drains. Nothing throws, so
+ * nothing alerts — the only symptom is a queue depth that grows and a
+ * pipeline that quietly stops.
+ */
+function startStallWatchdog(queueMap: Map<QueueName, Queue>): () => void {
+  const thresholdMs = Number(
+    process.env.WORKER_STALL_THRESHOLD_MS ?? 10 * 60_000,
+  );
+  const checkEveryMs = Number(process.env.WORKER_STALL_CHECK_MS ?? 60_000);
+
+  const timer = setInterval(() => {
+    void (async () => {
+      for (const [queueName, queue] of queueMap) {
+        try {
+          const active = await withDeadline(
+            queue.getActiveCount(),
+            5_000,
+            `active-count:${queueName}`,
+          );
+          if (typeof active !== "number" || active === 0) continue;
+          const stalledMs = Date.now() - (lastCompletion.get(queueName) ?? Date.now());
+          if (stalledMs > thresholdMs) {
+            logger.error(
+              { queue: queueName, active, stalledMs, thresholdMs },
+              "Queue is not draining: jobs are stuck and the slots are held",
+            );
+          }
+        } catch {
+          // The watchdog must never be the thing that breaks.
+        }
+      }
+    })();
+  }, checkEveryMs);
+  timer.unref?.();
+
+  return () => clearInterval(timer);
+}
 
 export interface WorkerHandle {
   queues: Map<QueueName, Queue>;
@@ -244,17 +364,20 @@ export async function startWorkers(): Promise<WorkerHandle> {
         }
         const startedAt = Date.now();
         try {
-          const result = await handler();
+          const result = await withJobDeadline(job.name as JobName, handler);
+          lastCompletion.set(queueName, Date.now());
           logger.info(
             { queue: queueName, job: job.name, durationMs: Date.now() - startedAt },
             "Background job completed",
           );
           return result;
         } catch (error) {
+          lastCompletion.set(queueName, Date.now());
           logger.error(
             {
               queue: queueName,
               job: job.name,
+              durationMs: Date.now() - startedAt,
               error: describeError(error),
             },
             "Background job failed",
@@ -281,9 +404,12 @@ export async function startWorkers(): Promise<WorkerHandle> {
 
   await scheduleRecurringJobs(queueMap);
 
+  const stopWatchdog = startStallWatchdog(queueMap);
+
   return {
     queues: queueMap,
     stop: async () => {
+      stopWatchdog();
       await Promise.all(workers.map((worker) => worker.close()));
       workers = [];
       await Promise.all(
@@ -327,6 +453,12 @@ async function runIngestionCycle(): Promise<{
  * with a Redis lease, so exactly one replica enqueues per interval; when
  * Redis is unreachable we fall back to running locally in development rather
  * than silently never running.
+ *
+ * The enqueue is **deduplicated by job id**. A periodic job means "make sure
+ * this runs", not "add another one every interval": the ingestion cycle
+ * takes minutes, so adding one every 30s grew a backlog that the workers
+ * could never drain. With a fixed job id, BullMQ keeps at most one copy
+ * pending, and the next tick picks up as soon as the previous run finishes.
  */
 function startContinuousPolling(
   queue: Queue,
@@ -346,7 +478,26 @@ function startContinuousPolling(
     intervalMs,
     async () => {
       try {
-        await queue.add(jobName, {}, { attempts: 1 });
+        // The worker's Redis connection retries forever (BullMQ requires
+        // it), so an unreachable Redis leaves this call pending for ever.
+        // A deadline turns that into a failed tick, which the next tick
+        // retries.
+        await withDeadline(
+          queue.add(
+            jobName,
+            {},
+            {
+              attempts: 1,
+              jobId: `periodic:${jobName}`,
+              // Removed on completion so the id frees up for the next run;
+              // kept on failure would block every later tick.
+              removeOnComplete: true,
+              removeOnFail: true,
+            },
+          ),
+          10_000,
+          `enqueue:${jobName}`,
+        );
       } catch (error) {
         logger.error(
           { error: error instanceof Error ? error.message : String(error) },
@@ -361,6 +512,31 @@ function startContinuousPolling(
   );
 
   return { stop };
+}
+
+/** A promise that gives up after `ms`, so a hung call cannot wedge a loop. */
+function withDeadline<T>(
+  work: Promise<T>,
+  ms: number,
+  label: string,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`DEADLINE_EXCEEDED: ${label} exceeded ${ms}ms`));
+    }, ms);
+    // Not unref'd: the deadline must arrive even when the work it is
+    // waiting on is the only thing keeping the loop busy.
+    work.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
 }
 
 async function scheduleRecurringJobs(
@@ -384,8 +560,40 @@ async function scheduleRecurringJobs(
   const embeddingQueue = queueMap.get(QUEUE_NAMES.embeddings);
   const maintenanceQueue = queueMap.get(QUEUE_NAMES.maintenance);
 
+  /**
+   * Removes a repeatable scheduler left behind by an earlier configuration.
+   *
+   * A job scheduler lives in Redis until it is removed, so switching a
+   * queue from scheduler mode to continuous mode leaves the old scheduler
+   * running: it keeps adding jobs on its own cadence, forever, in addition
+   * to the continuous tick. The duplicate source is invisible — it shows up
+   * only as a queue that never drains.
+   */
+  const removeStaleScheduler = async (
+    queue: Queue | undefined,
+    schedulerId: string,
+  ): Promise<void> => {
+    if (!queue) return;
+    try {
+      const removed = await withDeadline(
+        queue.removeJobScheduler(schedulerId),
+        10_000,
+        `remove-scheduler:${schedulerId}`,
+      );
+      if (removed) {
+        logger.info({ scheduler: schedulerId }, "Removed a stale job scheduler");
+      }
+    } catch (error) {
+      logger.warn(
+        { error, scheduler: schedulerId },
+        "Could not remove a stale job scheduler",
+      );
+    }
+  };
+
   // Set up continuous polling for ingestion if enabled
   if (ingestionQueue && process.env.CONTINUOUS_INGESTION !== "false") {
+    await removeStaleScheduler(ingestionQueue, "scheduler-ingestion");
     await startContinuousPolling(
       ingestionQueue,
       JOB_NAMES.ingestSources,
@@ -413,6 +621,7 @@ async function scheduleRecurringJobs(
 
   // Set up continuous polling for embeddings if enabled
   if (embeddingQueue && process.env.CONTINUOUS_EMBEDDING !== "false") {
+    await removeStaleScheduler(embeddingQueue, "scheduler-embeddings");
     await startContinuousPolling(
       embeddingQueue,
       JOB_NAMES.refreshEmbeddings,
@@ -439,6 +648,8 @@ async function scheduleRecurringJobs(
 
   if (maintenanceQueue) {
     if (process.env.CONTINUOUS_MAINTENANCE !== "false") {
+      await removeStaleScheduler(maintenanceQueue, "scheduler-maintenance");
+      await removeStaleScheduler(maintenanceQueue, "scheduler-event-pruning");
       await startContinuousPolling(
         maintenanceQueue,
         JOB_NAMES.expireOpportunities,
@@ -447,6 +658,19 @@ async function scheduleRecurringJobs(
       logger.info(
         { intervalMs: maintenanceIntervalMs },
         "Continuous maintenance polling started",
+      );
+
+      // Event pruning used to run only through the repeatable scheduler. In
+      // continuous mode it has to be polled too, or pruning stops the
+      // moment the stale scheduler is removed.
+      await startContinuousPolling(
+        maintenanceQueue,
+        JOB_NAMES.pruneEvents,
+        pruningIntervalMs,
+      );
+      logger.info(
+        { intervalMs: pruningIntervalMs },
+        "Continuous event pruning started",
       );
     } else {      const maintenanceHours = Number(
         process.env.MAINTENANCE_INTERVAL_HOURS ?? 6,

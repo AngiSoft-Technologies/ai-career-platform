@@ -3,12 +3,30 @@ import { config } from "../config.js";
 
 const { Pool } = pg;
 
+/**
+ * Every statement is bounded.
+ *
+ * Without a statement timeout a single blocked query waits forever: the
+ * server-side default is zero, which means "no limit". In a worker that is
+ * fatal rather than merely slow — the job holds its concurrency slot for
+ * ever, the queue stops draining, and nothing reports an error. The same
+ * is true of a lock wait, which is the common case when two jobs touch the
+ * same row: `lock_timeout` turns that wait into an error the retry logic
+ * can handle.
+ *
+ * `query_timeout` is the client-side backstop for a socket that dies
+ * without the server noticing.
+ */
 export const pool = new Pool({
   connectionString: config.DATABASE_URL,
   max: 10,
   idleTimeoutMillis: 60_000,
   connectionTimeoutMillis: 15_000,
   keepAlive: true,
+  statement_timeout: config.DB_STATEMENT_TIMEOUT_MS,
+  lock_timeout: config.DB_LOCK_TIMEOUT_MS,
+  query_timeout: config.DB_QUERY_TIMEOUT_MS,
+  idle_in_transaction_session_timeout: config.DB_IDLE_IN_TRANSACTION_MS,
 });
 
 pool.on("error", (error) => {

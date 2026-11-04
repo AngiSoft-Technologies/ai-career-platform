@@ -25,6 +25,8 @@ import { hashJitterMs, deferredRunAt } from "../services/api/src/lib/jitter.js";
 import { AbortManager, timeoutInstance } from "../services/api/src/lib/abort-manager.js";
 import { normaliseUrlIdentity, hotKeySafe, isUuidV7 } from "../services/api/src/lib/ids.js";
 import { overfetchLimitFor } from "../services/api/src/services/engine/search-orchestrator.js";
+import { startDistributedInterval } from "../services/api/src/lib/distributed-tick.js";
+import { withJobDeadline } from "../services/api/src/worker/index.js";
 
 let failures = 0;
 
@@ -138,6 +140,109 @@ const manager = new AbortManager([timeoutInstance(50, "engine")]);
 check("external deadline queryable", manager.msUntilNearestTimeout("engine") !== null);
 manager.throwIfAborted();
 check("no throw before timeout", true);
+
+console.log("\n[11] distributed tick resilience");
+{
+  // A handler that throws must not stop the cadence.
+  let thrownCalls = 0;
+  const throwing = startDistributedInterval(
+    "tick:{verify}:throwing",
+    50,
+    async () => {
+      thrownCalls += 1;
+      throw new Error("handler failed");
+    },
+    { runWhenRedisDown: true, label: "verify:throwing" },
+  );
+  await new Promise((resolve) => setTimeout(resolve, 280));
+  throwing.stop();
+  check(
+    "a throwing handler does not stop the tick",
+    thrownCalls >= 2,
+    `calls=${thrownCalls}`,
+  );
+
+  // A slow handler must never overlap: the tick is a heartbeat, not a queue.
+  let active = 0;
+  let maxActive = 0;
+  let slowCalls = 0;
+  const slow = startDistributedInterval(
+    "tick:{verify}:slow",
+    30,
+    async () => {
+      slowCalls += 1;
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      active -= 1;
+    },
+    { runWhenRedisDown: true, label: "verify:slow" },
+  );
+  await new Promise((resolve) => setTimeout(resolve, 320));
+  slow.stop();
+  check(
+    "a slow handler never runs concurrently",
+    maxActive === 1,
+    `maxActive=${maxActive}`,
+  );
+  check("a slow handler is retried once it finishes", slowCalls >= 1, `calls=${slowCalls}`);
+
+  // A handler that never settles must be called once, not once per tick:
+  // the cadence survives, the work does not pile up.
+  let hungCalls = 0;
+  const hung = startDistributedInterval(
+    "tick:{verify}:hung",
+    30,
+    () => {
+      hungCalls += 1;
+      return new Promise<void>(() => undefined);
+    },
+    { runWhenRedisDown: true, label: "verify:hung" },
+  );
+  await new Promise((resolve) => setTimeout(resolve, 220));
+  hung.stop();
+  check(
+    "a handler that never settles is not called again",
+    hungCalls === 1,
+    `calls=${hungCalls}`,
+  );
+
+  // A stopped tick does not fire again.
+  let afterStop = 0;
+  const stopped = startDistributedInterval(
+    "tick:{verify}:stopped",
+    30,
+    async () => {
+      afterStop += 1;
+    },
+    { runWhenRedisDown: true, label: "verify:stopped" },
+  );
+  stopped.stop();
+  await new Promise((resolve) => setTimeout(resolve, 140));
+  check("a stopped tick does not fire", afterStop === 0, `calls=${afterStop}`);
+}
+
+console.log("\n[12] job deadlines");
+{
+  const quick = await withJobDeadline(
+    "dispatch-webhooks",
+    async () => "done",
+    1_000,
+  );
+  check("a job that finishes returns its result", quick === "done");
+
+  let timedOut = false;
+  try {
+    await withJobDeadline(
+      "dispatch-webhooks",
+      () => new Promise<string>(() => undefined),
+      60,
+    );
+  } catch (error) {
+    timedOut = error instanceof Error && error.name === "JobTimeoutError";
+  }
+  check("a job that never settles is failed", timedOut);
+}
 
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);
