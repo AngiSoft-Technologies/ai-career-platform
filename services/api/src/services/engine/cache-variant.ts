@@ -73,6 +73,12 @@ interface CacheEnvelope<T> {
 
 export type CacheReadResult<T> =
   | { status: "hit"; value: T; ageMs: number }
+  /**
+   * A negative marker proved that no entry existed over the window. This is
+   * different from a plain miss: the caller may *skip* the source entirely
+   * for the length of the window instead of asking again.
+   */
+  | { status: "negative" }
   | { status: "miss" }
   | { status: "error" };
 
@@ -96,6 +102,11 @@ export function deriveVariantKey(dimensions: VariantDimensions): string {
  * A negative marker recorded at `emptyFrom` proves emptiness for the window
  * `[emptyFrom - maxAgeMs, emptyFrom]`. A lookup for `[now - maxAgeMs, now]`
  * is covered iff its left edge is no earlier than that.
+ *
+ * `maxAgeMs` is the **entry** age limit, not the marker's lifetime. The
+ * proof is "nothing existed at `emptyFrom`, and nothing has been written
+ * since (a write deletes the marker)", so every possible entry is older than
+ * `emptyFrom` and is stale exactly when `now - maxAgeMs >= emptyFrom`.
  */
 export function isNegativeStillValid(
   emptyFrom: number,
@@ -183,6 +194,9 @@ export class VariantCache<T> {
       }
 
       // Key absent: consult the windowed negative marker before the source.
+      // The proof uses the *entry* age limit: an entry that existed at the
+      // marker time is stale by now, and no entry can have been written since
+      // (a write deletes the marker).
       if (this.negativeTtlMs > 0 && filters.minAgeMs === undefined) {
         const marker = await withTimeout(
           redis.get(this.negativeKey(variantKey)),
@@ -192,10 +206,10 @@ export class VariantCache<T> {
           const emptyFrom = Number(marker);
           if (
             Number.isFinite(emptyFrom) &&
-            isNegativeStillValid(emptyFrom, this.negativeTtlMs, Date.now())
+            isNegativeStillValid(emptyFrom, maxAgeMs, Date.now())
           ) {
             this.counters.negativeHit += 1;
-            return { status: "miss" };
+            return { status: "negative" };
           }
         }
       }
@@ -262,13 +276,18 @@ export class VariantCache<T> {
 
   /**
    * Records that, as of now, nothing existed for this variant. The proof
-   * covers `[now - negativeTtlMs, now]`.
+   * covers `[now - maxAgeMs, now]`.
+   *
+   * The marker must outlive the moment it becomes *usable*: it only proves
+   * emptiness once every possible entry has aged out, which is one entry TTL
+   * after it was written. A marker that expired at that exact moment would
+   * make the whole negative cache unreachable.
    */
   async writeNegative(dimensions: VariantDimensions): Promise<void> {
     if (this.negativeTtlMs <= 0 || !redisIsReady()) return;
     const variantKey = deriveVariantKey(dimensions);
     const key = this.negativeKey(variantKey);
-    const ttlSeconds = Math.ceil(this.negativeTtlMs / 1_000);
+    const ttlSeconds = Math.ceil((this.negativeTtlMs + this.entryTtlMs) / 1_000);
     try {
       await withTimeout(
         redis.set(key, String(Date.now()), "EX", ttlSeconds),

@@ -14,9 +14,12 @@
  */
 
 import { createHash } from "node:crypto";
-import { aiChat, isAiConfigured } from "../ai/client.js";
+import { aiChatDetailed, isAiConfigured } from "../ai/client.js";
+import { config } from "../../config.js";
 import { logger } from "../../logger.js";
 import { guardPromptInjection } from "./injection-guard.js";
+import { priceCall } from "./cost-tracking.js";
+import { reserveBudget } from "./reservation.js";
 import type { JsonLdJobPosting, PageMetadata } from "./html.js";
 
 export interface ExtractedJob {
@@ -269,6 +272,16 @@ export async function extractJobWithLlm(input: {
     );
     return input.current;
   }
+  if (guarded.budgetExhausted) {
+    // The guard could not run because the shared budget is gone. Sending an
+    // unvetted page to a model now would be exactly what the guard exists to
+    // prevent, so the deterministic extraction stands.
+    logger.info(
+      { url: input.url },
+      "AI budget exhausted during injection guard; keeping deterministic extraction",
+    );
+    return input.current;
+  }
 
   const prompt = `Extract the job posting from the page below.
 Return ONLY minified JSON with these keys:
@@ -287,18 +300,54 @@ URL: ${input.url}
 PAGE:
 ${input.markdown.slice(0, 9_000)}`;
 
-  try {
-    const raw = await aiChat(
-      [
-        {
-          role: "system",
-          content:
-            "You are a strict information extractor. Output valid JSON only, no markdown fences.",
-        },
-        { role: "user", content: prompt },
-      ],
-      { temperature: 0.1, maxTokens: 700 },
+  const messages = [
+    {
+      role: "system" as const,
+      content:
+        "You are a strict information extractor. Output valid JSON only, no markdown fences.",
+    },
+    { role: "user" as const, content: prompt },
+  ];
+
+  // Reserve the estimated spend before the call, settle the actual spend
+  // after it. The fleet shares one budget: eleven API machines each with
+  // their own counter would be eleven times the limit.
+  const promptTokens = Math.ceil(
+    (prompt.length + messages[0]!.content.length) / 4,
+  );
+  const estimatedUsd =
+    priceCall(config.AI_MODEL, promptTokens, 700) ?? 0;
+
+  const reservation = await reserveBudget({
+    scope: "ai",
+    subject: "extraction",
+    estimatedUsd,
+    limitUsd: Number(config.AI_COST_LIMIT_USD ?? 0),
+  });
+
+  if (!reservation.ok) {
+    logger.info(
+      { url: input.url, usedUsd: reservation.usedUsd, limitUsd: reservation.limitUsd },
+      "AI budget exhausted; keeping deterministic extraction",
     );
+    return input.current;
+  }
+
+  try {
+    const completion = await aiChatDetailed(messages, {
+      temperature: 0.1,
+      maxTokens: 700,
+    });
+
+    const actualUsd =
+      priceCall(
+        completion.model,
+        completion.promptTokens || promptTokens,
+        completion.completionTokens || Math.ceil(completion.text.length / 4),
+      ) ?? estimatedUsd;
+    await reservation.settle(actualUsd);
+
+    const raw = completion.text;
 
     const jsonText = raw
       .replace(/^```(?:json)?/i, "")
@@ -375,6 +424,8 @@ ${input.markdown.slice(0, 9_000)}`;
       ),
     };
   } catch (error) {
+    // The call failed: nothing was spent, so the whole reservation goes back.
+    await reservation.release();
     logger.debug({ error, url: input.url }, "LLM job extraction failed");
     return input.current;
   }

@@ -135,6 +135,8 @@ const schema = z.object({
   DISCOVERY_SEMAPHORE_TTL_MS: z.coerce.number().int().positive().default(30_000),
   /** Blocking wait before proceeding uncapped (ms). */
   DISCOVERY_SEMAPHORE_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
+  /** Fleet-wide cap on concurrent page fetches during a crawl. */
+  DISCOVERY_CRAWL_CONCURRENCY: z.coerce.number().int().positive().default(8),
   /** Daily cap on index/search vertical calls per subject; 0 disables. */
   DISCOVERY_DAILY_QUOTA: z.coerce.number().int().nonnegative().default(1_000),
   /** Windowed negative-cache TTL for the discovery index (ms); 0 disables. */

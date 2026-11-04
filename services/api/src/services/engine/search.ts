@@ -16,8 +16,10 @@
 
 import * as cheerio from "cheerio";
 import { logger } from "../../logger.js";
+import { config } from "../../config.js";
 import { browserHeaders, egressFetch, randomUserAgent } from "./egress.js";
 import { decodeBody, fetchJson } from "./fetch.js";
+import { reserveDailyQuota } from "./quota.js";
 
 export interface WebSearchResult {
   url: string;
@@ -365,6 +367,41 @@ export async function googleNewsSearch(
  * Every adapter swallows its own errors, so the chain degrades to "no
  * results" rather than to a 5xx.
  */
+/**
+ * Runs one search provider under the shared daily quota.
+ *
+ * The quota is per provider, so one provider being rate-limited cannot starve
+ * the others. A call that *fails* refunds its unit: no result came back, so
+ * no work was done. A call that succeeds — even with zero results — consumed
+ * an upstream request and keeps its unit.
+ */
+async function quotaGuardedSearch(
+  provider: string,
+  run: () => Promise<WebSearchResult[]>,
+): Promise<WebSearchResult[]> {
+  const reservation = await reserveDailyQuota(
+    "search",
+    provider,
+    1,
+    Number(config.DISCOVERY_DAILY_QUOTA ?? 0) || 1_000,
+  );
+
+  if (!reservation.ok) {
+    logger.info(
+      { provider, used: reservation.used, limit: reservation.limit },
+      "Search quota exhausted; provider skipped",
+    );
+    return [];
+  }
+
+  try {
+    return await run();
+  } catch (error) {
+    await reservation.release?.();
+    throw error;
+  }
+}
+
 export async function searchWeb(
   query: string,
   options: SearchOptions = {},
@@ -372,28 +409,36 @@ export async function searchWeb(
   const limit = options.limit ?? 10;
 
   try {
-    const searx = await searxngSearch(query, options);
+    const searx = await quotaGuardedSearch("searxng", () =>
+      searxngSearch(query, options),
+    );
     if (searx.length > 0) return searx;
   } catch (error) {
     logger.debug({ error, query }, "SearXNG unavailable");
   }
 
   try {
-    const news = await googleNewsSearch(query, options);
+    const news = await quotaGuardedSearch("google_news", () =>
+      googleNewsSearch(query, options),
+    );
     if (news.length > 0) return news;
   } catch (error) {
     logger.debug({ error, query }, "Google News RSS unavailable");
   }
 
   try {
-    const ddg = await duckDuckGoSearch(query, options);
+    const ddg = await quotaGuardedSearch("duckduckgo", () =>
+      duckDuckGoSearch(query, options),
+    );
     if (ddg.length > 0) return ddg.slice(0, limit);
   } catch (error) {
     logger.debug({ error, query }, "DuckDuckGo unavailable");
   }
 
   try {
-    const bing = await bingSearch(query, options);
+    const bing = await quotaGuardedSearch("bing", () =>
+      bingSearch(query, options),
+    );
     if (bing.length > 0) return bing.slice(0, limit);
   } catch (error) {
     logger.debug({ error, query }, "Bing unavailable");
@@ -411,10 +456,10 @@ export async function searchWebAll(
   options: SearchOptions = {},
 ): Promise<WebSearchResult[]> {
   const settled = await Promise.allSettled([
-    searxngSearch(query, options),
-    googleNewsSearch(query, options),
-    duckDuckGoSearch(query, options),
-    bingSearch(query, options),
+    quotaGuardedSearch("searxng", () => searxngSearch(query, options)),
+    quotaGuardedSearch("google_news", () => googleNewsSearch(query, options)),
+    quotaGuardedSearch("duckduckgo", () => duckDuckGoSearch(query, options)),
+    quotaGuardedSearch("bing", () => bingSearch(query, options)),
   ]);
 
   const seen = new Set<string>();

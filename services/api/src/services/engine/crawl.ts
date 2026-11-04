@@ -10,8 +10,11 @@
  * its vacancies before it finds its blog.
  */
 
+import { randomUUID } from "node:crypto";
 import { logger } from "../../logger.js";
+import { config } from "../../config.js";
 import { scrapeUrl } from "./fetch.js";
+import { withSemaphore } from "./semaphore.js";
 import { extractEmbeddedJobs, embeddedJobsToRaw } from "./screen.js";
 import type { RawJob } from "./sources.js";
 
@@ -157,11 +160,25 @@ export async function crawlSite(
     visited.add(current.url);
 
     try {
-      const scraped = await scrapeUrl(current.url, {
-        onlyMainContent: false,
-        timeoutMs: 15_000,
-        polite: options.respectRobots ?? true,
-      });
+      // The crawl is the most fan-out-heavy thing we do, and several agents
+      // crawl at once across three worker machines. The semaphore caps the
+      // fleet-wide number of concurrent page fetches, so one big crawl
+      // cannot saturate our egress (or a target site's patience).
+      const scraped = await withSemaphore(
+        "sem:discovery:crawl",
+        config.DISCOVERY_CRAWL_CONCURRENCY,
+        `crawl:${randomUUID()}`,
+        () =>
+          scrapeUrl(current.url, {
+            onlyMainContent: false,
+            timeoutMs: 15_000,
+            polite: options.respectRobots ?? true,
+          }),
+        {
+          ttlMs: config.DISCOVERY_SEMAPHORE_TTL_MS,
+          timeoutMs: config.DISCOVERY_SEMAPHORE_TIMEOUT_MS,
+        },
+      );
       pagesVisited += 1;
 
       const html = scraped.html;

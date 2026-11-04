@@ -1,8 +1,10 @@
 import { query } from "../../db/pool.js";
 import { logger } from "../../logger.js";
+import { config } from "../../config.js";
 import { BaseDiscoveryAgent, type AgentContext, type AgentRunResult } from "./base.js";
 import { scrapeUrl } from "../engine/fetch.js";
 import { extractJob } from "../engine/extract.js";
+import { reserveDailyQuota } from "../engine/quota.js";
 import {
   judgeCandidateChange,
   looksLikeClosedListing,
@@ -60,12 +62,42 @@ export class BrowseAgent extends BaseDiscoveryAgent {
     let totalDuplicate = 0;
     let totalChanged = 0;
     let totalClosed = 0;
+    let totalSkipped = 0;
     let totalFailed = 0;
     const errors: string[] = [];
 
     for (const row of results.rows) {
       totalFetched += 1;
       try {
+        // Per-host page budget. The browse agent is the most scrape-heavy
+        // thing we run, and a single pathological domain must not spend the
+        // whole day's budget.
+        const host = (() => {
+          try {
+            return new URL(row.source_url).host;
+          } catch {
+            return "unknown";
+          }
+        })();
+
+        const reservation = await reserveDailyQuota(
+          "scrape",
+          host,
+          1,
+          Number(config.DISCOVERY_DAILY_QUOTA ?? 0) || 1_000,
+        );
+        if (!reservation.ok) {
+          totalSkipped += 1;
+          await query(
+            `UPDATE discovery_search_results
+                SET status = 'failed', processed_at = now(),
+                    error = $2
+              WHERE id = $1`,
+            [row.id, "HOST_QUOTA_EXCEEDED"],
+          );
+          continue;
+        }
+
         const scraped = await scrapeUrl(row.source_url, {
           onlyMainContent: true,
           preferProxy: /linkedin\.com|facebook\.com|instagram\.com/i.test(row.source_url),
@@ -288,6 +320,7 @@ export class BrowseAgent extends BaseDiscoveryAgent {
         failed: totalFailed,
         changed: totalChanged,
         closed: totalClosed,
+        skipped: totalSkipped,
         llm: useLlm,
       },
     };

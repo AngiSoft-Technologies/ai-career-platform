@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
 import { query } from "../db/pool.js";
+import { config } from "../config.js";
 import { assertPublicUrl } from "../services/sources/http.js";
+import { reserveDailyQuota } from "../services/engine/quota.js";
 import { connectorCatalog, connectors } from "../services/sources/connectors/index.js";
 
 const submitSchema = z.object({
@@ -124,6 +126,26 @@ sourcesRouter.post("/:id/verify", async (request, response, next) => {
 
     const connector = connectors.find((entry) => entry.detect(row.url));
     const startedAt = Date.now();
+
+    // A verification is two upstream requests (health + jobs). The daily
+    // quota is per source, so one noisy source cannot spend the whole
+    // budget, and a source that was already checked today is not checked
+    // again.
+    const reservation = await reserveDailyQuota(
+      "sources",
+      sourceId,
+      2,
+      Number(config.DISCOVERY_DAILY_QUOTA ?? 0) || 1_000,
+    );
+    if (!reservation.ok) {
+      response.status(429).json({
+        error: "SOURCE_QUOTA_EXCEEDED",
+        used: reservation.used,
+        limit: reservation.limit,
+      });
+      return;
+    }
+
     const health = connector
       ? await connector.healthCheck({ url: row.url, kind: "html" })
       : { ok: false, error: "NO_ADAPTER" };

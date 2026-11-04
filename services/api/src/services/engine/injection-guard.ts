@@ -22,11 +22,12 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { aiChat, isAiConfigured } from "../ai/client.js";
+import { aiChatDetailed, isAiConfigured } from "../ai/client.js";
 import { config } from "../../config.js";
 import { logger } from "../../logger.js";
 import { extractJsonBlock } from "./schema.js";
-import { CostTracking } from "./cost-tracking.js";
+import { CostTracking, priceCall } from "./cost-tracking.js";
+import { reserveBudget } from "./reservation.js";
 import { pooled } from "./index.js";
 
 export type InjectionVerdict = "none" | "injection";
@@ -45,6 +46,12 @@ export interface GuardResult {
   verdict: InjectionVerdict;
   chunkCount: number;
   estimatedCostUsd: number;
+  /**
+   * The shared AI budget was exhausted, so the classifier could not run.
+   * The caller must not proceed to an LLM call either: a page we could not
+   * vet is a page we must not send to a model.
+   */
+  budgetExhausted?: boolean;
 }
 
 const DEFAULT_CHUNK = 32_000;
@@ -120,16 +127,34 @@ export async function guardPromptInjection(
 
   const tracker = new CostTracking(options.costLimitUsd);
   const model = options.model ?? config.AI_MODEL;
+  let budgetExhausted = false;
 
   const classified = await pooled(
     chunks,
     concurrency,
     async (chunk): Promise<boolean> => {
       const tag = `untrusted_page_content_${randomUUID()}`;
+      const systemPrompt = buildSystemPrompt();
+      const promptTokens = Math.ceil((chunk.length + systemPrompt.length) / 4);
+
+      // Same fleet-wide budget as the gap-fill: reserve before the call,
+      // settle after, refund the whole reservation if the call throws.
+      const estimatedUsd = priceCall(model, promptTokens, 300) ?? 0;
+      const reservation = await reserveBudget({
+        scope: "ai",
+        subject: "injection-guard",
+        estimatedUsd,
+        limitUsd: Number(config.AI_COST_LIMIT_USD ?? 0),
+      });
+      if (!reservation.ok) {
+        budgetExhausted = true;
+        return false; // fail open, but the caller is told not to spend
+      }
+
       try {
-        const raw = await aiChat(
+        const completion = await aiChatDetailed(
           [
-            { role: "system", content: buildSystemPrompt() },
+            { role: "system", content: systemPrompt },
             {
               role: "user",
               content: `<${tag}>\n${chunk}\n</${tag}>`,
@@ -137,14 +162,25 @@ export async function guardPromptInjection(
           ],
           { model, temperature: 0 },
         );
+
+        const actualUsd =
+          priceCall(
+            completion.model,
+            completion.promptTokens || promptTokens,
+            completion.completionTokens || Math.ceil(completion.text.length / 4),
+          ) ?? estimatedUsd;
+        await reservation.settle(actualUsd);
+
         tracker.addCall({
           type: "injection-guard",
-          model,
-          promptTokens: Math.ceil((chunk.length + buildSystemPrompt().length) / 4),
-          completionTokens: Math.ceil(raw.length / 4),
+          model: completion.model,
+          promptTokens: completion.promptTokens || promptTokens,
+          completionTokens:
+            completion.completionTokens || Math.ceil(completion.text.length / 4),
         });
-        return isInjectionResponse(raw);
+        return isInjectionResponse(completion.text);
       } catch (error) {
+        await reservation.release();
         logger.debug({ error }, "Injection guard call failed; chunk treated as clean");
         return false; // fail open
       }
@@ -161,5 +197,6 @@ export async function guardPromptInjection(
     verdict,
     chunkCount: chunks.length,
     estimatedCostUsd: tracker.totalUsd,
+    budgetExhausted,
   };
 }

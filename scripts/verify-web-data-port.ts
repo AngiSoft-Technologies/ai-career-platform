@@ -52,6 +52,14 @@ import {
   assertPublicUrl,
   isPrivateAddress,
 } from "../services/api/src/lib/net-guard.js";
+import {
+  deriveVariantKey,
+  isNegativeStillValid,
+} from "../services/api/src/services/engine/cache-variant.js";
+import {
+  reserveBudget,
+  withBudget,
+} from "../services/api/src/services/engine/reservation.js";
 
 let failures = 0;
 
@@ -483,6 +491,94 @@ async function main(): Promise<void> {
     !(await blocked("https://8.8.8.8/")),
   );
 
+  // -------------------------------------------------------------------------
+  console.log("\n[6] budgets, quotas and cache variants");
+  // -------------------------------------------------------------------------
+
+  // No limit means no accounting and no failure.
+  const unlimited = await reserveBudget({
+    scope: "verify",
+    subject: "budget",
+    estimatedUsd: 1,
+    limitUsd: 0,
+  });
+  check("an unlimited budget always admits", unlimited.ok);
+  check("an unlimited budget reserves nothing", unlimited.reservedUsd === 0);
+
+  // Redis is unavailable in this environment, so the budget must fail open
+  // rather than block the work.
+  const failOpen = await reserveBudget({
+    scope: "verify",
+    subject: "budget",
+    estimatedUsd: 5,
+    limitUsd: 10,
+  });
+  check("the budget fails open when Redis is down", failOpen.ok);
+  check("a fail-open reservation reserves nothing", failOpen.reservedUsd === 0);
+
+  // A throwing work must propagate and release the reservation.
+  let thrown = false;
+  try {
+    await withBudget(
+      { scope: "verify", subject: "budget", estimatedUsd: 1, limitUsd: 10 },
+      async () => {
+        throw new Error("work failed");
+      },
+    );
+  } catch (error) {
+    thrown = error instanceof Error && error.message === "work failed";
+  }
+  check("a failing work propagates its error", thrown);
+
+  // The work's own result is returned untouched.
+  const settled = await withBudget(
+    { scope: "verify", subject: "budget", estimatedUsd: 1, limitUsd: 10 },
+    async () => ({ result: "done", actualUsd: 0.25 }),
+  );
+  check("a successful work returns its result", settled === "done");
+
+  // Cache variants: dimensions that change the content must not share a key.
+  const mainContent = deriveVariantKey({
+    urlHash: "hash-1",
+    blockAds: true,
+    isStealth: false,
+  });
+  const fullPage = deriveVariantKey({
+    urlHash: "hash-1",
+    blockAds: false,
+    isStealth: false,
+  });
+  const proxiedVariant = deriveVariantKey({
+    urlHash: "hash-1",
+    blockAds: true,
+    isStealth: true,
+  });
+  const otherUrl = deriveVariantKey({
+    urlHash: "hash-2",
+    blockAds: true,
+    isStealth: false,
+  });
+  check("main content and full page are different variants", mainContent !== fullPage);
+  check("the proxy tier is a different variant", mainContent !== proxiedVariant);
+  check("a different URL is a different variant", mainContent !== otherUrl);
+  check(
+    "the same dimensions produce the same key",
+    mainContent ===
+      deriveVariantKey({ urlHash: "hash-1", blockAds: true, isStealth: false }),
+  );
+
+  // The windowed negative proof: the marker becomes usable once every
+  // possible entry has aged out.
+  const now = 1_000_000;
+  check(
+    "a marker proves emptiness once its entries have aged out",
+    isNegativeStillValid(now, 60_000, now + 60_000),
+  );
+  check(
+    "a marker does not prove emptiness while entries could still be fresh",
+    !isNegativeStillValid(now, 60_000, now + 30_000),
+  );
+
   console.log(
     failures === 0
       ? "\nALL CHECKS PASSED\n"
@@ -490,5 +586,4 @@ async function main(): Promise<void> {
   );
   if (failures > 0) process.exitCode = 1;
 }
-
 void main();

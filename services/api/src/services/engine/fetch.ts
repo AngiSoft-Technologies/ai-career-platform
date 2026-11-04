@@ -16,6 +16,7 @@
  *   - Their native HTML→Markdown: `htmlToMarkdown` (same Turndown approach).
  */
 
+import { createHash } from "node:crypto";
 import robotsParser, { type Robot } from "robots-parser";
 import pdfParse from "pdf-parse";
 
@@ -30,6 +31,10 @@ import {
 } from "../../lib/net-guard.js";
 import { browserHeaders, egressFetch, randomUserAgent } from "./egress.js";
 import { buildFetchEngines } from "./fetch-engines.js";
+import {
+  VariantCache,
+  type VariantDimensions,
+} from "./cache-variant.js";
 import { runWaterfall, type WaterfallMeta } from "./waterfall.js";
 import {
   extractJobPostingJsonLd,
@@ -169,11 +174,50 @@ function readCache(key: string): ScrapeResult | null {
 }
 
 function writeCache(key: string, result: ScrapeResult): void {
+  // A rate limit or a server error is not a page: caching it would keep the
+  // error alive for the whole TTL.
+  if (result.status === 429 || result.status >= 500) return;
   if (pageCache.size >= PAGE_CACHE_MAX) {
     const oldest = pageCache.keys().next().value;
     if (oldest) pageCache.delete(oldest);
   }
   pageCache.set(key, { expiresAt: Date.now() + PAGE_CACHE_TTL_MS, result });
+}
+
+// ---------------------------------------------------------------------------
+// Shared variant cache (Redis)
+//
+// The in-process map above only helps the machine that fetched the page.
+// With eleven API machines, the same URL is fetched up to eleven times in a
+// window. The variant cache is the shared layer:
+//
+//   • the variant key carries every dimension that changes the *content*
+//     (main-content vs full page, direct vs proxy tier), so a cached hit is
+//     never served for a different request shape;
+//   • a 4xx writes a *negative* marker, which proves the URL was empty over a
+//     time window instead of merely expiring a TTL. A later positive write
+//     deletes the marker, so a page that comes back is fetched immediately.
+//
+// The cache is an accelerator: every failure path falls through to the fetch.
+// ---------------------------------------------------------------------------
+
+const variantCache = new VariantCache<ScrapeResult>("page", {
+  entryTtlSeconds: Math.ceil(PAGE_CACHE_TTL_MS / 1_000),
+  entryCap: 4,
+  negativeTtlMs: Number(process.env.INDEX_NEGATIVE_TTL_MS ?? 900_000),
+});
+
+function variantDimensions(
+  url: string,
+  options: ScrapeOptions,
+): VariantDimensions {
+  return {
+    urlHash: createHash("sha256").update(url).digest("hex"),
+    // Main-content extraction and a full-page fetch are different products.
+    blockAds: options.onlyMainContent !== false,
+    // The proxy tier can see a different page, so it is a different variant.
+    isStealth: options.preferProxy === true,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -236,6 +280,36 @@ export async function scrapeUrl(
   if (!options.force) {
     const cached = readCache(cacheKey);
     if (cached) return cached;
+
+    // Shared cache: another machine may already have fetched this exact
+    // variant of the page.
+    const dimensions = variantDimensions(url.toString(), options);
+    const shared = await variantCache.read(dimensions);
+    if (shared.status === "hit") {
+      const result = { ...shared.value, fromCache: true };
+      writeCache(cacheKey, result);
+      return result;
+    }
+    if (shared.status === "negative") {
+      // The URL was proven empty over the marker window: no entry existed.
+      // Asking again would only produce the same 404, so the proof stands in
+      // for the fetch.
+      const result: ScrapeResult = {
+        url: url.toString(),
+        finalUrl: url.toString(),
+        status: 404,
+        contentType: "",
+        html: "",
+        markdown: "",
+        metadata: {},
+        jsonLd: null,
+        via: "cache:negative",
+        fromCache: true,
+        looksLikeSpa: false,
+      };
+      writeCache(cacheKey, result);
+      return result;
+    }
   }
 
   const userAgent = randomUserAgent();
@@ -306,6 +380,19 @@ export async function scrapeUrl(
   }
 
   writeCache(cacheKey, result);
+
+  // Shared cache write. A 404/410 writes a negative marker instead of a
+  // value: the URL is proven empty for the marker window, and a later
+  // positive write deletes the marker. A 403 or 429 is *not* proof of
+  // emptiness — it is a rate limit, and caching it would keep us away from a
+  // page that is perfectly reachable.
+  const dimensions = variantDimensions(url.toString(), options);
+  if (result.status === 404 || result.status === 410) {
+    await variantCache.writeNegative(dimensions);
+  } else if (result.status < 500 && result.status !== 429) {
+    await variantCache.write(dimensions, result);
+  }
+
   return result;
 }
 

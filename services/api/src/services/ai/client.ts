@@ -161,18 +161,37 @@ async function aiRequest(
   return (await response.json()) as unknown;
 }
 
-export async function aiChat(
+export interface AiChatResult {
+  text: string;
+  /** Token counts reported by the provider, when it reports them. */
+  promptTokens: number;
+  completionTokens: number;
+  /** The model that actually answered (may differ from the requested one). */
+  model: string;
+  provider: AiProviderName;
+}
+
+/**
+ * Chat completion with the provider's usage figures.
+ *
+ * `aiChat` only needs the text, but anything that meters spend needs the
+ * token counts: estimating them from character counts is good enough to
+ * reserve a budget and bad enough to settle one. So the detailed variant
+ * exists, and `aiChat` is a thin wrapper over it.
+ */
+export async function aiChatDetailed(
   messages: ChatMessage[],
   options: { model?: string; temperature?: number; maxTokens?: number } = {},
-): Promise<string> {
+): Promise<AiChatResult> {
   const providers = getAiProviders();
   if (providers.length === 0) throw new AiNotConfiguredError();
 
   let lastError: unknown;
   for (const provider of providers) {
     try {
+      const requestedModel = options.model ?? provider.chatModel;
       const payload = await aiRequest(provider, "/chat/completions", {
-        model: options.model ?? provider.chatModel,
+        model: requestedModel,
         messages,
         temperature: options.temperature ?? 0.4,
         max_tokens: options.maxTokens ?? 900,
@@ -183,7 +202,20 @@ export async function aiChat(
       }).choices;
       const content = choices?.[0]?.message?.content;
       if (!content) throw new AiRequestError("AI_EMPTY_RESPONSE");
-      return content.trim();
+
+      const usage = (payload as {
+        usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+      }).usage;
+
+      return {
+        text: content.trim(),
+        promptTokens: Number(usage?.prompt_tokens ?? 0),
+        completionTokens: Number(usage?.completion_tokens ?? 0),
+        model: String(
+          (payload as { model?: string }).model ?? requestedModel,
+        ),
+        provider: provider.name,
+      };
     } catch (error) {
       lastError = error;
     }
@@ -192,6 +224,14 @@ export async function aiChat(
   throw lastError instanceof Error
     ? lastError
     : new AiRequestError("AI_REQUEST_FAILED");
+}
+
+export async function aiChat(
+  messages: ChatMessage[],
+  options: { model?: string; temperature?: number; maxTokens?: number } = {},
+): Promise<string> {
+  const result = await aiChatDetailed(messages, options);
+  return result.text;
 }
 
 export async function aiEmbed(
