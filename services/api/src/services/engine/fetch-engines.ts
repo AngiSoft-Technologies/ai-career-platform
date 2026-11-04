@@ -26,12 +26,7 @@
 import { AddFeatureError, EngineRetryableError, type WaterfallEngine, type WaterfallMeta } from "./waterfall.js";
 import { browserHeaders, egressFetch } from "./egress.js";
 import { decodeBody } from "./fetch.js";
-import {
-  extractJobPostingJsonLd,
-  extractMetadata,
-  htmlToMarkdown,
-  looksLikeSpa,
-} from "./html.js";
+import { processHtmlOffThread } from "./html-worker-host.js";
 import type { ScrapeOptions, ScrapeResult } from "./fetch.js";
 
 /** Statuses that mean "this address/tier is not welcome", i.e. change tier. */
@@ -67,12 +62,19 @@ function requestInit(attempt: FetchAttempt): RequestInit {
   };
 }
 
-/** Parses a response body into the engine's ScrapeResult (no cache write). */
-function parseResponse(
+/**
+ * Parses a response body into the engine's ScrapeResult (no cache write).
+ *
+ * The HTML pass runs on a worker thread: converting a large page to
+ * Markdown is synchronous and superlinear, and doing it here would block the
+ * event loop for minutes — which is exactly what took the background
+ * pipeline down once.
+ */
+async function parseResponse(
   attempt: FetchAttempt,
   response: { status: number; headers: Record<string, string>; body: ArrayBuffer; finalUrl: string; via: string },
   engine: string,
-): ScrapeResult {
+): Promise<ScrapeResult> {
   const contentType = response.headers["content-type"] ?? response.headers["Content-Type"] ?? "";
   const url = attempt.url;
   const finalUrl = response.finalUrl || url;
@@ -117,17 +119,23 @@ function parseResponse(
     };
   }
 
-  return {
-    ...base,
-    html: text,
-    markdown: htmlToMarkdown(text, {
+  const processed = await processHtmlOffThread(
+    text,
+    {
       onlyMainContent: attempt.options.onlyMainContent,
       includeTags: attempt.options.includeTags,
       excludeTags: attempt.options.excludeTags,
-    }),
-    metadata: extractMetadata(text, finalUrl),
-    jsonLd: extractJobPostingJsonLd(text),
-    looksLikeSpa: looksLikeSpa(text),
+    },
+    finalUrl,
+  );
+
+  return {
+    ...base,
+    html: text,
+    markdown: processed.markdown,
+    metadata: processed.metadata,
+    jsonLd: processed.jsonLd,
+    looksLikeSpa: processed.looksLikeSpa,
     engine,
   };
 }
@@ -181,7 +189,7 @@ function makeEngine(
         throw new EngineRetryableError(`HTTP ${response.status}`);
       }
 
-      const parsed = parseResponse(attempt, response, name);
+      const parsed = await parseResponse(attempt, response, name);
 
       if (parsed.contentType.includes("application/pdf")) {
         const pdf = await deps.parsePdf(Buffer.from(response.body));

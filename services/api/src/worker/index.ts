@@ -4,6 +4,10 @@ import { config } from "../config.js";
 import { logger } from "../logger.js";
 import { startDistributedInterval, type TickHandle } from "../lib/distributed-tick.js";
 import { clearBacklog, jobPriority, registerBacklog } from "../services/engine/priority.js";
+import {
+  shutdownHtmlWorkers,
+  warmUpHtmlWorkers,
+} from "../services/engine/html-worker-host.js";
 import { runIngestion } from "../services/ingestion/run.js";
 import { refreshOpportunityEmbeddings } from "../services/ai/embeddings.js";
 import { query } from "../db/pool.js";
@@ -406,10 +410,21 @@ export async function startWorkers(): Promise<WorkerHandle> {
 
   const stopWatchdog = startStallWatchdog(queueMap);
 
+  // The HTML worker loads its toolchain on first use, which costs a couple
+  // of seconds. Starting it now means the first page of the first job does
+  // not pay for it — and it happens while nothing is waiting on a page.
+  void warmUpHtmlWorkers().catch((error) => {
+    logger.debug(
+      { error: error instanceof Error ? error.message : String(error) },
+      "HTML worker warm-up skipped",
+    );
+  });
+
   return {
     queues: queueMap,
     stop: async () => {
       stopWatchdog();
+      await shutdownHtmlWorkers();
       await Promise.all(workers.map((worker) => worker.close()));
       workers = [];
       await Promise.all(

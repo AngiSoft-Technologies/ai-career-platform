@@ -37,10 +37,6 @@ import {
 } from "./cache-variant.js";
 import { runWaterfall, type WaterfallMeta } from "./waterfall.js";
 import {
-  extractJobPostingJsonLd,
-  extractMetadata,
-  htmlToMarkdown,
-  looksLikeSpa,
   type JsonLdJobPosting,
   type PageMetadata,
 } from "./html.js";

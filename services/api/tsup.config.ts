@@ -7,6 +7,10 @@ export default defineConfig({
     "src/db/seed.ts",
     "src/db/embed.ts",
     "src/db/ingest.ts",
+    // The HTML worker is its own thread: the HTML→Markdown conversion is
+    // synchronous and superlinear, and on the main thread a large page
+    // blocks the whole process.
+    "src/html-worker.ts",
   ],
   format: ["esm"],
   outDir: "dist",

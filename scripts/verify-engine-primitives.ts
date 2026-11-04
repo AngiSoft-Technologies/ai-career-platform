@@ -27,6 +27,45 @@ import { normaliseUrlIdentity, hotKeySafe, isUuidV7 } from "../services/api/src/
 import { overfetchLimitFor } from "../services/api/src/services/engine/search-orchestrator.js";
 import { startDistributedInterval } from "../services/api/src/lib/distributed-tick.js";
 import { withJobDeadline } from "../services/api/src/worker/index.js";
+import {
+  MAX_MARKDOWN_CHARS,
+  extractMetadata,
+  fastTextFromHtml,
+  htmlToMarkdown,
+  looksLikeSpa,
+  processHtml,
+  processHtmlFast,
+  stripHeavyMarkup,
+  truncateHtml,
+} from "../services/api/src/services/engine/html.js";
+
+/** A document with the shape of a real job board page, at a given size. */
+function buildLargeHtml(bytes: number): string {
+  const parts: string[] = [
+    "<!doctype html><html><head><title>Senior Backend Engineer</title>",
+    '<meta name="description" content="We are hiring a backend engineer.">',
+    "<script>window.__INLINE_STATE__ = {big: true};</script>",
+    '<script type="application/ld+json">{"@type":"JobPosting","title":"Senior Backend Engineer",' +
+      '"hiringOrganization":{"name":"Acme Ltd"},' +
+      '"jobLocation":{"address":{"addressLocality":"Nairobi","addressCountry":"KE"}},' +
+      '"baseSalary":{"value":{"minValue":180000,"maxValue":250000,"currency":"KES"}}}</script>',
+    "</head><body>",
+  ];
+  let size = parts.join("").length;
+  let index = 0;
+  while (size < bytes) {
+    const chunk =
+      `<div class="row"><div class="col"><span class="label">Requirement ${index}</span>` +
+      `<p>We are looking for a Senior Backend Engineer with Python, PostgreSQL and AWS ` +
+      `experience. You will work on our platform team in Nairobi, Kenya. Apply at ` +
+      `<a href="https://example.com/jobs/${index}">https://example.com/jobs/${index}</a>.</p></div></div>`;
+    parts.push(chunk);
+    size += chunk.length;
+    index += 1;
+  }
+  parts.push("</body></html>");
+  return parts.join("");
+}
 
 let failures = 0;
 
@@ -242,6 +281,133 @@ console.log("\n[12] job deadlines");
     timedOut = error instanceof Error && error.name === "JobTimeoutError";
   }
   check("a job that never settles is failed", timedOut);
+}
+
+console.log("\n[13] bounded HTML processing");
+{
+  // The production failure: a 3 MB page took 71 seconds inside Turndown and
+  // blocked the event loop for the whole time, which took the background
+  // pipeline down. Every bound below exists because of that.
+  const huge = buildLargeHtml(3 * 1024 * 1024);
+
+  const stripped = stripHeavyMarkup(huge);
+  check(
+    "script content is removed before parsing",
+    !stripped.includes("__INLINE_STATE__") && stripped.length < huge.length,
+    `${huge.length} -> ${stripped.length}`,
+  );
+
+  const bounded = truncateHtml(stripped, 1000);
+  check(
+    "truncation respects the cap",
+    bounded.length <= 1000,
+    `length=${bounded.length}`,
+  );
+  check(
+    "truncation cuts at a tag boundary",
+    bounded.length === 0 || bounded.endsWith(">"),
+    `tail=${bounded.slice(-12)}`,
+  );
+
+  const text = fastTextFromHtml(huge);
+  check(
+    "the linear text extraction keeps the words",
+    text.includes("Senior Backend Engineer") && text.includes("Nairobi"),
+    `chars=${text.length}`,
+  );
+
+  const fastStarted = Date.now();
+  const fast = processHtmlFast(huge, {}, "https://example.test/job");
+  const fastMs = Date.now() - fastStarted;
+  check(
+    "the linear whole-page pass finishes quickly",
+    fastMs < 5_000,
+    `${fastMs}ms`,
+  );
+  check(
+    "the linear pass still reads the metadata",
+    fast.metadata.title === "Senior Backend Engineer",
+    fast.metadata.title,
+  );
+  check(
+    "the linear pass still reads the JSON-LD",
+    fast.jsonLd?.company === "Acme Ltd",
+    fast.jsonLd?.company,
+  );
+
+  const started = Date.now();
+  const processed = processHtml(huge, {}, "https://example.test/job");
+  const processMs = Date.now() - started;
+  check(
+    "the whole-page pass finishes quickly",
+    processMs < 15_000,
+    `${processMs}ms`,
+  );
+  check(
+    "the whole-page pass reads the metadata",
+    processed.metadata.title === "Senior Backend Engineer",
+  );
+  check(
+    "the whole-page pass reads the description",
+    processed.metadata.description?.includes("backend engineer") === true,
+  );
+  check(
+    "the whole-page pass reads the JSON-LD",
+    processed.jsonLd?.company === "Acme Ltd",
+  );
+  check(
+    "the whole-page pass reads the salary",
+    processed.jsonLd?.salaryMin === 180_000,
+    String(processed.jsonLd?.salaryMin),
+  );
+  check(
+    "the markdown is bounded",
+    processed.markdown.length <= MAX_MARKDOWN_CHARS,
+    `length=${processed.markdown.length}`,
+  );
+
+  const markdownStarted = Date.now();
+  const markdown = htmlToMarkdown(huge);
+  const markdownMs = Date.now() - markdownStarted;
+  check(
+    "htmlToMarkdown finishes quickly on a huge document",
+    markdownMs < 15_000,
+    `${markdownMs}ms`,
+  );
+  check(
+    "htmlToMarkdown is bounded",
+    markdown.length <= MAX_MARKDOWN_CHARS,
+    `length=${markdown.length}`,
+  );
+
+  // An SPA has scripts and almost no text.
+  check(
+    "a script-only page is detected as an SPA",
+    looksLikeSpa("<html><body><script>window.x=1</script></body></html>"),
+  );
+  check(
+    "a page with real text is not an SPA",
+    !looksLikeSpa(
+      `<html><body><script>window.x=1</script><p>${"word ".repeat(200)}</p></body></html>`,
+    ),
+  );
+  check(
+    "a page without scripts is not an SPA",
+    !looksLikeSpa("<html><body><p>short</p></body></html>"),
+  );
+
+  // Metadata must survive either attribute order.
+  const reversed = extractMetadata(
+    '<html lang="en"><head><meta content="A description" name="description">' +
+      '<meta content="OG title" property="og:title">' +
+      '<link href="https://example.test/canonical" rel="canonical">' +
+      "<title>A title</title></head><body></body></html>",
+    "https://example.test/job",
+  );
+  check("metadata reads a reversed attribute order", reversed.description === "A description");
+  check("metadata reads the open-graph title", reversed.ogTitle === "OG title");
+  check("metadata reads the canonical link", reversed.canonical === "https://example.test/canonical");
+  check("metadata reads the language", reversed.language === "en");
 }
 
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
