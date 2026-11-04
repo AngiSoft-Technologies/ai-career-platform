@@ -3,6 +3,114 @@ import { haversineKm } from "../../services/geo.js";
 import { BaseDiscoveryAgent, type AgentContext, type AgentRunResult } from "./base.js";
 
 /**
+ * Country names, mapped from their two-letter code.
+ *
+ * The two sides of a match write the country differently: a candidate
+ * profile says "Kenya", a scraped listing says "KE". A literal comparison
+ * treats those as different countries, so a Kenyan user is shown nothing.
+ */
+const COUNTRY_NAMES: Record<string, string> = {
+  KE: "kenya",
+  NG: "nigeria",
+  ZA: "south africa",
+  GH: "ghana",
+  TZ: "tanzania",
+  UG: "uganda",
+  RW: "rwanda",
+  ET: "ethiopia",
+  EG: "egypt",
+  MA: "morocco",
+  US: "united states",
+  USA: "united states",
+  GB: "united kingdom",
+  UK: "united kingdom",
+  DE: "germany",
+  AT: "austria",
+  CH: "switzerland",
+  FR: "france",
+  ES: "spain",
+  IT: "italy",
+  NL: "netherlands",
+  BE: "belgium",
+  IE: "ireland",
+  PL: "poland",
+  PT: "portugal",
+  SE: "sweden",
+  NO: "norway",
+  DK: "denmark",
+  FI: "finland",
+  CA: "canada",
+  AU: "australia",
+  NZ: "new zealand",
+  IN: "india",
+  BD: "bangladesh",
+  PK: "pakistan",
+  CN: "china",
+  JP: "japan",
+  BR: "brazil",
+  MX: "mexico",
+};
+
+/** Normalises a country to a comparable token. */
+export function normaliseCountry(value: string | null | undefined): string {
+  if (!value) return "";
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) return "";
+  const mapped = COUNTRY_NAMES[trimmed.toUpperCase()];
+  if (mapped) return mapped;
+  // "Kenya" and "ke" both land on "kenya"; "South Africa" lands on
+  // "south africa" with the space kept, so both sides have to agree.
+  return trimmed.replace(/\s+/g, " ");
+}
+
+/** True when two country spellings refer to the same country. */
+export function sameCountry(
+  left: string | null | undefined,
+  right: string | null | undefined,
+): boolean {
+  const a = normaliseCountry(left);
+  const b = normaliseCountry(right);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  // "Remote" and "Worldwide" are not countries, but they are not a
+  // mismatch either — a user in Kenya can still apply to a remote role.
+  if (a === "remote" || a === "worldwide" || a === "anywhere") return false;
+  if (b === "remote" || b === "worldwide" || b === "anywhere") return false;
+  return false;
+}
+
+/**
+ * True when two place names refer to the same place.
+ *
+ * Listings write "London", "London, London", "UK - London" and
+ * "London (Hybrid)"; a profile writes "London". The comparison is on the
+ * first comma-separated chunk, lowercased, with the country suffix and
+ * parenthetical qualifiers removed.
+ */
+export function samePlace(
+  left: string | null | undefined,
+  right: string | null | undefined,
+): boolean {
+  const a = placeKey(left);
+  const b = placeKey(right);
+  return a !== "" && a === b;
+}
+
+function placeKey(value: string | null | undefined): string {
+  if (!value) return "";
+  // The chain has to be parenthesised: `a ?? "".replace(...)` binds the
+  // `.replace` to the empty string, not to the whole expression.
+  const first = (value.split(",")[0] ?? "")
+    .replace(/\([^)]*\)/g, "")
+    .replace(/\b(remote|hybrid|onsite|on-site)\b/gi, "")
+    .trim()
+    .toLowerCase();
+  // "UK - London", "US - New York": the country prefix is not part of
+  // the place name.
+  return first.replace(/^[a-z]{2,3}\s*[-–]\s*/, "");
+}
+
+/**
  * User Matching Agent
  *
  * Matches live catalogue entries to users based on:
@@ -56,10 +164,21 @@ export class UserMatchingAgent extends BaseDiscoveryAgent {
       preferred_countries: string[];
       preferred_locations: string[];
     }>(
-      `SELECT u.id as user_id, ulp.latitude, ulp.longitude,
-              ulp.max_distance_km, ulp.country, ulp.city, ulp.remote_ok,
-              ulp.willing_to_relocate, ulp.preferred_countries,
-              cp.preferred_locations
+      // `candidate_profiles` is the profile the onboarding flow writes, and
+      // `user_location_prefs` is the optional finer-grained override. The
+      // override wins where it has a value; the profile fills the rest.
+      // Reading only the override meant the agent saw 31 users with no
+      // country, no coordinates and no preferences — and matched nothing.
+      `SELECT u.id AS user_id,
+              COALESCE(ulp.latitude, cp.latitude) AS latitude,
+              COALESCE(ulp.longitude, cp.longitude) AS longitude,
+              COALESCE(ulp.max_distance_km, cp.max_distance_km) AS max_distance_km,
+              COALESCE(ulp.country, cp.country) AS country,
+              ulp.city AS city,
+              COALESCE(ulp.remote_ok, cp.remote_preferred, false) AS remote_ok,
+              COALESCE(ulp.willing_to_relocate, false) AS willing_to_relocate,
+              COALESCE(ulp.preferred_countries, cp.preferred_countries, '{}') AS preferred_countries,
+              COALESCE(ulp.preferred_locations, cp.preferred_locations, '{}') AS preferred_locations
          FROM users u
          LEFT JOIN user_location_prefs ulp ON ulp.user_id = u.id
          LEFT JOIN candidate_profiles cp ON cp.user_id = u.id
@@ -136,11 +255,7 @@ export class UserMatchingAgent extends BaseDiscoveryAgent {
             score += 10;
             reasons.push("relocation possible");
           }
-        } else if (
-          opportunity.country &&
-          user.country &&
-          opportunity.country === user.country
-        ) {
+        } else if (sameCountry(opportunity.country, user.country)) {
           score += 20;
           reasons.push("same country");
         }
@@ -158,14 +273,18 @@ export class UserMatchingAgent extends BaseDiscoveryAgent {
         // Preferred locations
         if (
           opportunity.city &&
-          user.preferred_locations?.includes(opportunity.city)
+          user.preferred_locations?.some((place) =>
+            samePlace(place, opportunity.city ?? ""),
+          )
         ) {
           score += 15;
           reasons.push("your preferred location");
         }
         if (
           opportunity.country &&
-          user.preferred_countries?.includes(opportunity.country)
+          user.preferred_countries?.some((country) =>
+            sameCountry(country, opportunity.country ?? ""),
+          )
         ) {
           score += 15;
           reasons.push("your preferred country");

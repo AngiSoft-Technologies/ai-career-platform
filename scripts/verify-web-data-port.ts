@@ -19,6 +19,11 @@
 import { readFileSync } from "node:fs";
 
 import {
+  sameCountry,
+  samePlace,
+} from "../services/api/src/services/agents/match-agent.js";
+
+import {
   AbortManager,
   timeoutInstance,
 } from "../services/api/src/lib/abort-manager.js";import {
@@ -699,6 +704,55 @@ async function main(): Promise<void> {
     "promotion runs before the agents that read the catalogue",
     promotionAt > 0 && matchingAt > promotionAt,
     `promotion@${promotionAt} matching@${matchingAt}`,
+  );
+
+  // -------------------------------------------------------------------------
+  // Country and place comparison
+  //
+  // A profile says "Kenya" and a listing says "KE". Compared literally
+  // they are different countries, so a Kenyan user was shown nothing.
+  // -------------------------------------------------------------------------
+
+  check(
+    "a country name and its code are the same country",
+    sameCountry("Kenya", "KE"),
+  );
+  check(
+    "a country code and its name are the same country",
+    sameCountry("US", "United States"),
+  );
+  check(
+    "two spellings of the same country match",
+    sameCountry("South Africa", "south africa"),
+  );
+  check(
+    "different countries do not match",
+    !sameCountry("Kenya", "Germany"),
+  );
+  check(
+    "an empty country does not match",
+    !sameCountry(null, "Kenya") && !sameCountry("Kenya", ""),
+  );
+  check(
+    "a remote listing is not a country match",
+    !sameCountry("Remote", "Kenya"),
+  );
+
+  check(
+    "a city with a country suffix is the same place",
+    samePlace("London, London", "London"),
+  );
+  check(
+    "a city with a qualifier is the same place",
+    samePlace("UK - London", "London"),
+  );
+  check(
+    "a city with a parenthetical is the same place",
+    samePlace("London (Hybrid)", "London"),
+  );
+  check(
+    "different cities do not match",
+    !samePlace("London", "Berlin"),
   );
 
   console.log(

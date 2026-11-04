@@ -250,7 +250,7 @@ export class DeduplicationAgent extends BaseDiscoveryAgent {
         opportunity_id: string;
       }>(
         `WITH payload AS (
-           SELECT * FROM jsonb_array_elements($1::jsonb) AS p
+           SELECT value AS p FROM jsonb_array_elements($1::jsonb)
          ), created AS (
            INSERT INTO opportunities
              (company_id, source_id, external_id, title, description, country, city,
@@ -320,9 +320,9 @@ export class DeduplicationAgent extends BaseDiscoveryAgent {
         await query(
           `INSERT INTO opportunity_skills (opportunity_id, skill)
            SELECT o.id, s.skill
-             FROM jsonb_array_elements($1::jsonb) AS p
-             JOIN opportunities o ON o.id = (p->>'opportunity_id')::uuid
-             CROSS JOIN LATERAL jsonb_array_elements_text(p->'skills') AS s(skill)
+             FROM jsonb_array_elements($1::jsonb) AS p(value)
+             JOIN opportunities o ON o.id = (p.value->>'opportunity_id')::uuid
+             CROSS JOIN LATERAL jsonb_array_elements_text(p.value->'skills') AS s(skill)
            ON CONFLICT (opportunity_id, skill) DO NOTHING`,
           [JSON.stringify(skillPayloads)],
         );

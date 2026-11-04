@@ -103,7 +103,7 @@ export class LearningAgent extends BaseDiscoveryAgent {
       FROM discovery_candidates
       WHERE status IN ('verified', 'imported')
         AND source_url IS NOT NULL
-      GROUP BY domain
+      GROUP BY 1, 2
       ON CONFLICT (domain) DO UPDATE SET
         jobs_found = discovery_known_sources.jobs_found + EXCLUDED.jobs_found,
         last_seen = now()
