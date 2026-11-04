@@ -11,19 +11,24 @@
  *   3. Bing HTML — last resort.
  *
  * All requests go through our own egress pool (`egressFetch`) and rotate
- * browser fingerprints, exactly like the ACE non-fire-engine path.
+ * browser fingerprints, over our own egress with no vendor key.
  */
 
 import * as cheerio from "cheerio";
 import { logger } from "../../logger.js";
 import { browserHeaders, egressFetch, randomUserAgent } from "./egress.js";
-import { fetchJson } from "./fetch.js";
+import { decodeBody, fetchJson } from "./fetch.js";
 
 export interface WebSearchResult {
   url: string;
   title: string;
   description: string;
-  engine: "searxng" | "duckduckgo" | "bing";
+  engine: "searxng" | "googlenews" | "duckduckgo" | "bing";
+  /** 1-based position in the final, filtered response. Renumbered by every
+   *  filter step so client-facing indexes match persisted analytics. */
+  position?: number;
+  /** Category attribution, stamped when category filters were requested. */
+  category?: string | null;
 }
 
 export interface SearchOptions {
@@ -302,9 +307,64 @@ export async function bingSearch(
 }
 
 // ---------------------------------------------------------------------------
+// Google News RSS (structured, no anti-bot — a stable middle tier)
+// ---------------------------------------------------------------------------
+
+export async function googleNewsSearch(
+  query: string,
+  options: SearchOptions = {},
+): Promise<WebSearchResult[]> {
+  const limit = options.limit ?? 10;
+  const params = new URLSearchParams({
+    q: query,
+    hl: options.lang ?? "en",
+    gl: (options.country ?? "ke").toUpperCase(),
+    ceid: `${(options.country ?? "KE").toUpperCase()}:en`,
+  });
+
+  const response = await egressFetch(
+    `https://news.google.com/rss/search?${params.toString()}`,
+    {
+      method: "GET",
+      headers: browserHeaders({ Accept: "application/rss+xml,application/xml,text/xml,*/*" }),
+      signal: AbortSignal.timeout(options.timeoutMs ?? 12_000),
+    },
+  );
+
+  if (response.status < 200 || response.status >= 300) return [];
+
+  const $ = cheerio.load(decodeBody(response.body, "application/xml"), {
+    xmlMode: true,
+  });
+  const seen = new Set<string>();
+  const results: WebSearchResult[] = [];
+
+  $("item").each((_, item) => {
+    const title = $(item).find("title").first().text().trim();
+    const link = $(item).find("link").first().text().trim();
+    const rawDescription = $(item).find("description").first().text().trim();
+    // <description> carries HTML markup; strip it for a plain snippet.
+    const description = rawDescription.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    if (!title || !link || seen.has(link)) return;
+    if (!link.startsWith("http")) return;
+    seen.add(link);
+    results.push({ url: link, title, description, engine: "googlenews" });
+  });
+
+  return results.slice(0, limit);
+}
+
+// ---------------------------------------------------------------------------
 // Orchestrator (ported from search/v2/index.ts)
 // ---------------------------------------------------------------------------
 
+/**
+ * Provider chain with result-validity gates between links. A provider that
+ * returns nothing does not merely "fail" — it is treated as absent and the
+ * next provider is consulted, so one broken instance never costs the search.
+ * Every adapter swallows its own errors, so the chain degrades to "no
+ * results" rather than to a 5xx.
+ */
 export async function searchWeb(
   query: string,
   options: SearchOptions = {},
@@ -316,6 +376,13 @@ export async function searchWeb(
     if (searx.length > 0) return searx;
   } catch (error) {
     logger.debug({ error, query }, "SearXNG unavailable");
+  }
+
+  try {
+    const news = await googleNewsSearch(query, options);
+    if (news.length > 0) return news;
+  } catch (error) {
+    logger.debug({ error, query }, "Google News RSS unavailable");
   }
 
   try {
@@ -345,6 +412,7 @@ export async function searchWebAll(
 ): Promise<WebSearchResult[]> {
   const settled = await Promise.allSettled([
     searxngSearch(query, options),
+    googleNewsSearch(query, options),
     duckDuckGoSearch(query, options),
     bingSearch(query, options),
   ]);

@@ -7,6 +7,8 @@ import type {
 import { APPLICATION_STATUS_TRANSITIONS } from "@angisoft/mboqara-contracts";
 import { query } from "../db/pool.js";
 import { getOpportunity } from "./opportunities.js";
+import { enqueueWebhook } from "./webhooks/outbound.js";
+import { logger } from "../logger.js";
 
 interface BlueprintRow {
   id: string;
@@ -238,6 +240,29 @@ export async function updateApplicationStatus(
      VALUES ($1, $2, $3)`,
     [applicationId, row.status, nextStatus],
   );
+
+  // Notify the tenant's webhook subscribers. A webhook is a notification, not
+  // a transaction participant: if the queue write fails, the status change
+  // still stands and the failure is logged rather than surfaced to the user.
+  try {
+    await enqueueWebhook({
+      event: "application.status_changed",
+      userId,
+      eventId: `${applicationId}:${nextStatus}:${updatedRow.version}`,
+      data: {
+        applicationId,
+        fromStatus: row.status,
+        toStatus: nextStatus,
+        version: updatedRow.version,
+        opportunityId: updatedRow.opportunity_id ?? null,
+      },
+    });
+  } catch (error) {
+    logger.warn(
+      { applicationId, error: error instanceof Error ? error.message : String(error) },
+      "Failed to queue application.status_changed webhook",
+    );
+  }
 
   return mapApplication(updatedRow);
 }

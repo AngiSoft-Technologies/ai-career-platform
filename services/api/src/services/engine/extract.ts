@@ -16,6 +16,7 @@
 import { createHash } from "node:crypto";
 import { aiChat, isAiConfigured } from "../ai/client.js";
 import { logger } from "../../logger.js";
+import { guardPromptInjection } from "./injection-guard.js";
 import type { JsonLdJobPosting, PageMetadata } from "./html.js";
 
 export interface ExtractedJob {
@@ -254,6 +255,20 @@ export async function extractJobWithLlm(input: {
     input.current.title === "Untitled position" ||
     input.current.description.length < 300;
   if (!needsHelp) return input.current;
+
+  // This is the pipeline's highest-exposure call: untrusted page content
+  // going into a model. The guard classifies the content first; a positive
+  // injection verdict keeps the deterministic extraction and never shows the
+  // page to the model. The guard fails open, so an outage costs a call, not
+  // the extraction.
+  const guarded = await guardPromptInjection(input.markdown.slice(0, 9_000));
+  if (guarded.verdict === "injection") {
+    logger.debug(
+      { url: input.url, estimatedCostUsd: guarded.estimatedCostUsd },
+      "Prompt-injection guard blocked LLM gap-fill; deterministic extraction kept",
+    );
+    return input.current;
+  }
 
   const prompt = `Extract the job posting from the page below.
 Return ONLY minified JSON with these keys:

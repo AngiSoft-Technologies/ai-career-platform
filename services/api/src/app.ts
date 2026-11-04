@@ -27,6 +27,7 @@ import { invitationRouter } from "./routes/invitations.js";
 import { v1Router } from "./routes/v1.js";
 import { authRouter } from "./routes/auth.js";
 import { webhookRouter } from "./routes/webhooks.js";
+import { webhookEndpointRouter } from "./routes/webhook-endpoints.js";
 import { n8nRouter } from "./routes/n8n.js";
 import { agentRouter } from "./routes/agent.js";
 import { internalRouter } from "./routes/internal.js";
@@ -217,6 +218,10 @@ app.use("/internal", internalRouter);
 app.use(identity);
 app.use("/v1/mcp", mcpRouter);
 app.use("/mcp", mcpRouter);
+// Outbound webhook management. Mounted after `identity` because every route
+// is scoped to the calling user.
+app.use("/v1/webhook-endpoints", webhookEndpointRouter);
+app.use("/api/v1/webhook-endpoints", webhookEndpointRouter);
 app.use("/v1", v1Router);
 app.use("/api/v1", v1Router);
 

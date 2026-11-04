@@ -1,7 +1,8 @@
 /**
  * Our own egress layer.
  *
- * ACE routes every scrape through its proprietary "fire-engine" pool.
+ * Every scrape routes through this pool instead of a proprietary upstream
+ * browser/TLS pool.
  * We cannot buy that, so we build the same idea from free parts we already
  * own:
  *
@@ -18,6 +19,7 @@
 
 import { ProxyAgent, fetch as undiciFetch, type Dispatcher } from "undici";
 import { logger } from "../../logger.js";
+import { redactError, redactUrl } from "../../lib/redact.js";
 
 export interface EgressResponse {
   status: number;
@@ -160,11 +162,17 @@ async function fetchViaNode(
         ? Uint8Array.from(Buffer.from(payload.bodyBase64, "base64")).buffer
         : new TextEncoder().encode(payload.body ?? "").buffer,
       finalUrl: payload.finalUrl ?? url,
-      via: `node:${node.url}`,
+      // The node URL can carry a shared secret in its path or query, and the
+      // `via` field is stored on the scrape result — redact before it lands
+      // anywhere durable.
+      via: `node:${redactUrl(node.url)}`,
     };
   } catch (error) {
     recordFailure(node.health);
-    logger.debug({ error, node: node.url }, "Egress node failed");
+    logger.debug(
+      { error: redactError(error), node: redactUrl(node.url) },
+      "Egress node failed",
+    );
     return null;
   } finally {
     clearTimeout(timer);
@@ -313,11 +321,17 @@ async function fetchViaProxy(
       headers: Object.fromEntries(response.headers.entries()),
       body,
       finalUrl: response.url,
-      via: `proxy:${proxy.url}`,
+      // A free proxy URL carries its credentials in the userinfo section.
+      // `via` ends up on the scrape result and in the cache, so it must not
+      // contain the password.
+      via: `proxy:${redactUrl(proxy.url)}`,
     };
   } catch (error) {
     recordFailure(proxy.health);
-    logger.debug({ error, proxy: proxy.url }, "Free proxy request failed");
+    logger.debug(
+      { error: redactError(error), proxy: redactUrl(proxy.url) },
+      "Free proxy request failed",
+    );
     return null;
   } finally {
     await dispatcher.close().catch(() => undefined);

@@ -1,7 +1,7 @@
 import { query } from "../../db/pool.js";
 import { logger } from "../../logger.js";
 import { BaseDiscoveryAgent, type AgentContext, type AgentRunResult } from "./base.js";
-import { searchWeb } from "../engine/search.js";
+import { searchWebPlanned } from "../engine/search-orchestrator.js";
 import { discoverFromDomainDetailed, detectAts, fetchAtsBoard } from "../engine/discover.js";
 import { crawlSite } from "../engine/crawl.js";
 import { capturePage } from "../engine/screen.js";
@@ -285,10 +285,10 @@ export class KenyaPlatformAgent extends BaseDiscoveryAgent {
 
     // 5. Search fallback — for platforms whose site is entirely gated.
     if (jobs.length === 0) {
-      const results = await searchWeb(
-        `${target.url} careers hiring`,
-        { limit: 8 },
-      ).catch(() => []);
+      const planned = await searchWebPlanned(`${target.url} careers hiring`, {
+        limit: 8,
+      }).catch(() => null);
+      const results = planned?.results ?? [];
       for (const result of results) {
         const page = await capturePage(result.url, { maxJobs: 20 }).catch(() => null);
         if (!page) continue;

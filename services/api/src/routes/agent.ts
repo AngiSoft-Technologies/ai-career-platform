@@ -2,11 +2,11 @@ import { Router } from "express";
 import { z } from "zod";
 import { scrapeUrl } from "../services/engine/fetch.js";
 import { extractJob } from "../services/engine/extract.js";
-import { searchWeb } from "../services/engine/search.js";
+import { searchWeb, type WebSearchResult } from "../services/engine/search.js";
 import { crawlSite, discoverJobUrls } from "../services/engine/crawl.js";
 import { capturePage } from "../services/engine/screen.js";
 import { assessEligibility } from "../services/engine/eligibility.js";
-import { createMarkdownChangeDiff, judgeListingChange } from "../services/engine/freshness.js";
+import { createMarkdownChangeDiff, judgeListingChange, detectMeaningfulChange } from "../services/engine/freshness.js";
 import { egressStatus } from "../services/engine/egress.js";
 import { getSkills, renderSkillCatalogue } from "../services/engine/skills.js";
 import { fetchFreeJobs } from "../services/engine/sources.js";
@@ -156,22 +156,31 @@ agentRouter.post("/search", async (request, response) => {
   }
 
   try {
-    const { searchWebAll, duckDuckGoSearch, searxngSearch, bingSearch } = await import(
+    const { duckDuckGoSearch, searxngSearch, bingSearch } = await import(
       "../services/engine/search.js"
     );
 
-    const runner =
-      parsed.data.engine === "duckduckgo"
-        ? duckDuckGoSearch
-        : parsed.data.engine === "bing"
-          ? bingSearch
-          : parsed.data.engine === "searxng"
-            ? searxngSearch
-            : searchWebAll;
+    let results: WebSearchResult[];
 
-    const results = await runner(parsed.data.query, {
-      limit: parsed.data.limit ?? 10,
-    });
+    if (parsed.data.engine) {
+      // Caller pinned an engine: honour it exactly, no orchestration.
+      const runner =
+        parsed.data.engine === "duckduckgo"
+          ? duckDuckGoSearch
+          : parsed.data.engine === "bing"
+            ? bingSearch
+            : searxngSearch;
+      results = await runner(parsed.data.query, { limit: parsed.data.limit ?? 10 });
+    } else {
+      // No engine pinned: run the planned fan-out, so query operators are
+      // planned, enforced locally and positions are renumbered.
+      const { searchWebPlannedAll } = await import(
+        "../services/engine/search-orchestrator.js"
+      );
+      results = (
+        await searchWebPlannedAll(parsed.data.query, { limit: parsed.data.limit ?? 10 })
+      ).results;
+    }
 
     response.json({
       success: true,
@@ -329,6 +338,38 @@ agentRouter.post("/eligibility", async (request, response) => {
     success: true,
     eligibility: assessEligibility(parsed.data),
   });
+});
+
+/**
+ * Structural change judgement.
+ *
+ * The deterministic diff above answers "what changed in the text"; this one
+ * answers "is that change about the vacancy or is it page churn" — the
+ * question that decides whether an alert is sent or suppressed. It is the
+ * same judgement the discovery pipeline uses internally.
+ */
+agentRouter.post("/change-judgement", async (request, response) => {
+  if (!authorised(request)) {
+    response.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const parsed = z
+    .object({
+      previous: z.string(),
+      current: z.string(),
+      url: z.string().url().optional(),
+      previousComplete: z.boolean().optional(),
+      currentComplete: z.boolean().optional(),
+    })
+    .safeParse(request.body);
+  if (!parsed.success) {
+    response.status(400).json({ error: "Invalid request" });
+    return;
+  }
+
+  const result = await detectMeaningfulChange(parsed.data);
+  response.json({ success: true, ...result });
 });
 
 /** Real markdown diff + a judgement of what changed between two reads. */

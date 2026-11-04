@@ -7,7 +7,7 @@ For existing projects, inspect the repo first and match its package manager, dep
 ## JavaScript / TypeScript
 
 ```bash
-npm install @mendable/angisoft-js
+npm install @angisoft/angisoft-js
 ```
 
 ## Python

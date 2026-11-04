@@ -1,7 +1,7 @@
 import { query } from "../../db/pool.js";
 import { logger } from "../../logger.js";
 import { BaseDiscoveryAgent, type AgentContext, type AgentRunResult } from "./base.js";
-import { searchWeb } from "../engine/search.js";
+import { searchWebPlanned } from "../engine/search-orchestrator.js";
 import { buildDiscoveryQueries, type QuerySeeds } from "../engine/discover.js";
 import { pooled } from "../engine/index.js";
 
@@ -85,13 +85,16 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
 
         try {
           const remaining = Math.max(5_000, deadline - Date.now());
-          const results = await searchWeb(queryText, {
+          // searchWebPlanned over-fetches, plans operators, enforces them
+          // locally and renumbers positions — the plain searchWeb chain only
+          // picks a provider.
+          const planned = await searchWebPlanned(queryText, {
             limit: maxResultsPerQuery,
             country,
             freshness,
             timeoutMs: Math.min(remaining, 45_000),
           });
-          return { queryText, results };
+          return { queryText, results: planned.results };
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           logger.debug({ query: queryText, error: message }, "Search query failed");

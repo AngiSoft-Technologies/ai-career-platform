@@ -5,7 +5,7 @@ Install the SDK that matches the project stack after `angisoft_API_KEY` is avail
 ## JavaScript / TypeScript
 
 ```bash
-npm install @mendable/angisoft-js
+npm install @angisoft/angisoft-js
 ```
 
 ## Python

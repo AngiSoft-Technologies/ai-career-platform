@@ -11,17 +11,26 @@
  *   - PDF and JSON handling
  *
  * What we replace:
- *   - the ACE proprietary fire-engine: our own `egressFetch` pool.
+ *   - the upstream proprietary TLS-impersonation engine: our own
+ *     `egressFetch` pool, with no vendor key.
  *   - Their native HTML→Markdown: `htmlToMarkdown` (same Turndown approach).
  */
 
-import { promises as dns } from "node:dns";
-import { isIP } from "node:net";
 import robotsParser, { type Robot } from "robots-parser";
 import pdfParse from "pdf-parse";
 
 import { logger } from "../../logger.js";
+import { AbortManager, timeoutInstance } from "../../lib/abort-manager.js";
+import { abortableSleep } from "../../lib/retry.js";
+import { redactError, redactUrl } from "../../lib/redact.js";
+import {
+  BlockedUrlError,
+  assertPublicUrl as assertPublicUrlStrict,
+  isPrivateAddress,
+} from "../../lib/net-guard.js";
 import { browserHeaders, egressFetch, randomUserAgent } from "./egress.js";
+import { buildFetchEngines } from "./fetch-engines.js";
+import { runWaterfall, type WaterfallMeta } from "./waterfall.js";
 import {
   extractJobPostingJsonLd,
   extractMetadata,
@@ -43,85 +52,24 @@ export interface ScrapeResult {
   via: string;
   fromCache: boolean;
   looksLikeSpa: boolean;
-}
-
-export class BlockedUrlError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "BlockedUrlError";
-  }
+  /** Which waterfall engine won (direct | proxied). */
+  engine?: string;
 }
 
 // ---------------------------------------------------------------------------
 // SSRF protection (ACE: scrapeURL/engines/utils/safeFetch.ts)
+//
+// The rules live in `lib/net-guard.ts`, shared with the source connectors so
+// there is exactly one implementation. The only difference here is the DNS
+// failure policy: for a scrape, a resolver hiccup is a transient network
+// error, not a policy decision, so it is allowed through and surfaces as a
+// normal fetch failure instead of being recorded as a blocked URL.
 // ---------------------------------------------------------------------------
 
-function isPrivateIPv4(address: string): boolean {
-  const parts = address.split(".").map(Number);
-  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part))) {
-    return true;
-  }
-  const [a, b] = parts as [number, number, number, number];
-  if (a === 0 || a === 10 || a === 127) return true;
-  if (a === 169 && b === 254) return true;
-  if (a === 172 && b >= 16 && b <= 31) return true;
-  if (a === 192 && b === 168) return true;
-  if (a === 100 && b >= 64 && b <= 127) return true;
-  if (a >= 224) return true;
-  return false;
-}
-
-function isPrivateIPv6(address: string): boolean {
-  const normalised = address.toLowerCase();
-  if (normalised === "::1" || normalised === "::") return true;
-  if (normalised.startsWith("fc") || normalised.startsWith("fd")) return true;
-  if (normalised.startsWith("fe80")) return true;
-  if (normalised.startsWith("::ffff:")) {
-    const mapped = normalised.slice("::ffff:".length);
-    if (isIP(mapped) === 4) return isPrivateIPv4(mapped);
-  }
-  return false;
-}
-
-export function isPrivateAddress(address: string): boolean {
-  const version = isIP(address);
-  if (version === 4) return isPrivateIPv4(address);
-  if (version === 6) return isPrivateIPv6(address);
-  return false;
-}
+export { BlockedUrlError, isPrivateAddress };
 
 export async function assertPublicUrl(rawUrl: string): Promise<URL> {
-  let url: URL;
-  try {
-    url = new URL(rawUrl);
-  } catch {
-    throw new BlockedUrlError(`Invalid URL: ${rawUrl}`);
-  }
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new BlockedUrlError(`Unsupported protocol: ${url.protocol}`);
-  }
-
-  const hostname = url.hostname.replace(/^\[|\]$/g, "");
-  if (/^(localhost|.*\.localhost|.*\.local|.*\.internal)$/i.test(hostname)) {
-    throw new BlockedUrlError(`Private hostname blocked: ${hostname}`);
-  }
-  if (isIP(hostname) && isPrivateAddress(hostname)) {
-    throw new BlockedUrlError(`Private address blocked: ${hostname}`);
-  }
-  if (!isIP(hostname)) {
-    try {
-      const records = await dns.lookup(hostname, { all: true, verbatim: true });
-      for (const record of records) {
-        if (isPrivateAddress(record.address)) {
-          throw new BlockedUrlError(`Hostname resolves to a private address: ${hostname}`);
-        }
-      }
-    } catch (error) {
-      if (error instanceof BlockedUrlError) throw error;
-      // DNS failures surface as a normal fetch error; not a security issue.
-    }
-  }
-  return url;
+  return assertPublicUrlStrict(rawUrl, { onDnsFailure: "allow" });
 }
 
 // ---------------------------------------------------------------------------
@@ -247,6 +195,37 @@ export interface ScrapeOptions {
 
 const RETRY_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504, 520, 521, 522, 524]);
 
+/**
+ * Hosts that have recently rejected the direct tier.
+ *
+ * The waterfall escalates to the proxy tier *within* a request, but the next
+ * request should not have to learn the same lesson again — a 403 from a
+ * careers site is a property of the site, not of the request. This is a
+ * small in-process map with a TTL: it is a hint, not a contract, and a
+ * process restart simply loses it.
+ */
+const PROXY_HINT_TTL_MS = 30 * 60 * 1000;
+const proxyHints = new Map<string, number>();
+
+function shouldPreferProxy(host: string): boolean {
+  const until = proxyHints.get(host);
+  if (until === undefined) return false;
+  if (until <= Date.now()) {
+    proxyHints.delete(host);
+    return false;
+  }
+  return true;
+}
+
+function rememberProxyHint(host: string): void {
+  proxyHints.set(host, Date.now() + PROXY_HINT_TTL_MS);
+}
+
+/** Drops the learned proxy hints. Used by tests and by an operator reset. */
+export function clearProxyHints(): void {
+  proxyHints.clear();
+}
+
 export async function scrapeUrl(
   rawUrl: string,
   options: ScrapeOptions = {},
@@ -261,7 +240,7 @@ export async function scrapeUrl(
 
   const userAgent = randomUserAgent();
   if (!(await robotsAllows(url.toString(), userAgent))) {
-    throw new BlockedUrlError(`robots.txt disallows ${url.toString()}`);
+    throw new BlockedUrlError("ROBOTS_DISALLOWED", url.toString());
   }
 
   await waitForHost(
@@ -269,136 +248,65 @@ export async function scrapeUrl(
     options.polite === false ? 0 : Number(process.env.CRAWL_DELAY_MS ?? 900),
   );
 
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      const response = await egressFetch(
-        url.toString(),
-        {
-          method: "GET",
-          headers: browserHeaders({
-            "User-Agent": userAgent,
-            Referer: url.origin,
-            Accept:
-              options.accept ??
-              "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          }),
-          signal: AbortSignal.timeout(options.timeoutMs ?? 25_000),
-        },
-        { preferProxy: options.preferProxy },
-      );
+  // From here on this is a waterfall, not a retry loop: the engines race,
+  // anti-bot signals re-plan the feature flags, and only a terminal error
+  // from every engine fails the scrape. See `waterfall.ts`.
+  //
+  // A host we already know dislikes the direct tier starts on the proxy
+  // engine, which is the whole point of remembering the signal.
+  const preferProxy = options.preferProxy === true || shouldPreferProxy(url.host);
+  const meta: WaterfallMeta = {
+    url: url.toString(),
+    featureFlags: new Set(preferProxy ? ["proxied" as const] : []),
+    abort: new AbortManager([
+      timeoutInstance(options.timeoutMs ?? 25_000, "operation"),
+    ]),
+    slots: {},
+  };
 
-      if (RETRY_STATUSES.has(response.status) && attempt < 2) {
-        await new Promise((resolve) =>
-          setTimeout(resolve, 750 * 2 ** attempt + Math.random() * 500),
-        );
-        continue;
-      }
-
-      const contentType =
-        response.headers["content-type"] ??
-        response.headers["Content-Type"] ??
-        "";
-      const finalUrl = response.finalUrl || url.toString();
-
-      // PDF (ACE: scrapeURL/engines/pdf)
-      if (contentType.includes("application/pdf")) {
-        const parsed = await pdfParse(Buffer.from(response.body));
-        const markdown = parsed.text.replace(/\n{3,}/g, "\n\n").trim();
-        const result: ScrapeResult = {
-          url: url.toString(),
-          finalUrl,
-          status: response.status,
-          contentType,
-          html: "",
-          markdown,
-          metadata: { title: (parsed.info as { Title?: string } | undefined)?.Title },
-          jsonLd: null,
-          via: response.via,
-          fromCache: false,
-          looksLikeSpa: false,
-        };
-        writeCache(cacheKey, result);
-        return result;
-      }
-
-      const text = decodeBody(response.body, contentType);
-
-      if (contentType.includes("application/json")) {
-        const markdown = "```json\n" + text.slice(0, 100_000) + "\n```";
-        const result: ScrapeResult = {
-          url: url.toString(),
-          finalUrl,
-          status: response.status,
-          contentType,
-          html: "",
-          markdown,
-          metadata: {},
-          jsonLd: null,
-          via: response.via,
-          fromCache: false,
-          looksLikeSpa: false,
-        };
-        writeCache(cacheKey, result);
-        return result;
-      }
-
-      if (contentType.includes("text/plain") || contentType.includes("text/markdown")) {
-        const result: ScrapeResult = {
-          url: url.toString(),
-          finalUrl,
-          status: response.status,
-          contentType,
-          html: "",
-          markdown: text.trim(),
-          metadata: {},
-          jsonLd: null,
-          via: response.via,
-          fromCache: false,
-          looksLikeSpa: false,
-        };
-        writeCache(cacheKey, result);
-        return result;
-      }
-
-      const metadata = extractMetadata(text, finalUrl);
-      const jsonLd = extractJobPostingJsonLd(text);
-      const markdown = htmlToMarkdown(text, {
-        onlyMainContent: options.onlyMainContent,
-        includeTags: options.includeTags,
-        excludeTags: options.excludeTags,
-      });
-
-      const result: ScrapeResult = {
+  let retryCount = 0;
+  const outcome = await runWaterfall(
+    meta,
+    buildFetchEngines({
+      attempt: () => ({
         url: url.toString(),
-        finalUrl,
-        status: response.status,
-        contentType,
-        html: text,
-        markdown,
-        metadata,
-        jsonLd,
-        via: response.via,
-        fromCache: false,
-        looksLikeSpa: looksLikeSpa(text),
-      };
-      writeCache(cacheKey, result);
-      return result;
-    } catch (error) {
-      lastError = error;
-      if (error instanceof BlockedUrlError) throw error;
-      if (attempt < 2) {
-        await new Promise((resolve) =>
-          setTimeout(resolve, 750 * 2 ** attempt + Math.random() * 500),
-        );
-      }
-    }
+        options,
+        accept:
+          options.accept ??
+          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        userAgent,
+      }),
+      parsePdf: async (bytes) => {
+        const parsed = await pdfParse(bytes);
+        return {
+          text: parsed.text,
+          title: (parsed.info as { Title?: string } | undefined)?.Title,
+        };
+      },
+    }),
+    {
+      label: url.hostname,
+      onRetry: async () => {
+        retryCount += 1;
+        await abortableSleep(750 * 2 ** (retryCount - 1) + Math.random() * 500);
+      },
+    },
+  );
+
+  // The engine already parsed the PDF body and title; nothing to redo here.
+  const result: ScrapeResult = { ...outcome.result, engine: outcome.engine };
+
+  // Remember an anti-bot signal even when the fallback tier won the race:
+  // the next scrape of this host should start on the proxy engine.
+  const antiBotHosts = (meta.slots as { antiBotHosts?: Set<string> })
+    .antiBotHosts;
+  if (antiBotHosts?.has(url.host)) {
+    rememberProxyHint(url.host);
+    logger.debug({ host: url.host }, "Host flagged as anti-bot; proxy preferred next time");
   }
 
-  logger.warn({ url: rawUrl, error: lastError }, "All scrape attempts failed");
-  throw lastError instanceof Error
-    ? lastError
-    : new Error(`Failed to scrape ${rawUrl}`);
+  writeCache(cacheKey, result);
+  return result;
 }
 
 /** Fetches a JSON endpoint with the same safety and egress rules. */
@@ -428,7 +336,9 @@ export async function fetchJson<T>(
         continue;
       }
       if (response.status < 200 || response.status >= 300) {
-        throw new Error(`HTTP ${response.status} for ${rawUrl}`);
+        // The URL can carry a token in its query string; never let it reach an
+        // error message that will be logged or shown in the admin UI.
+        throw new Error(`HTTP ${response.status} for ${redactUrl(url.toString())}`);
       }
       const text = decodeBody(response.body, "application/json");
       return JSON.parse(text) as T;
@@ -442,7 +352,12 @@ export async function fetchJson<T>(
     }
   }
 
-  throw lastError instanceof Error ? lastError : new Error(`Fetch failed: ${rawUrl}`);
+  const redacted = redactError(lastError);
+  throw new Error(
+    lastError instanceof Error
+      ? redacted.message
+      : `Fetch failed: ${redactUrl(url.toString())}`,
+  );
 }
 
 export function clearPageCache(): void {

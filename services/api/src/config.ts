@@ -126,6 +126,32 @@ const schema = z.object({
   ROBOTS_TXT_ENFORCED: z.string().optional(),
   CRAWL_DELAY_MS: z.coerce.number().int().min(0).default(900),
 
+  // Discovery pipeline hardening
+  /** Prompt-injection guard for untrusted page content. "false" disables. */
+  INJECTION_GUARD_ENABLED: z.string().optional(),
+  /** Hard USD ceiling for a single AI pipeline; 0/absent = unlimited. */
+  AI_COST_LIMIT_USD: z.coerce.number().nonnegative().optional(),
+  /** Concurrency lease TTL for long-running discovery work (ms). */
+  DISCOVERY_SEMAPHORE_TTL_MS: z.coerce.number().int().positive().default(30_000),
+  /** Blocking wait before proceeding uncapped (ms). */
+  DISCOVERY_SEMAPHORE_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
+  /** Daily cap on index/search vertical calls per subject; 0 disables. */
+  DISCOVERY_DAILY_QUOTA: z.coerce.number().int().nonnegative().default(1_000),
+  /** Windowed negative-cache TTL for the discovery index (ms); 0 disables. */
+  INDEX_NEGATIVE_TTL_MS: z.coerce.number().int().nonnegative().default(900_000),
+
+  // Outbound webhooks
+  /** "false" stops all delivery (endpoints and queue are left intact). */
+  WEBHOOK_DELIVERY_ENABLED: z.string().optional(),
+  /** Per-attempt HTTP timeout for a webhook POST (ms). */
+  WEBHOOK_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+  /** Consecutive failures before an endpoint is paused. */
+  WEBHOOK_PAUSE_AFTER_FAILURES: z.coerce.number().int().positive().default(8),
+  /** How long a paused endpoint stays paused (ms). */
+  WEBHOOK_PAUSE_MS: z.coerce.number().int().positive().default(15 * 60_000),
+  /** How many deliveries one dispatch pass claims. */
+  WEBHOOK_BATCH_SIZE: z.coerce.number().int().positive().default(20),
+
   // LinkedIn OAuth
   LINKEDIN_CLIENT_ID: z.string().optional(),
   LINKEDIN_CLIENT_SECRET: z.string().optional(),

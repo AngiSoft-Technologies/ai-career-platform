@@ -19,6 +19,19 @@ primary_region = 'jnb'  # Johannesburg - primary market
   PORT = '8088'
   S3_BUCKET = 'uploads'
   WEB_ORIGIN = 'https://mboqara.angisoft.co.ke,https://mboqara.vercel.app,http://localhost:3000,http://localhost:3003,http://localhost:3100'
+  # Worker continuous polling mode - when set to "true", workers poll continuously
+  # instead of using fixed intervals. Set interval via INGESTION_INTERVAL_MS etc.
+  CONTINUOUS_INGESTION = 'true'
+  CONTINUOUS_EMBEDDING = 'true'
+  CONTINUOUS_MAINTENANCE = 'true'
+  # Interval in milliseconds for continuous polling (default 30s for ingestion)
+  INGESTION_INTERVAL_MS = '30000'
+  EMBEDDING_INTERVAL_MS = '60000'
+  MAINTENANCE_INTERVAL_MS = '300000'
+  # Legacy interval vars (minutes) still supported for scheduler mode
+  INGESTION_INTERVAL_MINUTES = '30'
+  EMBEDDING_INTERVAL_MINUTES = '60'
+  MAINTENANCE_INTERVAL_HOURS = '6'
 
 # The role is derived from FLY_PROCESS_GROUP (see services/api/src/index.ts).
 # Do not use inline `PROCESS_ROLE=... node ...` here: Fly stores the command as

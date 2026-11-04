@@ -3,6 +3,11 @@ import { logger } from "../../logger.js";
 import { BaseDiscoveryAgent, type AgentContext, type AgentRunResult } from "./base.js";
 import { scrapeUrl } from "../engine/fetch.js";
 import { extractJob } from "../engine/extract.js";
+import {
+  judgeCandidateChange,
+  looksLikeClosedListing,
+  type CandidateSnapshot,
+} from "../engine/freshness.js";
 
 /**
  * Page Browse & Extraction Agent.
@@ -53,6 +58,8 @@ export class BrowseAgent extends BaseDiscoveryAgent {
     let totalFetched = 0;
     let totalStored = 0;
     let totalDuplicate = 0;
+    let totalChanged = 0;
+    let totalClosed = 0;
     let totalFailed = 0;
     const errors: string[] = [];
 
@@ -76,18 +83,143 @@ export class BrowseAgent extends BaseDiscoveryAgent {
           useLlm,
         });
 
-        if (!job.title || job.title === "Untitled position" || job.description.length < 60) {
-          throw new Error("Page did not contain a job posting");
+        const usable =
+          Boolean(job.title) &&
+          job.title !== "Untitled position" &&
+          job.description.length >= 60;
+
+        if (!usable) {
+          // No job posting on the page. That is either a broken read or a
+          // closed vacancy — only a *complete* read that says so is treated
+          // as a closure, because closing a live vacancy on a bad fetch is
+          // much worse than missing one closure for a cycle.
+          const closed = looksLikeClosedListing(scraped.markdown, {
+            complete: !scraped.looksLikeSpa,
+          });
+          if (!closed) {
+            throw new Error("Page did not contain a job posting");
+          }
+
+          const prior = await query<{ id: string }>(
+            `SELECT id FROM discovery_candidates
+              WHERE source_url = $1 OR source_url = $2
+              LIMIT 1`,
+            [row.source_url, scraped.finalUrl],
+          );
+          const priorRow = prior.rows[0];
+          if (priorRow) {
+            await query(
+              `UPDATE discovery_candidates
+                  SET status = 'expired', updated_at = now()
+                WHERE id = $1`,
+              [priorRow.id],
+            );
+            await query(
+              `INSERT INTO events (type, aggregate_type, aggregate_id, payload)
+               VALUES ('job.closed', 'discovery_candidate', $1, $2)`,
+              [
+                priorRow.id,
+                JSON.stringify({
+                  sourceUrl: scraped.finalUrl,
+                  detectedBy: "closed_listing_phrase",
+                }),
+              ],
+            );
+            totalClosed += 1;
+          }
+          await query(
+            `UPDATE discovery_search_results
+                SET status = 'done', processed_at = now(), error = NULL
+              WHERE id = $1`,
+            [row.id],
+          );
+          continue;
         }
 
-        const existing = await query<{ id: string }>(
-          `SELECT id FROM discovery_candidates
+        const existing = await query<{
+          id: string;
+          title: string | null;
+          company: string | null;
+          description: string | null;
+          salary_min: string | null;
+          salary_max: string | null;
+          apply_url: string | null;
+        }>(
+          `SELECT id, title, company, description, salary_min, salary_max, apply_url
+             FROM discovery_candidates
             WHERE fingerprint = $1 OR source_url = $2
             LIMIT 1`,
           [job.fingerprint, scraped.finalUrl],
         );
-        if (existing.rows.length > 0) {
-          totalDuplicate += 1;
+
+        const known = existing.rows[0];
+        if (known) {
+          // We have seen this listing before. Decide whether anything actually
+          // changed — a re-read that finds only churn must not overwrite the
+          // stored record, and a re-read that finds a real edit must not be
+          // filed as a duplicate.
+          const previous: CandidateSnapshot = {
+            title: known.title,
+            company: known.company,
+            description: known.description,
+            salaryMin: known.salary_min === null ? null : Number(known.salary_min),
+            salaryMax: known.salary_max === null ? null : Number(known.salary_max),
+            applyUrl: known.apply_url,
+          };
+          const next: CandidateSnapshot = {
+            title: job.title,
+            company: job.company,
+            description: job.description,
+            salaryMin: job.salaryMin,
+            salaryMax: job.salaryMax,
+            applyUrl: job.applyUrl,
+          };
+
+          const change = await judgeCandidateChange(previous, next, {
+            url: scraped.finalUrl,
+            currentComplete: !scraped.looksLikeSpa,
+          });
+
+          if (change.meaningful) {
+            await query(
+              `UPDATE discovery_candidates
+                  SET title = $2,
+                      company = $3,
+                      description = $4,
+                      salary_min = $5,
+                      salary_max = $6,
+                      apply_url = $7,
+                      status = CASE WHEN status = 'duplicate' THEN 'pending' ELSE status END,
+                      updated_at = now()
+                WHERE id = $1`,
+              [
+                known.id,
+                job.title,
+                job.company,
+                job.description,
+                job.salaryMin,
+                job.salaryMax,
+                job.applyUrl,
+              ],
+            );
+            await query(
+              `INSERT INTO events (type, aggregate_type, aggregate_id, payload)
+               VALUES ('job.changed', 'discovery_candidate', $1, $2)`,
+              [
+                known.id,
+                JSON.stringify({
+                  changedFields: change.changedFields,
+                  reason: change.reason,
+                  verdict: change.judgement.verdict,
+                  confidence: change.judgement.confidence,
+                  sourceUrl: scraped.finalUrl,
+                }),
+              ],
+            );
+            totalChanged += 1;
+          } else {
+            totalDuplicate += 1;
+          }
         } else {
           await query(
             `INSERT INTO discovery_candidates
@@ -154,6 +286,8 @@ export class BrowseAgent extends BaseDiscoveryAgent {
         batchSize,
         processed: results.rows.length,
         failed: totalFailed,
+        changed: totalChanged,
+        closed: totalClosed,
         llm: useLlm,
       },
     };
