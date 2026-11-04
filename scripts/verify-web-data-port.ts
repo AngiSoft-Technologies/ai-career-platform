@@ -16,11 +16,12 @@
  * Run: npx tsx scripts/verify-web-data-port.ts
  */
 
+import { readFileSync } from "node:fs";
+
 import {
   AbortManager,
   timeoutInstance,
-} from "../services/api/src/lib/abort-manager.js";
-import {
+} from "../services/api/src/lib/abort-manager.js";import {
   AddFeatureError,
   EngineRetryableError,
   runWaterfall,
@@ -633,6 +634,71 @@ async function main(): Promise<void> {
   check(
     "a marker does not prove emptiness while entries could still be fresh",
     !isNegativeStillValid(now, 60_000, now + 30_000),
+  );
+
+  // -------------------------------------------------------------------------
+  // The pipeline's ordering and the matching agent's shape
+  //
+  // Two mistakes here cost the whole ingestion cycle, so they are pinned:
+  //
+  //   1. `matches.opportunity_id` is a foreign key to `opportunities`. The
+  //      matching agent used to store a *candidate* id in it, so every
+  //      insert failed and the failures were swallowed into an error
+  //      string. It has to read the catalogue.
+  //
+  //   2. The matching agent used to resolve a candidate's coordinates once
+  //      per user, per candidate — tens of thousands of round trips to the
+  //      database. The city table is read once now.
+  //
+  // The matching agent also has to run *after* promotion, or there is
+  // nothing to point at.
+  // -------------------------------------------------------------------------
+
+  const matchAgentSource = readFileSync(
+    new URL(
+      "../services/api/src/services/agents/match-agent.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  check(
+    "the matching agent reads the catalogue, not the candidate queue",
+    matchAgentSource.includes("FROM opportunities") &&
+      !matchAgentSource.includes("FROM discovery_candidates"),
+  );
+  check(
+    "the matching agent does not look a city up per user",
+    matchAgentSource.includes("loadCityCoordinates") &&
+      !matchAgentSource.includes("this.geocode("),
+  );
+  check(
+    "the matching agent writes its matches in one statement",
+    matchAgentSource.includes("unnest("),
+  );
+
+  const runnerSource = readFileSync(
+    new URL("../services/api/src/services/agents/runner.ts", import.meta.url),
+    "utf8",
+  );
+  check(
+    "the matching agent is not part of the discovery phase",
+    runnerSource.includes("POST_PROMOTION_AGENT_CLASSES") &&
+      runnerSource.includes("runPostPromotionAgents"),
+  );
+
+  const ingestionSource = readFileSync(
+    new URL(
+      "../services/api/src/services/ingestion/run.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const promotionAt = ingestionSource.indexOf("promoteVerifiedCandidates()");
+  const matchingAt = ingestionSource.indexOf("runPostPromotionAgents()");
+  check(
+    "promotion runs before the agents that read the catalogue",
+    promotionAt > 0 && matchingAt > promotionAt,
+    `promotion@${promotionAt} matching@${matchingAt}`,
   );
 
   console.log(

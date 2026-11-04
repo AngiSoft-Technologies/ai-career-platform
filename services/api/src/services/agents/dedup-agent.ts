@@ -68,44 +68,37 @@ export class DeduplicationAgent extends BaseDiscoveryAgent {
     // Within-batch dedup: track fingerprints seen in this batch
     const seenInBatch = new Set<string>();
 
+    // The classification is computed here and written in one statement.
+    // Doing it one row at a time meant five hundred round trips to the
+    // database for one batch, and this agent runs on every ingestion cycle.
+    const decisions: Array<{ id: string; status: string }> = [];
+
     for (const candidate of candidates.rows) {
       const fp = candidate.fingerprint;
       if (!fp) {
         // No fingerprint — mark for manual review
-        await query(
-          `UPDATE discovery_candidates SET status = 'rejected', updated_at = now() WHERE id = $1`,
-          [candidate.id],
-        );
+        decisions.push({ id: candidate.id, status: "rejected" });
         totalRejected += 1;
         continue;
       }
 
       // Already in opportunities?
       if (existingOpps.has(fp)) {
-        await query(
-          `UPDATE discovery_candidates SET status = 'duplicate', updated_at = now() WHERE id = $1`,
-          [candidate.id],
-        );
+        decisions.push({ id: candidate.id, status: "duplicate" });
         totalDuplicate += 1;
         continue;
       }
 
       // Already a candidate?
       if (existingCandidates.has(fp)) {
-        await query(
-          `UPDATE discovery_candidates SET status = 'duplicate', updated_at = now() WHERE id = $1`,
-          [candidate.id],
-        );
+        decisions.push({ id: candidate.id, status: "duplicate" });
         totalDuplicate += 1;
         continue;
       }
 
       // Within-batch duplicate?
       if (seenInBatch.has(fp)) {
-        await query(
-          `UPDATE discovery_candidates SET status = 'duplicate', updated_at = now() WHERE id = $1`,
-          [candidate.id],
-        );
+        decisions.push({ id: candidate.id, status: "duplicate" });
         totalDuplicate += 1;
         continue;
       }
@@ -113,11 +106,21 @@ export class DeduplicationAgent extends BaseDiscoveryAgent {
       seenInBatch.add(fp);
 
       // Mark as verified — ready for import
-      await query(
-        `UPDATE discovery_candidates SET status = 'verified', updated_at = now() WHERE id = $1`,
-        [candidate.id],
-      );
+      decisions.push({ id: candidate.id, status: "verified" });
       totalNew += 1;
+    }
+
+    if (decisions.length > 0) {
+      await query(
+        `UPDATE discovery_candidates dc
+            SET status = t.status, updated_at = now()
+           FROM unnest($1::uuid[], $2::text[]) AS t(id, status)
+          WHERE dc.id = t.id`,
+        [
+          decisions.map((decision) => decision.id),
+          decisions.map((decision) => decision.status),
+        ],
+      );
     }
 
     return {
@@ -137,11 +140,17 @@ export class DeduplicationAgent extends BaseDiscoveryAgent {
   /**
    * Promote verified candidates to the opportunities table.
    * Called after deduplication to actually import new jobs.
+   *
+   * This is done in three statements rather than four per candidate. With
+   * a few hundred verified candidates the round-trip version spent minutes
+   * in the database, and the promotion is the step that actually puts jobs
+   * in front of a user — it cannot be the slow part of the cycle.
    */
   async promoteVerifiedCandidates(): Promise<{
     promoted: number;
     failed: number;
   }> {
+    const limit = 400;
     const verified = await query<{
       id: string;
       external_id: string;
@@ -164,17 +173,28 @@ export class DeduplicationAgent extends BaseDiscoveryAgent {
       simhash: string | null;
       fingerprint: string;
     }>(
-      `SELECT * FROM discovery_candidates WHERE status = 'verified' LIMIT 200`,
+      `SELECT * FROM discovery_candidates WHERE status = 'verified' LIMIT $1`,
+      [limit],
     );
+
+    if (verified.rows.length === 0) {
+      return { promoted: 0, failed: 0 };
+    }
 
     let promoted = 0;
     let failed = 0;
 
-    for (const row of verified.rows) {
-      try {
-        // opportunities.company_id is NOT NULL. Discovered jobs come from
-        // arbitrary employers, so upsert a company row first (slug is unique).
-        const companyName = (row.company ?? "Unknown employer").trim() || "Unknown employer";
+    try {
+      // 1. Companies. `opportunities.company_id` is NOT NULL and discovered
+      //    jobs come from arbitrary employers, so the employer is upserted
+      //    first. The slug is unique, so one statement covers them all.
+      const payloads: Array<Record<string, unknown>> = [];
+      const companyNames: string[] = [];
+      const companySlugs: string[] = [];
+
+      for (const row of verified.rows) {
+        const companyName =
+          (row.company ?? "Unknown employer").trim() || "Unknown employer";
         const slug =
           companyName
             .toLowerCase()
@@ -182,93 +202,148 @@ export class DeduplicationAgent extends BaseDiscoveryAgent {
             .replace(/^-+|-+$/g, "")
             .slice(0, 80) || `company-${row.id.slice(0, 8)}`;
 
-        const companyResult = await query<{ id: string }>(
-          `INSERT INTO companies (name, slug)
-           VALUES ($1, $2)
-           ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, updated_at = now()
-           RETURNING id`,
-          [companyName.slice(0, 200), slug],
-        );
-        const companyId = companyResult.rows[0]?.id;
-        if (!companyId) throw new Error("Could not resolve company");
+        if (!companySlugs.includes(slug)) {
+          companySlugs.push(slug);
+          companyNames.push(companyName.slice(0, 200));
+        }
 
         const simhash =
-          row.simhash && /^\d+$/.test(row.simhash) ? BigInt(row.simhash) : BigInt(0);
+          row.simhash && /^\d+$/.test(row.simhash) ? row.simhash : "0";
 
-        const result = await query<{ id: string }>(
-          `INSERT INTO opportunities
-              (company_id, source_id, external_id, title, description, country, city,
-               work_mode, seniority, employment_type, salary_min, salary_max,
-               currency, apply_url, application_method, platform, posted_at,
-               status, simhash, fingerprint, risk_score, risk_flags,
-               risk_action, risk_scored_at, created_at, updated_at)
-           VALUES (
-             $1, (SELECT id FROM job_sources WHERE type = 'aggregator' AND url = $2 LIMIT 1),
-             $3, $4, $5, $6, $7, $8, 'mid', $9, $10, $11, $12, $13, 'website',
-             $14, $15, 'active', $16::bigint, $17, 0, '{}', 'publish', now(),
-             now(), now()
-           )
+        payloads.push({
+          candidate_id: row.id,
+          company_slug: slug,
+          source_platform: row.source_platform,
+          source_url: `https://${row.source_platform}.com`,
+          external_id: row.external_id
+            ? `${row.external_id}${row.source_url}`
+            : row.source_url,
+          title: row.title,
+          description: row.description ?? "",
+          country: row.country ?? "Remote",
+          city: row.city ?? "",
+          work_mode: row.work_mode ?? "remote",
+          employment_type: row.employment_type ?? "full_time",
+          salary_min: row.salary_min,
+          salary_max: row.salary_max,
+          currency: row.currency ?? "USD",
+          apply_url: row.apply_url ?? row.source_url,
+          posted_at: row.posted_at ? new Date(row.posted_at).toISOString() : null,
+          simhash,
+          fingerprint: row.fingerprint,
+          skills: row.skills ?? [],
+        });
+      }
+
+      await query(
+        `INSERT INTO companies (name, slug)
+         SELECT * FROM unnest($1::text[], $2::text[])
+         ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, updated_at = now()`,
+        [companyNames, companySlugs],
+      );
+
+      // 2. Opportunities, and the link back to the candidate, in one
+      //    statement. The insert returns the rows it created, so the
+      //    candidate that produced each one is known exactly.
+      const inserted = await query<{
+        candidate_id: string;
+        opportunity_id: string;
+      }>(
+        `WITH payload AS (
+           SELECT * FROM jsonb_array_elements($1::jsonb) AS p
+         ), created AS (
+           INSERT INTO opportunities
+             (company_id, source_id, external_id, title, description, country, city,
+              work_mode, seniority, employment_type, salary_min, salary_max,
+              currency, apply_url, application_method, platform, posted_at,
+              status, simhash, fingerprint, risk_score, risk_flags,
+              risk_action, risk_scored_at, created_at, updated_at)
+           SELECT
+             c.id,
+             (SELECT id FROM job_sources
+               WHERE type = 'aggregator' AND url = p->>'source_url' LIMIT 1),
+             p->>'external_id',
+             p->>'title',
+             p->>'description',
+             p->>'country',
+             p->>'city',
+             p->>'work_mode',
+             'mid',
+             p->>'employment_type',
+             (p->>'salary_min')::numeric,
+             (p->>'salary_max')::numeric,
+             p->>'currency',
+             p->>'apply_url',
+             'website',
+             p->>'source_platform',
+             COALESCE((p->>'posted_at')::timestamptz, now()),
+             'active',
+             (p->>'simhash')::bigint,
+             p->>'fingerprint',
+             0,
+             '{}'::text[],
+             'publish',
+             now(),
+             now(),
+             now()
+           FROM payload p
+           JOIN companies c ON c.slug = p->>'company_slug'
            ON CONFLICT DO NOTHING
-           RETURNING id`,
-          [
-            companyId,
-            `https://${row.source_platform}.com`,
-            row.external_id || row.source_url,
-            row.title,
-            row.description ?? "",
-            row.country ?? "Remote",
-            row.city ?? "",
-            row.work_mode ?? "remote",
-            row.employment_type ?? "full_time",
-            row.salary_min,
-            row.salary_max,
-            row.currency ?? "USD",
-            row.apply_url ?? row.source_url,
-            row.source_platform,
-            row.posted_at ?? new Date(),
-            simhash,
-            row.fingerprint,
-          ],
-        );
+           RETURNING id, external_id
+         )
+         UPDATE discovery_candidates dc
+            SET status = 'imported',
+                imported_opportunity_id = created.id,
+                updated_at = now()
+           FROM created
+          WHERE created.external_id = coalesce(dc.external_id, '') || dc.source_url
+            AND dc.id = ANY($2::uuid[])
+         RETURNING dc.id AS candidate_id, created.id AS opportunity_id`,
+        [JSON.stringify(payloads), verified.rows.map((row) => row.id)],
+      );
 
-        const opportunityId = result.rows[0]?.id;
+      promoted = inserted.rowCount ?? 0;
 
-        if (opportunityId) {
-          // Insert skills
-          if (row.skills.length > 0) {
-            await query(
-              `INSERT INTO opportunity_skills (opportunity_id, skill)
-               SELECT $1, unnest($2::text[])
-               ON CONFLICT (opportunity_id, skill) DO NOTHING`,
-              [opportunityId, row.skills],
-            );
-          }
+      // 3. Skills for the rows that were just created.
+      const promotedPairs = new Map<string, string>();
+      for (const row of inserted.rows) {
+        promotedPairs.set(row.candidate_id, row.opportunity_id);
+      }
+      const skillPayloads = verified.rows
+        .filter((row) => promotedPairs.has(row.id) && row.skills.length > 0)
+        .map((row) => ({
+          opportunity_id: promotedPairs.get(row.id),
+          skills: row.skills,
+        }));
 
-          // Mark candidate as imported
-          await query(
-            `UPDATE discovery_candidates
-                SET status = 'imported', imported_opportunity_id = $1, updated_at = now()
-              WHERE id = $2`,
-            [opportunityId, row.id],
-          );
-          promoted += 1;
-        } else {
-          // ON CONFLICT DO NOTHING: already imported under the same source.
-          await query(
-            `UPDATE discovery_candidates
-                SET status = 'duplicate', updated_at = now()
-              WHERE id = $1`,
-            [row.id],
-          );
-        }
-      } catch (error) {
-        failed += 1;
-        console.error(
-          `[dedup] Failed to promote candidate ${row.id}: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
+      if (skillPayloads.length > 0) {
+        await query(
+          `INSERT INTO opportunity_skills (opportunity_id, skill)
+           SELECT o.id, s.skill
+             FROM jsonb_array_elements($1::jsonb) AS p
+             JOIN opportunities o ON o.id = (p->>'opportunity_id')::uuid
+             CROSS JOIN LATERAL jsonb_array_elements_text(p->'skills') AS s(skill)
+           ON CONFLICT (opportunity_id, skill) DO NOTHING`,
+          [JSON.stringify(skillPayloads)],
         );
       }
+
+      // A candidate whose opportunity already existed is a duplicate, not a
+      // failure. It would otherwise be picked up again on every cycle.
+      await query(
+        `UPDATE discovery_candidates
+            SET status = 'duplicate', updated_at = now()
+          WHERE id = ANY($1::uuid[])
+            AND status = 'verified'`,
+        [verified.rows.map((row) => row.id)],
+      );
+    } catch (error) {
+      failed = verified.rows.length;
+      console.error(
+        `[dedup] Failed to promote ${verified.rows.length} candidates: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
 
     return { promoted, failed };

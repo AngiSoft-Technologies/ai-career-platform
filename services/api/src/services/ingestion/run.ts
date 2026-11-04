@@ -1,6 +1,6 @@
 import { query } from "../../db/pool.js";
 import { logger } from "../../logger.js";
-import { runDiscoveryAgents } from "../agents/runner.js";
+import { runDiscoveryAgents, runPostPromotionAgents } from "../agents/runner.js";
 import { DeduplicationAgent } from "../agents/dedup-agent.js";
 import { assessEligibility } from "../engine/eligibility.js";
 
@@ -91,6 +91,20 @@ export async function runIngestion(): Promise<{
     );
   }
 
+  // 4b. Catalogue-phase agents. These read the opportunities the promotion
+  //     step just wrote, so they have to run after it — the matching agent
+  //     stores an opportunity id in `matches`, and that column is a foreign
+  //     key to `opportunities`.
+  let matching = { fetched: 0, inserted: 0, failed: 0 };
+  try {
+    matching = await runPostPromotionAgents();
+  } catch (error) {
+    logger.warn(
+      { error: error instanceof Error ? error.message : String(error) },
+      "Post-promotion agents failed this cycle",
+    );
+  }
+
   // 5. Freshness: expire listings that no longer advertise a vacancy.
   let expiredCount = 0;
   try {
@@ -131,6 +145,7 @@ export async function runIngestion(): Promise<{
       candidatesPromoted: promotion.promoted,
       promotionFailures: promotion.failed,
       eligibilityScored: eligibility,
+      matchesCreated: matching.inserted,
       expired: expiredCount,
       sourcesBackedOff: quietedSources,
     },
