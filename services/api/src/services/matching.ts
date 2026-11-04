@@ -6,6 +6,7 @@ import type {
 } from "@angisoft/mboqara-contracts";
 import { query } from "../db/pool.js";
 import { semanticHits, type SemanticHit } from "./ai/semantic-search.js";
+import { sameCountry, samePlace } from "./geo.js";
 import { getOpportunity, listOpportunities } from "./opportunities.js";
 import type { OpportunityFilters } from "./opportunities.js";
 import { getProfile } from "./profile.js";
@@ -46,28 +47,27 @@ function calculateLocationScore(
     return { score: 50, shown: true, reason: "remote work" };
   }
 
-  // Check if the job is in the user's country
+  // Check if the job is in the user's country.
+  //
+  // The two sides spell a country differently: a profile says "Kenya" and
+  // a listing says "KE". Compared literally they are different countries,
+  // so a Kenyan user was shown nothing.
   const countryMatch =
     profile.country &&
     opportunity.country &&
-    normalize(profile.country) === normalize(opportunity.country);
+    sameCountry(profile.country, opportunity.country);
 
   // Check if the job is in one of the user's preferred locations
   const preferredLocationMatch =
-    profile.preferredLocations &&
-    profile.preferredLocations.some((loc) =>
-      opportunity.city && normalize(loc) === normalize(opportunity.city),
-    ) ||
-    (opportunity.city &&
-      profile.preferredLocations?.some(
-        (loc) => normalize(loc) === normalize(opportunity.city),
-      ));
+    profile.preferredLocations?.some((loc) =>
+      opportunity.city ? samePlace(loc, opportunity.city) : false,
+    ) ?? false;
 
   // Check if the job is in the user's current city
   const cityMatch =
     profile.location &&
     opportunity.city &&
-    normalize(profile.location) === normalize(opportunity.city);
+    samePlace(profile.location, opportunity.city);
 
   // For onsite/hybrid jobs: ONLY show if in candidate's country or preferred location
   if (!isRemote && !countryMatch && !preferredLocationMatch && !cityMatch) {
@@ -114,7 +114,16 @@ function employmentTypeMatches(
   );
 }
 
-function calculate(
+/**
+ * Scores a profile against an opportunity.
+ *
+ * This is the product's matching rule, and it is a pure function so that
+ * the batch matcher can apply the *same* rule to a whole catalogue
+ * without a round trip per pair. The background agent and the API have
+ * to agree, or a candidate sees one set of jobs in the feed and another
+ * in the recommendations.
+ */
+export function scoreMatch(
   profile: CandidateProfile,
   opportunity: Opportunity,
 ): MatchResult {
@@ -228,7 +237,7 @@ export async function calculateMatch(
   if (!profile) throw new Error("PROFILE_NOT_FOUND");
   if (!opportunity) throw new Error("OPPORTUNITY_NOT_FOUND");
 
-  const result = calculate(profile, opportunity);
+  const result = scoreMatch(profile, opportunity);
 
   await query(
     `INSERT INTO matches (user_id, opportunity_id, score, factors, explanation, gaps)
@@ -279,7 +288,7 @@ export async function rankedOpportunities(
   // Filter and rank opportunities by location first
   const ranked = results
     .map((opportunity) => {
-      const match = calculate(profile, opportunity);
+      const match = scoreMatch(profile, opportunity);
 
       // Filter out jobs that shouldn't be shown (not remote, not in user's location)
       if (!locationShown(match)) {
@@ -335,5 +344,5 @@ export async function getOpportunityWithMatch(
   ]);
   if (!profile || !opportunity) return null;
 
-  return { ...opportunity, match: calculate(profile, opportunity) };
+  return { ...opportunity, match: scoreMatch(profile, opportunity) };
 }

@@ -21,7 +21,7 @@ import { readFileSync } from "node:fs";
 import {
   sameCountry,
   samePlace,
-} from "../services/api/src/services/agents/match-agent.js";
+} from "../services/api/src/services/geo.js";
 
 import {
   AbortManager,
@@ -673,12 +673,16 @@ async function main(): Promise<void> {
   );
   check(
     "the matching agent does not look a city up per user",
-    matchAgentSource.includes("loadCityCoordinates") &&
-      !matchAgentSource.includes("this.geocode("),
+    !matchAgentSource.includes("this.geocode(") &&
+      !matchAgentSource.includes("loadCityCoordinates"),
   );
   check(
     "the matching agent writes its matches in one statement",
-    matchAgentSource.includes("unnest("),
+    matchAgentSource.includes("jsonb_array_elements("),
+  );
+  check(
+    "the matching agent scores with the product's own rule",
+    matchAgentSource.includes("scoreMatch("),
   );
 
   const runnerSource = readFileSync(
@@ -736,6 +740,21 @@ async function main(): Promise<void> {
   check(
     "a remote listing is not a country match",
     !sameCountry("Remote", "Kenya"),
+  );
+
+  // The product's own rule has to use the same comparison, or the feed
+  // and the recommendations disagree.
+  const matchingSource = readFileSync(
+    new URL("../services/api/src/services/matching.ts", import.meta.url),
+    "utf8",
+  );
+  check(
+    "the product's matching rule compares countries by meaning",
+    matchingSource.includes("sameCountry("),
+  );
+  check(
+    "the product's matching rule compares places by meaning",
+    matchingSource.includes("samePlace("),
   );
 
   check(
