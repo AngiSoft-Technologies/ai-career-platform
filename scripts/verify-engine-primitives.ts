@@ -510,21 +510,36 @@ console.log("\n[15] content policy and checked redirects");
   ].map((match) => match[1] ?? "");
   check("the block list is not empty", blockedHosts.length > 10);
 
-  const migrationSource = readFileSync(
-    new URL(
-      "../db/migrations/032_blocked_host_queue.sql",
-      import.meta.url,
-    ),
-    "utf8",
-  );
-  const missingHosts = blockedHosts.filter(
-    (host) => !migrationSource.includes(`'${host}'`),
-  );
-  check(
-    "the queue migration knows every blocked host the guard knows",
-    missingHosts.length === 0,
-    missingHosts.slice(0, 10).join(", "),
-  );
+  // The migrations are not versioned — they are gatekept by the owner —
+  // so a fresh clone may not have them. The check runs when the file is
+  // there, and is skipped when it is not.
+  let migrationSource: string | null = null;
+  try {
+    migrationSource = readFileSync(
+      new URL(
+        "../db/migrations/032_blocked_host_queue.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+  } catch {
+    migrationSource = null;
+  }
+
+  if (migrationSource === null) {
+    console.log(
+      "  skip the queue migration is not in this clone (migrations are not versioned)",
+    );
+  } else {
+    const missingHosts = blockedHosts.filter(
+      (host) => !migrationSource.includes(`'${host}'`),
+    );
+    check(
+      "the queue migration knows every blocked host the guard knows",
+      missingHosts.length === 0,
+      missingHosts.slice(0, 10).join(", "),
+    );
+  }
 
   // -------------------------------------------------------------------------
   // Redirects are checked, hop by hop

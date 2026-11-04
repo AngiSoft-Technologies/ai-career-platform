@@ -1001,43 +1001,58 @@ async function main(): Promise<void> {
   );
   check("the role-word list is not empty", roleWords.length > 50);
 
-  const migrationSource = readFileSync(
-    new URL(
-      "../db/migrations/031_remove_non_job_catalogue_entries.sql",
-      import.meta.url,
-    ),
-    "utf8",
+  // The migrations are not versioned — they are gatekept by the owner —
+  // so a fresh clone may not have them. The checks run when the file is
+  // there, and are skipped when it is not.
+  const readOptional = (relativePath: string): string | null => {
+    try {
+      return readFileSync(new URL(relativePath, import.meta.url), "utf8");
+    } catch {
+      return null;
+    }
+  };
+
+  const migrationSource = readOptional(
+    "../db/migrations/031_remove_non_job_catalogue_entries.sql",
   );
-  const missingRoleWords = roleWords.filter(
-    (word) => !migrationSource.includes(`'${word}'`),
-  );
-  check(
-    "the cleanup migration knows every role word the application knows",
-    missingRoleWords.length === 0,
-    missingRoleWords.slice(0, 10).join(", "),
-  );
+  if (migrationSource === null) {
+    console.log(
+      "  skip the cleanup migration is not in this clone (migrations are not versioned)",
+    );
+  } else {
+    const missingRoleWords = roleWords.filter(
+      (word) => !migrationSource.includes(`'${word}'`),
+    );
+    check(
+      "the cleanup migration knows every role word the application knows",
+      missingRoleWords.length === 0,
+      missingRoleWords.slice(0, 10).join(", "),
+    );
+  }
 
   // The queue migration applies the same rule to the URLs that are
   // already waiting to be read.
-  const queueMigrationSource = readFileSync(
-    new URL(
-      "../db/migrations/033_empty_non_job_queue.sql",
-      import.meta.url,
-    ),
-    "utf8",
+  const queueMigrationSource = readOptional(
+    "../db/migrations/033_empty_non_job_queue.sql",
   );
-  const missingQueueRoleWords = roleWords.filter(
-    (word) => !queueMigrationSource.includes(`'${word}'`),
-  );
-  check(
-    "the queue migration knows every role word the application knows",
-    missingQueueRoleWords.length === 0,
-    missingQueueRoleWords.slice(0, 10).join(", "),
-  );
-  check(
-    "the queue migration leaves the title-less links alone",
-    queueMigrationSource.includes("title IS NOT NULL"),
-  );
+  if (queueMigrationSource === null) {
+    console.log(
+      "  skip the queue migration is not in this clone (migrations are not versioned)",
+    );
+  } else {
+    const missingQueueRoleWords = roleWords.filter(
+      (word) => !queueMigrationSource.includes(`'${word}'`),
+    );
+    check(
+      "the queue migration knows every role word the application knows",
+      missingQueueRoleWords.length === 0,
+      missingQueueRoleWords.slice(0, 10).join(", "),
+    );
+    check(
+      "the queue migration leaves the title-less links alone",
+      queueMigrationSource.includes("title IS NOT NULL"),
+    );
+  }
 
   // The search agent checks the title before it queues a URL: a page
   // read is the expensive part of the pipeline, and the title of a page
