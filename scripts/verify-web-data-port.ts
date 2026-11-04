@@ -22,6 +22,12 @@ import {
   sameCountry,
   samePlace,
 } from "../services/api/src/services/geo.js";
+import {
+  cleanCompanyName,
+  cleanJobTitle,
+  looksLikeJobPosting,
+} from "../services/api/src/services/engine/extract.js";
+import { keepBestPerUser } from "../services/api/src/services/agents/match-agent.js";
 
 import {
   AbortManager,
@@ -772,6 +778,254 @@ async function main(): Promise<void> {
   check(
     "different cities do not match",
     !samePlace("London", "Berlin"),
+  );
+
+  // -------------------------------------------------------------------------
+  // The job-posting gate
+  //
+  // The extractor used to accept any page with a title and sixty
+  // characters of text, so the catalogue filled up with "What is ERP?"
+  // and whatever else the search engine had ranked.
+  // -------------------------------------------------------------------------
+
+  check(
+    "a page with job-posting markers is recognised",
+    looksLikeJobPosting(
+      "About the role\nYou will build things.\nRequirements\n5 years of experience.\nApply now",
+    ),
+  );
+  check(
+    "a page without job-posting markers is rejected",
+    !looksLikeJobPosting(
+      "What is ERP? Enterprise resource planning is a suite of applications. " +
+        "Learn more about our products and contact our sales team.",
+    ),
+  );
+  check(
+    "one marker on its own is not enough",
+    !looksLikeJobPosting("We are hiring. Come and join our team of people."),
+  );
+  check(
+    "a page with two marker groups is accepted",
+    looksLikeJobPosting("Salary: negotiable. Apply now for the position."),
+  );
+  check(
+    "a posting with schema.org JobPosting is accepted",
+    looksLikeJobPosting("", {
+      jsonLd: { title: "Engineer" } as never,
+    }),
+  );
+  check(
+    "a careers subdomain is trusted on one marker",
+    looksLikeJobPosting("Apply now", { url: "https://jobs.example.test/123" }),
+  );
+  check(
+    "a car listing that says hybrid is not a posting",
+    !looksLikeJobPosting(
+      "New Honda CR-V Hybrid For Sale. Your Price $37,000. Results: 9 Vehicles.",
+    ),
+  );
+  check(
+    "a salary guide is not a posting",
+    !looksLikeJobPosting(
+      "What is salary negotiation? A guide to compensation for your career.",
+    ),
+  );
+  check(
+    "a requirements section alone is not enough",
+    !looksLikeJobPosting("Requirements: a browser and a broadband connection."),
+  );
+
+  // -------------------------------------------------------------------------
+  // The company-name cleaner
+  // -------------------------------------------------------------------------
+
+  check(
+    "a CSS selector is not a company name",
+    cleanCompanyName('cookies-similar-technology "Opens in new tab")') === null,
+  );
+  check(
+    "a chrome label is not a company name",
+    cleanCompanyName("Privacy Policy") === null,
+  );
+  check(
+    "a real company name survives",
+    cleanCompanyName("BambooHR") === "BambooHR",
+  );
+  check(
+    "an empty company name is nothing",
+    cleanCompanyName("   ") === null,
+  );
+
+  // -------------------------------------------------------------------------
+  // The title gate
+  //
+  // A search-engine browse turns up articles and index pages as readily
+  // as postings. Their titles are shaped like questions, guides and
+  // lists; a role title is a short noun phrase.
+  // -------------------------------------------------------------------------
+
+  for (const title of [
+    "What is ERP?",
+    "What Is Compliance? Definition And Importance Explained",
+    "Introduction to ERP - GeeksforGeeks",
+    "The 7 Fundamental Elements of a Compliance Program",
+    "ERP Examples: 12 Real ERP Systems and Software for 2026",
+    "Enterprise resource planning - Wikipedia",
+    "New Honda Ridgeline for Sale in Jacksonville, FL | Atlantic Coast Honda",
+    "Certified Pre-Owned Cars for Sale in Jacksonville, FL | Atlantic Coast Honda",
+    "NHL Schedule 2026-27",
+    "Methodology | Speedtest Awards",
+    "Tshwane Careers",
+    "Jobs in Kenya — November 2026 (1,572 Openings)",
+    "Download",
+    "Features",
+    "Abouts",
+    "N/A",
+    "null",
+    "Krita | Creative Freedom for Digital Artists",
+    "Welcome to the Krita 5.3 Manual! — Krita Manual 5.3.0 documentation",
+    "KEA Land Surveyor MCQ, Questions and Answers - Toppersexam",
+    "Gauteng Cabin Vacation Rentals | Airbnb",
+    "What is the difference between a job and a career",
+    "Sales - Enciclopedia Humanidades",
+    "Sales De Baño Epsom 300g Green Harmony | Gloss Beauty Shop",
+    "Top 10 ERP System Examples (2026) and How To Choose Yours?",
+  ]) {
+    check(
+      `a non-role title is rejected: ${title}`,
+      cleanJobTitle(title) === null,
+      cleanJobTitle(title) ?? "",
+    );
+  }
+
+  for (const title of [
+    "Software Engineer",
+    "Operations Administrator (Manufacturing)",
+    "Principal Counsel, Africa Legal",
+    "Legal Expert",
+    "Senior Data Analyst",
+    "Backend Engineer",
+    "Registered Nurse - ICU",
+    "Marketing Intern",
+    "Field Sales Agent",
+    "AI Data Consultant",
+    "Business Analyst",
+    "DevOps Engineer",
+    "Android Engineer",
+  ]) {
+    check(
+      `a role title survives: ${title}`,
+      cleanJobTitle(title) === title,
+      cleanJobTitle(title) ?? "",
+    );
+  }
+
+  check(
+    "a company suffix is removed from the title",
+    cleanJobTitle("Software Engineer | Acme") === "Software Engineer",
+  );
+
+  // -------------------------------------------------------------------------
+  // The role-word list, in the application and in the cleanup migration
+  //
+  // The migration applies the same rule as the application, so the two
+  // lists have to be the same list. A word that is in one and not the
+  // other means a page the application rejects and the migration keeps.
+  // -------------------------------------------------------------------------
+
+  const extractSource = readFileSync(
+    new URL("../services/api/src/services/engine/extract.ts", import.meta.url),
+    "utf8",
+  );
+  const roleWordBlock = /const ROLE_WORDS = new Set\(\[([\s\S]*?)\]\);/.exec(
+    extractSource,
+  );
+  const roleWords = [...(roleWordBlock?.[1] ?? "").matchAll(/"([a-z]+)"/g)].map(
+    (match) => match[1] ?? "",
+  );
+  check("the role-word list is not empty", roleWords.length > 50);
+
+  const migrationSource = readFileSync(
+    new URL(
+      "../db/migrations/031_remove_non_job_catalogue_entries.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const missingRoleWords = roleWords.filter(
+    (word) => !migrationSource.includes(`'${word}'`),
+  );
+  check(
+    "the cleanup migration knows every role word the application knows",
+    missingRoleWords.length === 0,
+    missingRoleWords.slice(0, 10).join(", "),
+  );
+
+  for (const title of [
+    "Warehouse Operative",
+    "Telesales Advisor",
+    "Nursery Teacher",
+    "Front Desk Receptionist",
+    "Store Supervisor",
+    "Delivery Driver",
+    "Sales Associate",
+    "Care Assistant",
+    "Barista",
+    "HR Business Partner",
+    "Site Reliability Engineer",
+    "Growth Marketing Manager",
+    "Financial Controller",
+    "Security Analyst",
+  ]) {
+    check(
+      `a role title survives: ${title}`,
+      cleanJobTitle(title) === title,
+      cleanJobTitle(title) ?? "",
+    );
+  }
+
+  for (const title of [
+    "Sales De Baño Epsom 300g Green Harmony",
+    "Build software better, together",
+    "Corporate Wear Online South Africa",
+    "Honda Dealer in Jacksonville, Florida",
+    "Krita",
+    "Methodology",
+    "Taphandles",
+    "Corporation",
+    "Sales",
+    "Schedule",
+  ]) {
+    check(
+      `a title that names no role is rejected: ${title}`,
+      cleanJobTitle(title) === null,
+      cleanJobTitle(title) ?? "",
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // The recommendation table keeps only the best matches per user
+  // -------------------------------------------------------------------------
+
+  const manyPairs = Array.from({ length: 10 }, (_, index) => ({
+    user_id: "user-a",
+    opportunity_id: `opp-${index}`,
+    score: index,
+  })).concat([
+    { user_id: "user-b", opportunity_id: "opp-x", score: 5 },
+  ]);
+  const kept = keepBestPerUser(manyPairs, 3);
+  check(
+    "only the best matches per user are kept",
+    kept.length === 4,
+    `kept ${kept.length}`,
+  );
+  check(
+    "the kept matches are the highest scoring ones",
+    kept
+      .filter((entry) => entry["user_id"] === "user-a")
+      .every((entry) => Number(entry["score"]) >= 7),
   );
 
   console.log(

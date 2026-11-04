@@ -3,7 +3,7 @@ import { logger } from "../../logger.js";
 import { config } from "../../config.js";
 import { BaseDiscoveryAgent, type AgentContext, type AgentRunResult } from "./base.js";
 import { scrapeUrl } from "../engine/fetch.js";
-import { extractJob } from "../engine/extract.js";
+import { extractJob, looksLikeJobPosting } from "../engine/extract.js";
 import { reserveDailyQuota } from "../engine/quota.js";
 import {
   isUnreadableRedirectWrapper,
@@ -162,7 +162,14 @@ export class BrowseAgent extends BaseDiscoveryAgent {
         const usable =
           Boolean(job.title) &&
           job.title !== "Untitled position" &&
-          job.description.length >= 60;
+          job.description.length >= 60 &&
+          // A title and sixty characters of text is a page, not a job
+          // posting. Without this the catalogue fills up with whatever
+          // the search engine happened to rank.
+          looksLikeJobPosting(scraped.markdown, {
+            jsonLd: scraped.jsonLd,
+            url: scraped.finalUrl,
+          });
 
         if (!usable) {
           // No job posting on the page. That is either a broken read or a

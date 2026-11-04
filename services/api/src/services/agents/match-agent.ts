@@ -34,8 +34,44 @@ import { BaseDiscoveryAgent, type AgentContext, type AgentRunResult } from "./ba
  * a user to opt into remote work, while the product shows a remote role
  * to everyone, because a remote role works from anywhere.
  */
-export class UserMatchingAgent extends BaseDiscoveryAgent {
-  readonly key = "user_matching_agent";
+/**
+ * Keeps each user's best matches.
+ *
+ * The agent scores every user against every opportunity it considers,
+ * which is thousands of pairs. Only the best few per user are worth
+ * keeping: a recommendation list that holds everything is not a
+ * recommendation list.
+ */
+export function keepBestPerUser(
+  payloads: Array<Record<string, unknown>>,
+  maxPerUser: number,
+): Array<Record<string, unknown>> {
+  if (maxPerUser <= 0) return payloads;
+
+  const byUser = new Map<string, Array<Record<string, unknown>>>();
+  for (const payload of payloads) {
+    const userId = String(payload["user_id"] ?? "");
+    const bucket = byUser.get(userId);
+    if (bucket) bucket.push(payload);
+    else byUser.set(userId, [payload]);
+  }
+
+  const kept: Array<Record<string, unknown>> = [];
+  for (const bucket of byUser.values()) {
+    bucket.sort((left, right) => {
+      const scoreDifference =
+        Number(right["score"] ?? 0) - Number(left["score"] ?? 0);
+      if (scoreDifference !== 0) return scoreDifference;
+      return String(left["opportunity_id"] ?? "").localeCompare(
+        String(right["opportunity_id"] ?? ""),
+      );
+    });
+    kept.push(...bucket.slice(0, maxPerUser));
+  }
+  return kept;
+}
+
+export class UserMatchingAgent extends BaseDiscoveryAgent {  readonly key = "user_matching_agent";
   readonly name = "User Job Matching Agent";
   readonly kind = "user_matching";
   readonly scheduleIntervalMinutes = 15;
@@ -43,6 +79,7 @@ export class UserMatchingAgent extends BaseDiscoveryAgent {
   async run(ctx: AgentContext): Promise<AgentRunResult> {
     const maxUsers = Number(ctx.config.max_users_per_run ?? 200);
     const maxOpportunities = Number(ctx.config.max_opportunities_per_run ?? 300);
+    const maxPerUser = Number(ctx.config.max_matches_per_user ?? 100);
     const minScore = Number(ctx.config.min_score ?? 1);
     const budgetMs = Number(ctx.config.budget_ms ?? 120_000);
     const deadline = Date.now() + budgetMs;
@@ -84,16 +121,21 @@ export class UserMatchingAgent extends BaseDiscoveryAgent {
       }
     }
 
+    // A recommendation table that holds every pair is not a
+    // recommendation table. Each user keeps their best matches, and the
+    // rest are left for a later cycle to reconsider.
+    const kept = keepBestPerUser(payloads, maxPerUser);
+
     let totalMatches = 0;
     const errors: string[] = [];
 
-    if (payloads.length > 0) {
+    if (kept.length > 0) {
       // One statement for every match, in chunks that stay well inside
       // the parameter limit. The rows travel as JSON so the nested
       // factors and gaps keep their shape on the way through.
       const CHUNK = 500;
-      for (let start = 0; start < payloads.length; start += CHUNK) {
-        const chunk = payloads.slice(start, start + CHUNK);
+      for (let start = 0; start < kept.length; start += CHUNK) {
+        const chunk = kept.slice(start, start + CHUNK);
         try {
           const result = await query(
             `INSERT INTO matches (user_id, opportunity_id, score, factors, explanation, gaps, created_at, updated_at)
@@ -135,7 +177,6 @@ export class UserMatchingAgent extends BaseDiscoveryAgent {
       },
     };
   }
-
   /**
    * Reads the candidates' profiles in one statement.
    *

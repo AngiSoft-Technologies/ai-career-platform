@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { scrapeUrl } from "../services/engine/fetch.js";
-import { extractJob } from "../services/engine/extract.js";
+import { extractJob, looksLikeJobPosting } from "../services/engine/extract.js";
 import { searchWeb, type WebSearchResult } from "../services/engine/search.js";
 import { crawlSite, discoverJobUrls } from "../services/engine/crawl.js";
 import { capturePage } from "../services/engine/screen.js";
@@ -125,6 +125,13 @@ agentRouter.post("/browse", async (request, response) => {
       jsonLd: scraped.jsonLd,
       job,
       eligibility,
+      // The extractor refuses a title that does not name a role, so the
+      // caller is told whether the page read as a posting at all rather
+      // than being left to wonder why the title is "Untitled position".
+      isJobPosting: looksLikeJobPosting(scraped.markdown, {
+        jsonLd: scraped.jsonLd,
+        url: scraped.finalUrl,
+      }),
       markdown: scraped.markdown.slice(0, 20_000),
       ...(capture
         ? {
