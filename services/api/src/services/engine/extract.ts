@@ -14,11 +14,11 @@
  */
 
 import { createHash } from "node:crypto";
-import { aiChatDetailed, isAiConfigured } from "../ai/client.js";
+import { aiChatDetailed, activeChatModel, isAiConfigured } from "../ai/client.js";
 import { config } from "../../config.js";
 import { logger } from "../../logger.js";
 import { guardPromptInjection } from "./injection-guard.js";
-import { priceCall } from "./cost-tracking.js";
+import { priceCallWithFallback } from "./cost-tracking.js";
 import { reserveBudget } from "./reservation.js";
 import type { JsonLdJobPosting, PageMetadata } from "./html.js";
 
@@ -312,11 +312,18 @@ ${input.markdown.slice(0, 9_000)}`;
   // Reserve the estimated spend before the call, settle the actual spend
   // after it. The fleet shares one budget: eleven API machines each with
   // their own counter would be eleven times the limit.
+  //
+  // The estimate is priced against the model that will actually answer —
+  // pricing it against a generic default would reserve the wrong amount,
+  // and an unpriced model would reserve nothing at all.
   const promptTokens = Math.ceil(
     (prompt.length + messages[0]!.content.length) / 4,
   );
-  const estimatedUsd =
-    priceCall(config.AI_MODEL, promptTokens, 700) ?? 0;
+  const estimatedUsd = priceCallWithFallback(
+    activeChatModel(),
+    promptTokens,
+    700,
+  );
 
   const reservation = await reserveBudget({
     scope: "ai",
@@ -339,12 +346,11 @@ ${input.markdown.slice(0, 9_000)}`;
       maxTokens: 700,
     });
 
-    const actualUsd =
-      priceCall(
-        completion.model,
-        completion.promptTokens || promptTokens,
-        completion.completionTokens || Math.ceil(completion.text.length / 4),
-      ) ?? estimatedUsd;
+    const actualUsd = priceCallWithFallback(
+      completion.model,
+      completion.promptTokens || promptTokens,
+      completion.completionTokens || Math.ceil(completion.text.length / 4),
+    );
     await reservation.settle(actualUsd);
 
     const raw = completion.text;

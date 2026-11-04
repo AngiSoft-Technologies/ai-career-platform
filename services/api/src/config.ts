@@ -98,17 +98,32 @@ const schema = z.object({
     .enum(["auto", "neon", "nvidia", "openai", "custom"])
     .default("auto"),
   AI_EMBEDDING_MODEL: z.string().default("text-embedding-3-small"),
-  NEON_AI_MODEL: z.string().default("openai/gpt-4.1-mini"),
-  NEON_AI_EMBEDDING_MODEL: z.string().default("openai/text-embedding-3-small"),
+  /**
+   * Neon gateway model IDs are catalog IDs — no provider prefix. The
+   * gateway serves them on its `/v1` dialect.
+   */
+  NEON_AI_MODEL: z.string().default("gpt-4.1-mini"),
+  NEON_AI_EMBEDDING_MODEL: z.string().default("text-embedding-3-small"),
   NVIDIA_API_KEY: z.string().optional(),
+  /**
+   * The same key, under the name it is actually deployed as. Both spellings
+   * are accepted so the provider works without renaming a live secret.
+   */
+  NVIDIA_AI_API_KEY: z.string().optional(),
   NVIDIA_BASE_URL: z
     .string()
     .url()
     .default("https://integrate.api.nvidia.com/v1"),
-  NVIDIA_MODEL: z.string().default("nvidia/llama-3.1-nemotron-70b-instruct"),
+  /**
+   * A *non-reasoning* model. Reasoning models (Nemotron Super, Nemotron
+   * Lightning, Kimi, GLM) answer with `content: null` and put the whole
+   * answer in `reasoning_content`, which every caller that reads
+   * `message.content` would see as an empty response.
+   */
+  NVIDIA_MODEL: z.string().default("nvidia/nemotron-3.5-bolt-e4b"),
   NVIDIA_EMBEDDING_MODEL: z
     .string()
-    .default("nvidia/llama-3.2-nv-embedqa-1b-v2"),
+    .default("nvidia/nemotron-3-embed-1b"),
   AI_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
   JOB_SOURCE_FETCH_LIMIT: z.coerce.number().int().positive().default(100),
 
@@ -164,6 +179,8 @@ const parsed = schema.parse(process.env);
 
 export const config = {
   ...parsed,
+  /** Either spelling of the NVIDIA key enables the provider. */
+  NVIDIA_API_KEY: parsed.NVIDIA_API_KEY ?? parsed.NVIDIA_AI_API_KEY,
   WEB_ORIGINS: parsed.WEB_ORIGIN.split(",")
     .map((origin) => origin.trim())
     .filter((origin) => origin.length > 0),

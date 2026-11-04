@@ -19,7 +19,15 @@ export class CostLimitExceededError extends Error {
   }
 }
 
-/** USD per million tokens. Add models as we adopt them. */
+/**
+ * USD per million tokens. Add models as we adopt them.
+ *
+ * The NVIDIA entries are **nominal budgeting rates**, not an invoice: the
+ * hosted API catalog is free for NVIDIA Developer Program members, so
+ * these calls do not appear on a bill. The rates are what the same model
+ * would cost on metered infrastructure, and they keep the ceiling
+ * meaningful — a pipeline that loops must still reach it.
+ */
 const MODEL_PRICES: Record<string, { input: number; output: number }> = {
   "gpt-4.1-mini": { input: 0.4, output: 1.6 },
   "gpt-4.1": { input: 2, output: 8 },
@@ -31,7 +39,14 @@ const MODEL_PRICES: Record<string, { input: number; output: number }> = {
   "openai/gpt-4.1-mini": { input: 0.4, output: 1.6 },
   "nvidia/llama-3.1-nemotron-70b-instruct": { input: 0.35, output: 0.4 },
   "nvidia/llama-3.2-nv-embedqa-1b-v2": { input: 0.02, output: 0 },
+  "nvidia/nemotron-3.5-bolt-e4b": { input: 0.1, output: 0.2 },
+  "nvidia/nemotron-3-embed-1b": { input: 0.02, output: 0 },
+  "nvidia/nemotron-3.5-embed-1b": { input: 0.02, output: 0 },
+  "nvidia/nemotron-3.5-embed-8b": { input: 0.05, output: 0 },
 };
+
+/** Conservative rates for a model we have no price for. */
+const FALLBACK_PRICE = { input: 1, output: 2 };
 
 const warnedModels = new Set<string>();
 
@@ -52,6 +67,29 @@ export function priceCall(
   }
   return (
     (promptTokens * price.input + completionTokens * price.output) / 1_000_000
+  );
+}
+
+/**
+ * Prices a call, falling back to a conservative rate for an unpriced model.
+ *
+ * `priceCall` returning `null` for an unknown model is right for a report
+ * ("we do not know what this cost") and wrong for a *reservation*: an
+ * unpriced model would reserve nothing, the ceiling would never be
+ * enforced, and the budget would silently stop existing. Budgeting uses
+ * this instead.
+ */
+export function priceCallWithFallback(
+  model: string,
+  promptTokens: number,
+  completionTokens: number,
+): number {
+  const priced = priceCall(model, promptTokens, completionTokens);
+  if (priced !== null) return priced;
+  return (
+    (promptTokens * FALLBACK_PRICE.input +
+      completionTokens * FALLBACK_PRICE.output) /
+    1_000_000
   );
 }
 

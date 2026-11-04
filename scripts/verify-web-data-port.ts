@@ -60,6 +60,12 @@ import {
   reserveBudget,
   withBudget,
 } from "../services/api/src/services/engine/reservation.js";
+import {
+  priceCall,
+  priceCallWithFallback,
+} from "../services/api/src/services/engine/cost-tracking.js";
+import { neonDialectUrl } from "../services/api/src/services/ai/client.js";
+import { config } from "../services/api/src/config.js";
 
 let failures = 0;
 
@@ -536,6 +542,56 @@ async function main(): Promise<void> {
     async () => ({ result: "done", actualUsd: 0.25 }),
   );
   check("a successful work returns its result", settled === "done");
+
+  // The AI provider chain: a wrong URL shape and a wrong model name are
+  // both silent, total failures of every AI-backed feature.
+  const gateway = neonDialectUrl("https://branch-api.ai.region.aws.neon.tech");
+  check(
+    "the gateway base URL gets the /v1 dialect",
+    gateway === "https://branch-api.ai.region.aws.neon.tech/v1",
+    gateway,
+  );
+  check(
+    "the gateway dialect is not appended twice",
+    neonDialectUrl("https://branch-api.ai.region.aws.neon.tech/v1") === gateway,
+  );
+  check(
+    "a trailing slash does not produce a double slash",
+    neonDialectUrl("https://branch-api.ai.region.aws.neon.tech/") === gateway,
+  );
+
+  // An unpriced model must still reserve budget, or the ceiling silently
+  // stops existing for every model we have not catalogued yet.
+  check(
+    "an unpriced model still has a price",
+    priceCallWithFallback("some/unknown-model", 1_000, 1_000) > 0,
+  );
+  check(
+    "a priced model uses its own price",
+    priceCallWithFallback("gpt-4.1-mini", 1_000, 1_000) !==
+      priceCallWithFallback("some/unknown-model", 1_000, 1_000),
+  );
+  check(
+    "an unpriced model is reported as unpriced",
+    priceCall("some/unknown-model", 1_000, 1_000) === null,
+  );
+
+  // The configured defaults must be models the provider actually serves.
+  check(
+    "the default chat model is a live model",
+    !config.NVIDIA_MODEL.includes("llama-3.1-nemotron-70b"),
+    config.NVIDIA_MODEL,
+  );
+  check(
+    "the default embedding model is a live model",
+    !config.NVIDIA_EMBEDDING_MODEL.includes("nv-embedqa-1b-v2"),
+    config.NVIDIA_EMBEDDING_MODEL,
+  );
+  check(
+    "the default chat model is not a reasoning model",
+    !/lightning|super|nemotron-3-super/i.test(config.NVIDIA_MODEL),
+    config.NVIDIA_MODEL,
+  );
 
   // Cache variants: dimensions that change the content must not share a key.
   const mainContent = deriveVariantKey({

@@ -1,4 +1,5 @@
 import { config } from "../../config.js";
+import { logger } from "../../logger.js";
 
 export type EmbeddingMode = "query" | "passage";
 
@@ -43,13 +44,27 @@ function normaliseBaseUrl(value: string): string {
   return value.endsWith("/") ? value.slice(0, -1) : value;
 }
 
+/**
+ * The Neon AI Gateway base URL is a **bare host** — the dialect path is ours
+ * to append. `/v1` is the unified OpenAI-compatible dialect, which serves
+ * both `/v1/chat/completions` and `/v1/embeddings`.
+ *
+ * Appending the dialect to the host matters: asking the host for
+ * `/chat/completions` returns a bare `404 page not found`, which looks like
+ * a wrong model rather than a wrong path.
+ */
+export function neonDialectUrl(host: string): string {
+  const base = normaliseBaseUrl(host);
+  return base.endsWith("/v1") ? base : `${base}/v1`;
+}
+
 function neonProvider(): AiProvider | null {
   if (!config.NEON_AI_GATEWAY_BASE_URL || !config.NEON_AI_GATEWAY_TOKEN) {
     return null;
   }
   return {
     name: "neon",
-    baseUrl: normaliseBaseUrl(config.NEON_AI_GATEWAY_BASE_URL),
+    baseUrl: neonDialectUrl(config.NEON_AI_GATEWAY_BASE_URL),
     apiKey: config.NEON_AI_GATEWAY_TOKEN,
     chatModel: config.NEON_AI_MODEL,
     embeddingModel: config.NEON_AI_EMBEDDING_MODEL,
@@ -128,6 +143,23 @@ export function isAiConfigured(): boolean {
   return getAiProviders().length > 0;
 }
 
+/**
+ * The chat model the active provider will actually use.
+ *
+ * Budget reservations must be priced against the model that will answer.
+ * Pinning a model name the active provider does not serve (for example
+ * asking NVIDIA for `gpt-4.1-mini`) fails with a 404 that reads like a
+ * missing model rather than a missing capability.
+ */
+export function activeChatModel(): string {
+  return getAiProvider()?.chatModel ?? config.AI_MODEL;
+}
+
+/** The embedding model the active provider will actually use. */
+export function activeEmbeddingModel(): string {
+  return getAiProvider()?.embeddingModel ?? config.AI_EMBEDDING_MODEL;
+}
+
 async function aiRequest(
   provider: AiProvider,
   path: string,
@@ -171,6 +203,30 @@ export interface AiChatResult {
   provider: AiProviderName;
 }
 
+interface ChatMessageShape {
+  content?: string | null;
+  reasoning_content?: string | null;
+}
+
+/**
+ * One chat request. `extra` carries provider-specific body fields.
+ */
+async function requestChat(
+  provider: AiProvider,
+  model: string,
+  messages: ChatMessage[],
+  options: { temperature?: number; maxTokens?: number },
+  extra?: Record<string, unknown>,
+): Promise<unknown> {
+  return aiRequest(provider, "/chat/completions", {
+    model,
+    messages,
+    temperature: options.temperature ?? 0.4,
+    max_tokens: options.maxTokens ?? 900,
+    ...(extra ?? {}),
+  });
+}
+
 /**
  * Chat completion with the provider's usage figures.
  *
@@ -190,17 +246,32 @@ export async function aiChatDetailed(
   for (const provider of providers) {
     try {
       const requestedModel = options.model ?? provider.chatModel;
-      const payload = await aiRequest(provider, "/chat/completions", {
-        model: requestedModel,
-        messages,
-        temperature: options.temperature ?? 0.4,
-        max_tokens: options.maxTokens ?? 900,
-      });
+      let payload = await requestChat(provider, requestedModel, messages, options);
 
       const choices = (payload as {
-        choices?: Array<{ message?: { content?: string } }>;
+        choices?: Array<{ message?: ChatMessageShape }>;
       }).choices;
-      const content = choices?.[0]?.message?.content;
+      const message = choices?.[0]?.message;
+      let content = message?.content;
+
+      if (!content && message?.reasoning_content) {
+        // A reasoning model that spent its whole token budget thinking
+        // answers with `content: null` and puts the answer in
+        // `reasoning_content`. Ask the same model again with thinking
+        // turned off: the work is identical, only the model stops burning
+        // the budget before it answers.
+        payload = await requestChat(provider, requestedModel, messages, options, {
+          chat_template_kwargs: {
+            enable_thinking: false,
+            force_nonempty_content: true,
+          },
+        });
+        const retried = (payload as {
+          choices?: Array<{ message?: ChatMessageShape }>;
+        }).choices;
+        content = retried?.[0]?.message?.content;
+      }
+
       if (!content) throw new AiRequestError("AI_EMPTY_RESPONSE");
 
       const usage = (payload as {
@@ -242,6 +313,51 @@ export async function aiEmbed(
   return vectors;
 }
 
+/**
+ * Embeds one batch with one provider.
+ *
+ * A provider can reject a *multi-input* batch while accepting single
+ * inputs — some embedding deployments fail a batch with a bare
+ * `service inference failed`. The work is the same either way, only the
+ * request shape changes, so a failed batch is retried one text at a time
+ * before the provider is given up on.
+ */
+async function embedBatchWithProvider(
+  provider: AiProvider,
+  texts: string[],
+  mode: EmbeddingMode,
+): Promise<number[][]> {
+  const body: Record<string, unknown> = {
+    model: provider.embeddingModel,
+    input: texts,
+  };
+
+  if (provider.name === "nvidia") {
+    body.input_type = mode;
+    body.truncate = "END";
+    body.encoding_format = "float";
+  }
+
+  try {
+    const payload = await aiRequest(provider, "/embeddings", body);
+    const data = (payload as { data?: Array<{ embedding?: number[] }> }).data;
+    if (!data?.length) throw new AiRequestError("AI_EMPTY_EMBEDDINGS");
+    return data.map((item) => item.embedding ?? []);
+  } catch (error) {
+    if (texts.length <= 1) throw error;
+    logger.debug(
+      { error, provider: provider.name, count: texts.length },
+      "Embedding batch failed; retrying one text at a time",
+    );
+    const vectors: number[][] = [];
+    for (const text of texts) {
+      const single = await embedBatchWithProvider(provider, [text], mode);
+      vectors.push(single[0] ?? []);
+    }
+    return vectors;
+  }
+}
+
 export async function aiEmbedWithProvider(
   texts: string[],
   mode: EmbeddingMode = "query",
@@ -252,24 +368,8 @@ export async function aiEmbedWithProvider(
   let lastError: unknown;
   for (const provider of providers) {
     try {
-      const body: Record<string, unknown> = {
-        model: provider.embeddingModel,
-        input: texts,
-      };
-
-      if (provider.name === "nvidia") {
-        body.input_type = mode;
-        body.truncate = "END";
-        body.encoding_format = "float";
-      }
-
-      const payload = await aiRequest(provider, "/embeddings", body);
-      const data = (payload as { data?: Array<{ embedding?: number[] }> }).data;
-      if (!data?.length) throw new AiRequestError("AI_EMPTY_EMBEDDINGS");
-      return {
-        provider,
-        vectors: data.map((item) => item.embedding ?? []),
-      };
+      const vectors = await embedBatchWithProvider(provider, texts, mode);
+      return { provider, vectors };
     } catch (error) {
       lastError = error;
     }

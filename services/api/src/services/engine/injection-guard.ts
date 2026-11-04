@@ -22,11 +22,11 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { aiChatDetailed, isAiConfigured } from "../ai/client.js";
+import { aiChatDetailed, activeChatModel, isAiConfigured } from "../ai/client.js";
 import { config } from "../../config.js";
 import { logger } from "../../logger.js";
 import { extractJsonBlock } from "./schema.js";
-import { CostTracking, priceCall } from "./cost-tracking.js";
+import { CostTracking, priceCallWithFallback } from "./cost-tracking.js";
 import { reserveBudget } from "./reservation.js";
 import { pooled } from "./index.js";
 
@@ -126,7 +126,11 @@ export async function guardPromptInjection(
   const chunks = chunkContent(content, chunkChars, overlapChars);
 
   const tracker = new CostTracking(options.costLimitUsd);
-  const model = options.model ?? config.AI_MODEL;
+  // The model is left to the provider unless the caller insists on one:
+  // pinning a model name the active provider does not serve turns every
+  // call into a 404. The price is taken from the model that will answer.
+  const requestedModel = options.model;
+  const pricingModel = requestedModel ?? activeChatModel();
   let budgetExhausted = false;
 
   const classified = await pooled(
@@ -139,7 +143,7 @@ export async function guardPromptInjection(
 
       // Same fleet-wide budget as the gap-fill: reserve before the call,
       // settle after, refund the whole reservation if the call throws.
-      const estimatedUsd = priceCall(model, promptTokens, 300) ?? 0;
+      const estimatedUsd = priceCallWithFallback(pricingModel, promptTokens, 300);
       const reservation = await reserveBudget({
         scope: "ai",
         subject: "injection-guard",
@@ -160,15 +164,14 @@ export async function guardPromptInjection(
               content: `<${tag}>\n${chunk}\n</${tag}>`,
             },
           ],
-          { model, temperature: 0 },
+          { model: requestedModel, temperature: 0 },
         );
 
-        const actualUsd =
-          priceCall(
-            completion.model,
-            completion.promptTokens || promptTokens,
-            completion.completionTokens || Math.ceil(completion.text.length / 4),
-          ) ?? estimatedUsd;
+        const actualUsd = priceCallWithFallback(
+          completion.model,
+          completion.promptTokens || promptTokens,
+          completion.completionTokens || Math.ceil(completion.text.length / 4),
+        );
         await reservation.settle(actualUsd);
 
         tracker.addCall({

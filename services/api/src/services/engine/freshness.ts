@@ -25,7 +25,6 @@ import { createTwoFilesPatch } from "diff";
 import parseDiff from "parse-diff";
 import { contentHash } from "./index.js";
 import { logger } from "../../logger.js";
-import { config } from "../../config.js";
 import { aiChat, isAiConfigured } from "../ai/client.js";
 import { extractJsonBlock } from "./schema.js";
 
@@ -371,7 +370,7 @@ export async function judgeChangeWithLlm(input: {
             .join("\n\n"),
         },
       ],
-      { model: config.AI_MODEL, temperature: 0 },
+      { temperature: 0 },
     );
     return parseJudgeResponse(raw) ?? failOpen;
   } catch (error) {
