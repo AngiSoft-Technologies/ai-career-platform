@@ -20,6 +20,8 @@
 import { logger } from "../../logger.js";
 import { sampled } from "../../lib/rollout.js";
 import { searchWeb, type SearchOptions, type WebSearchResult } from "./search.js";
+import { cleanJobTitle } from "./job-title.js";
+import { isNewsRedirectWrapper } from "./redirect.js";
 import {
   buildCategoryQuery,
   buildDomainQuery,
@@ -54,6 +56,30 @@ export interface PlannedSearchResult {
 
 const MAX_OVERFETCH = 100;
 
+/**
+ * The validity gate for job discovery.
+ *
+ * Two things make a search result useless for finding a job:
+ *
+ *   1. It is a *news* headline. Google News RSS returns an article
+ *      about a job, not the job, behind a wrapper that cannot be
+ *      decoded. The browse agent read these for days and never
+ *      produced a single candidate from them — and because the chain
+ *      is strict-priority, the news engine shadowed DuckDuckGo and
+ *      Bing for every query.
+ *
+ *   2. The title says the page is not about a role: "What is ERP?",
+ *      "Top 20 Highest Paying Jobs in Kenya", "Tracking Your Shipment
+ *      | FedEx".
+ *
+ * A provider whose results all fail this gate is treated as absent, so
+ * the chain moves on to the next engine.
+ */
+export function isJobDiscoveryResult(result: WebSearchResult): boolean {
+  if (isNewsRedirectWrapper(result.url)) return false;
+  return cleanJobTitle(result.title) !== null;
+}
+
 export function overfetchLimitFor(limit: number, plan: QueryPlan): number {
   if (plan.relaxed) return Math.min(Math.max(limit * 5, limit * 2), MAX_OVERFETCH);
   return Math.min(limit * 2, MAX_OVERFETCH);
@@ -77,7 +103,14 @@ export async function searchWebPlanned(
     ? Math.min(limit * options.overfetchMultiplier, MAX_OVERFETCH)
     : overfetchLimitFor(limit, plan);
 
-  const raw = await searchWeb(providerQuery, { ...options, limit: overfetch });
+  const raw = await searchWeb(providerQuery, {
+    ...options,
+    limit: overfetch,
+    // The gate is the caller's to set — a general web search has no
+    // business refusing a result because its title is not a job title.
+    // Job discovery gets it by default.
+    isValidResult: options.isValidResult ?? isJobDiscoveryResult,
+  });
 
   // 1. Local operator enforcement (site:/inurl:/intitle:/-site:).
   const operatorFiltered = keepOperatorMatches(raw, plan);

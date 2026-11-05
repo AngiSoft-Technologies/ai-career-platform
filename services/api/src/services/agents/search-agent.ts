@@ -1,7 +1,10 @@
 import { query } from "../../db/pool.js";
 import { logger } from "../../logger.js";
 import { BaseDiscoveryAgent, type AgentContext, type AgentRunResult } from "./base.js";
-import { searchWebPlanned } from "../engine/search-orchestrator.js";
+import {
+  isJobDiscoveryResult,
+  searchWebPlanned,
+} from "../engine/search-orchestrator.js";
 import { buildDiscoveryQueries, type QuerySeeds } from "../engine/discover.js";
 import { pooled } from "../engine/index.js";
 import { cleanJobTitle } from "../engine/extract.js";
@@ -95,6 +98,10 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
             country,
             freshness,
             timeoutMs: Math.min(remaining, 45_000),
+            // The gate that keeps a news engine from shadowing the web
+            // engines, and keeps the queue free of pages that are not
+            // about a role.
+            isValidResult: isJobDiscoveryResult,
           });
           return { queryText, results: planned.results };
         } catch (error) {

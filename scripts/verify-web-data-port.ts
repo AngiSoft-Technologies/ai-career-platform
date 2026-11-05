@@ -989,8 +989,13 @@ async function main(): Promise<void> {
   // other means a page the application rejects and the migration keeps.
   // -------------------------------------------------------------------------
 
+  // The title rules live in their own module, because the search chain
+  // needs them too.
   const extractSource = readFileSync(
-    new URL("../services/api/src/services/engine/extract.ts", import.meta.url),
+    new URL(
+      "../services/api/src/services/engine/job-title.ts",
+      import.meta.url,
+    ),
     "utf8",
   );
   const roleWordBlock = /const ROLE_WORDS = new Set\(\[([\s\S]*?)\]\);/.exec(
@@ -1071,6 +1076,85 @@ async function main(): Promise<void> {
   check(
     "the search agent counts what it refused",
     searchAgentSource.includes("notAJobTitle"),
+  );
+
+  // -------------------------------------------------------------------------
+  // The provider chain's validity gate
+  //
+  // The chain is strict-priority: the first provider that returns
+  // anything wins. Google News returns a news article for every query,
+  // so it shadowed DuckDuckGo and Bing — and a news article is not a job
+  // posting. The browse agent read them for days and never produced a
+  // candidate from one.
+  // -------------------------------------------------------------------------
+
+  const orchestratorSource = readFileSync(
+    new URL(
+      "../services/api/src/services/engine/search-orchestrator.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  check(
+    "the discovery path has a validity gate",
+    orchestratorSource.includes("isJobDiscoveryResult"),
+  );
+  check(
+    "the search agent uses the gate",
+    searchAgentSource.includes("isValidResult: isJobDiscoveryResult"),
+  );
+
+  // The Kenya agent searches for a *listing* — a careers page, a job
+  // board — so the job-posting gate has to be turned off there, or it
+  // refuses exactly what it is looking for.
+  const kenyaSource = readFileSync(
+    new URL(
+      "../services/api/src/services/agents/kenya-agent.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  check(
+    "the Kenya agent's listing search opts out of the gate",
+    kenyaSource.includes("isValidResult: () => true"),
+  );
+  check(
+    "a news wrapper is not a discovery result",
+    orchestratorSource.includes("isNewsRedirectWrapper(result.url)"),
+  );
+  check(
+    "the general search path keeps every engine",
+    orchestratorSource.includes(
+      "isValidResult: options.isValidResult ?? isJobDiscoveryResult",
+    ),
+  );
+
+  const searchSource = readFileSync(
+    new URL(
+      "../services/api/src/services/engine/search.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  check(
+    "the chain treats a provider with no valid results as absent",
+    searchSource.includes("applyValidityGate"),
+  );
+
+  const redirectSource = readFileSync(
+    new URL(
+      "../services/api/src/services/engine/redirect.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  check(
+    "a Google News wrapper is recognised",
+    redirectSource.includes("isNewsRedirectWrapper"),
+  );
+  check(
+    "a Google News wrapper is never worth crawling",
+    redirectSource.includes("if (isNewsRedirectWrapper(url)) return true;"),
   );
 
   for (const title of [

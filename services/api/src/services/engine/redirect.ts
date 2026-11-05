@@ -64,6 +64,26 @@ export function unwrapSearchRedirect(rawUrl: string): string {
 }
 
 /**
+ * True when the URL is a Google News RSS article wrapper.
+ *
+ *   Google News https://news.google.com/rss/articles/<base64>?oc=5
+ *
+ * This one is different from the others. A Bing or DuckDuckGo wrapper
+ * hides a page we could have found anyway; a Google News wrapper hides a
+ * *news article*, and the headline is about a job rather than the job.
+ * The article is not a posting and cannot be extracted as one — the
+ * browse agent read these for days and never produced a single candidate
+ * from them.
+ *
+ * The wrapper is also not decodable the way the others are: the payload
+ * is a Google-internal blob, and following the link lands on an
+ * interstitial rather than the article.
+ */
+export function isNewsRedirectWrapper(url: string): boolean {
+  return /^https?:\/\/news\.google\.com\//i.test(url.trim());
+}
+
+/**
  * True when the URL is a wrapper we could not read.
  *
  * These are never worth crawling: the page behind them is a redirect
@@ -72,6 +92,7 @@ export function unwrapSearchRedirect(rawUrl: string): string {
 export function isUnreadableRedirectWrapper(url: string): boolean {
   if (!url) return true;
   if (isBingRedirectWrapper(url)) return true;
+  if (isNewsRedirectWrapper(url)) return true;
   if (url.includes("duckduckgo.com/l/") && url.includes("uddg=")) return true;
   return false;
 }

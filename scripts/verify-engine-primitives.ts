@@ -40,6 +40,7 @@ import {
 } from "../services/api/src/services/engine/html.js";
 import {
   isBingRedirectWrapper,
+  isNewsRedirectWrapper,
   isUnreadableRedirectWrapper,
   unwrapSearchRedirect,
 } from "../services/api/src/services/engine/redirect.js";
@@ -449,6 +450,25 @@ console.log("\n[14] search-engine redirect wrappers");
   check(
     "a wrapper without a payload is still recognised",
     isUnreadableRedirectWrapper("https://www.bing.com/ck/a?ptn=3"),
+  );
+
+  // Google News hides a news article behind a wrapper that cannot be
+  // decoded. The article is about a job; it is not the job.
+  check(
+    "a Google News wrapper is recognised",
+    isNewsRedirectWrapper(
+      "https://news.google.com/rss/articles/CBMitwFBVV95cUxPQUFXWFBOZ3VM?oc=5",
+    ),
+  );
+  check(
+    "a Google News wrapper is never worth crawling",
+    isUnreadableRedirectWrapper(
+      "https://news.google.com/rss/articles/CBMitwFBVV95cUxPQUFXWFBOZ3VM?oc=5",
+    ),
+  );
+  check(
+    "an ordinary URL is not a news wrapper",
+    !isNewsRedirectWrapper("https://example.test/jobs/1"),
   );
 
   // DuckDuckGo wraps the destination in a query parameter.

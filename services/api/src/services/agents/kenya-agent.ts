@@ -300,6 +300,11 @@ export class KenyaPlatformAgent extends BaseDiscoveryAgent {
     if (jobs.length === 0) {
       const planned = await searchWebPlanned(`${target.url} careers hiring`, {
         limit: 8,
+        // This search is looking for a *listing* — a careers page, a job
+        // board — not a posting, so the job-posting gate is turned off.
+        // The gate is right for everything else in the pipeline and wrong
+        // here: "Careers" and "Jobs at Acme" are exactly what this wants.
+        isValidResult: () => true,
       }).catch(() => null);
       const results = planned?.results ?? [];
       for (const result of results) {

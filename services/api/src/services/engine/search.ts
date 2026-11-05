@@ -40,6 +40,20 @@ export interface SearchOptions {
   lang?: string;
   freshness?: "day" | "week" | "month" | "year";
   timeoutMs?: number;
+  /**
+   * A validity gate for the provider chain.
+   *
+   * The chain is strict-priority: the first provider that returns
+   * anything wins. That is the right rule for a general search, and the
+   * wrong one for job discovery — where a *news* engine returns
+   * something for every query and so shadows the web engines that would
+   * have found the posting.
+   *
+   * A provider whose results all fail the gate is treated as absent, and
+   * the next provider is consulted. Results that fail the gate are
+   * dropped from a provider that also produced good ones.
+   */
+  isValidResult?: (result: WebSearchResult) => boolean;
 }
 
 export class SearchBlockedError extends Error {
@@ -402,17 +416,34 @@ async function quotaGuardedSearch(
   }
 }
 
+/**
+ * Applies the validity gate to a provider's results.
+ *
+ * Returns null when the provider has nothing valid — which is the same
+ * as the provider being absent, and the chain moves on.
+ */
+function applyValidityGate(
+  results: WebSearchResult[],
+  gate: SearchOptions["isValidResult"],
+): WebSearchResult[] | null {
+  if (!gate) return results;
+  const valid = results.filter((result) => gate(result));
+  return valid.length > 0 ? valid : null;
+}
+
 export async function searchWeb(
   query: string,
   options: SearchOptions = {},
 ): Promise<WebSearchResult[]> {
   const limit = options.limit ?? 10;
+  const gate = options.isValidResult;
 
   try {
     const searx = await quotaGuardedSearch("searxng", () =>
       searxngSearch(query, options),
     );
-    if (searx.length > 0) return searx;
+    const accepted = applyValidityGate(searx, gate);
+    if (accepted) return accepted;
   } catch (error) {
     logger.debug({ error, query }, "SearXNG unavailable");
   }
@@ -421,7 +452,8 @@ export async function searchWeb(
     const news = await quotaGuardedSearch("google_news", () =>
       googleNewsSearch(query, options),
     );
-    if (news.length > 0) return news;
+    const accepted = applyValidityGate(news, gate);
+    if (accepted) return accepted;
   } catch (error) {
     logger.debug({ error, query }, "Google News RSS unavailable");
   }
@@ -430,7 +462,8 @@ export async function searchWeb(
     const ddg = await quotaGuardedSearch("duckduckgo", () =>
       duckDuckGoSearch(query, options),
     );
-    if (ddg.length > 0) return ddg.slice(0, limit);
+    const accepted = applyValidityGate(ddg, gate);
+    if (accepted) return accepted.slice(0, limit);
   } catch (error) {
     logger.debug({ error, query }, "DuckDuckGo unavailable");
   }
@@ -439,7 +472,8 @@ export async function searchWeb(
     const bing = await quotaGuardedSearch("bing", () =>
       bingSearch(query, options),
     );
-    if (bing.length > 0) return bing.slice(0, limit);
+    const accepted = applyValidityGate(bing, gate);
+    if (accepted) return accepted.slice(0, limit);
   } catch (error) {
     logger.debug({ error, query }, "Bing unavailable");
   }
@@ -468,6 +502,7 @@ export async function searchWebAll(
     if (result.status !== "fulfilled") continue;
     for (const item of result.value) {
       if (seen.has(item.url)) continue;
+      if (options.isValidResult && !options.isValidResult(item)) continue;
       seen.add(item.url);
       merged.push(item);
     }
