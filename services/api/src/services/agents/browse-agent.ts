@@ -467,7 +467,7 @@ export class BrowseAgent extends BaseDiscoveryAgent {
     agentId: string,
   ): Promise<{ links: number; queued: number }> {
     const links = findJobLinks(html, baseUrl, this.maxExpandedLinks).filter(
-      (link) => link !== baseUrl,
+      (link) => !samePage(link, baseUrl),
     );
     if (links.length === 0) return { links: 0, queued: 0 };
 
@@ -493,4 +493,19 @@ export class BrowseAgent extends BaseDiscoveryAgent {
 
     return { links: links.length, queued };
   }
+}
+
+/** True when two URLs are the same page. */
+function samePage(left: string, right: string): boolean {
+  const strip = (value: string): string => {
+    try {
+      const url = new URL(value);
+      url.hash = "";
+      const path = url.pathname.replace(/\/+$/, "");
+      return `${url.origin}${path}${url.search}`;
+    } catch {
+      return value;
+    }
+  };
+  return strip(left) === strip(right);
 }

@@ -652,20 +652,23 @@ const CAREER_LINK_PATTERN = /(careers?|jobs?|vacanc|work[-_ ]?with[-_ ]?us|join[
 /**
  * What a link to one posting looks like.
  *
- * Two shapes are accepted. The first is the one with a number in it —
- * "/job/data-analyst-cloudfactory-2", "/jobs/view/lead-generation-4484357960",
- * "/careers/12345" — which is unambiguous.
+ * Boards publish postings in different shapes, and a rule that fits one
+ * board misses the next:
  *
- * The second is a slug: "/job/bi-analyst-at-4g-capital". Plenty of boards
- * publish a posting at a URL with no number in it, and a pattern that
- * demands one misses every one of them. The slug has to be long enough
- * to be a posting rather than a section of the site, which is what the
- * fourteen characters are for: "/jobs/data-analyst-jobs-in-kenya" is
- * fifteen, and it is a listing — but a listing is a page worth reading
- * too, so it is not a mistake to follow it.
+ *   "/job/data-analyst-cloudfactory-2"          — a number in the slug
+ *   "/job/bi-analyst-at-4g-capital"             — no number at all
+ *   "/jobs/companies/sinnkontor/data-scientist" — a deep path
+ *
+ * All three are accepted. The deep path matters because a board that
+ * publishes at "/jobs/<company>/<slug>" is publishing postings at a
+ * depth the shallow rule never sees, and a board that publishes at
+ * "/jobs/<category>" is publishing *categories* — which the shallow
+ * rule does see, and which are pages of postings rather than postings.
+ *
+ * The two are told apart by depth when the links are ranked, not here.
  */
 const JOB_URL_PATTERN =
-  /(job|vacanc|career|position|opening|role|apply|posting)[/-][^/]*\d|[0-9a-f]{8}-[0-9a-f-]{20,}|(?:job|jobs|vacanc(?:y|ies)|career|careers|position|opening|role|apply|posting)\/[a-z0-9][a-z0-9-]{13,}/i;
+  /(job|vacanc|career|position|opening|role|apply|posting)[/-][^/]*\d|[0-9a-f]{8}-[0-9a-f-]{20,}|(?:job|jobs|vacanc(?:y|ies)|career|careers|position|opening|role|apply|posting)(?:\/[a-z0-9][a-z0-9-]*){2,3}\/[a-z0-9][a-z0-9-]{13,}|(?:job|jobs|vacanc(?:y|ies)|career|careers|position|opening|role|apply|posting)\/[a-z0-9][a-z0-9-]{13,}/i;
 
 export function findCareerLinks(html: string, baseUrl: string): string[] {
   const links = new Set<string>();
@@ -710,6 +713,10 @@ export function findJobLinks(
       // and "/jobs/data-analyst" are one page, and queuing both would
       // read one page twice.
       absolute.hash = "";
+      // Pagination is not a page of its own: "/jobs/data-scientist" and
+      // "/jobs/data-scientist?page=2" are the same listing, and the
+      // second one is the same listing again.
+      if (isPaginationUrl(absolute)) continue;
       links.add(absolute.toString());
     } catch {
       // Ignore.
@@ -718,28 +725,45 @@ export function findJobLinks(
 
   // The postings come before the pages of postings.
   //
-  // A board's page carries both: "/job/data-analyst-cloudfactory-2" and
-  // "/jobs/data-analyst-jobs-in-kenya". The page of postings is worth
-  // reading too, but it is worth less than the posting itself, and a
-  // limit of fifteen links should be spent on the postings.
-  return [...links]
-    .sort((left, right) => {
-      const leftPosting = endsWithAnId(left) ? 0 : 1;
-      const rightPosting = endsWithAnId(right) ? 0 : 1;
-      return leftPosting - rightPosting;
-    })
-    .slice(0, limit);
+  // A board's page carries both: "/jobs/companies/sinnkontor/data-scientist"
+  // and "/jobs/data-scientist". The page of postings is worth reading
+  // too, but it is worth less than the posting itself, and a limit of
+  // fifteen links should be spent on the postings.
+  return [...links].sort(compareJobLinks).slice(0, limit);
 }
 
-/** True when the last segment of the path ends in a number. */
-function endsWithAnId(url: string): boolean {
+/**
+ * Ranks a posting link above a page of postings.
+ *
+ * A link that ends in a number is a posting — "/jobs/view/data-analyst-4484357960".
+ * A link that is three or four segments deep is a posting on the boards
+ * that publish at "/jobs/<company>/<slug>". What is left is a page of
+ * postings: "/jobs/data-scientist", "/jobs-by-title/legal".
+ */
+function compareJobLinks(left: string, right: string): number {
+  return jobLinkRank(left) - jobLinkRank(right);
+}
+
+function jobLinkRank(url: string): number {
   try {
-    const segments = new URL(url).pathname.split("/").filter(Boolean);
+    const parsed = new URL(url);
+    const segments = parsed.pathname.split("/").filter(Boolean);
     const last = segments[segments.length - 1] ?? "";
-    return /\d+$/.test(last);
+    if (/\d/.test(last)) return 0;
+    if (segments.length >= 3) return 1;
+    return 2;
   } catch {
-    return false;
+    return 3;
   }
+}
+
+/** True when the URL is a page of the same listing rather than a new one. */
+function isPaginationUrl(url: URL): boolean {
+  if (!url.searchParams.has("page")) return false;
+  for (const [key] of url.searchParams) {
+    if (key !== "page") return false;
+  }
+  return true;
 }
 
 export function findAtsLinks(html: string, baseUrl: string): AtsBoard[] {

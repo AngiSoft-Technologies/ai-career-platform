@@ -25,6 +25,7 @@ import { hashJitterMs, deferredRunAt } from "../services/api/src/lib/jitter.js";
 import { AbortManager, timeoutInstance } from "../services/api/src/lib/abort-manager.js";
 import { normaliseUrlIdentity, hotKeySafe, isUuidV7 } from "../services/api/src/lib/ids.js";
 import { overfetchLimitFor } from "../services/api/src/services/engine/search-orchestrator.js";
+import { findJobLinks } from "../services/api/src/services/engine/discover.js";
 import { startDistributedInterval } from "../services/api/src/lib/distributed-tick.js";
 import { withJobDeadline } from "../services/api/src/worker/index.js";
 import {
@@ -121,6 +122,60 @@ check("include list honoured", matchesDomainLists("https://brightermonday.co.ke/
 check("subdomain of include honoured", matchesDomainLists("https://www.brightermonday.co.ke/jobs", ["brightermonday.co.ke"]));
 check("exclude list honoured", !matchesDomainLists("https://facebook.com/jobs", [], ["facebook.com"]));
 check("other-TLD base domain excluded", !matchesDomainLists("https://facebook.co.uk/jobs", [], ["facebook.com"]));
+
+console.log("\n[3b] finding the postings inside a page of postings");
+const boardHtml = `
+  <a href="/jobs/companies/sinnkontor/data-scientist-tegtmeier-internet-sol">Junior Data Scientist</a>
+  <a href="/job/data-analyst-cloudfactory-2">Data Analyst</a>
+  <a href="/job/bi-analyst-at-4g-capital">BI Analyst</a>
+  <a href="/jobs/data-scientist">Data Scientist</a>
+  <a href="/jobs/data-scientist?page=2">Next</a>
+  <a href="/jobs/data-scientist#content">Data Scientist</a>
+  <a href="/about/company">About us</a>
+`;
+const boardLinks = findJobLinks(
+  boardHtml,
+  "https://board.example/jobs/data-scientist",
+  10,
+);
+check(
+  "a posting at a deep path is found",
+  boardLinks.includes(
+    "https://board.example/jobs/companies/sinnkontor/data-scientist-tegtmeier-internet-sol",
+  ),
+  boardLinks.join(" "),
+);
+check(
+  "a posting with a number is found",
+  boardLinks.includes("https://board.example/job/data-analyst-cloudfactory-2"),
+  boardLinks.join(" "),
+);
+check(
+  "a posting with only a slug is found",
+  boardLinks.includes("https://board.example/job/bi-analyst-at-4g-capital"),
+  boardLinks.join(" "),
+);
+check(
+  "a pagination link is not a page of its own",
+  !boardLinks.some((link) => link.includes("page=2")),
+  boardLinks.join(" "),
+);
+check(
+  "a fragment does not make a second page",
+  !boardLinks.some((link) => link.includes("#content")),
+  boardLinks.join(" "),
+);
+check(
+  "a page that is not about jobs is left alone",
+  !boardLinks.some((link) => link.includes("/about/")),
+  boardLinks.join(" "),
+);
+check(
+  "the postings come before the page of postings",
+  boardLinks.indexOf("https://board.example/job/data-analyst-cloudfactory-2") <
+    boardLinks.indexOf("https://board.example/jobs/data-scientist"),
+  boardLinks.join(" "),
+);
 
 console.log("\n[4] strict schema normalisation");
 const bare = { title: { type: "string" }, salary: { type: "number" } };
