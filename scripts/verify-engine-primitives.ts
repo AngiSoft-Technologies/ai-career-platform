@@ -25,7 +25,7 @@ import { hashJitterMs, deferredRunAt } from "../services/api/src/lib/jitter.js";
 import { AbortManager, timeoutInstance } from "../services/api/src/lib/abort-manager.js";
 import { normaliseUrlIdentity, hotKeySafe, isUuidV7 } from "../services/api/src/lib/ids.js";
 import { overfetchLimitFor } from "../services/api/src/services/engine/search-orchestrator.js";
-import { findJobLinks } from "../services/api/src/services/engine/discover.js";
+import { findJobLinks, detectAts } from "../services/api/src/services/engine/discover.js";
 import { startDistributedInterval } from "../services/api/src/lib/distributed-tick.js";
 import { withJobDeadline } from "../services/api/src/worker/index.js";
 import {
@@ -864,6 +864,60 @@ console.log("\n[16] the identity of an employer");
     "the entities in a JSON-LD title are decoded",
     posting.title === "Arabic Linguistic Evaluator & Functional Tester",
     posting.title,
+  );
+}
+
+console.log("\n[17] the address of a board");
+{
+  // -------------------------------------------------------------------------
+  // A board's address is not always a board's address.
+  //
+  // Some employers publish at ".../job/<location>/<title>_<id>", with
+  // the site's own name left out of the address. That address was read
+  // as a board called "job", and the board could only ever answer 404:
+  // the endpoint that serves the postings is addressed by the site's
+  // name, which is nowhere in the address.
+  //
+  // So the address of a posting names the tenant and not the site, and
+  // the site is asked for — the tenant's own robots.txt names every
+  // site it publishes under.
+  // -------------------------------------------------------------------------
+
+  const boardAddress = detectAts(
+    "https://acme.wd1.myworkdayjobs.com/en-US/External",
+  );
+  check(
+    "a board's address names the site",
+    boardAddress?.kind === "workday" &&
+      boardAddress.token === "acme|wd1|External",
+    boardAddress ? `${boardAddress.kind}:${boardAddress.token}` : "none",
+  );
+
+  const postingAddress = detectAts(
+    "https://acme.wd1.myworkdayjobs.com/job/Nairobi-Office/Engineer_JR123",
+  );
+  check(
+    "a posting's address names the tenant and not a site",
+    postingAddress?.kind === "workday" &&
+      postingAddress.token === "acme|wd1|",
+    postingAddress ? `${postingAddress.kind}:${postingAddress.token}` : "none",
+  );
+
+  const siteAddress = detectAts(
+    "https://acme.wd1.myworkdayjobs.com/Acme_Careers",
+  );
+  check(
+    "a board published without a locale names the site",
+    siteAddress?.kind === "workday" &&
+      siteAddress.token === "acme|wd1|Acme_Careers",
+    siteAddress ? `${siteAddress.kind}:${siteAddress.token}` : "none",
+  );
+
+  const otherBoard = detectAts("https://jobs.lever.co/weloglobal");
+  check(
+    "the other boards are untouched",
+    otherBoard?.kind === "lever" && otherBoard.token === "weloglobal",
+    otherBoard ? `${otherBoard.kind}:${otherBoard.token}` : "none",
   );
 }
 

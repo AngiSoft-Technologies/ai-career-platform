@@ -152,7 +152,16 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
     }
 
     return {
-      status: stored === 0 && errors.length > 0 ? "failed" : "success",
+      // A board that answers 404 is a finding, not a failed cycle. The
+      // cycle read every other board, recognised six hundred postings it
+      // already knew and stored nothing new — that is a successful
+      // cycle. It is only a failure when nothing could be read at all.
+      status:
+        discovered === 0 && errors.length > 0
+          ? "failed"
+          : errors.length > 0
+            ? "partial"
+            : "success",
       jobsFound: discovered,
       jobsNew: stored,
       jobsDuplicate: duplicate,

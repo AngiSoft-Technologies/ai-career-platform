@@ -20,6 +20,7 @@
 
 import { logger } from "../../logger.js";
 import { fetchJson, scrapeUrl } from "./fetch.js";
+import { browserHeaders, egressFetch } from "./egress.js";
 import {
   decodeEntities,
   extractJobPostingsJsonLd,
@@ -52,15 +53,47 @@ const ATS_PATTERNS: Array<{ kind: AtsKind; regex: RegExp; tokenIndex: number }> 
   { kind: "recruitee", regex: /([a-z0-9-]+)\.recruitee\.com/i, tokenIndex: 1 },
 ];
 
+/**
+ * The Workday board behind a URL, if the URL names one.
+ *
+ * A Workday address is one of three shapes:
+ *
+ *   .../{locale}/{site}/job/...   a board, and the site is named
+ *   .../{locale}/job/...          a board whose site is implicit
+ *   .../job/{location}/{title}    a *posting*, not a board
+ *
+ * The third shape used to be read as a board called "job", and the
+ * catalogue then held a board that could only ever answer 404: the
+ * site's own name is nowhere in the address, and the endpoint that
+ * serves the postings is addressed by that name.
+ *
+ * So a posting's address names the *tenant* and not the site, and the
+ * board is found by asking the tenant which sites it publishes under.
+ */
 function detectWorkday(rawUrl: string): AtsBoard | null {
   // https://{tenant}.wd{n}.myworkdayjobs.com/{locale}/{site}/job/...
   const match =
-    /^https?:\/\/([a-z0-9-]+)\.(wd\d+)\.myworkdayjobs\.com\/(?:[a-z]{2}-[A-Z]{2}\/)?([^/?#]+)/i.exec(
+    /^https?:\/\/([a-z0-9-]+)\.(wd\d+)\.myworkdayjobs\.com(\/[^?#]*)?/i.exec(
       rawUrl,
     );
-  if (!match?.[1] || !match[2] || !match[3]) return null;
-  if (match[3].toLowerCase() === "wday") return null;
-  return { kind: "workday", token: `${match[1]}|${match[2]}|${match[3]}` };
+  if (!match?.[1] || !match[2]) return null;
+
+  const segments = (match[3] ?? "")
+    .split("/")
+    .filter((segment) => segment.length > 0);
+  const first = segments[0] ?? "";
+
+  if (first.toLowerCase() === "wday") return null;
+
+  // A locale first, then the site.
+  const isLocale = /^[a-z]{2}-[A-Z]{2}$/i.test(first);
+  const site = isLocale ? (segments[1] ?? "") : first;
+
+  // The posting's own path: the site's name is not in the address, and
+  // it is asked for rather than guessed.
+  const known = site.toLowerCase() === "job" ? "" : site;
+
+  return { kind: "workday", token: `${match[1]}|${match[2]}|${known}` };
 }
 
 function detectOracle(rawUrl: string): AtsBoard | null {
@@ -134,9 +167,18 @@ function boardPageUrl(board: AtsBoard): string | null {
  * ("weloglobal") makes a guess, and one request to the board's own page
  * buys the right name for every posting on it — the page cache holds it
  * for the next cycle.
+ *
+ * Workday writes its board's title as the employer's name, the pod and
+ * the site, separated by pipes: "Centific|Wd1|Centific Global". The
+ * employer's name is the first of them, and the rest is the board's
+ * own address.
  */
 async function boardEmployerName(board: AtsBoard): Promise<string> {
-  const fallback = normaliseCompanyName(prettify(board.token)) ?? prettify(board.token);
+  const rawToken =
+    board.kind === "workday"
+      ? (board.token.split("|")[0] ?? board.token)
+      : board.token;
+  const fallback = normaliseCompanyName(prettify(rawToken)) ?? prettify(rawToken);
   // A token that reads as words is good enough on its own.
   if (/[-_]/.test(board.token)) return fallback;
 
@@ -145,9 +187,11 @@ async function boardEmployerName(board: AtsBoard): Promise<string> {
 
   try {
     const scraped = await scrapeUrl(page, { onlyMainContent: false });
-    const name = normaliseCompanyName(
-      scraped.metadata?.title ?? scraped.metadata?.ogTitle ?? null,
-    );
+    const title =
+      scraped.metadata?.title ?? scraped.metadata?.ogTitle ?? null;
+    const first =
+      board.kind === "workday" ? (title?.split("|")[0] ?? title) : title;
+    const name = normaliseCompanyName(first);
     if (name) return name;
   } catch (error) {
     logger.debug(
@@ -459,14 +503,78 @@ interface WorkdayJob {
   bulletFields?: string[];
 }
 
-async function workdayBoard(token: string): Promise<RawJob[]> {
-  const [tenant, pod, site] = token.split("|");
-  if (!tenant || !pod || !site) return [];
+/**
+ * The site names a Workday board is usually published under.
+ *
+ * The board's URL carries the site name — ".../en-US/External/job/…"
+ * — but not always: some employers publish at ".../job/…", where the
+ * site is implicit and the address alone does not say which one it
+ * is.
+ *
+ * So the name in the address is tried first, and the tenant's own
+ * robots.txt is asked after it — that file names every site the tenant
+ * publishes under ("Allow: /Centific_Global/", "Sitemap: …/Centific_Global/siteMap.xml").
+ *
+ * One request to learn the name, and no guessing.
+ */
+async function workdaySitePaths(origin: string): Promise<string[]> {
+  try {
+    const response = await egressFetch(`${origin}/robots.txt`, {
+      method: "GET",
+      headers: browserHeaders({ Accept: "text/plain,*/*" }),
+    });
+    if (response.status < 200 || response.status >= 300) return [];
 
-  const endpoint = `https://${tenant}.${pod}.myworkdayjobs.com/wday/cxs/${tenant}/${site}/jobs`;
-  const payload = await fetchJson<{ jobPostings?: WorkdayJob[]; total?: number }>(
-    endpoint,
-    {
+    const text = new TextDecoder().decode(response.body);
+    const names = new Set<string>();
+
+    for (const line of text.split("\n")) {
+      const sitemap = /^sitemap:\s*https?:\/\/[^/\s]+\/([^/\s]+)\/sitemap\.xml/i.exec(
+        line.trim(),
+      );
+      if (sitemap?.[1]) names.add(sitemap[1]);
+
+      const allow = /^allow:\s*\/([^/\s]+)\//i.exec(line.trim());
+      if (allow?.[1]) names.add(allow[1]);
+    }
+
+    // The paths that are not sites: the refresh endpoint, the posting
+    // path itself, the API's own.
+    return [...names].filter(
+      (name) =>
+        !/^(refreshfacet|wday|cxs|job|jobs|robots\.txt)$/i.test(name),
+    );
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * One board's postings.
+ *
+ * The endpoint serves twenty at a time and the board holds as many as
+ * the employer put there — ninety-two, four hundred, four thousand. So
+ * the board is walked, a page at a time, until it says it has no more
+ * or the walk has read enough (two hundred postings is more than any
+ * one employer's board needs to be useful).
+ */
+async function fetchWorkdayBoard(
+  origin: string,
+  tenant: string,
+  site: string,
+): Promise<WorkdayJob[]> {
+  const endpoint = `${origin}/wday/cxs/${tenant}/${site}/jobs`;
+  const pageSize = 20;
+  const maxPages = 10;
+
+  const postings: WorkdayJob[] = [];
+  let total: number | null = null;
+
+  for (let page = 0; page < maxPages; page++) {
+    const payload = await fetchJson<{
+      jobPostings?: WorkdayJob[];
+      total?: number;
+    }>(endpoint, {
       method: "POST",
       headers: {
         Accept: "application/json",
@@ -474,15 +582,69 @@ async function workdayBoard(token: string): Promise<RawJob[]> {
       },
       body: JSON.stringify({
         appliedFacets: {},
-        limit: 20,
-        offset: 0,
+        limit: pageSize,
+        offset: page * pageSize,
         searchText: "",
       }),
-    },
-  );
+    });
+
+    const batch = payload.jobPostings ?? [];
+    postings.push(...batch);
+
+    // The total is only ever reported for the first page — later pages
+    // answer "0" — so it is read once and believed once.
+    if (page === 0 && typeof payload.total === "number") {
+      total = payload.total;
+    }
+
+    if (batch.length < pageSize) break;
+    if (total !== null && postings.length >= total) break;
+  }
+
+  return postings;
+}
+
+async function workdayBoard(token: string): Promise<RawJob[]> {
+  const [tenant, pod, site] = token.split("|");
+  if (!tenant || !pod) return [];
 
   const origin = `https://${tenant}.${pod}.myworkdayjobs.com`;
-  return (payload.jobPostings ?? [])
+
+  let postings: WorkdayJob[] | null = null;
+  let lastError: unknown = null;
+
+  // The name in the address first.
+  if (site) {
+    try {
+      postings = await fetchWorkdayBoard(origin, tenant, site);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  // Then the names the tenant's own file gives.
+  if (!postings) {
+    for (const candidate of await workdaySitePaths(origin)) {
+      if (candidate === site) continue;
+      try {
+        postings = await fetchWorkdayBoard(origin, tenant, candidate);
+        break;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+  }
+
+  if (!postings) {
+    // Nothing was named and nothing was found: the tenant publishes
+    // its boards under a name this catalogue cannot reach. That is a
+    // fact about the employer, not a failure of the cycle.
+    if (!site && !lastError) return [];
+    if (lastError) throw lastError;
+    return [];
+  }
+
+  return postings
     .filter((job) => job.title && job.externalPath)
     .map((job) => {
       const url = new URL(job.externalPath!, origin).toString();
