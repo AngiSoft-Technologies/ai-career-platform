@@ -805,6 +805,12 @@ console.log("\n[16] the identity of an employer");
     normaliseCompanyName("Happyrobot.ai") === "Happyrobot.ai",
     String(normaliseCompanyName("Happyrobot.ai")),
   );
+  check(
+    "the system's own label for a site is not the employer's name",
+    normaliseCompanyName("Safaricom Candidate Experience site") ===
+      "Safaricom",
+    String(normaliseCompanyName("Safaricom Candidate Experience site")),
+  );
 
   // A name that is not an employer still has an identity of its own, or
   // every such posting in the catalogue would share one.
@@ -918,6 +924,18 @@ console.log("\n[17] the address of a board");
     "the other boards are untouched",
     otherBoard?.kind === "lever" && otherBoard.token === "weloglobal",
     otherBoard ? `${otherBoard.kind}:${otherBoard.token}` : "none",
+  );
+
+  // Oracle's career sites are addressed by tenant and site, and the
+  // employer's name is on the board's page rather than in the address.
+  const oracleBoard = detectAts(
+    "https://eoin.fa.em3.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_3001/jobs",
+  );
+  check(
+    "an Oracle board's address names the tenant and the site",
+    oracleBoard?.kind === "oracle" &&
+      oracleBoard.token === "eoin.fa.em3.oraclecloud.com|CX_3001",
+    oracleBoard ? `${oracleBoard.kind}:${oracleBoard.token}` : "none",
   );
 }
 

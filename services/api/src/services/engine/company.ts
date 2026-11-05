@@ -205,6 +205,13 @@ export function normaliseCompanyName(
     .trim();
   if (!name) return null;
 
+  // Oracle's own label for a tenant whose site has no name of its own:
+  // "Safaricom Candidate Experience site" is Safaricom.
+  name = name
+    .replace(/\s+candidate experience(?:\s+site)?\.?$/i, "")
+    .trim();
+  if (!name) return null;
+
   // The legal form, once.
   const withoutLegal = name.replace(
     new RegExp(`\\s+(?:${LEGAL_FORMS.join("|")})\\.?$`, "i"),

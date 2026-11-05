@@ -168,19 +168,26 @@ function boardPageUrl(board: AtsBoard): string | null {
  * buys the right name for every posting on it — the page cache holds it
  * for the next cycle.
  *
- * Workday writes its board's title as the employer's name, the pod and
- * the site, separated by pipes: "Centific|Wd1|Centific Global". The
- * employer's name is the first of them, and the rest is the board's
- * own address.
+ * Two kinds of board are addressed rather than named, and their tokens
+ * are addresses, not names: Oracle ("host|site") and Workday
+ * ("tenant|pod|site"). A site id reads as words — "CX_3001" — and
+ * used to be taken for the employer's name, so KCB Group's roles were
+ * written under "Eoin.Fa.Em3.Oraclecloud.Com|CX 3001".
+ *
+ * So for those two the board's page is always read, and its title is
+ * read the way they write it: the employer's name first, then the
+ * board's own address — "KCB Group", "Centific|Wd1|Centific Global".
  */
 async function boardEmployerName(board: AtsBoard): Promise<string> {
-  const rawToken =
-    board.kind === "workday"
-      ? (board.token.split("|")[0] ?? board.token)
-      : board.token;
-  const fallback = normaliseCompanyName(prettify(rawToken)) ?? prettify(rawToken);
-  // A token that reads as words is good enough on its own.
-  if (/[-_]/.test(board.token)) return fallback;
+  const addressed = board.kind === "oracle" || board.kind === "workday";
+  const rawToken = addressed
+    ? (board.token.split("|")[0] ?? board.token)
+    : board.token;
+  const fallback =
+    normaliseCompanyName(prettify(rawToken)) ?? prettify(rawToken);
+  // A token that reads as words is good enough on its own — unless it
+  // is an address, which never is.
+  if (!addressed && /[-_]/.test(board.token)) return fallback;
 
   const page = boardPageUrl(board);
   if (!page) return fallback;
@@ -189,8 +196,7 @@ async function boardEmployerName(board: AtsBoard): Promise<string> {
     const scraped = await scrapeUrl(page, { onlyMainContent: false });
     const title =
       scraped.metadata?.title ?? scraped.metadata?.ogTitle ?? null;
-    const first =
-      board.kind === "workday" ? (title?.split("|")[0] ?? title) : title;
+    const first = addressed ? (title?.split("|")[0] ?? title) : title;
     const name = normaliseCompanyName(first);
     if (name) return name;
   } catch (error) {

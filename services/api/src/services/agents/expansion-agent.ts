@@ -1,9 +1,16 @@
 import { query } from "../../db/pool.js";
 import { logger } from "../../logger.js";
 import { BaseDiscoveryAgent, type AgentContext, type AgentRunResult } from "./base.js";
-import { detectAts, discoverFromDomainDetailed, discoverFromSitemap, fetchAtsBoard } from "../engine/discover.js";
+import {
+  detectAts,
+  discoverFromDomainDetailed,
+  discoverFromSitemap,
+  fetchAtsBoard,
+  findAtsLinks,
+} from "../engine/discover.js";
 import type { AtsBoard, AtsKind } from "../engine/discover.js";
 import { computeFingerprint, computeSimhash } from "../engine/extract.js";
+import { capturePage, embeddedJobsToRaw } from "../engine/screen.js";
 import type { RawJob } from "../engine/sources.js";
 
 const ATS_KIND_SET: Record<AtsKind, true> = {
@@ -18,17 +25,35 @@ const ATS_KIND_SET: Record<AtsKind, true> = {
 };
 
 /**
+ * The host of an address.
+ *
+ * The remembered source is a host, so that the same employer's careers
+ * page is expanded once however it was written — "https://kcbgroup.com/careers"
+ * and "https://www.kcbgroup.com/" are one employer.
+ */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return url.trim().toLowerCase().replace(/^www\./, "");
+  }
+}
+
+/**
  * Expansion Agent.
  *
  * This is the "new site appears and is hiring" answer. It does not use a list
  * of employers:
  *
  *   1. Every URL ever discovered is inspected for an ATS signature. If a
- *      company uses Greenhouse/Lever/Ashby/Workable/SmartRecruiters/Recruitee,
- *      the agent pulls the company's whole public board.
- *   2. Domains that do not use an ATS are crawled: homepage → careers → job
+ *      company uses Greenhouse/Lever/Ashby/Workable/SmartRecruiters/Recruitee/
+ *      Workday/Oracle, the agent pulls the company's whole public board.
+ *   2. The sources the catalogue was given — KCB Group's careers page,
+ *      Safaricom's, Kenya Airways' — are read, and the board each one
+ *      points at is pulled.
+ *   3. Domains that do not use an ATS are crawled: homepage → careers → job
  *      links, plus sitemap.xml.
- *   3. Boards and domains are remembered in `discovery_known_sources`, so the
+ *   4. Boards and domains are remembered in `discovery_known_sources`, so the
  *      next run refreshes them and the search agent can target them.
  */
 export class ExpansionAgent extends BaseDiscoveryAgent {
@@ -80,26 +105,69 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
       }
     }
 
-    // Careers/sitemap discovery for domains we know but have never expanded.
-    const domains = await this.findUnexpandedDomains(maxDomains);
-    for (const domain of domains) {
+    // Careers/sitemap discovery for the employers we know but have
+    // never expanded.
+    const targets = await this.findUnexpandedTargets(maxDomains);
+    for (const target of targets) {
       if (Date.now() > deadline) {
         stoppedOnBudget = true;
         break;
       }
       try {
-        const harvest = await discoverFromDomainDetailed(domain);
-        const sitemapLinks = await discoverFromSitemap(domain);
-        const links = new Set<string>([...harvest.links, ...sitemapLinks]);
-        discovered += links.size + harvest.jobs.length;
+        const harvest = await discoverFromDomainDetailed(target);
+
+        // The page's own state, when the markup held nothing.
+        //
+        // A careers page that renders its roles in the browser ships
+        // them in its state, and the board it links to is in the same
+        // place. Reading that state is the only way an employer whose
+        // page holds no markup is found at all — and the page has
+        // already been fetched, so this costs nothing.
+        let ats = harvest.ats;
+        let pageJobs = harvest.jobs;
+        let pageLinks = harvest.links;
+
+        if (
+          ats.length === 0 &&
+          pageJobs.length === 0 &&
+          pageLinks.length === 0
+        ) {
+          const capture = await capturePage(target, { maxJobs: 40 }).catch(
+            () => null,
+          );
+          if (capture) {
+            ats = findAtsLinks(capture.html, capture.finalUrl);
+            pageJobs = embeddedJobsToRaw(
+              capture.jobs,
+              capture.finalUrl,
+              "careers_page",
+            );
+            pageLinks = capture.links
+              .map((href) => {
+                try {
+                  return new URL(href, capture.finalUrl).toString();
+                } catch {
+                  return null;
+                }
+              })
+              .filter((href): href is string => Boolean(href))
+              .filter((href) =>
+                /job|career|role|vacanc|hiring|apply|position/i.test(href),
+              );
+          }
+        }
+
+        const sitemapLinks = await discoverFromSitemap(hostOf(target));
+        const links = new Set<string>([...pageLinks, ...sitemapLinks]);
+        discovered += links.size + pageJobs.length;
 
         // Structured jobs found on the careers page go straight in.
-        const direct = await this.storeJobs(harvest.jobs, ctx.agentId);
+        const direct = await this.storeJobs(pageJobs, ctx.agentId);
         stored += direct.stored;
         duplicate += direct.duplicate;
 
         // Any ATS discovered on the way is fetched immediately in this run.
-        for (const board of harvest.ats.slice(0, 3)) {
+        for (const board of ats.slice(0, 3)) {
           try {
             const jobs = await fetchAtsBoard(board);
             discovered += jobs.length;
@@ -129,7 +197,7 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
              VALUES ($1, $2, 'careers_page', $3, NULL, NULL, now())
              ON CONFLICT (source_url) DO NOTHING
              RETURNING id`,
-            [ctx.agentId, `careers:${domain}`, link],
+            [ctx.agentId, `careers:${hostOf(target)}`, link],
           );
           if (inserted.rows.length > 0) stored += 1;
           else duplicate += 1;
@@ -144,10 +212,22 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
              -- forever and made the ranking between sources meaningless.
              SET jobs_found = EXCLUDED.jobs_found,
                  last_seen = now()`,
-          [domain, links.size + harvest.jobs.length],
+          [hostOf(target), links.size + pageJobs.length],
+        );
+
+        // A registered source that has now been read is a source whose
+        // health can be stated. It was read: the cycle knows whether it
+        // answered.
+        await query(
+          `UPDATE job_sources
+              SET last_checked_at = now(),
+                  health = CASE WHEN $2 THEN 'healthy' ELSE 'degraded' END,
+                  updated_at = now()
+            WHERE url = $1`,
+          [target, harvest.links.length + harvest.ats.length > 0],
         );
       } catch (error) {
-        errors.push(`${domain}: ${error instanceof Error ? error.message : String(error)}`);
+        errors.push(`${target}: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
 
@@ -168,7 +248,7 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
       error: errors.length > 0 ? errors.slice(0, 10).join("; ") : undefined,
       payload: {
         boards: boards.length,
-        domains: domains.length,
+        targets: targets.length,
         budgetMs,
         stoppedOnBudget,
       },
@@ -212,8 +292,35 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
     return [...boards.values()].slice(0, limit);
   }
 
-  private async findUnexpandedDomains(limit: number): Promise<string[]> {
-    const result = await query<{ domain: string }>(
+  /**
+   * The employers to expand, and the pages to expand them from.
+   *
+   * Two lists, and the first one was missing.
+   *
+   * The registered sources are the employers the catalogue was *given*:
+   * KCB Group's careers page, Safaricom's, Kenya Airways', Airtel
+   * Kenya's — the ones a person put in because they want those
+   * employers' roles. Nothing read them: the agent only looked at the
+   * domains the *candidates* came from, so a registered source was a
+   * row that sat there and was never fetched.
+   *
+   * The second list is the domains the candidates came from, which is
+   * where the agent used to start.
+   *
+   * A source is expanded once: the host is remembered, and the next
+   * cycle refreshes the board it led to instead of looking for it
+   * again.
+   */
+  private async findUnexpandedTargets(limit: number): Promise<string[]> {
+    const registered = await query<{ url: string }>(
+      `SELECT url FROM job_sources
+        WHERE type = 'company_web'
+          AND url IS NOT NULL AND url <> ''
+        ORDER BY last_checked_at NULLS FIRST, created_at ASC
+        LIMIT 500`,
+    );
+
+    const discovered = await query<{ domain: string }>(
       `SELECT DISTINCT regexp_replace(source_url, '^https?://([^/]+).*$', '\\1') AS domain
          FROM discovery_candidates
         WHERE source_url IS NOT NULL
@@ -226,10 +333,26 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
     );
     const knownSet = new Set(known.rows.map((row) => row.domain));
 
-    return result.rows
-      .map((row) => row.domain)
-      .filter((domain) => domain && !knownSet.has(domain))
-      .slice(0, limit);
+    const targets: string[] = [];
+    const seenHosts = new Set<string>();
+
+    for (const row of registered.rows) {
+      const host = hostOf(row.url);
+      if (!host || knownSet.has(host) || seenHosts.has(host)) continue;
+      targets.push(row.url);
+      seenHosts.add(host);
+      if (targets.length >= limit) return targets;
+    }
+
+    for (const row of discovered.rows) {
+      const host = row.domain;
+      if (!host || knownSet.has(host) || seenHosts.has(host)) continue;
+      targets.push(host);
+      seenHosts.add(host);
+      if (targets.length >= limit) break;
+    }
+
+    return targets;
   }
 
   private async storeJobs(
