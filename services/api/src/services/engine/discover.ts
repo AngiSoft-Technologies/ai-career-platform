@@ -753,17 +753,30 @@ async function oracleCompany(host: string, site: string): Promise<string> {
   return name || prettify(host.split(".")[0] ?? "Company");
 }
 
-async function oracleBoard(token: string): Promise<RawJob[]> {
-  const [host, site] = token.split("|");
-  if (!host || !site) return [];
-
-  const finder = [
+/**
+ * The finder that asks an Oracle board for its postings.
+ *
+ * The finder's own separators are semicolons. With commas, Oracle reads
+ * the first part and ignores the rest — and whether the postings come
+ * back at all depends on the tenant: one employer's board answered with
+ * seven roles, the next answered with none, and the board was not
+ * empty.
+ */
+export function oracleFinder(site: string): string {
+  return [
     `findReqs;siteNumber=${site}`,
     "facetsList=LOCATIONS;WORK_LOCATIONS;WORKPLACE_TYPES;TITLES;CATEGORIES;ORGANIZATIONS;POSTING_DATES;FLEX_FIELDS",
     "limit=50",
     "offset=0",
     "sortBy=POSTING_DATES_DESC",
-  ].join(",");
+  ].join(";");
+}
+
+async function oracleBoard(token: string): Promise<RawJob[]> {
+  const [host, site] = token.split("|");
+  if (!host || !site) return [];
+
+  const finder = oracleFinder(site);
 
   const endpoint =
     `https://${host}/hcmRestApi/resources/latest/recruitingCEJobRequisitions` +

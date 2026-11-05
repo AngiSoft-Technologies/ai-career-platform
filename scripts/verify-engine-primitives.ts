@@ -25,7 +25,11 @@ import { hashJitterMs, deferredRunAt } from "../services/api/src/lib/jitter.js";
 import { AbortManager, timeoutInstance } from "../services/api/src/lib/abort-manager.js";
 import { normaliseUrlIdentity, hotKeySafe, isUuidV7 } from "../services/api/src/lib/ids.js";
 import { overfetchLimitFor } from "../services/api/src/services/engine/search-orchestrator.js";
-import { findJobLinks, detectAts } from "../services/api/src/services/engine/discover.js";
+import {
+  findJobLinks,
+  detectAts,
+  oracleFinder,
+} from "../services/api/src/services/engine/discover.js";
 import {
   isUnreadableHost,
   jobUrlRefusal,
@@ -941,6 +945,23 @@ console.log("\n[17] the address of a board");
     oracleBoard?.kind === "oracle" &&
       oracleBoard.token === "eoin.fa.em3.oraclecloud.com|CX_3001",
     oracleBoard ? `${oracleBoard.kind}:${oracleBoard.token}` : "none",
+  );
+
+  // The finder's separators are semicolons. With commas, Oracle reads
+  // the first part and ignores the rest — and whether the postings come
+  // back at all depends on the tenant: one employer's board answered
+  // with seven roles, the next answered with none, and the board was
+  // not empty.
+  const finder = oracleFinder("CX_3001");
+  check(
+    "the Oracle finder is separated by semicolons",
+    finder.includes("siteNumber=CX_3001;facetsList=") && !finder.includes(","),
+    finder.slice(0, 80),
+  );
+  check(
+    "the Oracle finder asks for the site",
+    finder.startsWith("findReqs;siteNumber=CX_3001"),
+    finder.slice(0, 40),
   );
 }
 
