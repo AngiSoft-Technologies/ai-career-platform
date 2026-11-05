@@ -253,7 +253,11 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
           continue;
         }
 
-        await query(
+        // The conflict on the URL is handled rather than left to fail.
+        // Two agents can reach the same posting at the same time, and
+        // the second insert would violate the unique constraint on the
+        // URL.
+        const inserted = await query<{ id: string }>(
           `INSERT INTO discovery_candidates
               (external_id, source_platform, source_url, title, company,
                description, location_raw, country, city, work_mode,
@@ -261,7 +265,9 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
                skills, posted_at, simhash, fingerprint, status,
                discovered_by_agent_id, discovered_at, updated_at)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-                   $14, $15, $16, $17, $18, $19, 'pending', $20, now(), now())`,
+                   $14, $15, $16, $17, $18, $19, 'pending', $20, now(), now())
+           ON CONFLICT (source_url) DO NOTHING
+           RETURNING id`,
           [
             job.externalId,
             job.sourcePlatform,
@@ -285,7 +291,7 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
             agentId,
           ],
         );
-        stored += 1;
+        if (inserted.rows.length > 0) stored += 1;
       } catch (error) {
         logger.debug(
           { error: error instanceof Error ? error.message : String(error), url: job.url },

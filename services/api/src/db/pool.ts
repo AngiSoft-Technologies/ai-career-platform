@@ -58,6 +58,44 @@ function isTransient(error: unknown): boolean {
 }
 
 /**
+ * Runs a unit of work in one transaction.
+ *
+ * The pool helper (`query`) runs every statement in its own transaction,
+ * which is fine for a statement that stands alone and wrong for a unit
+ * of work that has to be atomic: "read these rows, then write them" is
+ * two transactions, and another worker can read the same rows in
+ * between.
+ *
+ * That is not a theoretical race. The promotion step reads the verified
+ * candidates and then inserts the opportunities, and the ingestion tick
+ * and the internal route both run it — so two promotions could read the
+ * same candidate and both create an opportunity for it. The catalogue
+ * held 604 such pairs.
+ *
+ * The transaction is the unit of atomicity; `FOR UPDATE SKIP LOCKED`
+ * inside it is what keeps two workers off the same rows.
+ */
+export async function withTransaction<T>(
+  fn: (client: pg.PoolClient) => Promise<T>,
+): Promise<T> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await fn(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    // The rollback is best-effort: if the connection is already gone the
+    // transaction is gone with it, and the original error is the one
+    // worth reporting.
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
  * Runs a statement, retrying once when Neon drops an idle pooled connection.
  * Without the retry a long ingestion run fails on the first stale socket.
  */

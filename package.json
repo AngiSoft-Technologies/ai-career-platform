@@ -17,6 +17,8 @@
     "typecheck:web": "npm run typecheck -w @angisoft/mboqara-web",
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "check": "npm run check:boundaries && npm run typecheck && npm run typecheck:web",
+    "verify": "tsx scripts/verify-web-data-port.ts && tsx scripts/verify-engine-primitives.ts",
+    "verify:db": "tsx scripts/verify-db-regressions.ts",
     "db:migrate": "npm run db:migrate -w @angisoft/mboqara-api",
     "db:seed": "npm run db:seed -w @angisoft/mboqara-api",
     "grpc": "npm run grpc -w @angisoft/mboqara-api",

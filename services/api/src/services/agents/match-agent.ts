@@ -7,6 +7,37 @@ import { scoreMatch } from "../../services/matching.js";
 import { BaseDiscoveryAgent, type AgentContext, type AgentRunResult } from "./base.js";
 
 /**
+ * The statement that writes the recommendations.
+ *
+ * Exported so the regression verifier can run *this* statement against a
+ * live database — inside a transaction it rolls back — rather than a
+ * copy of it that can drift away from the one that runs in production.
+ *
+ * The shape of the gaps column is the part worth keeping an eye on. It is
+ * `text[]`, and the natural way to write it — `unnest(..., text[][])` —
+ * does not exist in Postgres: there is no `unnest` overload that takes an
+ * array of arrays. The form that works reads the array as JSON and turns
+ * it into a `text[]` with `ARRAY(SELECT jsonb_array_elements_text(...))`.
+ * The factors column is `jsonb`, so it travels as JSON and is read back
+ * as JSON.
+ */
+export const MATCH_UPSERT_SQL = `INSERT INTO matches (user_id, opportunity_id, score, factors, explanation, gaps, created_at, updated_at)
+     SELECT (p->>'user_id')::uuid,
+            (p->>'opportunity_id')::uuid,
+            (p->>'score')::numeric,
+            p->'factors',
+            p->>'explanation',
+            ARRAY(SELECT jsonb_array_elements_text(p->'gaps')),
+            now(), now()
+       FROM jsonb_array_elements($1::jsonb) AS p
+     ON CONFLICT (user_id, opportunity_id) DO UPDATE SET
+       score = EXCLUDED.score,
+       factors = EXCLUDED.factors,
+       explanation = EXCLUDED.explanation,
+       gaps = EXCLUDED.gaps,
+       updated_at = now()`;
+
+/**
  * User Matching Agent
  *
  * Matches live catalogue entries to users so the feed can put the right
@@ -138,24 +169,9 @@ export class UserMatchingAgent extends BaseDiscoveryAgent {  readonly key = "use
       for (let start = 0; start < kept.length; start += CHUNK) {
         const chunk = kept.slice(start, start + CHUNK);
         try {
-          const result = await query(
-            `INSERT INTO matches (user_id, opportunity_id, score, factors, explanation, gaps, created_at, updated_at)
-             SELECT (p->>'user_id')::uuid,
-                    (p->>'opportunity_id')::uuid,
-                    (p->>'score')::numeric,
-                    p->'factors',
-                    p->>'explanation',
-                    ARRAY(SELECT jsonb_array_elements_text(p->'gaps')),
-                    now(), now()
-               FROM jsonb_array_elements($1::jsonb) AS p
-             ON CONFLICT (user_id, opportunity_id) DO UPDATE SET
-               score = EXCLUDED.score,
-               factors = EXCLUDED.factors,
-               explanation = EXCLUDED.explanation,
-               gaps = EXCLUDED.gaps,
-               updated_at = now()`,
-            [JSON.stringify(chunk)],
-          );
+          const result = await query(MATCH_UPSERT_SQL, [
+            JSON.stringify(chunk),
+          ]);
           totalMatches += result.rowCount ?? 0;
         } catch (error) {
           errors.push(
