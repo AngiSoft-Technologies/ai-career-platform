@@ -11,6 +11,7 @@ import {
 import type { AtsBoard, AtsKind } from "../engine/discover.js";
 import { computeFingerprint, computeSimhash } from "../engine/extract.js";
 import { jobUrlRefusal } from "../engine/job-url.js";
+import { hostIsQuiet, noteLoudHost, noteQuietHost } from "../engine/quota.js";
 import { capturePage, embeddedJobsToRaw } from "../engine/screen.js";
 import type { RawJob } from "../engine/sources.js";
 
@@ -29,10 +30,16 @@ const ATS_KIND_SET: Record<AtsKind, true> = {
  * How long a source that yielded nothing waits before it is read again.
  *
  * An employer's careers page that renders its roles in the browser holds
- * nothing today and holds thirty roles tomorrow. Six hours is often
- * enough and never often enough to spend the budget on.
+ * nothing today and holds thirty roles tomorrow — and a page that was
+ * read through a bad network holds nothing at all, which is not the
+ * employer's fault.
+ *
+ * So a source that yielded nothing is read again after half an hour,
+ * unless the host has had nothing to say three times running: then it
+ * rests for an hour and is tried again after that. The count decays
+ * with its own expiry, so a host that recovers is read again.
  */
-const EMPTY_SOURCE_RETRY_MS = 6 * 60 * 60 * 1000;
+const EMPTY_SOURCE_RETRY_MS = 30 * 60 * 1000;
 
 /**
  * The host of an address.
@@ -214,6 +221,15 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
           [hostOf(target), links.size + pageJobs.length],
         );
 
+        // A host that had nothing to say is counted, and one that had
+        // something is forgotten. The count is what keeps a source that
+        // yielded nothing from being asked for on every cycle.
+        if (pageLinks.length + ats.length + pageJobs.length > 0) {
+          await noteLoudHost(hostOf(target));
+        } else {
+          await noteQuietHost(hostOf(target));
+        }
+
         // A registered source that has now been read is a source whose
         // health can be stated. It was read: the cycle knows whether it
         // answered.
@@ -286,29 +302,23 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
   }
 
   private async findBoards(limit: number): Promise<AtsBoard[]> {
-    const candidates = await query<{ url: string }>(
-      `SELECT source_url AS url FROM discovery_candidates
-        UNION
-       SELECT source_url AS url FROM discovery_search_results
-        LIMIT 5000`,
-    );
-
-    const boards = new Map<string, AtsBoard>();
-    for (const row of candidates.rows) {
-      const board = detectAts(row.url);
-      if (!board) continue;
-      boards.set(`${board.kind}:${board.token}`, board);
-      if (boards.size >= limit) break;
-    }
-
-    // Learned ATS boards are refreshed even when their original URLs are old.
-    const learned = await query<{ domain: string }>(
-      `SELECT domain FROM discovery_known_sources
+    // The boards that are already known, and when each was last read.
+    //
+    // The order is the oldest first, so the refresh *rotates*: the board
+    // that was read last cycle waits for the one after it, and every
+    // board is read in turn. Ordered the other way — newest first — the
+    // same two boards were read every cycle and the other ten were read
+    // when the budget allowed.
+    const learned = await query<{ domain: string; last_seen: Date }>(
+      `SELECT domain, last_seen FROM discovery_known_sources
         WHERE source_type = 'ats'
-        ORDER BY last_seen DESC
-        LIMIT $1`,
-      [limit],
+        ORDER BY last_seen ASC
+        LIMIT 500`,
     );
+
+    const lastSeen = new Map<string, Date>();
+    const boards = new Map<string, AtsBoard>();
+
     for (const row of learned.rows) {
       const separator = row.domain.indexOf(":");
       if (separator < 0) continue;
@@ -317,9 +327,45 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
       if (!kind || !token) continue;
       if (!(kind in ATS_KIND_SET)) continue;
       boards.set(row.domain, { kind: kind as AtsKind, token });
+      lastSeen.set(row.domain, row.last_seen);
     }
 
-    return [...boards.values()].slice(0, limit);
+    // The boards that are visible in what has been discovered. They are
+    // added only when they are not already known — a known board is
+    // read through its own record, which says when it was last read.
+    const candidates = await query<{ url: string }>(
+      `SELECT source_url AS url FROM discovery_candidates
+        UNION
+       SELECT source_url AS url FROM discovery_search_results
+        LIMIT 5000`,
+    );
+
+    const found: Array<{ key: string; board: AtsBoard }> = [];
+    for (const row of candidates.rows) {
+      const board = detectAts(row.url);
+      if (!board) continue;
+      const key = `${board.kind}:${board.token}`;
+      if (boards.has(key)) continue;
+      boards.set(key, board);
+      found.push({ key, board });
+      if (found.length >= limit) break;
+    }
+
+    // The known boards first, oldest first, then the ones found in the
+    // candidates — which have never been read, so they are read before
+    // the ones that were read yesterday.
+    const known = [...boards.entries()]
+      .filter(([key]) => lastSeen.has(key))
+      .sort((left, right) => {
+        const leftSeen = lastSeen.get(left[0])?.getTime() ?? 0;
+        const rightSeen = lastSeen.get(right[0])?.getTime() ?? 0;
+        return leftSeen - rightSeen;
+      })
+      .map(([, board]) => board);
+
+    const fresh = found.map((entry) => entry.board);
+
+    return [...fresh, ...known].slice(0, limit);
   }
 
   /**
@@ -394,11 +440,13 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
 
       // A source that was expanded and found nothing is tried again
       // later, not every cycle: an employer's careers page can render
-      // its roles tomorrow.
+      // its roles tomorrow. The host's own count of the times it had
+      // nothing says whether it is worth asking again yet.
       const emptySince = emptyHosts.get(host);
       if (emptySince) {
         const ageMs = Date.now() - new Date(emptySince).getTime();
         if (ageMs < EMPTY_SOURCE_RETRY_MS) continue;
+        if (await hostIsQuiet(host)) continue;
       } else if (knownHosts.has(host)) {
         continue;
       }
