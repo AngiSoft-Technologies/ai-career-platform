@@ -20,7 +20,7 @@
 import { logger } from "../../logger.js";
 import { sampled } from "../../lib/rollout.js";
 import { searchWeb, type SearchOptions, type WebSearchResult } from "./search.js";
-import { cleanJobTitle } from "./job-title.js";
+import { cleanJobTitle, isAboutQuery, isListingTitle } from "./job-title.js";
 import { isNewsRedirectWrapper } from "./redirect.js";
 import {
   buildCategoryQuery,
@@ -59,7 +59,7 @@ const MAX_OVERFETCH = 100;
 /**
  * The validity gate for job discovery.
  *
- * Two things make a search result useless for finding a job:
+ * Three things make a search result useless for finding a job:
  *
  *   1. It is a *news* headline. Google News RSS returns an article
  *      about a job, not the job, behind a wrapper that cannot be
@@ -68,16 +68,46 @@ const MAX_OVERFETCH = 100;
  *      is strict-priority, the news engine shadowed DuckDuckGo and
  *      Bing for every query.
  *
- *   2. The title says the page is not about a role: "What is ERP?",
- *      "Top 20 Highest Paying Jobs in Kenya", "Tracking Your Shipment
- *      | FedEx".
+ *   2. The title says the page is not about a role at all: "What is
+ *      ERP?", "Tracking Your Shipment | FedEx".
+ *
+ *   3. The result is not about the query. A search engine can answer
+ *      with the wrong results and nothing about the result itself
+ *      gives it away: Bing answered "data analyst jobs Kenya" with
+ *      Wikipedia's article on *data*, IBM's "What is data?" and the
+ *      Merriam-Webster definition, as though only the first word had
+ *      been searched. Only the comparison with the query catches
+ *      that.
  *
  * A provider whose results all fail this gate is treated as absent, so
  * the chain moves on to the next engine.
+ *
+ * A *listing* — a page of postings rather than a posting — passes the
+ * gate. Almost every job query is answered with listings, and the
+ * postings are inside them.
+ *
+ * The gate needs the query to compare against, so it is built per
+ * query rather than being a plain predicate.
+ */
+export function jobDiscoveryGate(query: string): (result: WebSearchResult) => boolean {
+  return (result: WebSearchResult): boolean => {
+    if (isNewsRedirectWrapper(result.url)) return false;
+    if (cleanJobTitle(result.title) === null && !isListingTitle(result.title)) {
+      return false;
+    }
+    return isAboutQuery(result.title, result.url, query);
+  };
+}
+
+/**
+ * The gate without the query comparison.
+ *
+ * Used where the query is not known — a general search, or a check
+ * applied to results that were fetched by a different route.
  */
 export function isJobDiscoveryResult(result: WebSearchResult): boolean {
   if (isNewsRedirectWrapper(result.url)) return false;
-  return cleanJobTitle(result.title) !== null;
+  return cleanJobTitle(result.title) !== null || isListingTitle(result.title);
 }
 
 export function overfetchLimitFor(limit: number, plan: QueryPlan): number {
@@ -108,8 +138,10 @@ export async function searchWebPlanned(
     limit: overfetch,
     // The gate is the caller's to set — a general web search has no
     // business refusing a result because its title is not a job title.
-    // Job discovery gets it by default.
-    isValidResult: options.isValidResult ?? isJobDiscoveryResult,
+    // Job discovery gets it by default, and the default compares the
+    // result with the query as well.
+    isValidResult:
+      options.isValidResult ?? jobDiscoveryGate(providerQuery),
   });
 
   // 1. Local operator enforcement (site:/inurl:/intitle:/-site:).
@@ -185,6 +217,10 @@ export async function searchWebPlannedAll(
   const raw = await searchWebAll(providerQuery, {
     ...options,
     limit: overfetchLimitFor(limit, plan),
+    // The same gate as the strict chain: a result that is not about the
+    // query is not a result.
+    isValidResult:
+      options.isValidResult ?? jobDiscoveryGate(providerQuery),
   });
 
   const operatorFiltered = keepOperatorMatches(raw, plan);

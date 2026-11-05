@@ -27,7 +27,11 @@ import { cleanJobTitle } from "./job-title.js";
  * The title rules live in their own module, because the search chain
  * needs them too and it must not drag the AI client in behind it.
  */
-export { cleanJobTitle, namesARole } from "./job-title.js";
+export {
+  cleanJobTitle,
+  isListingTitle,
+  namesARole,
+} from "./job-title.js";
 
 export interface ExtractedJob {
   externalId: string;

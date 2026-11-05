@@ -648,8 +648,24 @@ export function extractListingJobs(html: string, baseUrl: string): RawJob[] {
 // ---------------------------------------------------------------------------
 
 const CAREER_LINK_PATTERN = /(careers?|jobs?|vacanc|work[-_ ]?with[-_ ]?us|join[-_ ]?us|opportunit)/i;
+
+/**
+ * What a link to one posting looks like.
+ *
+ * Two shapes are accepted. The first is the one with a number in it —
+ * "/job/data-analyst-cloudfactory-2", "/jobs/view/lead-generation-4484357960",
+ * "/careers/12345" — which is unambiguous.
+ *
+ * The second is a slug: "/job/bi-analyst-at-4g-capital". Plenty of boards
+ * publish a posting at a URL with no number in it, and a pattern that
+ * demands one misses every one of them. The slug has to be long enough
+ * to be a posting rather than a section of the site, which is what the
+ * fourteen characters are for: "/jobs/data-analyst-jobs-in-kenya" is
+ * fifteen, and it is a listing — but a listing is a page worth reading
+ * too, so it is not a mistake to follow it.
+ */
 const JOB_URL_PATTERN =
-  /(job|vacanc|career|position|opening|role|apply|posting)[/-][^/]*\d|[0-9a-f]{8}-[0-9a-f-]{20,}/i;
+  /(job|vacanc|career|position|opening|role|apply|posting)[/-][^/]*\d|[0-9a-f]{8}-[0-9a-f-]{20,}|(?:job|jobs|vacanc(?:y|ies)|career|careers|position|opening|role|apply|posting)\/[a-z0-9][a-z0-9-]{13,}/i;
 
 export function findCareerLinks(html: string, baseUrl: string): string[] {
   const links = new Set<string>();
@@ -673,7 +689,11 @@ export function findCareerLinks(html: string, baseUrl: string): string[] {
   return [...links].slice(0, 8);
 }
 
-export function findJobLinks(html: string, baseUrl: string): string[] {
+export function findJobLinks(
+  html: string,
+  baseUrl: string,
+  limit = 30,
+): string[] {
   const links = new Set<string>();
   const regex = /<a\b[^>]*href=["']([^"']+)["']/gi;
   let match: RegExpExecArray | null;
@@ -686,12 +706,40 @@ export function findJobLinks(html: string, baseUrl: string): string[] {
       if (absolute.protocol !== "http:" && absolute.protocol !== "https:") continue;
       if (!JOB_URL_PATTERN.test(absolute.pathname)) continue;
       if (absolute.pathname.split("/").filter(Boolean).length < 2) continue;
+      // The fragment is not part of the page: "/jobs/data-analyst#content"
+      // and "/jobs/data-analyst" are one page, and queuing both would
+      // read one page twice.
+      absolute.hash = "";
       links.add(absolute.toString());
     } catch {
       // Ignore.
     }
   }
-  return [...links].slice(0, 30);
+
+  // The postings come before the pages of postings.
+  //
+  // A board's page carries both: "/job/data-analyst-cloudfactory-2" and
+  // "/jobs/data-analyst-jobs-in-kenya". The page of postings is worth
+  // reading too, but it is worth less than the posting itself, and a
+  // limit of fifteen links should be spent on the postings.
+  return [...links]
+    .sort((left, right) => {
+      const leftPosting = endsWithAnId(left) ? 0 : 1;
+      const rightPosting = endsWithAnId(right) ? 0 : 1;
+      return leftPosting - rightPosting;
+    })
+    .slice(0, limit);
+}
+
+/** True when the last segment of the path ends in a number. */
+function endsWithAnId(url: string): boolean {
+  try {
+    const segments = new URL(url).pathname.split("/").filter(Boolean);
+    const last = segments[segments.length - 1] ?? "";
+    return /\d+$/.test(last);
+  } catch {
+    return false;
+  }
 }
 
 export function findAtsLinks(html: string, baseUrl: string): AtsBoard[] {
@@ -818,12 +866,38 @@ export interface QuerySeeds {
 }
 
 /**
+ * Splits a taxonomy label into the roles it names.
+ *
+ * The profession taxonomy groups roles under one label, and the label
+ * reads like a family: "Legal & Compliance", "Inside Sales & Lead
+ * Generation", "Allied Health & Therapy". Quoting that whole phrase
+ * asks the engine for a page containing *every* word of it, which is
+ * why most of those queries came back with nothing at all.
+ *
+ * The label is split on the separator, and each part is searched on its
+ * own: "Legal", "Compliance", "Inside Sales", "Lead Generation".
+ */
+export function splitRoleLabel(label: string): string[] {
+  return label
+    .split(/\s*(?:&|\/|\||,|\+|\band\b|\bor\b)\s*/i)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 1);
+}
+
+/**
  * Builds a rotating query set from real user demand and learned sources.
  * This is the opposite of a hardcoded list: it changes as users and data
  * change, and it keeps exploring new sites every cycle.
  */
 export function buildDiscoveryQueries(seeds: QuerySeeds): string[] {
-  const roles = [...new Set(seeds.roles.map((role) => role.trim()).filter(Boolean))].slice(0, 8);
+  const roles = [
+    ...new Set(
+      seeds.roles
+        .flatMap((role) => splitRoleLabel(role))
+        .map((role) => role.trim())
+        .filter(Boolean),
+    ),
+  ].slice(0, 8);
   const skills = [...new Set(seeds.skills.map((skill) => skill.trim()).filter(Boolean))].slice(0, 6);
   const countries = [...new Set(seeds.countries.map((country) => country.trim()).filter(Boolean))].slice(0, 4);
   const domains = [...new Set(seeds.knownDomains.map((domain) => domain.trim()).filter(Boolean))];
@@ -831,9 +905,13 @@ export function buildDiscoveryQueries(seeds: QuerySeeds): string[] {
   const queries = new Set<string>();
 
   for (const role of roles) {
+    // A single word is quoted so the engine looks for that word; a
+    // phrase is left alone, because a quoted phrase that no page
+    // contains exactly returns nothing.
+    const term = /\s/.test(role) ? role : `"${role}"`;
     for (const country of countries.length > 0 ? countries : ["Africa"]) {
-      queries.add(`"${role}" jobs ${country} hiring`);
-      queries.add(`"${role}" remote ${country}`);
+      queries.add(`${term} jobs ${country} hiring`);
+      queries.add(`${term} remote ${country}`);
     }
   }
 

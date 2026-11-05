@@ -2,19 +2,19 @@ import { query } from "../../db/pool.js";
 import { logger } from "../../logger.js";
 import { BaseDiscoveryAgent, type AgentContext, type AgentRunResult } from "./base.js";
 import {
-  isJobDiscoveryResult,
-  searchWebPlanned,
+  jobDiscoveryGate,
+  searchWebPlannedAll,
 } from "../engine/search-orchestrator.js";
 import { buildDiscoveryQueries, type QuerySeeds } from "../engine/discover.js";
 import { pooled } from "../engine/index.js";
-import { cleanJobTitle } from "../engine/extract.js";
+import { cleanJobTitle, isListingTitle } from "../engine/extract.js";
 
 /**
- * Search Engine Discovery Agent.
+ * The search engine discovery agent.
  *
  * Uses our own search stack (`services/engine/search.ts`): the DuckDuckGo HTML
  * client with pagination and anti-bot retries, the multi-instance SearXNG
- * client, and a Bing HTML fallback — all over our own egress.
+ * client, and Bing's RSS and HTML interfaces — all over our own egress.
  *
  * Queries are NOT a fixed list. Every run rebuilds them from:
  *   • what users actually want (desired roles, skills, preferred countries)
@@ -26,6 +26,31 @@ import { cleanJobTitle } from "../engine/extract.js";
  * next. The whole run is bounded by a wall-clock budget so a rate-limited
  * engine can never stall the rest of the discovery cycle.
  */
+
+/**
+ * Rewrites a domain query into one the engines understand.
+ *
+ * The agent configuration carries domain queries as `careers:<domain>`,
+ * which is a label the expansion agent uses for its own bookkeeping — it
+ * is not a search operator, and no engine understands it. Sent as it
+ * stands, "careers:remoteOK.com" is a phrase that matches nothing, and
+ * seven of the twelve queries in one cycle were of this shape.
+ *
+ * The search operator that *is* understood is `site:`, so that is what a
+ * domain query becomes.
+ */
+export function normaliseConfiguredQuery(query: string): string {
+  const trimmed = query.trim();
+  const domain = /^careers:\s*(\S+)$/i.exec(trimmed);
+  if (!domain?.[1]) return trimmed;
+
+  const host = domain[1]
+    .replace(/^https?:\/\//i, "")
+    .replace(/\/.*$/, "")
+    .replace(/^www\./i, "");
+  return host ? `site:${host} jobs` : trimmed;
+}
+
 export class SearchEngineAgent extends BaseDiscoveryAgent {
   readonly key = "search_engine_agent";
   readonly name = "Search Engine Discovery Agent";
@@ -35,13 +60,18 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
   async run(ctx: AgentContext): Promise<AgentRunResult> {
     const maxResultsPerQuery = Number(ctx.config.max_results_per_query ?? 8);
     const country = String(ctx.config.country ?? "ke");
+    // Freshness is off unless it is asked for. A job posting is not
+    // news: it stays open for weeks and often for months, and a date
+    // filter removes postings that are still hiring. One query in eight
+    // returned *nothing at all* with a one-month filter and six results
+    // without it — the filter was costing the run more than it bought.
     const freshness =
       ctx.config.freshness === "day" ||
       ctx.config.freshness === "week" ||
       ctx.config.freshness === "month" ||
       ctx.config.freshness === "year"
         ? ctx.config.freshness
-        : "week";
+        : undefined;
 
     const seeds = await this.loadSeeds();
     const generated = buildDiscoveryQueries(seeds);
@@ -49,9 +79,12 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
     // Operators can pin extra queries in the agent config; they are additive,
     // never a replacement for generated discovery.
     const configured = Array.isArray(ctx.config.queries)
-      ? (ctx.config.queries as unknown[]).filter(
-          (value): value is string => typeof value === "string" && value.trim().length > 0,
-        )
+      ? (ctx.config.queries as unknown[])
+          .filter(
+            (value): value is string =>
+              typeof value === "string" && value.trim().length > 0,
+          )
+          .map(normaliseConfiguredQuery)
       : [];
 
     // A cycle has a budget. A modest cap keeps the whole run inside a few
@@ -61,7 +94,32 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
     const concurrency = Number(ctx.config.concurrency ?? 4);
     const budgetMs = Number(ctx.config.budget_ms ?? 150_000);
 
-    const queries = [...new Set([...configured, ...generated])].slice(
+    // The pinned queries are a fixed list, and the generated ones rotate
+    // with the taxonomy and the learned sources. If the pinned list is
+    // given the whole budget, the rotation never runs — which is the
+    // opposite of what a discovery agent is for. Half the budget goes to
+    // each, so a cycle always explores and always honours the operator's
+    // own queries.
+    const pinnedQuota = Math.min(
+      configured.length,
+      Math.max(1, Math.floor(maxQueries / 2)),
+    );
+    // The pinned list is longer than the budget, so it is read from a
+    // window that moves with the hour. Over a day every pinned query is
+    // used, and the ones outside the window wait their turn rather than
+    // being crowded out for good.
+    const offset =
+      configured.length > pinnedQuota
+        ? (new Date().getUTCHours() * pinnedQuota) % configured.length
+        : 0;
+    const pinned = [
+      ...configured.slice(offset, offset + pinnedQuota),
+      ...configured.slice(
+        0,
+        Math.max(0, pinnedQuota - (configured.length - offset)),
+      ),
+    ];
+    const queries = [...new Set([...pinned, ...generated])].slice(
       0,
       Math.max(1, maxQueries),
     );
@@ -73,9 +131,20 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
     let totalStored = 0;
     let totalDuplicate = 0;
     let totalNotAJob = 0;
+    let totalListings = 0;
+    let totalDeferred = 0;
     let timedOut = false;
     const errors: string[] = [];
     const engines = new Set<string>();
+
+    // How many URLs one run may add to the queue.
+    //
+    // The browse agent reads twenty pages every half hour, so a hundred
+    // URLs an hour is more than the pipeline can read. Adding more than
+    // that does not find more jobs — it only makes the queue longer, and
+    // the URLs behind the backlog are read later and are staler when they
+    // are read.
+    const maxQueuePerRun = Number(ctx.config.max_queue_per_run ?? 60);
 
     const settle = await pooled(
       queries,
@@ -93,15 +162,30 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
           // searchWebPlanned over-fetches, plans operators, enforces them
           // locally and renumbers positions — the plain searchWeb chain only
           // picks a provider.
-          const planned = await searchWebPlanned(queryText, {
+          //
+          // The recall-first variant is used here, and it fans out to every
+          // engine that can serve a posting. The strict chain stops at the
+          // first engine that answers, and one blocked engine was enough to
+          // end a query with nothing: DuckDuckGo answers with an anti-bot
+          // page, Bing's HTML result page sometimes answers a different
+          // question, and the public SearXNG instances answer about half
+          // the time. A discovery run that found one job in twelve queries
+          // was the result of three providers failing on the same morning.
+          //
+          // The news engine is left out on purpose: its results are
+          // articles behind a wrapper, never a posting, so asking it
+          // costs a request and returns nothing the gate would keep.
+          const planned = await searchWebPlannedAll(queryText, {
             limit: maxResultsPerQuery,
             country,
             freshness,
             timeoutMs: Math.min(remaining, 45_000),
+            providers: ["searxng", "duckduckgo", "bing"],
             // The gate that keeps a news engine from shadowing the web
-            // engines, and keeps the queue free of pages that are not
-            // about a role.
-            isValidResult: isJobDiscoveryResult,
+            // engines, keeps the queue free of pages that are not about
+            // a role, and drops the results an engine answered with
+            // when it was asked a different question.
+            isValidResult: jobDiscoveryGate(queryText),
           });
           return { queryText, results: planned.results };
         } catch (error) {
@@ -123,20 +207,32 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
 
         // The title is checked before the URL is queued.
         //
-        // The browse agent reads a page to find out whether it is a job
-        // posting, and a page read is the expensive part of the
-        // pipeline. A search-engine result carries its title, and the
-        // title of a page that is not about a role says so: "What is
-        // ERP?", "Krita | Creative Freedom for Digital Artists", "New
-        // Honda Ridgeline for Sale". Queueing those spends a request on
-        // a page we already know we will refuse, and the queue of
-        // unread URLs grew faster than the browse agent could drain it.
+        // The browse agent reads a page to find out what it is, and a
+        // page read is the expensive part of the pipeline. A
+        // search-engine result carries its title, and the title of a
+        // page that is not about a role says so: "What is ERP?",
+        // "Krita | Creative Freedom for Digital Artists", "New Honda
+        // Ridgeline for Sale". Queueing those spends a request on a
+        // page we already know we will refuse, and the queue of unread
+        // URLs grew faster than the browse agent could drain it.
         //
-        // The same rule the extractor applies is applied here, so a
-        // title that is refused at search time is also refused at
-        // browse time.
-        if (!cleanJobTitle(result.title)) {
+        // A *listing* is queued as well, and it is the other half of
+        // the answer: "Legal Jobs in Kenya (97 Open Roles)" is not a
+        // posting, but it is the page the postings are on. The browse
+        // agent reads it, finds no posting in it and mines it for the
+        // postings it names.
+        const title = cleanJobTitle(result.title);
+        const listing = isListingTitle(result.title);
+        if (!title && !listing) {
           totalNotAJob += 1;
+          continue;
+        }
+        if (listing) totalListings += 1;
+
+        // The queue is bounded. Beyond the bound the results are
+        // dropped for this run and the next run finds them again.
+        if (totalStored >= maxQueuePerRun) {
+          totalDeferred += 1;
           continue;
         }
 
@@ -199,6 +295,10 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
         // Results whose title said plainly that they are not about a
         // role. They were never queued, so they cost nothing.
         notAJobTitle: totalNotAJob,
+        // Results that named a page of postings rather than a posting.
+        listings: totalListings,
+        // Results found but not queued, because the queue was full.
+        deferred: totalDeferred,
       },
     };
   }

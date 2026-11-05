@@ -25,8 +25,11 @@ import {
 import {
   cleanCompanyName,
   cleanJobTitle,
+  isListingTitle,
   looksLikeJobPosting,
 } from "../services/api/src/services/engine/extract.js";
+import { isAboutQuery } from "../services/api/src/services/engine/job-title.js";
+import { normaliseConfiguredQuery } from "../services/api/src/services/agents/search-agent.js";
 import { keepBestPerUser } from "../services/api/src/services/agents/match-agent.js";
 
 import {
@@ -1078,6 +1081,28 @@ async function main(): Promise<void> {
     searchAgentSource.includes("notAJobTitle"),
   );
 
+  const discoverSource = readFileSync(
+    new URL(
+      "../services/api/src/services/engine/discover.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const browseAgentSource = readFileSync(
+    new URL(
+      "../services/api/src/services/agents/browse-agent.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const searchSource = readFileSync(
+    new URL(
+      "../services/api/src/services/engine/search.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
   // -------------------------------------------------------------------------
   // The provider chain's validity gate
   //
@@ -1101,7 +1126,7 @@ async function main(): Promise<void> {
   );
   check(
     "the search agent uses the gate",
-    searchAgentSource.includes("isValidResult: isJobDiscoveryResult"),
+    searchAgentSource.includes("isValidResult: jobDiscoveryGate(queryText)"),
   );
 
   // The Kenya agent searches for a *listing* — a careers page, a job
@@ -1123,22 +1148,140 @@ async function main(): Promise<void> {
     orchestratorSource.includes("isNewsRedirectWrapper(result.url)"),
   );
   check(
-    "the general search path keeps every engine",
-    orchestratorSource.includes(
-      "isValidResult: options.isValidResult ?? isJobDiscoveryResult",
-    ),
+    "the discovery path applies the gate by default",
+    orchestratorSource.includes("options.isValidResult ?? jobDiscoveryGate(providerQuery)"),
   );
 
-  const searchSource = readFileSync(
-    new URL(
-      "../services/api/src/services/engine/search.ts",
-      import.meta.url,
-    ),
-    "utf8",
+  // -------------------------------------------------------------------------
+  // The discovery run itself
+  //
+  // The run that found one job in twelve queries had three faults, and
+  // all three are checked here: the queries were built from taxonomy
+  // labels that name a family of roles ("Legal & Compliance"), the
+  // domain queries were written in a form no engine understands
+  // ("careers:remoteOK.com"), and the run stopped at the first engine
+  // that answered — so one blocked engine ended a query with nothing.
+  // -------------------------------------------------------------------------
+
+  check(
+    "a taxonomy label is split into the roles it names",
+    discoverSource.includes("export function splitRoleLabel"),
   );
   check(
-    "the chain treats a provider with no valid results as absent",
-    searchSource.includes("applyValidityGate"),
+    "a domain query is rewritten into one the engines understand",
+    searchAgentSource.includes("normaliseConfiguredQuery"),
+  );
+  check(
+    "the discovery run fans out to every engine",
+    searchAgentSource.includes("searchWebPlannedAll"),
+  );
+  check(
+    "the discovery run leaves the news engine out",
+    searchAgentSource.includes('providers: ["searxng", "duckduckgo", "bing"]'),
+  );
+  check(
+    "the fan-out merges the engines round-robin",
+    searchSource.includes("const item = list[index]"),
+  );
+  check(
+    "the chain asks each engine in turn",
+    searchSource.includes("for (const provider of selectedProviders(options))"),
+  );
+
+  // -------------------------------------------------------------------------
+  // Listings
+  //
+  // Almost every job query is answered with pages of postings rather
+  // than with postings. Those pages were refused by the title rule and
+  // then failed as postings, and the postings inside them were never
+  // reached.
+  // -------------------------------------------------------------------------
+
+  check(
+    "a listing title is recognised",
+    extractSource.includes("export function isListingTitle"),
+  );
+  check(
+    "the search agent queues a listing",
+    searchAgentSource.includes("isListingTitle(result.title)"),
+  );
+  check(
+    "the browse agent mines a listing for its postings",
+    browseAgentSource.includes("findJobLinks"),
+  );
+  check(
+    "the browse agent asks a model only about pages that look like postings",
+    browseAgentSource.includes("const job = postingLike"),
+  );
+
+  // -------------------------------------------------------------------------
+  // The listing rule, the query rule and the domain query — behaviour, not
+  // source shape. These three decide what the pipeline reads, and each of
+  // them has a case that is easy to get backwards.
+  // -------------------------------------------------------------------------
+
+  for (const title of [
+    "Legal Jobs In Kenya Jobs in Kenya (97 Open Roles) | LinkedIn",
+    "Legal Jobs in Kenya November 2026 | MyJobMag",
+    "Legal Jobs In Kenya 2026 | Latest Vacancies - Corporate Staffing",
+    "legal Jobs, Vacancies in Kenya | Careerjet",
+    "Data Analyst Jobs In Kenya 2026 | Latest Vacancies",
+    "Warehouse Jobs in Kenya November 2026 | MyJobMag",
+    "Jobs in Kenya",
+  ]) {
+    check(
+      `a page of postings is recognised: ${title.slice(0, 40)}`,
+      isListingTitle(title),
+    );
+  }
+
+  for (const title of [
+    "Pharmacist - Postbank - Jobs in Kenya .co .ke",
+    "Lead Generation Specialist at Solvo Global | MyJobMag",
+    "Data Analyst at Transsion — Nairobi County, Kenya | LinkedIn Jobs",
+    "What is ERP?",
+  ]) {
+    check(
+      `a posting is not mistaken for a page of postings: ${title.slice(0, 40)}`,
+      !isListingTitle(title),
+    );
+  }
+
+  check(
+    "a result that answers a different question is refused",
+    !isAboutQuery(
+      "Data - Wikipedia",
+      "https://en.wikipedia.org/wiki/Data",
+      "data analyst jobs Kenya",
+    ),
+  );
+  check(
+    "a result that answers the question is kept",
+    isAboutQuery(
+      "Data Analyst Jobs in Nairobi (132 Open Roles) | LinkedIn",
+      "https://ke.linkedin.com/jobs/data-analyst-jobs-nairobi",
+      "data analyst jobs Kenya",
+    ),
+  );
+  check(
+    "a query made only of filler words refuses nothing",
+    isAboutQuery("Anything at all", "https://example.test/x", "jobs hiring"),
+  );
+
+  check(
+    "a domain query becomes a site query",
+    normaliseConfiguredQuery("careers:remoteOK.com") ===
+      "site:remoteOK.com jobs",
+  );
+  check(
+    "a domain query with a path becomes a site query",
+    normaliseConfiguredQuery("careers:https://www.arbeitnow.ch/jobs") ===
+      "site:arbeitnow.ch jobs",
+  );
+  check(
+    "an ordinary query is left alone",
+    normaliseConfiguredQuery('"Product Manager" jobs Kenya hiring') ===
+      '"Product Manager" jobs Kenya hiring',
   );
 
   const redirectSource = readFileSync(
@@ -1147,6 +1290,10 @@ async function main(): Promise<void> {
       import.meta.url,
     ),
     "utf8",
+  );
+  check(
+    "the chain treats a provider with no valid results as absent",
+    searchSource.includes("applyValidityGate"),
   );
   check(
     "a Google News wrapper is recognised",

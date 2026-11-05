@@ -38,8 +38,43 @@ const USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0",
 ];
 
+/**
+ * The user agents used for *search* requests.
+ *
+ * DuckDuckGo answers Chrome far more often with an "anomaly" page than
+ * it answers Firefox or Safari: HTTP 202, a JavaScript challenge, and
+ * not one result. The response is a successful fetch as far as the
+ * transport is concerned, so the only way to notice is to read the body
+ * — and the symptom we saw was a search agent that ran for an hour and
+ * stored nothing at all, with no error to explain it.
+ *
+ * The general pool above is Chrome-heavy, which is right for the pages
+ * we scrape and wrong for the engines we query. These three are the
+ * ones the engines answer.
+ */
+const SEARCH_USER_AGENTS = [
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0",
+  "Mozilla/5.0 (X11; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15",
+];
+
 export function randomUserAgent(): string {
   return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)] ?? USER_AGENTS[0]!;
+}
+
+/**
+ * A user agent for a search request.
+ *
+ * The index rotates: a retry after a block must not repeat the agent
+ * that was blocked, or the retry is the same request again.
+ */
+export function searchUserAgent(index = 0): string {
+  const agent =
+    SEARCH_USER_AGENTS[
+      (index + Math.floor(Math.random() * SEARCH_USER_AGENTS.length)) %
+        SEARCH_USER_AGENTS.length
+    ];
+  return agent ?? SEARCH_USER_AGENTS[0]!;
 }
 
 export function browserHeaders(extra: Record<string, string> = {}): Record<string, string> {
@@ -57,6 +92,22 @@ export function browserHeaders(extra: Record<string, string> = {}): Record<strin
     "Upgrade-Insecure-Requests": "1",
     ...extra,
   };
+}
+
+/**
+ * Headers for a search request.
+ *
+ * The same shape as `browserHeaders`, with the user agent an engine
+ * will answer. An explicit `User-Agent` in `extra` still wins, so a
+ * caller that knows what it wants can say so.
+ */
+export function searchHeaders(
+  extra: Record<string, string> = {},
+  index = 0,
+): Record<string, string> {
+  const headers = browserHeaders(extra);
+  if (!extra["User-Agent"]) headers["User-Agent"] = searchUserAgent(index);
+  return headers;
 }
 
 // ---------------------------------------------------------------------------

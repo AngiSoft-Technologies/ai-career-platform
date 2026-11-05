@@ -52,7 +52,136 @@ export const CHROME_TITLE =
  * would cost a job. "Vacancies" and "Openings" are the words that
  * appear on a listing and not on a posting.
  */
-export const LISTING_TITLE = /\b(?:vacancies|openings)\b/i;
+export const LISTING_TITLE = /\b(?:vacancies|openings|open roles|job openings)\b/i;
+
+/**
+ * True when the title says the page is a *listing* — a page of many
+ * postings rather than one posting.
+ *
+ * This is the question the search agent has to answer before it queues
+ * a URL, because the two pages are read in different ways: a posting is
+ * extracted, a listing is mined for the postings inside it.
+ *
+ * Almost every job query is answered with listings. "Legal jobs Kenya"
+ * comes back as "Legal Jobs in Kenya (97 Open Roles)", "Legal Jobs in
+ * Kenya November 2026", "Legal & Compliance Jobs in Kenya — GoKazini" —
+ * pages of dozens of postings, and the postings themselves are the
+ * second click. Refusing those pages loses the jobs; reading them as
+ * postings produces nothing at all.
+ *
+ * The awkward case is a *site* whose name contains the phrase: "Jobs in
+ * Kenya .co .ke" is a board, and "Pharmacist - Postbank - Jobs in Kenya
+ * .co .ke" is one posting on it. The phrase is only a listing marker
+ * when it is not attached to a site name, which is what the two
+ * exclusions below are for.
+ */
+export function isListingTitle(title: string | null | undefined): boolean {
+  if (!title) return false;
+  const cleaned = title.replace(/\s+/g, " ").trim();
+  if (!cleaned) return false;
+
+  // "Latest Vacancies", "Job Openings", "(97 Open Roles)".
+  if (LISTING_TITLE.test(cleaned)) return true;
+
+  // "Jobs by Title", "All Jobs", "Latest Jobs", "Vacancies".
+  if (
+    /^(?:all|latest|new|top|featured|popular|available)?\s*(?:jobs?|vacancies|openings?|positions?)\b/i.test(
+      cleaned,
+    )
+  ) {
+    return true;
+  }
+
+  // "Legal Jobs in Kenya", "Data Analyst Jobs In Nairobi 2026".
+  const phrase = /\bjobs?\s+in\b/i.exec(cleaned);
+  if (!phrase) return false;
+
+  const before = cleaned.slice(0, phrase.index);
+  const after = cleaned.slice(phrase.index + phrase[0].length);
+
+  // The phrase belongs to a site name: "Pharmacist - Postbank - Jobs in
+  // Kenya .co .ke".
+  if (/[-–—|]\s*$/.test(before)) return false;
+  if (/^\s+[A-Za-z0-9-]+\s*\.\s*[A-Za-z]{2,}/.test(after)) return false;
+
+  return true;
+}
+
+/**
+ * The words a query is built from that carry no meaning on their own.
+ *
+ * They are what every job query is padded with, so a result that
+ * matches only these has not been matched by anything.
+ */
+const QUERY_FILLER = new Set([
+  "a", "an", "the", "and", "or", "of", "in", "at", "on", "to", "for",
+  "with", "by", "from", "is", "are", "be", "we", "our", "you", "your",
+  "job", "jobs", "hiring", "hire", "role", "roles", "work", "working",
+  "remote", "position", "positions", "opening", "openings", "vacancy",
+  "vacancies", "apply", "now", "new", "latest", "want", "need", "looking",
+  "site", "jobs", "careers", "career", "search", "find", "all", "any",
+  "com", "net", "org", "www", "http", "https",
+]);
+
+/**
+ * True when a result is actually about what was asked for.
+ *
+ * A search engine can answer with the wrong results and no way of
+ * knowing: Bing answered "data analyst jobs Kenya" with results for the
+ * word "data" — Wikipedia's data article, IBM's "What is data?", the
+ * Merriam-Webster definition — as though only the first word had been
+ * searched. Every one of those results was a real, well-formed page
+ * from a well-known site, so nothing about the result itself says it is
+ * wrong. Only the comparison with the query does.
+ *
+ * The comparison is with the *role*, not with the query. A query is
+ * built as "<role> jobs <place> hiring", so the role is the run of
+ * meaningful words at the front, and every word of it has to be there.
+ * "Data Analyst" has to be in the result for the query to be about a
+ * data analyst; "Data" alone is the first word of the wrong answer, and
+ * matching it is how the wrong answer got in.
+ *
+ * The place and the rest of the query are not required. "Pharmacist
+ * Jobs in Kenya" is the right answer to "pharmacist jobs nairobi" — a
+ * posting in a different city is still a posting about a pharmacist.
+ */
+export function isAboutQuery(
+  title: string,
+  url: string,
+  query: string,
+): boolean {
+  const words = query
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+
+  const meaningful = words.filter(
+    (word) => word.length > 2 && !QUERY_FILLER.has(word),
+  );
+
+  // A query made only of filler words gives us nothing to compare
+  // against, so nothing is refused.
+  if (meaningful.length === 0) return true;
+
+  // The role is the run of meaningful words before the first piece of
+  // padding. A query that starts with padding ("job openings Kenya
+  // remote") has no role, and falls back to matching any one word.
+  const role: string[] = [];
+  for (const word of words) {
+    if (word.length > 2 && !QUERY_FILLER.has(word)) {
+      role.push(word);
+      continue;
+    }
+    if (role.length > 0) break;
+  }
+
+  const haystack = `${title} ${url}`.toLowerCase();
+  if (role.length === 0) {
+    return meaningful.some((word) => haystack.includes(word));
+  }
+  return role.every((word) => haystack.includes(word));
+}
 
 /**
  * The nouns a role title is built from.
@@ -135,6 +264,11 @@ export function cleanJobTitle(value: string | null | undefined): string | null {
   // An encyclopedia entry is not a role, whatever it is called.
   if (/\bwikipedia\b/i.test(cleaned)) return null;
 
+  // A listing is a listing however the site name is attached: "Sales
+  // Representative Jobs In Kenya 2026 | Latest Vacancies" is a page of
+  // many jobs, not a job.
+  if (LISTING_TITLE.test(cleaned)) return null;
+
   // "Software Engineer | Acme" — the role is the part before the pipe.
   const pipe = cleaned.indexOf(" | ");
   if (pipe > 0) cleaned = cleaned.slice(0, pipe).trim();
@@ -161,7 +295,6 @@ export function cleanJobTitle(value: string | null | undefined): string | null {
   if (NON_ROLE_TITLE_OPENER.test(cleaned)) return null;
   if (PAGE_TOPIC_TITLE.test(cleaned)) return null;
   if (CHROME_TITLE.test(cleaned)) return null;
-  if (LISTING_TITLE.test(cleaned)) return null;
 
   // The title has to name a role. "Sales De Baño Epsom 300g Green
   // Harmony" is a product; "Senior Data Analyst" is a job.

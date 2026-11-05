@@ -17,7 +17,7 @@
 import * as cheerio from "cheerio";
 import { logger } from "../../logger.js";
 import { config } from "../../config.js";
-import { browserHeaders, egressFetch, randomUserAgent } from "./egress.js";
+import { browserHeaders, egressFetch, searchHeaders } from "./egress.js";
 import { decodeBody, fetchJson } from "./fetch.js";
 import { reserveDailyQuota } from "./quota.js";
 import { unwrapSearchRedirect } from "./redirect.js";
@@ -54,6 +54,56 @@ export interface SearchOptions {
    * dropped from a provider that also produced good ones.
    */
   isValidResult?: (result: WebSearchResult) => boolean;
+  /**
+   * The providers to use, in order.
+   *
+   * The default is every provider. A caller that knows a provider cannot
+   * serve what it is asking for can leave it out — job discovery does
+   * exactly that with the news engine, whose results are articles
+   * behind a wrapper and never a posting.
+   */
+  providers?: string[];
+}
+
+/** The search providers, in the order the chain prefers them. */
+export type SearchProvider =
+  | "searxng"
+  | "google_news"
+  | "duckduckgo"
+  | "bing";
+
+/**
+ * The chain order.
+ *
+ * SearXNG first because it is a metasearch: one request reaches several
+ * indexes. DuckDuckGo next because it is the engine that answers most
+ * job-board queries. Bing next because its HTML result page can come
+ * back answering a different question than the one asked, which is why
+ * its RSS interface is asked first.
+ *
+ * The news engine is deliberately *last*. It answers every query, and
+ * what it answers with is an article rather than a posting, so a
+ * strict-priority chain put it in front of the engines that find the
+ * jobs — for days.
+ */
+const PROVIDER_ORDER: SearchProvider[] = [
+  "searxng",
+  "duckduckgo",
+  "bing",
+  "google_news",
+];
+
+function selectedProviders(options: SearchOptions): SearchProvider[] {
+  const wanted = options.providers
+    ?.map((provider) => provider.trim().toLowerCase())
+    .filter(Boolean);
+  if (!wanted || wanted.length === 0) return PROVIDER_ORDER;
+
+  const allow = new Set(wanted);
+  const selected = PROVIDER_ORDER.filter((provider) => allow.has(provider));
+  // An unknown name is a typo, not a request for a provider that does
+  // not exist — the caller's other names still apply.
+  return selected.length > 0 ? selected : PROVIDER_ORDER;
 }
 
 export class SearchBlockedError extends Error {
@@ -73,7 +123,11 @@ function cleanDdgUrl(href: string): string {
 
 function parseDdgResults(html: string, seen: Set<string>): WebSearchResult[] {
   const $ = cheerio.load(html);
-  if ($(".anomaly-modal__modal").length > 0 || /anomaly-modal/.test(html)) {
+
+  // The anti-bot page is served with HTTP 202 and a normal-looking body,
+  // so the status code alone does not tell us it failed. The challenge
+  // is in the body.
+  if ($(".anomaly-modal__modal").length > 0 || /anomaly-modal/i.test(html)) {
     throw new SearchBlockedError("DuckDuckGo anti-bot modal");
   }
 
@@ -143,7 +197,10 @@ export async function duckDuckGoSearch(
         {
           method: first ? "GET" : "POST",
           headers: {
-            ...browserHeaders({ Accept: "text/html,application/xhtml+xml,*/*;q=0.8" }),
+            ...searchHeaders(
+              { Accept: "text/html,application/xhtml+xml,*/*;q=0.8" },
+              antiBotRetries,
+            ),
             ...(first
               ? {}
               : { "Content-Type": "application/x-www-form-urlencoded" }),
@@ -154,7 +211,13 @@ export async function duckDuckGoSearch(
         { preferProxy: antiBotRetries > 0 },
       );
 
-      if (response.status === 429 || response.status === 403) {
+      // 202 is how the anti-bot page is served. It is not a success:
+      // the body is a challenge, and parsing it yields nothing.
+      if (
+        response.status === 429 ||
+        response.status === 403 ||
+        response.status === 202
+      ) {
         throw new SearchBlockedError(`DuckDuckGo HTTP ${response.status}`);
       }
       if (response.status < 200 || response.status >= 300) {
@@ -194,17 +257,22 @@ const DEFAULT_SEARXNG_ENDPOINTS = [
   "https://searx.tiekoetter.com",
   "https://priv.au",
   "https://search.sapti.me",
+  "https://paulgo.io",
+  "https://searxng.site",
 ];
 
-function searxngEndpoints(): string[] {
+function searxngEndpoints(): { endpoints: string[]; configured: boolean } {
   const configured = process.env.SEARXNG_ENDPOINTS ?? process.env.SEARXNG_ENDPOINT;
   if (configured) {
-    return configured
-      .split(",")
-      .map((value) => value.trim().replace(/\/$/, ""))
-      .filter(Boolean);
+    return {
+      endpoints: configured
+        .split(",")
+        .map((value) => value.trim().replace(/\/$/, ""))
+        .filter(Boolean),
+      configured: true,
+    };
   }
-  return DEFAULT_SEARXNG_ENDPOINTS;
+  return { endpoints: DEFAULT_SEARXNG_ENDPOINTS, configured: false };
 }
 
 interface SearxngResponse {
@@ -245,29 +313,127 @@ async function searxngInstance(
     .filter((result) => result.url.startsWith("http") && result.title);
 }
 
+/**
+ * Reads a SearXNG instance through its HTML interface.
+ *
+ * The JSON interface is the one we would prefer, and it is the one the
+ * public instances refuse: nearly every instance answers `format=json`
+ * with HTTP 429 — "too many requests" — because JSON output is the
+ * expensive feature they ask you not to use, and the one that ignores
+ * the format answers with the HTML page instead. The HTML interface is
+ * the one they keep open, and it answers with the same results.
+ *
+ * The request is a POST rather than a GET because that is what the
+ * instances answer; a GET is redirected to the front page, which parses
+ * as "no results" rather than as an error.
+ */
+async function searxngInstanceHtml(
+  endpoint: string,
+  query: string,
+  lang: string,
+): Promise<WebSearchResult[]> {
+  const body = new URLSearchParams({
+    q: query,
+    language: lang,
+    categories: "general",
+  }).toString();
+
+  const response = await egressFetch(
+    `${endpoint}/search`,
+    {
+      method: "POST",
+      headers: searchHeaders({
+        Accept: "text/html,application/xhtml+xml,*/*;q=0.8",
+        "Content-Type": "application/x-www-form-urlencoded",
+      }),
+      body,
+      signal: AbortSignal.timeout(12_000),
+    },
+  );
+
+  if (response.status < 200 || response.status >= 300) {
+    throw new Error(`SearXNG HTTP ${response.status}`);
+  }
+
+  const html = new TextDecoder().decode(response.body);
+  const $ = cheerio.load(html);
+  const results: WebSearchResult[] = [];
+
+  $("article.result").each((_, block) => {
+    const link = $(block).find("h3 a").first();
+    if (link.length === 0) return;
+
+    const url = link.attr("href")?.trim() ?? "";
+    const title = link.text().trim();
+    const description = $(block).find(".content").first().text().trim();
+    if (!url.startsWith("http") || !title) return;
+
+    results.push({ url, title, description, engine: "searxng" });
+  });
+
+  return results;
+}
+
 export async function searxngSearch(
   query: string,
   options: SearchOptions = {},
 ): Promise<WebSearchResult[]> {
   const limit = options.limit ?? 10;
   const lang = options.lang ?? "en";
-  const endpoints = searxngEndpoints();
+  const { endpoints, configured } = searxngEndpoints();
   const seen = new Set<string>();
   const results: WebSearchResult[] = [];
 
-  const attempts = await Promise.allSettled(
-    endpoints.slice(0, 4).map((endpoint) => searxngInstance(endpoint, query, 1, lang)),
-  );
-
-  for (const attempt of attempts) {
-    if (attempt.status !== "fulfilled") continue;
-    for (const result of attempt.value) {
-      if (seen.has(result.url)) continue;
-      seen.add(result.url);
-      results.push(result);
-      if (results.length >= limit) return results;
+  const collect = (attempts: PromiseSettledResult<WebSearchResult[]>[]): boolean => {
+    for (const attempt of attempts) {
+      if (attempt.status !== "fulfilled") continue;
+      for (const result of attempt.value) {
+        if (seen.has(result.url)) continue;
+        seen.add(result.url);
+        results.push(result);
+        if (results.length >= limit) return true;
+      }
     }
+    return false;
+  };
+
+  const html = (batch: string[]) =>
+    Promise.allSettled(
+      batch.map((endpoint) => searxngInstanceHtml(endpoint, query, lang)),
+    );
+  const json = (batch: string[]) =>
+    Promise.allSettled(
+      batch.map((endpoint) => searxngInstance(endpoint, query, 1, lang)),
+    );
+
+  // Three instances at a time. They are separate operators' machines and
+  // they answer in parallel, so the wall-clock cost is one request — but
+  // asking eight of them for every query of every run is the kind of
+  // thing that gets a metasearch instance to answer with HTTP 429.
+  const first = endpoints.slice(0, 3);
+  const second = endpoints.slice(3, 6);
+
+  // An instance the operator configured themselves is their own machine,
+  // and the JSON interface is the one to ask: it is structured, and it is
+  // the interface their instance has been configured to allow. The public
+  // instances are the other way round — they refuse JSON and answer the
+  // HTML interface.
+  if (configured) {
+    if (collect(await json(first))) return results;
+    if (collect(await html(first))) return results;
+  } else {
+    if (collect(await html(first))) return results;
   }
+
+  // The first three can all be down or all rate-limited.
+  if (second.length > 0) {
+    if (collect(await html(second))) return results;
+    if (collect(await json(second))) return results;
+  }
+
+  // Last resort: the JSON interface on the first instances, for the
+  // public list where it is usually refused.
+  if (!configured && collect(await json(first))) return results;
 
   return results;
 }
@@ -287,7 +453,7 @@ export async function bingSearch(
     `https://www.bing.com/search?${params.toString()}`,
     {
       method: "GET",
-      headers: browserHeaders({
+      headers: searchHeaders({
         Accept: "text/html,application/xhtml+xml,*/*;q=0.8",
         "Accept-Language": `${options.lang ?? "en"}-US,en;q=0.9`,
       }),
@@ -317,6 +483,68 @@ export async function bingSearch(
     if (!href.startsWith("http")) return;
     seen.add(href);
     results.push({ url: href, title, description, engine: "bing" });
+  });
+
+  return results.slice(0, limit);
+}
+
+/**
+ * Reads Bing through its RSS interface.
+ *
+ * Bing serves two different result sets for the same query, and the
+ * HTML one is the wrong one. A query for "data analyst jobs Kenya" came
+ * back with results for the word "data" — Wikipedia's data article, IBM's
+ * "What is data?", the Merriam-Webster definition — as though only the
+ * first word had been searched. The same query through the RSS interface
+ * came back with the job boards.
+ *
+ * The difference is not the query and not the address: the HTML and RSS
+ * interfaces were asked the same question, minutes apart, and one
+ * answered it and the other did not. Bing's HTML result page carries a
+ * large amount of client-side state and can be served in a degraded
+ * form; the RSS interface is a plain XML document and does not have
+ * that failure mode.
+ *
+ * So the RSS interface is asked first, and the HTML one is the fallback.
+ */
+export async function bingRssSearch(
+  query: string,
+  options: SearchOptions = {},
+): Promise<WebSearchResult[]> {
+  const limit = options.limit ?? 10;
+  const params = new URLSearchParams({
+    q: query,
+    format: "rss",
+    count: String(Math.max(limit, 20)),
+  });
+
+  const response = await egressFetch(
+    `https://www.bing.com/search?${params.toString()}`,
+    {
+      method: "GET",
+      headers: searchHeaders({
+        Accept: "application/rss+xml,application/xml,text/xml,*/*",
+      }),
+      signal: AbortSignal.timeout(options.timeoutMs ?? 12_000),
+    },
+    { preferProxy: true },
+  );
+
+  if (response.status < 200 || response.status >= 300) return [];
+
+  const xml = new TextDecoder().decode(response.body);
+  const $ = cheerio.load(xml, { xmlMode: true });
+  const results: WebSearchResult[] = [];
+  const seen = new Set<string>();
+
+  $("item").each((_, item) => {
+    const url = $(item).find("link").text().trim();
+    const title = $(item).find("title").text().trim();
+    const description = $(item).find("description").text().trim();
+    if (!url.startsWith("http") || !title) return;
+    if (seen.has(url)) return;
+    seen.add(url);
+    results.push({ url, title, description, engine: "bing" });
   });
 
   return results.slice(0, limit);
@@ -382,6 +610,38 @@ export async function googleNewsSearch(
  * results" rather than to a 5xx.
  */
 /**
+ * Runs one provider.
+ *
+ * The provider registry lives here so the strict chain and the fan-out
+ * cannot drift apart: a provider that is added to one and not the other
+ * is a provider that works in one mode and not the other, which is
+ * exactly the kind of difference nobody notices until a run comes back
+ * empty.
+ */
+async function runSearchProvider(
+  provider: SearchProvider,
+  query: string,
+  options: SearchOptions,
+): Promise<WebSearchResult[]> {
+  switch (provider) {
+    case "searxng":
+      return await searxngSearch(query, options);
+    case "google_news":
+      return await googleNewsSearch(query, options);
+    case "duckduckgo":
+      return await duckDuckGoSearch(query, options);
+    case "bing": {
+      // The RSS interface first: Bing's HTML result page can come back
+      // in a degraded form that answers a different question, and the
+      // RSS one does not have that failure mode.
+      const rss = await bingRssSearch(query, options);
+      if (rss.length > 0) return rss;
+      return await bingSearch(query, options);
+    }
+  }
+}
+
+/**
  * Runs one search provider under the shared daily quota.
  *
  * The quota is per provider, so one provider being rate-limited cannot starve
@@ -438,44 +698,16 @@ export async function searchWeb(
   const limit = options.limit ?? 10;
   const gate = options.isValidResult;
 
-  try {
-    const searx = await quotaGuardedSearch("searxng", () =>
-      searxngSearch(query, options),
-    );
-    const accepted = applyValidityGate(searx, gate);
-    if (accepted) return accepted;
-  } catch (error) {
-    logger.debug({ error, query }, "SearXNG unavailable");
-  }
-
-  try {
-    const news = await quotaGuardedSearch("google_news", () =>
-      googleNewsSearch(query, options),
-    );
-    const accepted = applyValidityGate(news, gate);
-    if (accepted) return accepted;
-  } catch (error) {
-    logger.debug({ error, query }, "Google News RSS unavailable");
-  }
-
-  try {
-    const ddg = await quotaGuardedSearch("duckduckgo", () =>
-      duckDuckGoSearch(query, options),
-    );
-    const accepted = applyValidityGate(ddg, gate);
-    if (accepted) return accepted.slice(0, limit);
-  } catch (error) {
-    logger.debug({ error, query }, "DuckDuckGo unavailable");
-  }
-
-  try {
-    const bing = await quotaGuardedSearch("bing", () =>
-      bingSearch(query, options),
-    );
-    const accepted = applyValidityGate(bing, gate);
-    if (accepted) return accepted.slice(0, limit);
-  } catch (error) {
-    logger.debug({ error, query }, "Bing unavailable");
+  for (const provider of selectedProviders(options)) {
+    try {
+      const results = await quotaGuardedSearch(provider, () =>
+        runSearchProvider(provider, query, options),
+      );
+      const accepted = applyValidityGate(results, gate);
+      if (accepted) return accepted.slice(0, limit);
+    } catch (error) {
+      logger.debug({ error, query, provider }, `${provider} unavailable`);
+    }
   }
 
   return [];
@@ -484,28 +716,58 @@ export async function searchWeb(
 /**
  * Search every configured engine and merge, for queries where recall matters
  * more than latency (e.g. a new region with no cached results).
+ *
+ * The merge is round-robin rather than concatenation. Concatenation would
+ * let whichever provider answered first fill the whole list, and the
+ * point of asking several engines is that any one of them may be blocked,
+ * degraded or simply empty for a given query — which is exactly what
+ * happened for every query of one discovery run, when DuckDuckGo was
+ * answering with an anti-bot page and the chain gave up on the query
+ * before it reached the engine that had the answer.
+ *
+ * A provider that fails takes its place in the rotation and the others
+ * carry on, so a blocked engine costs recall and nothing else.
  */
 export async function searchWebAll(
   query: string,
   options: SearchOptions = {},
 ): Promise<WebSearchResult[]> {
-  const settled = await Promise.allSettled([
-    quotaGuardedSearch("searxng", () => searxngSearch(query, options)),
-    quotaGuardedSearch("google_news", () => googleNewsSearch(query, options)),
-    quotaGuardedSearch("duckduckgo", () => duckDuckGoSearch(query, options)),
-    quotaGuardedSearch("bing", () => bingSearch(query, options)),
-  ]);
+  const limit = options.limit ?? 10;
+  const providers = selectedProviders(options);
+
+  const settled = await Promise.allSettled(
+    providers.map(async (provider) => {
+      const results = await quotaGuardedSearch(provider, () =>
+        runSearchProvider(provider, query, options),
+      );
+      const gate = options.isValidResult;
+      return gate ? results.filter((result) => gate(result)) : results;
+    }),
+  );
+
+  const lists = settled
+    .filter(
+      (attempt): attempt is PromiseFulfilledResult<WebSearchResult[]> =>
+        attempt.status === "fulfilled",
+    )
+    .map((attempt) => attempt.value);
 
   const seen = new Set<string>();
   const merged: WebSearchResult[] = [];
-  for (const result of settled) {
-    if (result.status !== "fulfilled") continue;
-    for (const item of result.value) {
+  let exhausted = false;
+
+  for (let index = 0; !exhausted && merged.length < limit; index += 1) {
+    exhausted = true;
+    for (const list of lists) {
+      const item = list[index];
+      if (!item) continue;
+      exhausted = false;
       if (seen.has(item.url)) continue;
-      if (options.isValidResult && !options.isValidResult(item)) continue;
       seen.add(item.url);
       merged.push(item);
+      if (merged.length >= limit) break;
     }
   }
+
   return merged;
 }

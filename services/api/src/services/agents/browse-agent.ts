@@ -4,6 +4,7 @@ import { config } from "../../config.js";
 import { BaseDiscoveryAgent, type AgentContext, type AgentRunResult } from "./base.js";
 import { scrapeUrl } from "../engine/fetch.js";
 import { extractJob, looksLikeJobPosting } from "../engine/extract.js";
+import { findJobLinks } from "../engine/discover.js";
 import { reserveDailyQuota } from "../engine/quota.js";
 import {
   isUnreadableRedirectWrapper,
@@ -32,6 +33,9 @@ export class BrowseAgent extends BaseDiscoveryAgent {
   readonly name = "Page Browse & Extraction Agent";
   readonly kind = "browse";
   readonly scheduleIntervalMinutes = 30;
+
+  /** How many postings one listing page may contribute. Set per run. */
+  private maxExpandedLinks = 15;
 
   async run(ctx: AgentContext): Promise<AgentRunResult> {
     const batchSize = Number(ctx.config.batch_size ?? 25);
@@ -83,8 +87,14 @@ export class BrowseAgent extends BaseDiscoveryAgent {
     let totalClosed = 0;
     let totalSkipped = 0;
     let totalFailed = 0;
+    let totalExpanded = 0;
     let stoppedOnBudget = false;
     const errors: string[] = [];
+
+    // How many postings one listing page may contribute. A listing can
+    // hold hundreds; the queue drains at a few dozen a cycle, so a page
+    // that names more than this would push everything else out of reach.
+    this.maxExpandedLinks = Number(ctx.config.max_expanded_links ?? 15);
 
     for (const row of results.rows) {
       if (Date.now() > deadline) {
@@ -151,31 +161,80 @@ export class BrowseAgent extends BaseDiscoveryAgent {
           throw new Error(`HTTP ${scraped.status}`);
         }
 
-        const job = await extractJob({
-          url: scraped.finalUrl,
-          markdown: scraped.markdown,
-          metadata: scraped.metadata,
+        // Is this a posting, or a page of postings?
+        //
+        // The answer decides everything that follows: whether a model is
+        // asked to fill the gaps, and whether the page is worth mining
+        // for the postings inside it. It is answered from the page
+        // itself rather than from the title the search engine gave,
+        // because the title is wrong often enough to matter — a posting
+        // whose board is called "Jobs in Kenya", a listing whose title
+        // names a role.
+        const postingLike = looksLikeJobPosting(scraped.markdown, {
           jsonLd: scraped.jsonLd,
-          useLlm,
+          url: scraped.finalUrl,
         });
 
+        // A page that looks like a posting is read as one. A page that
+        // does not is not asked of a model: the model is the expensive
+        // part of the read, and there is nothing on the page for it to
+        // extract.
+        const job = postingLike
+          ? await extractJob({
+              url: scraped.finalUrl,
+              markdown: scraped.markdown,
+              metadata: scraped.metadata,
+              jsonLd: scraped.jsonLd,
+              useLlm,
+            })
+          : null;
+
         const usable =
+          job !== null &&
           Boolean(job.title) &&
           job.title !== "Untitled position" &&
-          job.description.length >= 60 &&
           // A title and sixty characters of text is a page, not a job
           // posting. Without this the catalogue fills up with whatever
           // the search engine happened to rank.
-          looksLikeJobPosting(scraped.markdown, {
-            jsonLd: scraped.jsonLd,
-            url: scraped.finalUrl,
-          });
+          job.description.length >= 60;
 
         if (!usable) {
-          // No job posting on the page. That is either a broken read or a
-          // closed vacancy — only a *complete* read that says so is treated
-          // as a closure, because closing a live vacancy on a bad fetch is
-          // much worse than missing one closure for a cycle.
+          // Not a posting. It may still be a page of them.
+          //
+          // Almost every job query is answered with listings — "Legal
+          // Jobs in Kenya (97 Open Roles)", "Legal Jobs in Kenya
+          // November 2026" — and those pages are where the postings
+          // actually are. Read as postings they yield nothing, and the
+          // read is wasted; read as listings they yield a dozen URLs.
+          //
+          // The backlog was 700-odd such pages, and every one of them
+          // was being read as a posting and failing.
+          const expanded = await this.expandListing(
+            scraped.html,
+            scraped.finalUrl,
+            row.query,
+            ctx.agentId,
+          );
+
+          if (expanded.links > 0) {
+            // It is a listing. It is done — whether its postings were
+            // new or already known, the page has been read and what it
+            // had to give has been queued.
+            totalExpanded += expanded.queued;
+            await query(
+              `UPDATE discovery_search_results
+                  SET status = 'done', processed_at = now(), error = NULL
+                WHERE id = $1`,
+              [row.id],
+            );
+            continue;
+          }
+
+          // No job posting on the page, and no postings inside it.
+          // That is either a broken read or a closed vacancy — only a
+          // *complete* read that says so is treated as a closure,
+          // because closing a live vacancy on a bad fetch is much
+          // worse than missing one closure for a cycle.
           const closed = looksLikeClosedListing(scraped.markdown, {
             complete: !scraped.looksLikeSpa,
           });
@@ -218,6 +277,9 @@ export class BrowseAgent extends BaseDiscoveryAgent {
           );
           continue;
         }
+
+        // The page is a posting, and the extraction produced one.
+        if (!job) continue;
 
         const existing = await query<{
           id: string;
@@ -372,10 +434,63 @@ export class BrowseAgent extends BaseDiscoveryAgent {
         changed: totalChanged,
         closed: totalClosed,
         skipped: totalSkipped,
+        // The postings found inside the pages of postings.
+        expanded: totalExpanded,
         llm: useLlm,
         budgetMs,
         stoppedOnBudget,
       },
     };
+  }
+
+  /**
+   * Mines a page of postings for the postings inside it.
+   *
+   * The links are queued, not read: a listing can hold fifty postings
+   * and the browse agent has a budget of twenty pages a cycle. So the
+   * listing costs one read and the postings it names are read over the
+   * cycles that follow.
+   *
+   * The cap is on the number of links taken from one page. A board that
+   * publishes five hundred openings would otherwise put five hundred
+   * rows in a queue that drains at forty a day, and the postings behind
+   * the first five hundred would never be reached.
+   *
+   * The two counts are different on purpose. `links` says the page was
+   * a listing — which is true whether the postings on it are new or
+   * already known — and `queued` says how many of them were new.
+   */
+  private async expandListing(
+    html: string,
+    baseUrl: string,
+    queryLabel: string,
+    agentId: string,
+  ): Promise<{ links: number; queued: number }> {
+    const links = findJobLinks(html, baseUrl, this.maxExpandedLinks).filter(
+      (link) => link !== baseUrl,
+    );
+    if (links.length === 0) return { links: 0, queued: 0 };
+
+    let queued = 0;
+    for (const link of links) {
+      try {
+        const inserted = await query<{ id: string }>(
+          `INSERT INTO discovery_search_results
+              (agent_id, query, source_platform, source_url, title, snippet, fetched_at)
+           VALUES ($1, $2, 'listing_link', $3, NULL, NULL, now())
+           ON CONFLICT (source_url) DO NOTHING
+           RETURNING id`,
+          [agentId, queryLabel, link],
+        );
+        if (inserted.rows.length > 0) queued += 1;
+      } catch (error) {
+        logger.debug(
+          { error: error instanceof Error ? error.message : String(error), link },
+          "Listing expansion: link insert failed",
+        );
+      }
+    }
+
+    return { links: links.length, queued };
   }
 }
