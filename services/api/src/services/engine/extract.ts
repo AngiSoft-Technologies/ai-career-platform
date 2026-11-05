@@ -25,6 +25,7 @@ import { cleanJobTitle } from "./job-title.js";
 import {
   canonicalCompanyKey,
   normaliseCompanyName,
+  rawCompanyKey,
 } from "./company.js";
 
 /**
@@ -724,7 +725,7 @@ export function computeFingerprint(
   // whether two readings are the same posting. A fingerprint built on
   // the raw name changes when the name is spelled differently, and the
   // deduplication then sees one posting as two.
-  const employer = canonicalCompanyKey(company) || normalise(company);
+  const employer = canonicalCompanyKey(company) || rawCompanyKey(company) || normalise(company);
   const day =
     postedAt === null
       ? ""

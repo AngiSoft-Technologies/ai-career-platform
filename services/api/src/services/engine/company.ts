@@ -310,6 +310,33 @@ export function canonicalCompanyKey(
 }
 
 /**
+ * The key of a name that is not an employer.
+ *
+ * "Writer", "Legal Counsel - 12 month FTC at Rightmove Greenhouse" and
+ * "Ashby" are not employers — they are a job title, a posting's
+ * heading and a board's own name. The canonical key refuses them, and
+ * that is right: an employer called "Software Engineer" is worse than
+ * an employer with no name at all.
+ *
+ * But they still need an identity of their own, or every such posting
+ * in the catalogue would share one — and two different employers' roles
+ * would look like the same job twice over.
+ *
+ * So the raw name is keyed as it stands. This is the fallback, never
+ * the rule.
+ */
+export function rawCompanyKey(value: string | null | undefined): string {
+  if (!value) return "";
+  return value
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "")
+    .slice(0, 80);
+}
+
+/**
  * The catalogue's slug for an employer.
  *
  * The slug is the readable form of the name — "kcb-bank",

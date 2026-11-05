@@ -43,14 +43,18 @@ export class KenyaPlatformAgent extends BaseDiscoveryAgent {
   readonly scheduleIntervalMinutes = 30;
 
   async run(ctx: AgentContext): Promise<AgentRunResult> {
-    const maxTargets = Number(ctx.config.max_targets_per_run ?? 12);
-    const maxSitesPerCycle = Number(ctx.config.max_sites_per_cycle ?? 10);
+    const maxTargets = Number(ctx.config.max_targets_per_run ?? 16);
+    const maxSitesPerCycle = Number(ctx.config.max_sites_per_cycle ?? 12);
     const includeMicroTask = ctx.config.micro_task_platforms !== false;
 
     // A cycle has a wall-clock budget. One target can cost a crawl plus a
     // screen capture plus a search fallback, so without a budget a dozen
     // slow targets eat the whole ingestion window.
-    const budgetMs = Number(ctx.config.budget_ms ?? 240_000);
+    //
+    // The budget is what the cycle actually ends on: the targets are
+    // cheaper now that the board a careers page points at is read, but
+    // the slow ones still cost a crawl each.
+    const budgetMs = Number(ctx.config.budget_ms ?? 360_000);
     const deadline = Date.now() + budgetMs;
 
     const targets = await this.loadTargets(maxTargets, includeMicroTask);

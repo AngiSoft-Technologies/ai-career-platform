@@ -48,6 +48,7 @@ import pg from "pg";
 import {
   canonicalCompanyKey,
   normaliseCompanyName,
+  rawCompanyKey,
 } from "../services/api/src/services/engine/company.js";
 import {
   decodeEntities,
@@ -163,7 +164,8 @@ async function main(): Promise<void> {
 
     for (const row of companies.rows) {
       const normalised = normaliseCompanyName(row.name);
-      const key = canonicalCompanyKey(normalised ?? row.name);
+      const key =
+        canonicalCompanyKey(normalised ?? row.name) || rawCompanyKey(row.name);
       if (!key) continue;
 
       const known = survivorByKey.get(key);
@@ -251,9 +253,9 @@ async function main(): Promise<void> {
 
     const nameToSurvivor = new Map<string, CompanyRow>();
     for (const row of companies.rows) {
-      const key = canonicalCompanyKey(
-        normaliseCompanyName(row.name) ?? row.name,
-      );
+      const key =
+        canonicalCompanyKey(normaliseCompanyName(row.name) ?? row.name) ||
+        rawCompanyKey(row.name);
       const survivor = survivorByKey.get(key);
       if (survivor) nameToSurvivor.set(row.name, survivor);
     }

@@ -52,6 +52,7 @@ import {
   companySlug,
   isPlausibleEmployer,
   normaliseCompanyName,
+  rawCompanyKey,
   sameCompany,
 } from "../services/api/src/services/engine/company.js";
 import { extractJobDeterministic } from "../services/api/src/services/engine/extract.js";
@@ -803,6 +804,32 @@ console.log("\n[16] the identity of an employer");
     "an employer named after its domain is kept",
     normaliseCompanyName("Happyrobot.ai") === "Happyrobot.ai",
     String(normaliseCompanyName("Happyrobot.ai")),
+  );
+
+  // A name that is not an employer still has an identity of its own, or
+  // every such posting in the catalogue would share one.
+  check(
+    "a name that is not an employer has no canonical key",
+    canonicalCompanyKey("Writer") === "",
+    canonicalCompanyKey("Writer"),
+  );
+  check(
+    "a name that is not an employer still has a raw key",
+    rawCompanyKey("Writer") === "writer",
+    rawCompanyKey("Writer"),
+  );
+  check(
+    "two such names do not share a key",
+    rawCompanyKey("Writer") !== rawCompanyKey("Ashby"),
+  );
+  check(
+    "an empty name has no key at all",
+    rawCompanyKey("") === "" && rawCompanyKey(null) === "",
+  );
+  check(
+    "the raw key ignores the spacing",
+    rawCompanyKey("Legal Counsel - 12 month FTC") ===
+      rawCompanyKey("legalcounsel12monthftc"),
   );
 
   // -------------------------------------------------------------------------

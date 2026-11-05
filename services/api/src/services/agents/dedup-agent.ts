@@ -4,6 +4,7 @@ import {
   canonicalCompanyKey,
   companySlug,
   normaliseCompanyName,
+  rawCompanyKey,
 } from "../engine/company.js";
 
 /**
@@ -365,6 +366,7 @@ export class DeduplicationAgent extends BaseDiscoveryAgent {
           const displayName = (companyName || "Unknown employer").slice(0, 200);
           const key =
             canonicalCompanyKey(companyName) ||
+            rawCompanyKey(rawName) ||
             canonicalCompanyKey("Unknown employer");
           const slug =
             companySlug(companyName) ||
