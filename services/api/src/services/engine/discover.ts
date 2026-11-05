@@ -20,7 +20,12 @@
 
 import { logger } from "../../logger.js";
 import { fetchJson, scrapeUrl } from "./fetch.js";
-import { extractJobPostingsJsonLd, htmlToMarkdown } from "./html.js";
+import {
+  decodeEntities,
+  extractJobPostingsJsonLd,
+  htmlToMarkdown,
+} from "./html.js";
+import { normaliseCompanyName } from "./company.js";
 import type { RawJob } from "./sources.js";
 
 export type AtsKind =
@@ -84,13 +89,73 @@ function prettify(token: string): string {
     .trim();
 }
 
-function decodeEntities(value: string): string {
-  return value
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, "&");
+/**
+ * The board's own page.
+ *
+ * The board's URL token is a slug the board was given — "weloglobal" —
+ * and turning that into a name ("Weloglobal") is a guess. The board's
+ * page knows the employer's name: its title is "Welo Global".
+ */
+function boardPageUrl(board: AtsBoard): string | null {
+  const token = board.token;
+  switch (board.kind) {
+    case "lever":
+      return `https://jobs.lever.co/${encodeURIComponent(token)}`;
+    case "greenhouse":
+      return `https://boards.greenhouse.io/${encodeURIComponent(token)}`;
+    case "ashby":
+      return `https://jobs.ashbyhq.com/${encodeURIComponent(token)}`;
+    case "workable":
+      return `https://apply.workable.com/${encodeURIComponent(token)}/`;
+    case "smartrecruiters":
+      return `https://jobs.smartrecruiters.com/${encodeURIComponent(token)}`;
+    case "recruitee":
+      return `https://${token}.recruitee.com`;
+    case "workday": {
+      const [tenant, wd, site] = token.split("|");
+      if (!tenant || !wd || !site) return null;
+      return `https://${tenant}.${wd}.myworkdayjobs.com/${site}`;
+    }
+    case "oracle": {
+      const [host, site] = token.split("|");
+      if (!host || !site) return null;
+      return `https://${host}/hcmUI/CandidateExperience/en/sites/${site}`;
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * The employer's name, as the board writes it.
+ *
+ * A token with a separator in it ("acme-corp") already makes a
+ * readable name, and no request is needed. A single run-on token
+ * ("weloglobal") makes a guess, and one request to the board's own page
+ * buys the right name for every posting on it — the page cache holds it
+ * for the next cycle.
+ */
+async function boardEmployerName(board: AtsBoard): Promise<string> {
+  const fallback = normaliseCompanyName(prettify(board.token)) ?? prettify(board.token);
+  // A token that reads as words is good enough on its own.
+  if (/[-_]/.test(board.token)) return fallback;
+
+  const page = boardPageUrl(board);
+  if (!page) return fallback;
+
+  try {
+    const scraped = await scrapeUrl(page, { onlyMainContent: false });
+    const name = normaliseCompanyName(
+      scraped.metadata?.title ?? scraped.metadata?.ogTitle ?? null,
+    );
+    if (name) return name;
+  } catch (error) {
+    logger.debug(
+      { board: board.kind, token: board.token, error },
+      "Board name lookup failed; using the token",
+    );
+  }
+  return fallback;
 }
 
 function toDescription(html: string | null | undefined): string {
@@ -582,26 +647,43 @@ async function oracleBoard(token: string): Promise<RawJob[]> {
 }
 
 export async function fetchAtsBoard(board: AtsBoard): Promise<RawJob[]> {
-  switch (board.kind) {
-    case "greenhouse":
-      return greenhouseBoard(board.token);
-    case "lever":
-      return leverBoard(board.token);
-    case "ashby":
-      return ashbyBoard(board.token);
-    case "workable":
-      return workableBoard(board.token);
-    case "smartrecruiters":
-      return smartRecruitersBoard(board.token);
-    case "recruitee":
-      return recruiteeBoard(board.token);
-    case "workday":
-      return workdayBoard(board.token);
-    case "oracle":
-      return oracleBoard(board.token);
-    default:
-      return [];
-  }
+  // The employer's name is resolved once for the whole board.
+  //
+  // Every posting on the board belongs to the same employer, so the
+  // board is asked once and the answer is applied to all of them. The
+  // postings themselves carry no employer name — a board is a list of
+  // roles, and the employer's name is on the board's page.
+  const employer = await boardEmployerName(board);
+
+  const jobs = await (async (): Promise<RawJob[]> => {
+    switch (board.kind) {
+      case "greenhouse":
+        return greenhouseBoard(board.token);
+      case "lever":
+        return leverBoard(board.token);
+      case "ashby":
+        return ashbyBoard(board.token);
+      case "workable":
+        return workableBoard(board.token);
+      case "smartrecruiters":
+        return smartRecruitersBoard(board.token);
+      case "recruitee":
+        return recruiteeBoard(board.token);
+      case "workday":
+        return workdayBoard(board.token);
+      case "oracle":
+        return oracleBoard(board.token);
+      default:
+        return [];
+    }
+  })();
+
+  if (jobs.length === 0) return jobs;
+
+  return jobs.map((job) => ({
+    ...job,
+    company: employer,
+  }));
 }
 
 /**

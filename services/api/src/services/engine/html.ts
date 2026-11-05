@@ -366,7 +366,7 @@ const ENTITY_RE =
  * `&lt;` into `<`, which is a different thing from the text the page
  * actually contains.
  */
-function decodeEntities(value: string): string {
+export function decodeEntities(value: string): string {
   return value.replace(ENTITY_RE, (match, entity: string) => {
     const key = entity.toLowerCase();
     switch (key) {
@@ -676,6 +676,13 @@ export function extractJobPostingsJsonLd(html: string): JsonLdJobPosting[] {
 }
 
 function parseJobPostingNode(posting: Record<string, unknown>): JsonLdJobPosting {
+  // The entities are decoded on the way in.
+  //
+  // A JSON-LD block is not HTML — the browser hands it to the parser
+  // as it stands — but the sites that publish them often write the
+  // strings as though it were: a posting's title arrives as "Arabic
+  // Linguistic Evaluator & Functional Tester", and the catalogue
+  // then shows the entity to the user and searches for it in that form.
   const company =
     textOf(posting.hiringOrganization) ??
     textOf((posting.hiringOrganization as Record<string, unknown>)?.name);
@@ -720,7 +727,7 @@ function parseJobPostingNode(posting: Record<string, unknown>): JsonLdJobPosting
 
   const descriptionRaw = textOf(posting.description);
   const description = descriptionRaw
-    ? htmlToMarkdown(descriptionRaw, { onlyMainContent: false })
+    ? htmlToMarkdown(decodeEntities(descriptionRaw), { onlyMainContent: false })
     : undefined;
 
   const applyUrl =
@@ -728,17 +735,20 @@ function parseJobPostingNode(posting: Record<string, unknown>): JsonLdJobPosting
     textOf(posting.applicationContact) ??
     textOf(posting.sameAs);
 
+  const text = (value: string | undefined): string | undefined =>
+    value === undefined ? undefined : decodeEntities(value);
+
   return {
-    title: textOf(posting.title),
+    title: text(textOf(posting.title)),
     description,
-    company,
-    location: locationRaw,
-    city,
-    country,
-    employmentType,
+    company: text(company),
+    location: text(locationRaw),
+    city: text(city),
+    country: text(country),
+    employmentType: text(employmentType),
     datePosted: textOf(posting.datePosted),
     validThrough: textOf(posting.validThrough),
-    applyUrl,
+    applyUrl: text(applyUrl),
     salaryMin: Number.isFinite(salaryMin) ? salaryMin : undefined,
     salaryMax: Number.isFinite(salaryMax) ? salaryMax : undefined,
     currency: textOf(salary?.currency),

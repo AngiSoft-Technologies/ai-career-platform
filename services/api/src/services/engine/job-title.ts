@@ -191,33 +191,132 @@ export function isAboutQuery(
  * because it is what the title is *for* rather than what it looks like.
  */
 export const ROLE_WORDS = new Set([
-  "accountant", "actuary", "administrator", "advisor", "adviser", "agent",
-  "ambassador", "analyst", "appraiser", "apprentice", "architect", "archivist",
+  "accountant", "actuary", "actor", "administrator", "advisor", "adviser",
+  "agent",
+  "ambassador", "analista", "analyst", "annotator", "appraiser", "apprentice",
+  "architect", "archivist",
   "artist", "assembler", "assessor", "assistant", "associate", "attendant",
-  "auditor", "author", "babysitter", "banker", "barber", "barista", "bartender",
+  "auditor", "author",
+  "babysitter", "banker", "barber", "barista", "bartender",
   "baker", "beam", "broker", "buyer", "carer", "carpenter", "cashier",
-  "caterer", "ceo", "cfo", "chef", "cleaner", "clerk", "coach", "consultant",
+  "caterer", "ceo", "cfo", "chef", "cleaner", "clerk", "coach", "comercial",
+  "consultant",
   "contractor", "controller", "coordinator", "copywriter", "counsel",
   "counsellor", "courier", "curator", "customer", "cto", "designer",
-  "developer", "director", "dispatcher", "driver", "editor", "electrician",
-  "engineer", "estimator", "executive", "expert", "facilitator", "farmer",
+  "developer", "directeur", "director", "dispatcher", "dispenser", "driver",
+  "docent",
+  "editor", "electrician",
+  "engineer", "estimator", "evaluator", "executive", "expert", "facilitator",
+  "farmer",
   "fashion", "firefighter", "fitter", "florist", "founder", "freelance",
   "generalist", "gardener", "graduate", "guard", "head", "helper", "host",
-  "inspector", "instructor", "intern", "internship", "keeper", "labourer",
-  "laborer", "leader", "lecturer", "librarian", "lifeguard", "locksmith",
-  "machinist", "manager", "marketer", "maser", "mechanic", "mentor", "moderator",
-  "nanny", "notary", "nurse", "officer", "operative", "operator", "owner",
-  "painter", "paralegal", "partner", "pharmacist", "photographer", "physician",
-  "picker", "planner", "plumber", "porter", "president", "producer",
-  "professional", "programmer", "proofreader", "psychologist", "publisher",
-  "realtor", "receptionist", "recruiter", "registrar", "reporter",
-  "representative", "researcher", "roofer", "runner", "salesperson",
-  "scientist", "secretary", "seller", "solicitor", "specialist", "steward",
+  "infirmier", "inspector", "instructor", "intern", "internship",
+  "interviewer", "ingeniero",
+  "keeper", "labourer",
+  "laborer", "leader", "lead", "lecturer", "librarian", "lifeguard",
+  "linguist",
+  "locksmith", "machinist", "manager", "marketer", "maser", "mechanic",
+  "mentor", "monteur", "moderator",
+  "nanny", "notary", "nurse", "officer", "ombudsman", "operative",
+  "operator", "owner",
+  "painter", "paralegal", "partner", "pharmacist", "photographer",
+  "physician", "picker", "planner", "plumber", "porter", "praktikant",
+  "praktikum", "principal", "president", "producer",
+  "professional", "programador", "programmer", "proofreader", "psychologist",
+  "publisher",
+  "rater", "realtor", "receptionist", "recruiter", "referent", "registrar",
+  "reporter",
+  "representative", "responsable", "researcher", "reviewer", "roofer",
+  "runner", "salesperson",
+  "scientist", "secretary", "seller", "solicitor", "specialist", "staff",
+  "stage", "statistician", "support",
+  "stagiaire", "steward",
   "strategist", "stylist", "supervisor", "surveyor", "tailor", "teller",
-  "teacher", "technician", "technologist", "trainee", "trainer", "translator",
-  "truck", "tutor", "underwriter", "usher", "valuer", "verifier", "volunteer",
-  "waiter", "waitress", "weaver", "welder", "worker", "writer",
+  "teacher", "technician", "technicien", "technico", "technologist",
+  "tekenaar", "tester", "trainee", "trainer", "translator",
+  "truck", "tutor", "underwriter", "usher", "valuer",
+  "vendeur", "verifier", "vp", "volunteer",
+  "waiter", "waitress", "weaver", "welder", "werkstudent", "worker",
+  "writer", "student",
+  // The words that carry an accent are the French and German ones. They
+  // are part of the word, so the rule reads them as letters and keeps
+  // the accent.
+  "chargé", "ingénieur", "médecin", "übersetzer",
 ]);
+
+/**
+ * The role words that live at the end of a compound.
+ *
+ * A compound puts the role at its end: "Softwareentwickler" is a
+ * developer, "Steuerberater" is an adviser, "Regionalleiter" is a
+ * manager, "Kreditanalyst" is an analyst, "Junior Accountmanager" is a
+ * manager. The words cannot be listed — there are thousands of them —
+ * so the role is found at the end of the word instead.
+ *
+ * Without this, a quarter of the catalogue was invisible to the rule:
+ * six hundred and fifty-six of its titles carried the "(m/w/d)" marker
+ * and every one of them was a title the rule could not read.
+ */
+export const ROLE_SUFFIXES = [
+  "accountmanager",
+  "administrator",
+  "advisor",
+  "agent",
+  "analyst",
+  "architect",
+  "architekt",
+  "assistant",
+  "auditor",
+  "berater",
+  "betreuer",
+  "broker",
+  "buyer",
+  "chef",
+  "consultant",
+  "coordinator",
+  "developer",
+  "designer",
+  "director",
+  "driver",
+  "einkäufer",
+  "elektroniker",
+  "editor",
+  "engineer",
+  "entwickler",
+  "executive",
+  "ingenieur",
+  "inspector",
+  "instructor",
+  "kosmetiker",
+  "leiter",
+  "lecturer",
+  "librarian",
+  "manager",
+  "mitarbeiter",
+  "monteur",
+  "operator",
+  "painter",
+  "praktikant",
+  "president",
+  "prüfer",
+  "referent",
+  "researcher",
+  "responsible",
+  "sachbearbeiter",
+  "scientist",
+  "seller",
+  "specialist",
+  "supervisor",
+  "technician",
+  "techniker",
+  "teacher",
+  "trainer",
+  "translator",
+  "tutor",
+  "welder",
+  "writer",
+  "werkvoorbereider",
+] as const;
 
 /**
  * True when the title names a role.
@@ -230,19 +329,28 @@ export const ROLE_WORDS = new Set([
  * A plural counts: "Engineers" names a role as plainly as "Engineer"
  * does. A singular ending in "s" is not enough on its own — "Sales" and
  * "Jobs" are not roles.
+ *
+ * The words are read as letters, not as ASCII: "Chargé de support" and
+ * "Ingénieur d'études" are roles, and the accents are part of the
+ * word.
  */
 export function namesARole(title: string): boolean {
   const words = title
     .toLowerCase()
-    .replace(/[^a-z\s-]/g, " ")
+    .replace(/[^\p{L}\s-]/gu, " ")
     .split(/[\s-]+/)
     .filter(Boolean);
 
   for (const word of words) {
-    if (ROLE_WORDS.has(word)) return true;
-    if (word.endsWith("s") && word.length > 3) {
-      const stem = word.slice(0, -1);
-      if (ROLE_WORDS.has(stem)) return true;
+    // "Engineers" names a role as plainly as "Engineer" does.
+    const singular =
+      word.endsWith("s") && word.length > 3 ? word.slice(0, -1) : word;
+
+    for (const candidate of new Set([word, singular])) {
+      if (ROLE_WORDS.has(candidate)) return true;
+      for (const suffix of ROLE_SUFFIXES) {
+        if (candidate.endsWith(suffix)) return true;
+      }
     }
   }
   return false;

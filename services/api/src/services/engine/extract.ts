@@ -22,6 +22,10 @@ import { priceCallWithFallback } from "./cost-tracking.js";
 import { reserveBudget } from "./reservation.js";
 import type { JsonLdJobPosting, PageMetadata } from "./html.js";
 import { cleanJobTitle } from "./job-title.js";
+import {
+  canonicalCompanyKey,
+  normaliseCompanyName,
+} from "./company.js";
 
 /**
  * The title rules live in their own module, because the search chain
@@ -223,6 +227,19 @@ export function looksLikeJobPosting(
 }
 
 /**
+ * True when a value is a placeholder rather than a value.
+ *
+ * "Untitled position" is what the deterministic extractor returns when it
+ * found no title. It is not a title, and a model that fills the gap is
+ * allowed to replace it.
+ */
+function isPlaceholder(value: string | null | undefined): boolean {
+  if (value === null || value === undefined) return true;
+  const trimmed = value.trim();
+  return trimmed.length === 0 || trimmed === "Untitled position";
+}
+
+/**
  * Cleans a company name out of page chrome.
  *
  * The `og:site_name` of a page is whatever the page says it is, and on
@@ -230,35 +247,14 @@ export function looksLikeJobPosting(
  * leftover tooltip: "cookies-similar-technology \"Opens in new tab\")".
  * A name like that is worse than no name, because it becomes a company
  * row in the catalogue.
+ *
+ * The rules live in `company.ts`, because the employer has to be
+ * identified the same way everywhere: by the extractor that reads the
+ * posting, by the promotion that writes the catalogue row, and by the
+ * change judge that decides whether the employer changed.
  */
 export function cleanCompanyName(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const cleaned = value
-    .replace(/\s*\(?\s*opens in new tab\s*\)?\s*/gi, " ")
-    .replace(/["'`]+/g, "")
-    .replace(/[{}<>\[\]()]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (!cleaned) return null;
-  // A CSS selector, a path fragment or a sentence is not a company.
-  if (/[-_]{2,}|[.#]\w|\/|\\/.test(cleaned)) return null;
-  // All-lowercase kebab-case is the shape of a CSS class, not of a
-  // company: "cookies-similar-technology". A real name with a hyphen is
-  // written "Hewlett-Packard", not "hewlett-packard".
-  if (/^[a-z0-9]+(?:-[a-z0-9]+)+$/.test(cleaned)) return null;
-  if (cleaned.length < 2 || cleaned.length > 120) return null;
-  // Five words is a sentence, not a company.
-  if (cleaned.split(/\s+/).length > 5) return null;
-  // "Cookies", "Privacy policy", "Skip to main content" and friends.
-  if (
-    /^(cookies?|privacy( policy| notice)?|terms( of (use|service))?|skip to .+|home|menu|search|login|sign in|advertisement|sponsored)$/i.test(
-      cleaned,
-    )
-  ) {
-    return null;
-  }
-  return cleaned;
+  return normaliseCompanyName(value);
 }
 
 const AFRICAN_COUNTRIES = [
@@ -583,20 +579,40 @@ ${input.markdown.slice(0, 9_000)}`;
       .trim();
     const parsed = JSON.parse(jsonText) as Record<string, unknown>;
 
+    // The model fills gaps. It does not overwrite what the page said.
+    //
+    // It used to overwrite, and the cost was real. The posting's own
+    // JSON-LD named the employer "Welo Global"; the model read the same
+    // page and answered "Welocalize" — the employer's better-known
+    // brand. Every re-read of that posting was then recorded as "the
+    // employer changed", and the catalogue ended up with one employer's
+    // roles under three different names.
+    //
+    // The page is the authority. The model is the fallback for the
+    // fields the page left out — which is what this function has always
+    // claimed to be.
     const locationRaw =
-      typeof parsed.location === "string" ? parsed.location : input.current.locationRaw;
+      typeof parsed.location === "string" && parsed.location.trim().length > 1
+        ? parsed.location
+        : input.current.locationRaw;
     const resolved = resolveLocation(locationRaw);
     const title =
-      typeof parsed.title === "string" && parsed.title.trim().length > 1
+      isPlaceholder(input.current.title) &&
+      typeof parsed.title === "string" &&
+      parsed.title.trim().length > 1
         ? parsed.title.trim()
         : input.current.title;
     const company =
-      typeof parsed.company === "string" && parsed.company.trim().length > 1
-        ? parsed.company.trim()
+      !input.current.company && typeof parsed.company === "string"
+        ? normaliseCompanyName(parsed.company.trim())
         : input.current.company;
 
     let applyUrl = input.current.applyUrl;
-    if (typeof parsed.applyUrl === "string" && parsed.applyUrl.startsWith("http")) {
+    if (
+      isPlaceholder(input.current.applyUrl) &&
+      typeof parsed.applyUrl === "string" &&
+      parsed.applyUrl.startsWith("http")
+    ) {
       try {
         applyUrl = new URL(parsed.applyUrl).toString();
       } catch {
@@ -610,39 +626,53 @@ ${input.markdown.slice(0, 9_000)}`;
       company,
       locationRaw,
       country:
-        typeof parsed.country === "string" && parsed.country.trim()
+        input.current.country ??
+        resolved.country ??
+        (typeof parsed.country === "string" && parsed.country.trim()
           ? parsed.country.trim()
-          : resolved.country ?? input.current.country,
+          : input.current.country),
       city:
-        typeof parsed.city === "string" && parsed.city.trim()
+        input.current.city ??
+        resolved.city ??
+        (typeof parsed.city === "string" && parsed.city.trim()
           ? parsed.city.trim()
-          : resolved.city ?? input.current.city,
+          : input.current.city),
       workMode:
-        parsed.workMode === "remote" ||
+        input.current.workMode ??
+        (parsed.workMode === "remote" ||
         parsed.workMode === "hybrid" ||
         parsed.workMode === "onsite"
           ? parsed.workMode
-          : input.current.workMode,
+          : input.current.workMode),
       employmentType:
+        input.current.employmentType ??
         normaliseEmployment(
           typeof parsed.employmentType === "string" ? parsed.employmentType : null,
-        ) ?? input.current.employmentType,
+        ) ??
+        input.current.employmentType,
       salaryMin:
-        typeof parsed.salaryMin === "number" && parsed.salaryMin > 0
+        input.current.salaryMin ??
+        (typeof parsed.salaryMin === "number" && parsed.salaryMin > 0
           ? parsed.salaryMin
-          : input.current.salaryMin,
+          : input.current.salaryMin),
       salaryMax:
-        typeof parsed.salaryMax === "number" && parsed.salaryMax > 0
+        input.current.salaryMax ??
+        (typeof parsed.salaryMax === "number" && parsed.salaryMax > 0
           ? parsed.salaryMax
-          : input.current.salaryMax,
+          : input.current.salaryMax),
       currency:
-        typeof parsed.currency === "string" && parsed.currency.trim()
+        input.current.currency ??
+        (typeof parsed.currency === "string" && parsed.currency.trim()
           ? parsed.currency.trim().toUpperCase()
-          : input.current.currency,
+          : input.current.currency),
       skills:
-        Array.isArray(parsed.skills) && parsed.skills.length > 0
-          ? parsed.skills.filter((skill): skill is string => typeof skill === "string").slice(0, 20)
-          : input.current.skills,
+        input.current.skills.length > 0
+          ? input.current.skills
+          : Array.isArray(parsed.skills) && parsed.skills.length > 0
+            ? parsed.skills
+                .filter((skill): skill is string => typeof skill === "string")
+                .slice(0, 20)
+            : input.current.skills,
       applyUrl,
       fingerprint: computeFingerprint(
         company ?? "unknown",
@@ -687,12 +717,20 @@ export function computeFingerprint(
 ): string {
   const normalise = (value: string) =>
     value.toLowerCase().replace(/\s+/g, " ").trim();
+  // The employer's *canonical* key, not its name.
+  //
+  // The name of an employer is written several ways — "Welo Global",
+  // "Weloglobal", "Welo  Global" — and the fingerprint is what says
+  // whether two readings are the same posting. A fingerprint built on
+  // the raw name changes when the name is spelled differently, and the
+  // deduplication then sees one posting as two.
+  const employer = canonicalCompanyKey(company) || normalise(company);
   const day =
     postedAt === null
       ? ""
       : new Date(postedAt).toISOString().slice(0, 10);
   return createHash("sha1")
-    .update(`${normalise(company)}|${normalise(title)}|${normalise(city)}|${day}`)
+    .update(`${employer}|${normalise(title)}|${normalise(city)}|${day}`)
     .digest("hex");
 }
 

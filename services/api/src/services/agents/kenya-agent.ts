@@ -3,7 +3,9 @@ import { logger } from "../../logger.js";
 import { BaseDiscoveryAgent, type AgentContext, type AgentRunResult } from "./base.js";
 import { searchWebPlanned } from "../engine/search-orchestrator.js";
 import { discoverFromDomainDetailed, detectAts, fetchAtsBoard } from "../engine/discover.js";
+import type { AtsBoard } from "../engine/discover.js";
 import { crawlSite } from "../engine/crawl.js";
+import { scrapeUrl } from "../engine/fetch.js";
 import { capturePage } from "../engine/screen.js";
 import { extractListingJobs } from "../engine/discover.js";
 import { computeFingerprint, computeSimhash } from "../engine/extract.js";
@@ -243,8 +245,29 @@ export class KenyaPlatformAgent extends BaseDiscoveryAgent {
   }
 
   /**
-   * One target can yield jobs in four different ways; try the cheapest first
-   * and stop as soon as one works. That is what keeps a cycle fast.
+   * One target can yield jobs in seven different ways; try the cheapest
+   * first and stop as soon as one works. That is what keeps a cycle fast.
+   *
+   * The order is not arbitrary — it is the cost of the yield:
+   *
+   *   1. an ATS board the target's own URL points at — one request,
+   *      every posting on it
+   *   2. the careers page — the page's own embedded state and JSON-LD
+   *   3. an ATS board *on* the careers page — the employer moved the
+   *      board to a vendor, and the vendor's board is the whole list
+   *   4. the postings the careers page links to directly — one request
+   *      each, so this is capped
+   *   5. a bounded crawl, for the sites that are entirely JavaScript
+   *   6. the page's own JS state, which is where micro-task platforms
+   *      hide their live role lists
+   *   7. a search, for the platforms whose site is entirely gated
+   *
+   * Steps 3 and 4 were missing, and they were the whole yield: a
+   * micro-task platform's careers page is a *link* to the employer's
+   * board on a vendor, and the vendor's board is every role the
+   * employer has. One request returns all of them; the individual
+   * postings take one request each. The harvest was finding the link
+   * and throwing it away.
    */
   private async harvestTarget(
     target: { url: string; kind: string; worldwideByDefault: boolean },
@@ -262,13 +285,29 @@ export class KenyaPlatformAgent extends BaseDiscoveryAgent {
 
     // 2. Careers-page harvest — embedded state + JSON-LD + links + nested ATS.
     const harvest = await discoverFromDomainDetailed(target.url).catch(() => ({
-      links: [],
+      links: [] as string[],
       jobs: [] as RawJob[],
-      ats: [],
+      ats: [] as AtsBoard[],
     }));
     jobs.push(...this.normalise(harvest.jobs, target.url));
 
-    // 3. Bounded crawl when the site is JS-heavy and the harvest came up dry.
+    // 3. The board the careers page points at.
+    if (jobs.length === 0) {
+      for (const nested of harvest.ats.slice(0, 2)) {
+        const boardJobs = await fetchAtsBoard(nested).catch(() => []);
+        if (boardJobs.length === 0) continue;
+        jobs.push(...this.normalise(boardJobs, target.url));
+        break;
+      }
+    }
+
+    // 4. The postings the careers page links to directly.
+    if (jobs.length === 0) {
+      const linked = await this.followPostingLinks(harvest.links, 8);
+      jobs.push(...this.normalise(linked, target.url));
+    }
+
+    // 5. Bounded crawl when the site is JS-heavy and the harvest came up dry.
     if (jobs.length === 0) {
       const crawl = await crawlSite(target.url, {
         maxPages: Math.min(6, budget.maxSites),
@@ -279,7 +318,7 @@ export class KenyaPlatformAgent extends BaseDiscoveryAgent {
 
       if (crawl.jobs.length > 0) jobs.push(...this.normalise(crawl.jobs, target.url));
 
-      // 4. Screen capture — reads the page's own JS state, which is where
+      // 6. Screen capture — reads the page's own JS state, which is where
       //    micro-task platforms hide their live role lists.
       if (jobs.length === 0) {
         const capture = await capturePage(target.url, { maxJobs: 40 }).catch(() => null);
@@ -302,7 +341,7 @@ export class KenyaPlatformAgent extends BaseDiscoveryAgent {
       }
     }
 
-    // 5. Search fallback — for platforms whose site is entirely gated.
+    // 7. Search fallback — for platforms whose site is entirely gated.
     if (jobs.length === 0) {
       const planned = await searchWebPlanned(`${target.url} careers hiring`, {
         limit: 8,
@@ -331,6 +370,41 @@ export class KenyaPlatformAgent extends BaseDiscoveryAgent {
              updated_at = now()`,
       [target.url, target.kind, jobs.length],
     ).catch(() => undefined);
+
+    return jobs;
+  }
+
+  /**
+   * Reads the postings a careers page links to.
+   *
+   * A careers page that lists its own roles as links has already done
+   * the hard part: it knows which pages are postings. The only thing
+   * left is to read them, and each one is one request — so the number
+   * is capped. A board with four hundred roles on it would otherwise
+   * take the whole cycle to read, one page at a time.
+   */
+  private async followPostingLinks(
+    links: string[],
+    limit: number,
+  ): Promise<RawJob[]> {
+    const jobs: RawJob[] = [];
+    const seen = new Set<string>();
+
+    for (const link of links) {
+      if (jobs.length >= limit) break;
+      if (seen.has(link)) continue;
+      seen.add(link);
+
+      const page = await scrapeUrl(link, { onlyMainContent: true }).catch(
+        () => null,
+      );
+      if (!page) continue;
+
+      for (const listing of extractListingJobs(page.html, page.finalUrl)) {
+        jobs.push(listing);
+        if (jobs.length >= limit) break;
+      }
+    }
 
     return jobs;
   }

@@ -27,6 +27,7 @@ import { contentHash } from "./index.js";
 import { logger } from "../../logger.js";
 import { aiChat, isAiConfigured } from "../ai/client.js";
 import { extractJsonBlock } from "./schema.js";
+import { sameCompany } from "./company.js";
 
 export type ListingChange =
   | "added"
@@ -515,10 +516,24 @@ export async function judgeCandidateChange(
   for (const field of STRUCTURED_FIELDS) {
     const before = previous[field];
     const after = next[field];
-    const equal =
-      typeof before === "number" || typeof after === "number"
-        ? before === after
-        : semanticEquals(before ?? "", after ?? "");
+
+    let equal: boolean;
+    if (field === "company") {
+      // The employer's name is written several ways — "Welo Global",
+      // "Weloglobal", "Welo  Global" — and a re-read that spells it
+      // differently has not found an edit. It has found the same
+      // employer written another way. Twenty-nine "the employer
+      // changed" events came from one board that had not changed.
+      equal = sameCompany(
+        typeof before === "string" ? before : "",
+        typeof after === "string" ? after : "",
+      );
+    } else if (typeof before === "number" || typeof after === "number") {
+      equal = before === after;
+    } else {
+      equal = semanticEquals(before ?? "", after ?? "");
+    }
+
     if (!equal) changedFields.push(field);
   }
 

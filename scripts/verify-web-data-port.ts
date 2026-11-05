@@ -1009,6 +1009,18 @@ async function main(): Promise<void> {
   );
   check("the role-word list is not empty", roleWords.length > 50);
 
+  // The role words that live at the end of a compound: "Software­
+  // entwickler" is a developer, "Steuerberater" is an adviser. The
+  // cleanup migration has to know them too, or it refuses the German
+  // postings that the application accepts.
+  const roleSuffixBlock = /const ROLE_SUFFIXES = \[([\s\S]*?)\] as const;/.exec(
+    extractSource,
+  );
+  const roleSuffixes = [
+    ...(roleSuffixBlock?.[1] ?? "").matchAll(/"([^"]+)"/g),
+  ].map((match) => match[1] ?? "");
+  check("the role-suffix list is not empty", roleSuffixes.length > 20);
+
   // The migrations are not versioned — they are gatekept by the owner —
   // so a fresh clone may not have them. The checks run when the file is
   // there, and are skipped when it is not.
@@ -1036,6 +1048,14 @@ async function main(): Promise<void> {
       missingRoleWords.length === 0,
       missingRoleWords.slice(0, 10).join(", "),
     );
+    const missingRoleSuffixes = roleSuffixes.filter(
+      (suffix) => !migrationSource.includes(`'%${suffix}'`),
+    );
+    check(
+      "the cleanup migration knows every role suffix the application knows",
+      missingRoleSuffixes.length === 0,
+      missingRoleSuffixes.slice(0, 10).join(", "),
+    );
   }
 
   // The queue migration applies the same rule to the URLs that are
@@ -1055,6 +1075,14 @@ async function main(): Promise<void> {
       "the queue migration knows every role word the application knows",
       missingQueueRoleWords.length === 0,
       missingQueueRoleWords.slice(0, 10).join(", "),
+    );
+    const missingQueueRoleSuffixes = roleSuffixes.filter(
+      (suffix) => !queueMigrationSource.includes(`'%${suffix}'`),
+    );
+    check(
+      "the queue migration knows every role suffix the application knows",
+      missingQueueRoleSuffixes.length === 0,
+      missingQueueRoleSuffixes.slice(0, 10).join(", "),
     );
     check(
       "the queue migration leaves the title-less links alone",

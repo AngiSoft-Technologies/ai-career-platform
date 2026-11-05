@@ -47,6 +47,14 @@ import {
 } from "../services/api/src/services/engine/redirect.js";
 import { isBlockedHost } from "../services/api/src/lib/net-guard.js";
 import { directFetch } from "../services/api/src/services/engine/egress.js";
+import {
+  canonicalCompanyKey,
+  companySlug,
+  isPlausibleEmployer,
+  normaliseCompanyName,
+  sameCompany,
+} from "../services/api/src/services/engine/company.js";
+import { extractJobDeterministic } from "../services/api/src/services/engine/extract.js";
 import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
@@ -685,6 +693,151 @@ console.log("\n[15] content policy and checked redirects");
   );
 
   server.close();
+}
+
+console.log("\n[16] the identity of an employer");
+{
+  // -------------------------------------------------------------------------
+  // One employer, one row.
+  //
+  // The employer's name arrives from a dozen places — the board's URL
+  // token, the board page's title, the posting's JSON-LD, the page's
+  // og:site_name, a model's guess — and no two of them agree. These
+  // checks are the difference between one employer under several rows
+  // and one row per employer.
+  // -------------------------------------------------------------------------
+
+  // The same employer, written two ways.
+  check(
+    "a name written as one word and as two is one employer",
+    sameCompany("AnywhereNow", "Anywhere Now"),
+  );
+  check(
+    "the canonical key ignores spacing",
+    canonicalCompanyKey("AnywhereNow") === canonicalCompanyKey("Anywhere Now"),
+  );
+  check(
+    "the canonical key ignores the legal form",
+    canonicalCompanyKey("Acme Ltd") === canonicalCompanyKey("ACME LIMITED"),
+  );
+  check(
+    "the canonical key ignores case and punctuation",
+    canonicalCompanyKey("Acme, Inc.") === canonicalCompanyKey("acme inc"),
+  );
+  check(
+    "two different employers are two different employers",
+    !sameCompany("Acme", "Globex"),
+  );
+  check(
+    "a missing name does not match a name",
+    !sameCompany(null, "Acme") && !sameCompany("", "Acme"),
+  );
+
+  // The identity is the canonical key; the slug is the readable form
+  // the employer's page is known by.
+  check(
+    "the identity ignores the spacing",
+    canonicalCompanyKey("Anywhere Now") === canonicalCompanyKey("AnywhereNow"),
+  );
+  check(
+    "the slug is the readable form",
+    companySlug("Anywhere Now") === "anywhere-now",
+    companySlug("Anywhere Now"),
+  );
+  check(
+    "the slug fits the column",
+    companySlug("A".repeat(200)).length <= 80,
+  );
+  check(
+    "a name that is not an employer still has a slug",
+    companySlug("Legal Counsel - 12 month FTC at Rightmove Greenhouse") !== "",
+  );
+
+  // The board's name, appended to the employer's own.
+  check(
+    "the board's name is stripped from the end",
+    normaliseCompanyName("Indie Campers | LinkedIn") === "Indie Campers",
+    String(normaliseCompanyName("Indie Campers | LinkedIn")),
+  );
+  check(
+    "the board's name is stripped with a hyphen too",
+    normaliseCompanyName("SingleStore-LinkedIn") === "SingleStore",
+    String(normaliseCompanyName("SingleStore-LinkedIn")),
+  );
+  check(
+    "the page's word for the board is stripped",
+    normaliseCompanyName("Acme Careers") === "Acme",
+    String(normaliseCompanyName("Acme Careers")),
+  );
+
+  // A job title is not an employer.
+  check(
+    "a title with the employer appended is not an employer",
+    !isPlausibleEmployer("Legal Counsel - 12 month FTC at Rightmove Greenhouse"),
+  );
+  check(
+    "a title on its own is not an employer",
+    !isPlausibleEmployer("Software Engineer"),
+  );
+  check(
+    "a page heading is not an employer",
+    !isPlausibleEmployer("How We Work & What We Value"),
+  );
+  check(
+    "the board's name alone is not an employer",
+    !isPlausibleEmployer("Ashby"),
+  );
+  check(
+    "a real employer whose name contains a role word in the middle is kept",
+    isPlausibleEmployer("Customs Support Group"),
+  );
+  check(
+    "a firm that names itself in the plural is kept",
+    isPlausibleEmployer("True North Partners"),
+  );
+  check(
+    "a real employer is kept",
+    isPlausibleEmployer("BambooHR"),
+  );
+  check(
+    "an employer named after its domain is kept",
+    normaliseCompanyName("Happyrobot.ai") === "Happyrobot.ai",
+    String(normaliseCompanyName("Happyrobot.ai")),
+  );
+
+  // -------------------------------------------------------------------------
+  // The page is the authority
+  //
+  // The model fills the gaps the page left; it does not overwrite what
+  // the page said. It used to overwrite, and one board's twenty-nine
+  // re-reads were each recorded as "the employer changed".
+  // -------------------------------------------------------------------------
+  const posting = extractJobDeterministic({
+    url: "https://jobs.lever.co/weloglobal/abc",
+    markdown:
+      "# Arabic Linguistic Evaluator\n\nWe are hiring a language evaluator in Nairobi, Kenya.",
+    metadata: { title: "Welo Global" },
+    jsonLd: {
+      title: "Arabic Linguistic Evaluator & Functional Tester",
+      description:
+        "We are hiring a language evaluator in Nairobi, Kenya. Apply through the board.",
+      company: "Welo Global",
+      location: "Nairobi, Kenya",
+      city: "Nairobi",
+      country: "Kenya",
+      applyUrl: "https://jobs.lever.co/weloglobal/abc",
+    },
+  });
+  check(
+    "the employer's name comes from the posting",
+    posting.company === "Welo Global",
+    String(posting.company),
+  );
+  check(
+    "the entities in a JSON-LD title are decoded",
+    posting.title === "Arabic Linguistic Evaluator & Functional Tester",
+    posting.title,
+  );
 }
 
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);

@@ -485,6 +485,79 @@ async function main(): Promise<void> {
       gapsFormRefused,
     );
 
+    // ---------------------------------------------------------------------
+    // [6] The identity of an employer
+    //
+    // One employer, one row — and the rule that says so is a constraint,
+    // not a convention. The catalogue held one employer's roles under
+    // three rows ("Weloglobal", "Welo Global", "Welocalize") because
+    // nothing stopped the second row from being written.
+    // ---------------------------------------------------------------------
+
+    console.log("\n[6] the identity of an employer");
+    const identityColumn = await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count
+         FROM information_schema.columns
+        WHERE table_name = 'companies' AND column_name = 'canonical_key'`,
+    );
+    check(
+      "the employer row carries its identity",
+      identityColumn.rows[0]?.count === "1",
+      `count=${identityColumn.rows[0]?.count}`,
+    );
+
+    const identityIndex = await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count
+         FROM pg_indexes
+        WHERE tablename = 'companies'
+          AND indexdef ILIKE '%canonical_key%'
+          AND indexdef ILIKE '%UNIQUE%'`,
+    );
+    check(
+      "the identity is unique in the database",
+      Number(identityIndex.rows[0]?.count ?? 0) >= 1,
+      `indexes=${identityIndex.rows[0]?.count}`,
+    );
+
+    const key = `regression-identity-${marker}`;
+    await client.query(
+      `INSERT INTO companies (name, slug, canonical_key)
+       VALUES ($1, $2, $3)`,
+      [`Regression Identity ${marker}`, `regression-identity-${marker}`, key],
+    );
+
+    await client.query("SAVEPOINT identity");
+    let duplicateRefused = false;
+    try {
+      await client.query(
+        `INSERT INTO companies (name, slug, canonical_key)
+         VALUES ($1, $2, $3)`,
+        [
+          `Regression Identity Other ${marker}`,
+          `regression-identity-other-${marker}`,
+          key,
+        ],
+      );
+    } catch {
+      duplicateRefused = true;
+      await client.query("ROLLBACK TO SAVEPOINT identity");
+    }
+    await client.query("RELEASE SAVEPOINT identity");
+    check(
+      "a second row for the same employer is refused",
+      duplicateRefused,
+    );
+
+    const rowsForKey = await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM companies WHERE canonical_key = $1`,
+      [key],
+    );
+    check(
+      "the employer has one row",
+      rowsForKey.rows[0]?.count === "1",
+      `count=${rowsForKey.rows[0]?.count}`,
+    );
+
     await client.query("ROLLBACK");
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
@@ -506,7 +579,7 @@ async function main(): Promise<void> {
   // checked afterwards.
   // -----------------------------------------------------------------------
 
-  console.log("\n[6] nothing left behind");
+  console.log("\n[7] nothing left behind");
   const leftover = new pg.Pool({
     connectionString,
     max: 1,

@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { config } from "../config.js";
 import { pool } from "./pool.js";
+import { canonicalCompanyKey } from "../services/engine/company.js";
 
 interface SeedOpportunity {
   company: string;
@@ -97,15 +98,22 @@ async function main(): Promise<void> {
 
     for (const [index, job] of opportunities.entries()) {
       const company = await client.query<{ id: string }>(
-        `INSERT INTO companies (name, slug, industry, country, website, careers_url)
-         VALUES ($1, $2, $3, 'Kenya', $4, $5)
+        `INSERT INTO companies (name, slug, canonical_key, industry, country, website, careers_url)
+         VALUES ($1, $2, $3, $4, 'Kenya', $5, $6)
          ON CONFLICT (slug) DO UPDATE SET
            name = excluded.name,
            industry = excluded.industry,
            website = excluded.website,
            careers_url = excluded.careers_url
          RETURNING id`,
-        [job.company, job.companySlug, job.industry, job.website, job.careersUrl],
+        [
+          job.company,
+          job.companySlug,
+          canonicalCompanyKey(job.company),
+          job.industry,
+          job.website,
+          job.careersUrl,
+        ],
       );
       const companyId = company.rows[0]?.id;
       if (!companyId) throw new Error(`Company seed failed for ${job.company}`);

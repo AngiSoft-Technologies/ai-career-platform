@@ -1,5 +1,10 @@
 import { query, withTransaction } from "../../db/pool.js";
 import { BaseDiscoveryAgent, type AgentContext, type AgentRunResult } from "./base.js";
+import {
+  canonicalCompanyKey,
+  companySlug,
+  normaliseCompanyName,
+} from "../engine/company.js";
 
 /**
  * The statement that claims the candidates a promotion is going to work
@@ -326,25 +331,48 @@ export class DeduplicationAgent extends BaseDiscoveryAgent {
         attempted = verified.rows.length;
 
         // 1. Companies. `opportunities.company_id` is NOT NULL and discovered
-        //    jobs come from arbitrary employers, so the employer is upserted
-        //    first. The slug is unique, so one statement covers them all.
+        //    jobs come from arbitrary employers, so the employer is written
+        //    first.
+        //
+        //    The employer's *identity* is its canonical key — "kcbbank"
+        //    for "KCB Bank" and for "Kcb Bank" alike — and that key is
+        //    what the row carries and what the database refuses to let
+        //    two rows share. The slug is the readable form the row is
+        //    known by, and it is left alone: the employer's page keeps
+        //    the address it has always had.
         const payloads: Array<Record<string, unknown>> = [];
-        const companyNames: string[] = [];
-        const companySlugs: string[] = [];
+
+        // The employer, once: the name it is displayed under, the slug
+        // it is known by, and the key that says which employer it is.
+        const employers = new Map<
+          string,
+          { name: string; slug: string; key: string }
+        >();
 
         for (const row of verified.rows) {
+          // The employer's name is normalised on the way in, so one
+          // employer has one name however the page spelled it.
+          //
+          // A name that cannot be an employer at all (a job title, a
+          // page heading, the board's name) keeps its raw form rather
+          // than being thrown away: the posting is real, and a wrong
+          // name is better than no name. The extraction refuses those
+          // names at the source, so this only applies to rows that were
+          // written before the rule existed.
+          const rawName = (row.company ?? "").trim();
           const companyName =
-            (row.company ?? "Unknown employer").trim() || "Unknown employer";
+            normaliseCompanyName(rawName) ?? rawName.slice(0, 200);
+          const displayName = (companyName || "Unknown employer").slice(0, 200);
+          const key =
+            canonicalCompanyKey(companyName) ||
+            canonicalCompanyKey("Unknown employer");
           const slug =
-            companyName
-              .toLowerCase()
-              .replace(/[^a-z0-9]+/g, "-")
-              .replace(/^-+|-+$/g, "")
-              .slice(0, 80) || `company-${row.id.slice(0, 8)}`;
+            companySlug(companyName) ||
+            companySlug("Unknown employer") ||
+            `company-${row.id.slice(0, 8)}`;
 
-          if (!companySlugs.includes(slug)) {
-            companySlugs.push(slug);
-            companyNames.push(companyName.slice(0, 200));
+          if (!employers.has(key)) {
+            employers.set(key, { name: displayName, slug, key });
           }
 
           const simhash =
@@ -353,6 +381,7 @@ export class DeduplicationAgent extends BaseDiscoveryAgent {
           payloads.push({
             candidate_id: row.id,
             company_slug: slug,
+            company_key: key,
             source_platform: row.source_platform,
             source_url: `https://${row.source_platform}.com`,
             external_id: opportunityIdentity(row.external_id, row.source_url),
@@ -375,12 +404,122 @@ export class DeduplicationAgent extends BaseDiscoveryAgent {
           });
         }
 
-        await client.query(
-          `INSERT INTO companies (name, slug)
-           SELECT * FROM unnest($1::text[], $2::text[])
-           ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, updated_at = now()`,
-          [companyNames, companySlugs],
+        // The employer rows are written once.
+        //
+        // The *name* is not rewritten on every promotion. It used to be:
+        // `DO UPDATE SET name = EXCLUDED.name` meant the last writer
+        // decided what the employer is called, and with three spellings
+        // in play the label on the employer's row changed from one cycle
+        // to the next. A catalogue that renames its employers between
+        // pages is a catalogue nobody can trust.
+        //
+        // The first name written is the one kept. The discovery side is
+        // where the name is made right, and it is made right before the
+        // row is ever created.
+        //
+        // The lookup comes first. An employer that is already in the
+        // catalogue keeps the row it has, under the slug it is known by;
+        // only an employer that is not there yet is written. The row
+        // carries the employer's canonical key, and the unique index on
+        // that key is what stops a second row from appearing for one
+        // employer.
+        const employerKeys = [...employers.keys()];
+        const employerSlugs = [...employers.values()].map(
+          (employer) => employer.slug,
         );
+
+        // The employers that are already in the catalogue, found by their
+        // identity first and by their slug second.
+        const findEmployers = async (): Promise<{
+          byKey: Map<string, string>;
+          bySlug: Map<string, string>;
+        }> => {
+          const known = await client.query<{
+            id: string;
+            slug: string;
+            canonical_key: string | null;
+          }>(
+            `SELECT id, slug, canonical_key
+               FROM companies
+              WHERE canonical_key = ANY($1::text[])
+                 OR slug = ANY($2::text[])`,
+            [employerKeys, employerSlugs],
+          );
+
+          const byKey = new Map<string, string>();
+          const bySlug = new Map<string, string>();
+          for (const row of known.rows) {
+            if (row.canonical_key) byKey.set(row.canonical_key, row.slug);
+            bySlug.set(row.slug, row.slug);
+          }
+          return { byKey, bySlug };
+        };
+
+        const { byKey, bySlug } = await findEmployers();
+
+        const missingNames: string[] = [];
+        const missingSlugs: string[] = [];
+        const missingKeys: string[] = [];
+
+        for (const employer of employers.values()) {
+          const knownSlug = byKey.get(employer.key) ?? bySlug.get(employer.slug);
+          if (knownSlug) {
+            employer.slug = knownSlug;
+            continue;
+          }
+
+          missingNames.push(employer.name);
+          missingSlugs.push(employer.slug);
+          missingKeys.push(employer.key);
+        }
+
+        if (missingNames.length > 0) {
+          await client.query(
+            `INSERT INTO companies (name, slug, canonical_key)
+             SELECT * FROM unnest($1::text[], $2::text[], $3::text[])
+             ON CONFLICT DO NOTHING`,
+            [missingNames, missingSlugs, missingKeys],
+          );
+        }
+
+        // A slug that is already taken by a *different* employer — two
+        // long names that share their first eighty characters — leaves
+        // the employer without a row, and the promotion would then write
+        // no opportunity for it at all. The identity is the key, so the
+        // slug is given a suffix and the row is written under it.
+        const afterInsert = await findEmployers();
+        const unresolved = [...employers.values()].filter(
+          (employer) =>
+            !afterInsert.byKey.has(employer.key) &&
+            !afterInsert.bySlug.has(employer.slug),
+        );
+
+        if (unresolved.length > 0) {
+          const fallbackNames: string[] = [];
+          const fallbackSlugs: string[] = [];
+          const fallbackKeys: string[] = [];
+
+          for (const employer of unresolved) {
+            const slug = `${employer.slug.slice(0, 70)}-${employer.key.slice(0, 8)}`;
+            fallbackNames.push(employer.name);
+            fallbackSlugs.push(slug);
+            fallbackKeys.push(employer.key);
+            employer.slug = slug;
+          }
+
+          await client.query(
+            `INSERT INTO companies (name, slug, canonical_key)
+             SELECT * FROM unnest($1::text[], $2::text[], $3::text[])
+             ON CONFLICT DO NOTHING`,
+            [fallbackNames, fallbackSlugs, fallbackKeys],
+          );
+        }
+
+        // The payload names the employer by the slug its row actually has.
+        for (const payload of payloads) {
+          const employer = employers.get(payload.company_key as string);
+          if (employer) payload.company_slug = employer.slug;
+        }
 
         // 2. Opportunities, and the link back to the candidate, in one
         //    statement. The insert returns the rows it created, so the
