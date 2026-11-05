@@ -26,6 +26,11 @@ import { AbortManager, timeoutInstance } from "../services/api/src/lib/abort-man
 import { normaliseUrlIdentity, hotKeySafe, isUuidV7 } from "../services/api/src/lib/ids.js";
 import { overfetchLimitFor } from "../services/api/src/services/engine/search-orchestrator.js";
 import { findJobLinks, detectAts } from "../services/api/src/services/engine/discover.js";
+import {
+  isUnreadableHost,
+  jobUrlRefusal,
+  looksLikeJobUrl,
+} from "../services/api/src/services/engine/job-url.js";
 import { startDistributedInterval } from "../services/api/src/lib/distributed-tick.js";
 import { withJobDeadline } from "../services/api/src/worker/index.js";
 import {
@@ -936,6 +941,71 @@ console.log("\n[17] the address of a board");
     oracleBoard?.kind === "oracle" &&
       oracleBoard.token === "eoin.fa.em3.oraclecloud.com|CX_3001",
     oracleBoard ? `${oracleBoard.kind}:${oracleBoard.token}` : "none",
+  );
+}
+
+console.log("\n[18] the address of a posting");
+{
+  // -------------------------------------------------------------------------
+  // The queue is filled by search engines and by careers pages, and both
+  // put things in it that are not postings. Every one of them is a
+  // request spent to be refused.
+  //
+  // The rules are narrow on purpose: a URL is refused only when it is
+  // *known* not to be a posting. A posting whose address is a bare slug
+  // is still a posting, and refusing it would throw away most of the
+  // roles the catalogue holds.
+  // -------------------------------------------------------------------------
+
+  check(
+    "a posting's address is queued",
+    looksLikeJobUrl("https://remowork.life/jobs/tier-1-support-agent"),
+  );
+  check(
+    "a posting's address with an id is queued",
+    looksLikeJobUrl(
+      "https://kaziconnect-ke.work/jobs/clinical-officer-oncology-oasis-healthcare-1",
+    ),
+  );
+  check(
+    "an address with no path is not a posting",
+    !looksLikeJobUrl("https://remowork.life/"),
+  );
+  check(
+    "a help page is not a posting",
+    !looksLikeJobUrl("https://www.amazon.com/gp/help/customer/display.html"),
+  );
+  check(
+    "a policy page is not a posting",
+    !looksLikeJobUrl("https://example.com/privacy-policy"),
+  );
+  check(
+    "a sign-in page is not a posting",
+    !looksLikeJobUrl("https://example.com/login"),
+  );
+  check(
+    "an examination board's news page is not a posting",
+    !looksLikeJobUrl(
+      "https://toppersexam.com/news-and-careers/daily-current-affairs_22.html",
+    ),
+  );
+  check(
+    "a host we are not allowed to read is not a posting",
+    !looksLikeJobUrl("https://ke.linkedin.com/jobs/data-analyst-jobs"),
+  );
+  check(
+    "the refusal says why",
+    jobUrlRefusal("https://ke.linkedin.com/jobs/data-analyst-jobs") ===
+      "HOST_NOT_READABLE",
+    String(jobUrlRefusal("https://ke.linkedin.com/jobs/data-analyst-jobs")),
+  );
+  check(
+    "a posting is not refused",
+    jobUrlRefusal("https://remowork.life/jobs/tier-1-support-agent") === null,
+  );
+  check(
+    "an address that is not an address is refused",
+    !looksLikeJobUrl("not a url"),
   );
 }
 

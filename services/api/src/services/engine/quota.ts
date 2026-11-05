@@ -108,3 +108,62 @@ export async function quotaUsed(scope: string, subject: string): Promise<number>
     return 0;
   }
 }
+
+// ---------------------------------------------------------------------------
+// The quiet host
+//
+// A queue with four hundred and sixty-three pages from one site is a
+// site that has nothing: each page is a request, and each request
+// answers with a page that holds no posting. The host is read three
+// times, and then not at all for an hour.
+//
+// The count is in Redis and expires with it. When Redis cannot answer,
+// the host is read — this must never stop the work.
+// ---------------------------------------------------------------------------
+
+const QUIET_HOST_THRESHOLD = 3;
+const QUIET_HOST_TTL_SECONDS = 60 * 60;
+
+/**
+ * Notes that a host's page held no posting.
+ */
+export async function noteQuietHost(host: string): Promise<void> {
+  if (!host || !redisIsReady()) return;
+  try {
+    const key = `quiet:${host}`;
+    const count = await redis.incr(key);
+    if (count === QUIET_HOST_THRESHOLD) {
+      await redis.expire(key, QUIET_HOST_TTL_SECONDS);
+    }
+  } catch {
+    // Fail open: the page is read.
+  }
+}
+
+/**
+ * Notes that a host's page held something after all.
+ *
+ * A host that recovers is read again, and the count of the times it
+ * had nothing is forgotten.
+ */
+export async function noteLoudHost(host: string): Promise<void> {
+  if (!host || !redisIsReady()) return;
+  try {
+    await redis.del(`quiet:${host}`);
+  } catch {
+    // Fail open: the page is read.
+  }
+}
+
+/**
+ * True when the host has had nothing to say, three times running.
+ */
+export async function hostIsQuiet(host: string): Promise<boolean> {
+  if (!host || !redisIsReady()) return false;
+  try {
+    const raw = await redis.get(`quiet:${host}`);
+    return raw !== null && Number(raw) >= QUIET_HOST_THRESHOLD;
+  } catch {
+    return false;
+  }
+}

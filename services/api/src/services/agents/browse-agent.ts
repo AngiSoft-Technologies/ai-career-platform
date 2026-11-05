@@ -5,7 +5,12 @@ import { BaseDiscoveryAgent, type AgentContext, type AgentRunResult } from "./ba
 import { scrapeUrl } from "../engine/fetch.js";
 import { extractJob, looksLikeJobPosting } from "../engine/extract.js";
 import { findJobLinks } from "../engine/discover.js";
-import { reserveDailyQuota } from "../engine/quota.js";
+import {
+  hostIsQuiet,
+  noteLoudHost,
+  noteQuietHost,
+  reserveDailyQuota,
+} from "../engine/quota.js";
 import {
   isUnreadableRedirectWrapper,
   unwrapSearchRedirect,
@@ -104,6 +109,17 @@ export class BrowseAgent extends BaseDiscoveryAgent {
       }
 
       totalFetched += 1;
+
+      // The host is known before the read, so that a failure can be
+      // counted against the host that caused it.
+      const host = (() => {
+        try {
+          return new URL(unwrapSearchRedirect(row.source_url)).host;
+        } catch {
+          return "unknown";
+        }
+      })();
+
       try {
         // A search-engine click-through wrapper is a redirect *page*, not a
         // redirect: reading it returns a notice rather than the listing.
@@ -125,13 +141,25 @@ export class BrowseAgent extends BaseDiscoveryAgent {
         // Per-host page budget. The browse agent is the most scrape-heavy
         // thing we run, and a single pathological domain must not spend the
         // whole day's budget.
-        const host = (() => {
-          try {
-            return new URL(target).host;
-          } catch {
-            return "unknown";
-          }
-        })();
+        //
+        // A host that has had nothing to say, three times running, is
+        // not read again for an hour.
+        //
+        // The queue held four hundred and sixty-three pages from one
+        // site — one per category — and every one of them was a request
+        // spent to be told that the site had nothing. The host is read
+        // three times now, and then not at all.
+        if (await hostIsQuiet(host)) {
+          totalSkipped += 1;
+          await query(
+            `UPDATE discovery_search_results
+                SET status = 'failed', processed_at = now(),
+                    error = $2
+              WHERE id = $1`,
+            [row.id, "HOST_QUIET"],
+          );
+          continue;
+        }
 
         const reservation = await reserveDailyQuota(
           "scrape",
@@ -198,6 +226,9 @@ export class BrowseAgent extends BaseDiscoveryAgent {
           // the search engine happened to rank.
           job.description.length >= 60;
 
+        // A host that answers with a posting is a host worth reading.
+        if (usable) await noteLoudHost(host);
+
         if (!usable) {
           // Not a posting. It may still be a page of them.
           //
@@ -239,6 +270,9 @@ export class BrowseAgent extends BaseDiscoveryAgent {
             complete: !scraped.looksLikeSpa,
           });
           if (!closed) {
+            // The host said nothing. Three of those and the host is
+            // left alone for an hour.
+            await noteQuietHost(host);
             throw new Error("Page did not contain a job posting");
           }
 
@@ -420,6 +454,18 @@ export class BrowseAgent extends BaseDiscoveryAgent {
         const message = error instanceof Error ? error.message : String(error);
         totalFailed += 1;
         errors.push(`${row.source_url}: ${message}`);
+
+        // A host that refuses us — a robots file that says no, an
+        // address that will not resolve — is a host that has nothing to
+        // give. Three of those and it is left alone for an hour.
+        if (
+          /ROBOTS_DISALLOWED|WATERFALL_EXHAUSTED|fetch failed|ENOTFOUND/i.test(
+            message,
+          )
+        ) {
+          await noteQuietHost(host);
+        }
+
         await query(
           `UPDATE discovery_search_results
               SET status = 'failed', processed_at = now(), error = $2

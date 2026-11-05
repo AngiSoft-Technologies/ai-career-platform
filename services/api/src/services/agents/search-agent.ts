@@ -8,6 +8,7 @@ import {
 import { buildDiscoveryQueries, type QuerySeeds } from "../engine/discover.js";
 import { pooled } from "../engine/index.js";
 import { cleanJobTitle, isListingTitle } from "../engine/extract.js";
+import { jobUrlRefusal } from "../engine/job-url.js";
 
 /**
  * The search engine discovery agent.
@@ -228,6 +229,16 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
           continue;
         }
         if (listing) totalListings += 1;
+
+        // The address itself is a question too. A search engine will
+        // answer a query for a role with an Amazon help page, a
+        // LinkedIn sign-in wall and an examination board's news page,
+        // and each of those is a request spent to be refused.
+        const refusal = jobUrlRefusal(result.url);
+        if (refusal) {
+          totalNotAJob += 1;
+          continue;
+        }
 
         // The queue is bounded. Beyond the bound the results are
         // dropped for this run and the next run finds them again.

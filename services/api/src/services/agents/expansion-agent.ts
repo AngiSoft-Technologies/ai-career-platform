@@ -10,6 +10,7 @@ import {
 } from "../engine/discover.js";
 import type { AtsBoard, AtsKind } from "../engine/discover.js";
 import { computeFingerprint, computeSimhash } from "../engine/extract.js";
+import { jobUrlRefusal } from "../engine/job-url.js";
 import { capturePage, embeddedJobsToRaw } from "../engine/screen.js";
 import type { RawJob } from "../engine/sources.js";
 
@@ -183,6 +184,12 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
         }
 
         for (const link of links) {
+          // A link that is known not to be a posting is not queued.
+          // The careers page of a bank links its help centre and its
+          // press releases too, and every one of them is a request the
+          // browse agent would spend and refuse.
+          if (jobUrlRefusal(link)) continue;
+
           const inserted = await query<{ id: string }>(
             `INSERT INTO discovery_search_results
                 (agent_id, query, source_platform, source_url, title, snippet, fetched_at)
