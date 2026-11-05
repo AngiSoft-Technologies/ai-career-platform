@@ -25,6 +25,15 @@ const ATS_KIND_SET: Record<AtsKind, true> = {
 };
 
 /**
+ * How long a source that yielded nothing waits before it is read again.
+ *
+ * An employer's careers page that renders its roles in the browser holds
+ * nothing today and holds thirty roles tomorrow. Six hours is often
+ * enough and never often enough to spend the budget on.
+ */
+const EMPTY_SOURCE_RETRY_MS = 6 * 60 * 60 * 1000;
+
+/**
  * The host of an address.
  *
  * The remembered source is a host, so that the same employer's careers
@@ -72,44 +81,27 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
     const budgetMs = Number(ctx.config.budget_ms ?? 180_000);
     const deadline = Date.now() + budgetMs;
 
-    const boards = await this.findBoards(maxBoards);
+    // The sources the catalogue was given come first, and they get the
+    // larger share of the budget.
+    //
+    // They used to come last, and the boards — which are refreshed every
+    // cycle and cost fifteen seconds each — took the whole window. The
+    // nineteen registered employers were then never reached, cycle after
+    // cycle, because the budget was always gone before they were asked
+    // for.
+    const targetDeadline = Date.now() + Math.floor(budgetMs * 0.6);
+
     let discovered = 0;
     let stored = 0;
     let duplicate = 0;
     let stoppedOnBudget = false;
     const errors: string[] = [];
 
-    for (const board of boards) {
-      if (Date.now() > deadline) {
-        stoppedOnBudget = true;
-        break;
-      }
-      try {
-        const jobs = await fetchAtsBoard(board);
-        discovered += jobs.length;
-        const result = await this.storeJobs(jobs, ctx.agentId);
-        stored += result.stored;
-        duplicate += result.duplicate;
-
-        await query(
-          `INSERT INTO discovery_known_sources (domain, source_type, jobs_found, last_seen, created_at)
-           VALUES ($1, 'ats', $2, now(), now())
-           ON CONFLICT (domain) DO UPDATE
-             SET jobs_found = EXCLUDED.jobs_found, last_seen = now()`,
-          [`${board.kind}:${board.token}`, jobs.length],
-        );
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        errors.push(`${board.kind}:${board.token}: ${message}`);
-        logger.debug({ board, error: message }, "ATS board expansion failed");
-      }
-    }
-
     // Careers/sitemap discovery for the employers we know but have
     // never expanded.
     const targets = await this.findUnexpandedTargets(maxDomains);
     for (const target of targets) {
-      if (Date.now() > deadline) {
+      if (Date.now() > targetDeadline) {
         stoppedOnBudget = true;
         break;
       }
@@ -224,10 +216,41 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
                   health = CASE WHEN $2 THEN 'healthy' ELSE 'degraded' END,
                   updated_at = now()
             WHERE url = $1`,
-          [target, harvest.links.length + harvest.ats.length > 0],
+          [target, pageLinks.length + ats.length + pageJobs.length > 0],
         );
       } catch (error) {
         errors.push(`${target}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+
+    // The boards that are already known are refreshed with what is left
+    // of the budget. A board that is refreshed every cycle costs fifteen
+    // seconds each, which is why the sources the catalogue was given are
+    // read first.
+    const boards = await this.findBoards(maxBoards);
+    for (const board of boards) {
+      if (Date.now() > deadline) {
+        stoppedOnBudget = true;
+        break;
+      }
+      try {
+        const jobs = await fetchAtsBoard(board);
+        discovered += jobs.length;
+        const result = await this.storeJobs(jobs, ctx.agentId);
+        stored += result.stored;
+        duplicate += result.duplicate;
+
+        await query(
+          `INSERT INTO discovery_known_sources (domain, source_type, jobs_found, last_seen, created_at)
+           VALUES ($1, 'ats', $2, now(), now())
+           ON CONFLICT (domain) DO UPDATE
+             SET jobs_found = EXCLUDED.jobs_found, last_seen = now()`,
+          [`${board.kind}:${board.token}`, jobs.length],
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        errors.push(`${board.kind}:${board.token}: ${message}`);
+        logger.debug({ board, error: message }, "ATS board expansion failed");
       }
     }
 
@@ -328,17 +351,51 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
         LIMIT 500`,
     );
 
-    const known = await query<{ domain: string }>(
-      `SELECT domain FROM discovery_known_sources WHERE source_type IN ('ats', 'careers_page')`,
+    const known = await query<{
+      domain: string;
+      source_type: string;
+      jobs_found: number;
+      last_seen: Date;
+    }>(
+      `SELECT domain, source_type, jobs_found, last_seen
+         FROM discovery_known_sources
+        WHERE source_type IN ('ats', 'careers_page')`,
     );
-    const knownSet = new Set(known.rows.map((row) => row.domain));
+
+    const knownHosts = new Set<string>();
+    const emptyHosts = new Map<string, Date>();
+    const atsHosts = new Set<string>();
+    for (const row of known.rows) {
+      if (row.source_type === "ats") {
+        atsHosts.add(row.domain);
+        continue;
+      }
+      knownHosts.add(row.domain);
+      if (row.jobs_found <= 0) emptyHosts.set(row.domain, row.last_seen);
+    }
 
     const targets: string[] = [];
     const seenHosts = new Set<string>();
 
     for (const row of registered.rows) {
       const host = hostOf(row.url);
-      if (!host || knownSet.has(host) || seenHosts.has(host)) continue;
+      if (!host || seenHosts.has(host)) continue;
+
+      // A source that has already led to a board is read through that
+      // board, every cycle.
+      if (atsHosts.has(host)) continue;
+
+      // A source that was expanded and found nothing is tried again
+      // later, not every cycle: an employer's careers page can render
+      // its roles tomorrow.
+      const emptySince = emptyHosts.get(host);
+      if (emptySince) {
+        const ageMs = Date.now() - new Date(emptySince).getTime();
+        if (ageMs < EMPTY_SOURCE_RETRY_MS) continue;
+      } else if (knownHosts.has(host)) {
+        continue;
+      }
+
       targets.push(row.url);
       seenHosts.add(host);
       if (targets.length >= limit) return targets;
@@ -346,7 +403,8 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
 
     for (const row of discovered.rows) {
       const host = row.domain;
-      if (!host || knownSet.has(host) || seenHosts.has(host)) continue;
+      if (!host || knownHosts.has(host) || atsHosts.has(host)) continue;
+      if (seenHosts.has(host)) continue;
       targets.push(host);
       seenHosts.add(host);
       if (targets.length >= limit) break;
