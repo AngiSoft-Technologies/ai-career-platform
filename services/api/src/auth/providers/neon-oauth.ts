@@ -8,20 +8,31 @@ import { AuthProviderError } from "./errors.js";
 /**
  * Neon Auth is an OAuth 2.1 authorization server in its own right
  * (`/.well-known/openid-configuration` advertises `/oauth2/authorize`,
- * `/oauth2/token`, PKCE `S256`, and public clients with
- * `token_endpoint_auth_method: none`).
- *
- * The API uses that to run the Google sign-in flow itself:
+ * `/oauth2/token`, PKCE `S256`), and the API is registered on it as an
+ * OAuth *client*. The Google sign-in runs as an authorization request
+ * against that server:
  *
  *   1. The API generates a PKCE pair and stores the verifier server-side.
- *   2. The browser is sent to Neon's `/oauth2/authorize` with `provider=google`.
- *   3. Neon runs the Google consent screen using its own shared OAuth
- *      credentials, then redirects back to the API with an authorization code.
- *   4. The API redeems the code with the PKCE verifier and receives a Neon
- *      session token, which it verifies against Neon's JWKS.
+ *   2. The browser is sent to Neon's `/oauth2/authorize` with the API's
+ *      own `client_id` and `provider=google`.
+ *   3. Neon sends the browser to the application's login page, which
+ *      signs the user in through Neon Auth; Neon then shows Google the
+ *      consent screen using the credentials *Neon Auth* holds for the
+ *      Google provider, and returns the browser to the API's callback
+ *      with an authorization code.
+ *   4. The API redeems the code with the PKCE verifier and its own
+ *      client credentials, and receives a Neon session token, which it
+ *      verifies against Neon's JWKS.
  *
  * The result is that neither the web app nor the mobile app ever talks to
- * Neon or Google directly, and no Google client id is required anywhere.
+ * Neon or Google directly, and no Google client id is required anywhere
+ * in this codebase.
+ *
+ * The `client_id` on the authorize request is the API's own — the client
+ * registered on Neon Auth's OAuth server. It is *not* the client id Neon
+ * Auth uses to talk to Google: sending that one answers `invalid_client`
+ * ("client not found") from a server that has never heard of it. Google's
+ * credentials belong to the provider, and Neon already holds them.
  */
 
 const GOOGLE_PROVIDER = "google";
@@ -48,20 +59,6 @@ function authBaseUrl(): string {
     );
   }
   return url.replace(/\/$/, "");
-}
-
-/**
- * Neon Auth's Google OAuth client ID (registered in Neon Auth, not the API's).
- * This is the client ID that Neon Auth uses when talking to Google.
- */
-function neonAuthGoogleClientId(): string {
-  const id = config.NEON_AUTH_GOOGLE_CLIENT_ID;
-  if (!id) {
-    throw new AuthNotConfiguredError(
-      "NEON_AUTH_GOOGLE_CLIENT_ID is required for social sign-in via Neon Auth.",
-    );
-  }
-  return id;
 }
 
 function clientId(): string {
@@ -170,7 +167,7 @@ export async function beginOAuthFlow(options: {
   );
 
   const params = new URLSearchParams({
-    client_id: neonAuthGoogleClientId(),
+    client_id: clientId(),
     redirect_uri: oauthCallbackUrl(),
     response_type: "code",
     scope: "openid profile email offline_access",
@@ -271,6 +268,17 @@ export async function completeOAuthFlow(options: {
     );
   }
 
+  // A confidential client proves who it is at the token endpoint with
+  // HTTP Basic, and the API's client is registered for exactly that
+  // (`token_endpoint_auth_method: client_secret_basic`). Sending the
+  // secret in the body instead is answered with "client registered for
+  // client_secret_basic cannot use client_secret_post", and sending no
+  // secret at all with "cannot use none".
+  const headers: Record<string, string> = {
+    "Content-Type": "application/x-www-form-urlencoded",
+    Accept: "application/json",
+    Origin: config.API_URL,
+  };
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code: options.code,
@@ -279,16 +287,15 @@ export async function completeOAuthFlow(options: {
     code_verifier: stored.code_verifier,
   });
   if (config.NEON_AUTH_OAUTH_CLIENT_SECRET) {
-    body.set("client_secret", config.NEON_AUTH_OAUTH_CLIENT_SECRET);
+    const credentials = Buffer.from(
+      `${clientId()}:${config.NEON_AUTH_OAUTH_CLIENT_SECRET}`,
+    ).toString("base64");
+    headers.authorization = `Basic ${credentials}`;
   }
 
   const response = await fetch(`${authBaseUrl()}/oauth2/token`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Accept: "application/json",
-      Origin: config.API_URL,
-    },
+    headers,
     body: body.toString(),
   });
 

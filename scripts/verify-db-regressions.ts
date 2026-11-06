@@ -40,6 +40,10 @@ import {
 } from "../services/api/src/services/agents/dedup-agent.js";
 import { MATCH_UPSERT_SQL } from "../services/api/src/services/agents/match-agent.js";
 import { pendingQueueDepth, queueRoom } from "../services/api/src/services/engine/queue.js";
+import {
+  beginOAuthFlow,
+  oauthCallbackUrl,
+} from "../services/api/src/auth/providers/neon-oauth.js";
 import { withTransaction } from "../services/api/src/db/pool.js";
 import { pool as appPool } from "../services/api/src/db/pool.js";
 
@@ -730,6 +734,73 @@ async function main(): Promise<void> {
       noLimit === 0,
       `room=${noLimit}`,
     );
+  }
+
+  // -----------------------------------------------------------------------
+  // The Google sign-in's first step
+  //
+  // The browser is sent to Neon Auth's authorization endpoint, and the
+  // client id in that request has to be the API's own — the client
+  // registered on Neon Auth's OAuth server. Google's client id is held
+  // by Neon Auth for the *provider*, and a server that has never heard
+  // of it answers "client not found" and sends the user to an error
+  // page. That is what happened: every Google sign-in failed, at the
+  // first request, for every user, for as long as the wrong id was
+  // sent. The state row is written and rolled back with the rest.
+  // -----------------------------------------------------------------------
+
+  console.log("\n[9] the Google sign-in's first request");
+  {
+    const googleClient = process.env.NEON_AUTH_GOOGLE_CLIENT_ID;
+    const apiClient = process.env.NEON_AUTH_OAUTH_CLIENT_ID;
+
+    if (!apiClient) {
+      console.log("  --   no OAuth client configured; nothing to check");
+    } else {
+      // The state row is written and rolled back with the rest of the
+      // harness: nothing about a check may survive it.
+      const started = await withTransaction(
+        async () =>
+          await beginOAuthFlow({
+            provider: "google",
+            appRedirectUri: "https://mboqara.angisoft.co.ke/dashboard",
+          }),
+      );
+      const asked = new URL(started.authorizationUrl);
+      const sentClient = asked.searchParams.get("client_id") ?? "";
+
+      check(
+        "the request asks Neon Auth's own authorization endpoint",
+        asked.pathname.endsWith("/oauth2/authorize"),
+        asked.pathname,
+      );
+      check(
+        "the request names the API's own client",
+        sentClient === apiClient,
+        sentClient,
+      );
+      check(
+        "the request does not name the provider's client",
+        !googleClient || sentClient !== googleClient,
+        googleClient ? `google id also configured` : "no google id configured",
+      );
+      check(
+        "the request carries the provider it was asked for",
+        asked.searchParams.get("provider") === "google",
+        asked.searchParams.get("provider") ?? "none",
+      );
+      check(
+        "the request comes back to the API's own callback",
+        asked.searchParams.get("redirect_uri") === oauthCallbackUrl(),
+        asked.searchParams.get("redirect_uri") ?? "none",
+      );
+      check(
+        "the request carries PKCE",
+        asked.searchParams.get("code_challenge_method") === "S256" &&
+          (asked.searchParams.get("code_challenge") ?? "").length > 20,
+        asked.searchParams.get("code_challenge_method") ?? "none",
+      );
+    }
   }
 
   console.log("");
