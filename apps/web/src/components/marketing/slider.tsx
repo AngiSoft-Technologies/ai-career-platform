@@ -37,8 +37,13 @@ export function Slider({
   const paused = hovered || hidden;
 
   const goTo = (i: number) => {
-    setIndex(i);
-    setDirection(i > index ? "next" : "prev");
+    // A slide index has to stay on the track. Without the wrap, leaving
+    // the last slide steps to `count` — the carousel translates past its
+    // own final panel and parks the visitor in front of blank space,
+    // where it keeps walking away into more of nothing.
+    const wrapped = ((i % count) + count) % count;
+    setDirection(wrapped > index ? "next" : "prev");
+    setIndex(wrapped);
   };
 
   const goToPrev = () => {

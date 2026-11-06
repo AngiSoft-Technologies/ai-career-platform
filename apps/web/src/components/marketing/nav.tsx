@@ -10,15 +10,19 @@ import {
   Globe,
   HelpCircle,
   Info,
+  BookOpen,
+  Building2,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
 
 const NAV_LINKS = [
   { href: "/features", label: "Features", icon: Sparkles },
+  { href: "/guides", label: "Guides", icon: BookOpen },
   { href: "/pricing", label: "Pricing", icon: Briefcase },
   { href: "/about", label: "About", icon: Info },
   { href: "/contact", label: "Contact", icon: Globe },
+  { href: "/employers", label: "For employers", icon: Building2 },
   { href: "/faq", label: "FAQ", icon: HelpCircle },
 ];
 

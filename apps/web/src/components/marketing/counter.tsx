@@ -9,9 +9,11 @@ interface CounterProps {
   duration?: number;
   delay?: number;
   className?: string;
+  /** Render as a span so the counter can sit inside text without a div. */
+  inline?: boolean;
 }
 
-export function Counter({ value, suffix = "", prefix = "", duration = 1800, delay = 0, className }: CounterProps) {
+export function Counter({ value, suffix = "", prefix = "", duration = 1800, delay = 0, className, inline }: CounterProps) {
   const [display, setDisplay] = useState(0);
   const [started, setStarted] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -32,7 +34,9 @@ export function Counter({ value, suffix = "", prefix = "", duration = 1800, dela
             function animate(now: number) {
               const progress = Math.min(1, (now - startTime) / duration);
               const eased = 1 - Math.pow(1 - progress, 3);
-              const current = Math.floor(start + (end - start) * eased);
+              // Snap to the final value: a floor() on the last frame lands a
+              // frame short and leaves "27" where "28" was promised.
+              const current = progress >= 1 ? end : Math.floor(start + (end - start) * eased);
               setDisplay(current);
               if (progress < 1) requestAnimationFrame(animate);
             }
@@ -48,11 +52,18 @@ export function Counter({ value, suffix = "", prefix = "", duration = 1800, dela
     return () => observer.disconnect();
   }, [value, duration, delay, started]);
 
+  const Tag = (inline ? "span" : "div") as "span";
+
   return (
-    <div ref={ref} className={className} aria-live="polite" aria-label={`${value} ${suffix}`.trim()}>
+    <Tag
+      ref={ref as React.Ref<HTMLSpanElement>}
+      className={className}
+      aria-live="polite"
+      aria-label={`${value} ${suffix}`.trim()}
+    >
       <span className="mk-counter__value">{display.toLocaleString()}</span>
       {suffix && <span className="mk-counter__suffix">{suffix}</span>}
       {prefix && <span className="mk-counter__prefix">{prefix}</span>}
-    </div>
+    </Tag>
   );
 }

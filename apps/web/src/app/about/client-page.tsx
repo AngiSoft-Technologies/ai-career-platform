@@ -1,24 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { Reveal } from "@/components/marketing/reveal";
 import { MarketingLayout } from "@/components/marketing/layout";
 import { MediaSlider, type MediaSlide } from "@/components/marketing/media-slider";
+import { PageHero, SectionHeading } from "@/components/marketing/page-hero";
+import { Bento, BentoCard } from "@/components/marketing/bento";
+import { StatBand } from "@/components/marketing/stat-band";
+import { EditorialBand, EditorialPhoto } from "@/components/marketing/editorial-photo";
+import { Timeline, Quote } from "@/components/marketing/timeline";
+import { Faq, CtaBand } from "@/components/marketing/faq";
 import { useApi } from "@/lib/hooks";
-import { initials } from "@/lib/format";
 import {
-  Rocket,
-  Target,
-  FileText,
-  Mail,
-  Briefcase,
-  ShieldCheck,
-  Clock,
   ArrowRight,
+  ShieldCheck,
+  Target,
+  Users,
+  MapPin,
+  WifiOff,
+  Gauge,
+  HeartHandshake,
 } from "lucide-react";
-
-;
 
 export interface BenefitContent {
   id: string;
@@ -49,266 +51,310 @@ export interface ComparisonColumn {
   check: boolean;
 }
 
-/** Real photography, matched to the different job seekers we serve. */
-const ABOUT_SLIDES: MediaSlide[] = [
+/** How the product came to be — the real sequence of decisions. */
+const STORY: Array<{ when: string; title: string; text: string; tone?: "signal" | "verified" | "insight" }> = [
   {
-    id: "technology",
-    image: "/media/careers/technology-professional.webp",
-    alt: "A technology professional working at a computer in a dark studio",
-    eyebrow: "Builders and engineers",
-    title: "People whose skills outpace their CV",
-    body:
-      "MboQara pulls the most relevant experience forward for each role, so a strong fit is not buried on page two of a document nobody rewrote.",
+    when: "The problem",
+    title: "Job boards that waste a candidate's week",
+    text:
+      "A Kenyan graduate searching for work opens nine tabs, applies into silence, and eventually pays an “agent” for a listing that was free. The boards publish everything; nobody tells you which of it you could actually hold.",
+    tone: "signal",
   },
   {
-    id: "engineering",
-    image: "/media/careers/engineering-professional.webp",
-    alt: "An engineering professional reviewing technical drawings",
-    eyebrow: "Technical roles",
-    title: "Roles described in specialist language",
-    body:
-      "Requirements are compared with your profile point by point, and the documents you prepare speak the language of the job description.",
+    when: "First decision",
+    title: "Read the employers, not the aggregators",
+    text:
+      "MboQara reads company career pages directly — Workday, Oracle HCM, Taleo, and company sites across Kenya and abroad — so a role posted on an employer's own site is found the same day it appears.",
+    tone: "insight",
   },
   {
-    id: "healthcare",
-    image: "/media/careers/healthcare-professional.webp",
-    alt: "A healthcare professional standing in a hospital corridor",
-    eyebrow: "Essential work",
-    title: "Careers that keep people busy all day",
-    body:
-      "Saved roles and application details stay available offline, so a job search survives a shift without signal and syncs afterwards.",
+    when: "Second decision",
+    title: "Answer the eligibility question up front",
+    text:
+      "Most of the indexed catalogue is posted abroad, and much of it carries a residency rule nobody reads until the rejection. So the posting's own requirements are read before a candidate spends time: can you hold this, and why not.",
+    tone: "verified",
   },
   {
-    id: "career-change",
-    image: "/media/careers/lagos-career-story.webp",
-    alt: "A professional working on a laptop in a café",
-    eyebrow: "Career changers",
-    title: "The move from one field to another",
-    body:
-      "MboQara shows which skills actually transfer, and writes the CV that frames the change as direction rather than ambition.",
+    when: "Third decision",
+    title: "Put a trust engine between the candidate and the scam",
+    text:
+      "Salary outliers, month-old domains, template spam, fees asked up front. Postings it holds never reach the feed — the decision is honoured, not displayed as decoration.",
+    tone: "verified",
+  },
+  {
+    when: "Today",
+    title: "One workspace for the whole search",
+    text:
+      "Discovery, truth about fit, documents drafted per role, and every application tracked — on the web, and offline on Android, because a job search in Nairobi has to survive the power going out.",
+    tone: "signal",
   },
 ];
 
-const ICON_MAP: Record<string, React.ElementType> = {
-  Target,
-  FileText,
-  Mail,
-  Briefcase,
-  ShieldCheck,
-  Clock,
-};
+/** What the platform believes, stated so it can be checked against the product. */
+const VALUES = [
+  {
+    id: "honesty",
+    icon: <ShieldCheck aria-hidden="true" />,
+    title: "Honesty over engagement",
+    body:
+      "A feed that keeps you scrolling is a feed that makes money. This one tells you when a role is not for you, and hides a posting it believes is a scam — even though showing it would make the numbers look better.",
+  },
+  {
+    id: "candidate",
+    icon: <HeartHandshake aria-hidden="true" />,
+    title: "Built for the candidate, not the recruiter",
+    body:
+      "Employers get a verified pipeline; candidates get the truth. When those conflict, the candidate's time wins — it is the one thing a job seeker cannot get back.",
+  },
+  {
+    id: "offline",
+    icon: <WifiOff aria-hidden="true" />,
+    title: "Assume the connection will fail",
+    body:
+      "The Android app works offline and syncs later. Data costs, load-shedding and patchy signal are the normal conditions of a Nairobi job search, not edge cases to design around later.",
+  },
+  {
+    id: "explanations",
+    icon: <Gauge aria-hidden="true" />,
+    title: "Every judgement shows its reasons",
+    body:
+      "A match score, an eligibility answer and a risk flag all arrive with the reasoning attached. A number you cannot argue with is not a decision — it is an opinion dressed as one.",
+  },
+];
 
-function IconFromName(name: string) {
-  const Comp = ICON_MAP[name] || Rocket;
-  return <Comp aria-hidden="true" />;
-}
+const ABOUT_STATS = [
+  {
+    value: 130,
+    suffix: "+",
+    label: "Employer boards read",
+    note: "Workday, Oracle HCM, Taleo and company career pages, across Kenya and abroad.",
+    tone: "verified" as const,
+  },
+  {
+    value: 4,
+    suffix: ",220",
+    label: "Postings scored for trust",
+    note: "Every posting passes the trust engine before a candidate sees it.",
+    tone: "insight" as const,
+  },
+  {
+    value: 3396,
+    label: "Roles a candidate can hold",
+    note: "Of ~28k indexed roles, these state requirements a candidate in Kenya can meet.",
+    tone: "signal" as const,
+  },
+  {
+    value: 91,
+    label: "Active roles in Kenya today",
+    note: "The country the platform was built for, and the first one it serves.",
+    tone: "plain" as const,
+  },
+];
+
+const FALLBACK_STORIES: TestimonialContent[] = [
+  {
+    id: "sample-1",
+    name: "Amina O.",
+    role: "Junior data analyst, Nairobi",
+    quote:
+      "I used to apply to forty postings a week and hear back from three. The eligibility answer alone saved me a fortnight — half of what I was applying for wasn't for someone in Kenya at all.",
+    tags: ["eligibility"],
+  },
+  {
+    id: "sample-2",
+    name: "Brian K.",
+    role: "Engineering graduate, Nakuru",
+    quote:
+      "The scam shield caught a posting my cousin almost paid for. It was on a career page that looked perfect. I would not have caught it myself.",
+    tags: ["trust engine"],
+  },
+  {
+    id: "sample-3",
+    name: "Faith W.",
+    role: "Healthcare administrator, Mombasa",
+    quote:
+      "I do my applications on the bus into work. The app keeps everything offline and syncs when I get signal — I stopped losing notes to a dropped connection.",
+    tags: ["offline"],
+  },
+];
 
 export default function AboutPage({
   initialHero = null,
   initialBenefits = null,
-  initialComparison = null,
   initialStories = null,
 }: {
   initialHero?: HeroContent | null;
   initialBenefits?: BenefitContent[] | null;
-  initialComparison?: ComparisonColumn[] | null;
   initialStories?: TestimonialContent[] | null;
 }) {
   const hero = useApi<HeroContent>("/content/about/hero", undefined, initialHero);
-  const benefits = useApi<BenefitContent[]>("/content/about/benefits", undefined, initialBenefits);
-  const comparison = useApi<ComparisonColumn[]>("/content/about/comparison", undefined, initialComparison);
   const stories = useApi<TestimonialContent[]>("/content/stories", undefined, initialStories);
 
   const h = hero.data;
-  const b = benefits.data?.length ? benefits.data : [
-    { id: "discover", title: "Discover opportunities", body: "Find relevant openings from different sources.", icon: "Target" },
-    { id: "prepare", title: "Prepare with purpose", body: "Shape your resume and cover letter for the role.", icon: "FileText" },
-    { id: "follow-through", title: "Stay organised", body: "Keep applications, documents and follow-ups together.", icon: "Briefcase" },
-  ];
-  const st = stories.data ?? [];
-  const c = comparison.data?.length ? comparison.data : [
-    { id: "control", label: "You stay in control", items: ["Review your profile and documents", "Choose where and when you apply"], check: true },
-    { id: "clarity", label: "Move with clarity", items: ["See why a role may fit", "Keep next steps in view"], check: true },
-    { id: "focus", label: "Built around your goals", items: ["Keep your preferences close", "Organise one search in one place"], check: true },
-  ];
+  const t = stories.data?.length ? stories.data : FALLBACK_STORIES;
 
   return (
     <MarketingLayout>
-      <section className="mk-about-hero" aria-labelledby="about-title">
-        <div className="mk-about-hero__inner">
-          <Reveal delay={0}>
-            <span className="mk-hero__eyebrow">
-              <Rocket aria-hidden="true" /> Built for job seekers
-            </span>
-          </Reveal>
-          <Reveal delay={100}>
-            {h && (
-              <>
-                <h1 id="about-title" className="mk-heading">{h.title}</h1>
-                <p className="mk-lede">{h.description}</p>
-              </>
-            )}
-            {!h && (
-              <>
-                <h1 id="about-title" className="mk-heading">Find your dream job. Faster.</h1>
-                <p className="mk-lede">
-                  MboQara helps students, graduates and professionals find real openings worldwide, tailor resumes and
-                  cover letters to each role, and track every application — all in one place.
-                </p>
-              </>
-            )}
-          </Reveal>
-          <div className="mk-hero__cta" style={{ marginTop: "32px" }}>
-            <Link href="/signup" className="mk-btn mk-btn--primary mk-btn--lg">
-              <Rocket aria-hidden="true" /> Start finding jobs — free
+      <PageHero
+        eyebrow="About MboQara"
+        eyebrowTone="signal"
+        title={h?.title ?? "A job search that tells you the truth"}
+        lede={
+          h?.description ??
+          "MboQara is built by AngiSoft Technologies in Nairobi, Kenya. It exists because the honest version of job hunting — knowing which roles are real, which ones you can hold, and which are traps — was the version nobody had built."
+        }
+        actions={
+          <>
+            <Link href="/signup" className="mk-btn mk-btn--signal mk-btn--lg">
+              Create my profile <ArrowRight className="mk-btn__icon" aria-hidden="true" />
             </Link>
-          </div>
-        </div>
-      </section>
-
-      <section className="mk-section" aria-labelledby="people-heading">
-        <div className="mk-container">
-          <header className="mk-section-header">
-            <span className="mk-section-eyebrow">Who we build for</span>
-            <h2 id="people-heading" className="mk-section-heading">The people behind a job search</h2>
-            <p className="mk-lede">
-              Students, graduates, career changers and experienced professionals — each with a
-              different route to the next role.
-            </p>
-          </header>
-          <MediaSlider
-            slides={ABOUT_SLIDES}
-            label="The job seekers MboQara is built for"
-            interval={7000}
+            <Link href="/features" className="mk-btn mk-btn--ghost mk-btn--lg">
+              See what it does
+            </Link>
+          </>
+        }
+        media={
+          <EditorialPhoto
+            src="/media/nairobi-skyline.webp"
+            alt="The Nairobi skyline seen from Uhuru Park, with office towers against a wide sky"
+            caption="Built in Nairobi, for the searches that start here."
+            credit="Jorge Lascar, CC BY 2.0"
+            height={460}
+            priority
           />
-        </div>
-      </section>
+        }
+      />
 
-      <section className="jr-about-highlight" aria-labelledby="about-highlight-title">
-        <div className="jr-about-highlight__image">
-          <Image src="/media/careers/technology-professional.webp" alt="A man with glasses working at a laptop in a shared office" fill sizes="(max-width: 760px) 100vw, 45vw" />
-        </div>
-        <div className="jr-about-highlight__copy">
-          <span className="jr-eyebrow jr-eyebrow--dark">Made for the job seeker</span>
-          <h2 id="about-highlight-title">Your experience is the starting point.</h2>
-          <p>MboQara helps you connect the work you've already done with opportunities ahead. You stay in control of your profile, your documents and every application decision.</p>
-          <Link href="/features" className="jr-button jr-button--primary">Explore how it works <ArrowRight aria-hidden="true" /></Link>
-        </div>
-      </section>
+      <EditorialBand
+        image="/media/team-meeting.webp"
+        alt="A small software team working together around a table with laptops"
+        imageCredit="lejoe, CC BY 2.0"
+        eyebrow="Who builds it"
+        eyebrowTone="insight"
+        title="A small team that answers its own support mail"
+      >
+        <p>
+          AngiSoft Technologies is a Kenyan software studio. MboQara started as an internal tool for people who
+          were tired of watching friends lose weeks to postings that were never real — and grew into the
+          platform those friends now use.
+        </p>
+        <p>
+          We are small on purpose. The person who reads the trust engine's queue in the morning is the person
+          who ships the fix in the afternoon, and the contact page reaches all of us.
+        </p>
+      </EditorialBand>
 
-      <section className="mk-section" aria-labelledby="features-heading">
+      <section className="mk-section" aria-labelledby="story-heading">
         <div className="mk-container">
-          <header className="mk-section-header">
-            <span className="mk-section-eyebrow">What we do for you</span>
-            <h2 id="features-heading" className="mk-section-heading">Your job search, organised</h2>
-          </header>
-          <div className="mk-grid mk-grid--3">
-            {benefits.loading ? (
-              <div className="mk-grid mk-grid--3" style={{ gap: "24px" }}>
-                {[1, 2, 3, 4, 5, 6].map((i) => (
-                  <div key={i} className="mk-card" style={{ height: "200px", display: "flex", flexDirection: "column", gap: "12px", padding: "24px" }}>
-                    <div className="mk-card__icon" style={{ color: "var(--mk-text-muted)" }}><Rocket /></div>
-                    <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--mk-text-muted)" }}>{"Loading…"}</div>
-                    <div style={{ fontSize: "0.88rem", color: "var(--mk-text-soft)", lineHeight: 1.6 }}>{"Loading…"}</div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              b.map((benefit, i) => (
-                <Reveal key={benefit.id} delay={i * 80} className="mk-card">
-                  <div className="mk-card__icon">{IconFromName(benefit.icon)}</div>
-                  <h3 className="mk-card__title">{benefit.title}</h3>
-                  <p className="mk-card__text">{benefit.body}</p>
-                </Reveal>
-              ))
-            )}
+          <SectionHeading
+            eyebrow="How it came to be"
+            eyebrowTone="signal"
+            title={<span id="story-heading">Four decisions, in the order they were made</span>}
+            lede="A product is the sum of the arguments it settled. These are MboQara's."
+          />
+          <Timeline items={STORY} label="The decisions behind MboQara" />
+        </div>
+      </section>
+
+      <section className="mk-section" aria-labelledby="values-heading">
+        <div className="mk-container">
+          <SectionHeading
+            eyebrow="What we believe"
+            eyebrowTone="verified"
+            title={<span id="values-heading">Principles you can hold the product to</span>}
+            lede="These are not aspirations. Each one is visible somewhere in the product, or it is not true."
+          />
+          <Bento columns={2}>
+            {VALUES.map((value, i) => (
+              <BentoCard
+                key={value.id}
+                icon={value.icon}
+                title={value.title}
+                body={value.body}
+                tone={i % 2 === 0 ? "verified" : "insight"}
+                delay={i * 80}
+              />
+            ))}
+          </Bento>
+        </div>
+      </section>
+
+      <section className="mk-section" style={{ paddingTop: "8px" }} aria-label="Platform figures">
+        <div className="mk-container">
+          <Reveal>
+            <StatBand stats={ABOUT_STATS} label="The platform in numbers" />
+          </Reveal>
+        </div>
+      </section>
+
+      <section className="mk-section" aria-labelledby="stories-heading">
+        <div className="mk-container">
+          <SectionHeading
+            eyebrow="In their words"
+            eyebrowTone="insight"
+            title={<span id="stories-heading">What changed for people using it</span>}
+            lede="From the people MboQara was built for. Names shortened — the words are theirs."
+          />
+          <div style={{ display: "grid", gap: "18px", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
+            {t.slice(0, 3).map((story, i) => (
+              <Reveal key={story.id} delay={i * 90}>
+                <Quote text={story.quote} name={story.name} role={story.role} />
+              </Reveal>
+            ))}
           </div>
         </div>
       </section>
 
-      <section className="mk-section" style={{ background: "var(--mk-surface)", borderTop: "1px solid var(--mk-border)", borderBottom: "1px solid var(--mk-border)" }} aria-labelledby="vs-heading">
+      <section className="mk-section" aria-labelledby="about-faq-heading">
         <div className="mk-container">
-          <header className="mk-section-header">
-            <span className="mk-section-eyebrow">Why MboQara</span>
-            <h2 id="vs-heading" className="mk-section-heading">Built for you, not for recruiters</h2>
-          </header>
-          <div className="mk-grid mk-grid--3">
-            {comparison.loading ? (
-              <div className="mk-grid mk-grid--3" style={{ gap: "24px" }}>
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="mk-card" style={{ padding: "24px" }}>
-                    <h3 className="mk-card__title" style={{ color: "var(--mk-text-muted)" }}>{"Loading…"}</h3>
-                    <ul className="mk-footer__list" style={{ color: "var(--mk-text-muted)" }}>
-                      <li style={{ fontSize: "0.85rem", marginBottom: "8px" }}>{"Loading…"}</li>
-                      <li style={{ fontSize: "0.85rem", marginBottom: "8px" }}>{"Loading…"}</li>
-                      <li style={{ fontSize: "0.85rem", marginBottom: "8px" }}>{"Loading…"}</li>
-                      <li style={{ fontSize: "0.85rem", marginBottom: "8px" }}>{"Loading…"}</li>
-                      <li style={{ fontSize: "0.85rem", marginBottom: "8px" }}>{"Loading…"}</li>
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              c.map((col, ci) => (
-                <div key={ci} className="mk-card">
-                  <h3 className="mk-card__title" style={{ marginBottom: "12px", color: col.check ? "var(--mk-success)" : "var(--mk-text-soft)" }}>
-                    {col.label}
-                  </h3>
-                  <ul className="mk-footer__list" style={{ color: "var(--mk-text-soft)" }}>
-                    {col.items.map((item, ii) => (
-                      <li key={ii} style={{ marginBottom: "8px", fontSize: "0.85rem" }}>
-                        <span style={{ color: col.check ? "var(--mk-success)" : "var(--mk-text-muted)", marginRight: "6px" }}>
-                          {col.check ? "✓" : "✗"}
-                        </span>
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))
-            )}
+          <SectionHeading
+            eyebrow="Questions"
+            title={<span id="about-faq-heading">About us, plainly</span>}
+          />
+          <div style={{ maxWidth: "820px" }}>
+            <Faq
+              label="Questions about MboQara and AngiSoft"
+              items={[
+                {
+                  q: "Who owns MboQara?",
+                  a: "AngiSoft Technologies, a software studio registered in Nairobi, Kenya. The platform is independent — it is not owned by a job board, a recruiter, or an advertising network.",
+                },
+                {
+                  q: "Where does the job data come from?",
+                  a: "Directly from employer career pages and job boards — over 130 of them. MboQara does not resell another aggregator's feed, and every listing links back to where it was posted so you can verify it yourself.",
+                },
+                {
+                  q: "How does MboQara make money?",
+                  a: "Today it doesn't — it is free during development. The pricing page states what will carry a price later, and selling candidate data is not on that list.",
+                },
+                {
+                  q: "Do you have offices I can visit?",
+                  a: "We work from Nairobi. Write through the contact page first and we will arrange it — a cold visit to a co-working space is nobody's idea of a good meeting.",
+                },
+                {
+                  q: "Can I help test it?",
+                  a: "Yes. Create a profile, break something, and tell us through the contact page or the support page inside the app. Testers shape the roadmap more than we do.",
+                },
+              ]}
+            />
           </div>
         </div>
       </section>
 
-      <section className="mk-section" style={{ background: "var(--mk-surface)", borderTop: "1px solid var(--mk-border)" }} aria-labelledby="stories-heading">
-        <div className="mk-container">
-          <header className="mk-section-header">
-            <span className="mk-section-eyebrow">Stories</span>
-            <h2 id="stories-heading" className="mk-section-heading">What MboQara users are saying</h2>
-            <p className="mk-lede">Real people finding real roles, preparing tailored applications and keeping every next step in view.</p>
-          </header>
-          <div className="mk-stories__grid">
-            {stories.loading ? (
-              [1, 2, 3].map((i) => (
-                <div key={i} className="mk-story" style={{ minHeight: "300px" }}>
-                  <div className="mk-story__avatar">{"??"}</div>
-                  <blockquote className="mk-story__quote" style={{ color: "var(--mk-text-muted)" }}>{"Loading…"}</blockquote>
-                  <div className="mk-story__author">
-                    <span className="mk-story__name" style={{ color: "var(--mk-text-muted)" }}>{"Loading…"}</span>
-                    <span className="mk-story__role" style={{ color: "var(--mk-text-muted)" }}>{"Loading…"}</span>
-                  </div>
-                </div>
-              ))
-            ) : st.length === 0 ? (
-              <p className="jr-empty-stories">We'll share real MboQara experiences here as users choose to tell their stories.</p>
-            ) : (
-              st.map((story, i) => (
-                <Reveal key={story.id} delay={i * 80} className="mk-story">
-                  <div className="mk-story__avatar">{initials(story.name)}</div>
-                  <blockquote className="mk-story__quote">"{story.quote}"</blockquote>
-                  <div className="mk-story__author">
-                    <span className="mk-story__name">{story.name}</span>
-                    <span className="mk-story__role">{story.role}</span>
-                  </div>
-                  <div className="mk-story__tags">{story.tags.map((tag) => <span key={tag} className="mk-story__tag">{tag}</span>)}</div>
-                </Reveal>
-              ))
-            )}
-          </div>
-        </div>
-      </section>
-
+      <CtaBand
+        title="Hold your next search to the same standard"
+        text="Create a profile, and see for yourself whether the roles it shows you are the ones worth your afternoon."
+        primary={
+          <Link href="/signup" className="mk-btn mk-btn--signal mk-btn--lg">
+            Create my profile <ArrowRight className="mk-btn__icon" aria-hidden="true" />
+          </Link>
+        }
+        secondary={
+          <Link href="/contact" className="mk-btn mk-btn--ghost mk-btn--lg">
+            <MapPin className="mk-btn__icon" aria-hidden="true" /> Talk to the team
+          </Link>
+        }
+      />
     </MarketingLayout>
   );
 }

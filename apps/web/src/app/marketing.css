@@ -215,6 +215,20 @@
 }
 .mk-btn--primary:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(109, 139, 255, 0.45); }
 .mk-btn--primary:active { transform: translateY(0); }
+
+/* The signal button: the action that matters, in the colour that means
+   "act on this". Amber against the ink reads as the warmest thing on
+   the page, which is the point — one obvious door per screen. */
+.mk-btn--signal {
+  background: linear-gradient(135deg, var(--mk-signal), var(--mk-signal-strong));
+  color: #1a1206;
+  box-shadow: var(--mk-signal-glow);
+}
+.mk-btn--signal:hover { transform: translateY(-1px); box-shadow: 0 8px 28px rgba(242, 163, 60, 0.5); filter: saturate(1.08); }
+.mk-btn--signal:active { transform: translateY(0); }
+
+/* A large button, for hero-level actions. */
+.mk-btn--lg { padding: 13px 26px; font-size: 0.95rem; border-radius: var(--mk-radius-md); }
 .mk-btn--ghost {
   background: transparent;
   color: var(--mk-text-soft);
@@ -273,7 +287,7 @@
 .mk-mobile-menu__sub-link:hover { color: var(--mk-text); background: var(--mk-surface); }
 .mk-mobile-menu__actions { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
 
-@media (max-width: 880px) {
+@media (max-width: 1180px) {
   .mk-nav__primary { display: none; }
   .mk-nav__actions > .mk-btn--ghost { display: none; }
   .mk-nav__mobile-toggle { display: flex; }
@@ -1746,3 +1760,592 @@
 .jr-review-form--done { text-align: center; }
 .jr-review-form--done h3 { margin: 0 0 8px; font-size: 1.3rem; color: var(--mk-text); }
 .jr-review-form--done p { margin: 0; color: var(--mk-text-soft); }
+
+/* ==========================================================================
+   The instrument panel — 2026 marketing vocabulary
+   The product's promise is trust: every role checked for eligibility,
+   every posting scored before a candidate sees it. So the marketing
+   site borrows the look of the thing it sells — signal colours that
+   mean something (amber = act on this, green = verified, violet =
+   intelligence), numbers set in mono with tabular figures, photography
+   used editorially rather than as wallpaper.
+   ========================================================================== */
+
+:root {
+  /* Signal — opportunity and energy. The primary call to action. */
+  --mk-signal: #f2a33c;
+  --mk-signal-strong: #ffb85c;
+  --mk-signal-soft: rgba(242, 163, 60, 0.14);
+  --mk-signal-glow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 18px 50px rgba(242, 163, 60, 0.28);
+
+  /* Verified — the trust engine agreeing. Used for eligibility facts,
+     the Scam Shield, and any claim the platform stands behind. */
+  --mk-verified: #3ecf8e;
+  --mk-verified-strong: #5fe3a6;
+  --mk-verified-soft: rgba(62, 207, 142, 0.14);
+  --mk-verified-glow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 18px 50px rgba(62, 207, 142, 0.26);
+
+  --mk-numeral: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+}
+
+/* --- display type ------------------------------------------------------- */
+
+.mk-display {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.6rem, 5.4vw, 4.4rem);
+  font-weight: 800;
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+  color: var(--mk-text);
+  text-wrap: balance;
+}
+
+.mk-display--sm { font-size: clamp(2rem, 3.8vw, 3.1rem); }
+
+.mk-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--mk-text-muted);
+}
+
+.mk-eyebrow--signal { color: var(--mk-signal); }
+.mk-eyebrow--verified { color: var(--mk-verified); }
+.mk-eyebrow--insight { color: var(--mk-accent); }
+
+.mk-eyebrow__rule { width: 26px; height: 1px; background: currentColor; opacity: 0.55; }
+
+/* Every number on the marketing site is data, so every number is set the
+   same way: mono, tabular, tight. A score does not change width when it
+   changes value. */
+.mk-numeral {
+  font-family: var(--mk-numeral);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  font-feature-settings: "tnum" 1;
+}
+
+/* --- editorial photo ---------------------------------------------------- */
+
+.mk-photo {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--mk-radius-lg);
+  border: 1px solid var(--mk-border);
+  background: var(--mk-bg-elevated);
+  isolation: isolate;
+}
+
+.mk-photo__image { object-fit: cover; }
+
+.mk-photo__scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(6, 9, 17, 0) 34%, rgba(6, 9, 17, 0.82) 100%);
+  pointer-events: none;
+}
+
+.mk-photo__caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px;
+  color: var(--mk-text);
+}
+
+.mk-photo__caption-text { font-size: 0.86rem; font-weight: 600; line-height: 1.45; }
+
+.mk-photo__credit {
+  flex-shrink: 0;
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(238, 242, 255, 0.62);
+}
+
+/* A full-bleed editorial band: photograph behind, copy in front. This is
+   the layout the page heroes use — magazine, not brochure. */
+.mk-editorial {
+  position: relative;
+  overflow: hidden;
+  border-block: 1px solid var(--mk-border);
+}
+
+.mk-editorial__media { position: absolute; inset: 0; }
+
+.mk-editorial__media img { object-fit: cover; }
+
+.mk-editorial__veil {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(100deg, rgba(6, 9, 17, 0.96) 8%, rgba(6, 9, 17, 0.72) 46%, rgba(6, 9, 17, 0.34) 100%),
+    radial-gradient(120% 90% at 85% 15%, rgba(242, 163, 60, 0.14), transparent 60%);
+}
+
+.mk-editorial__inner {
+  position: relative;
+  display: grid;
+  gap: 28px;
+  padding-block: clamp(64px, 9vw, 116px);
+  max-width: 780px;
+}
+
+/* --- stat band ----------------------------------------------------------- */
+
+.mk-stat-band {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  border: 1px solid var(--mk-border);
+  border-radius: var(--mk-radius-lg);
+  background: var(--mk-border);
+  overflow: hidden;
+}
+
+.mk-stat {
+  display: grid;
+  gap: 6px;
+  padding: 26px 24px;
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015));
+}
+
+.mk-stat__value {
+  font-size: clamp(1.7rem, 3vw, 2.3rem);
+  font-weight: 750;
+  line-height: 1;
+  color: var(--mk-text);
+}
+
+.mk-stat__value--signal { color: var(--mk-signal); }
+.mk-stat__value--verified { color: var(--mk-verified); }
+.mk-stat__value--insight { color: var(--mk-accent); }
+
+.mk-stat__label { font-size: 0.8rem; font-weight: 600; letter-spacing: 0.04em; color: var(--mk-text-soft); }
+
+.mk-stat__note { font-size: 0.74rem; line-height: 1.5; color: var(--mk-text-muted); }
+
+@media (max-width: 860px) {
+  .mk-stat-band { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 480px) {
+  .mk-stat-band { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* --- timeline ------------------------------------------------------------ */
+
+.mk-timeline { display: grid; gap: 0; }
+
+.mk-timeline__item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 24px;
+  padding-bottom: 40px;
+}
+
+.mk-timeline__item:last-child { padding-bottom: 0; }
+
+/* The spine runs through the dots, not through the text. */
+.mk-timeline__item::before {
+  content: "";
+  position: absolute;
+  left: 11px;
+  top: 26px;
+  bottom: -2px;
+  width: 1px;
+  background: linear-gradient(180deg, var(--mk-border-strong), transparent);
+}
+
+.mk-timeline__item:last-child::before { display: none; }
+
+.mk-timeline__marker {
+  position: relative;
+  z-index: 1;
+  width: 23px;
+  height: 23px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: var(--mk-bg-elevated);
+  border: 1px solid var(--mk-border-strong);
+  display: grid;
+  place-items: center;
+}
+
+.mk-timeline__marker::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mk-accent);
+}
+
+.mk-timeline__item--signal .mk-timeline__marker::after { background: var(--mk-signal); }
+.mk-timeline__item--verified .mk-timeline__marker::after { background: var(--mk-verified); }
+
+.mk-timeline__when {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mk-text-muted);
+  padding-top: 6px;
+}
+
+.mk-timeline__body { display: grid; gap: 8px; }
+
+.mk-timeline__title { margin: 0; font-size: 1.18rem; font-weight: 750; letter-spacing: -0.01em; color: var(--mk-text); }
+
+.mk-timeline__text { margin: 0; font-size: 0.95rem; line-height: 1.65; color: var(--mk-text-soft); }
+
+@media (max-width: 620px) {
+  .mk-timeline__item { grid-template-columns: 34px 1fr; gap: 16px; }
+  .mk-timeline__when { display: none; }
+}
+
+/* --- quote --------------------------------------------------------------- */
+
+.mk-quote {
+  display: grid;
+  gap: 20px;
+  padding: 30px;
+  border-radius: var(--mk-radius-lg);
+  border: 1px solid var(--mk-border);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+}
+
+.mk-quote__text {
+  margin: 0;
+  font-size: 1.02rem;
+  line-height: 1.6;
+  color: var(--mk-text);
+  text-wrap: pretty;
+}
+
+.mk-quote__text::before { content: "\201C"; color: var(--mk-signal); font-size: 1.4em; line-height: 0; margin-right: 2px; }
+.mk-quote__text::after { content: "\201D"; color: var(--mk-signal); font-size: 1.4em; line-height: 0; margin-left: 2px; }
+
+.mk-quote__who { display: flex; align-items: center; gap: 12px; }
+
+.mk-quote__avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.82rem;
+  font-weight: 750;
+  color: var(--mk-text);
+  background: var(--mk-accent-soft);
+  border: 1px solid var(--mk-border);
+}
+
+.mk-quote__name { font-size: 0.9rem; font-weight: 700; color: var(--mk-text); }
+
+.mk-quote__role { font-size: 0.78rem; color: var(--mk-text-muted); }
+
+/* --- video facade ---------------------------------------------------------
+   A YouTube embed costs ~400KB of JavaScript and phones home on load. The
+   facade ships a still frame instead and only asks YouTube for the player
+   once the visitor chooses to watch. No API key, no cookies until asked. */
+
+.mk-video {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--mk-radius-lg);
+  border: 1px solid var(--mk-border);
+  background: var(--mk-bg-elevated);
+}
+
+.mk-video__frame { position: relative; width: 100%; aspect-ratio: 16 / 9; }
+
+.mk-video__poster { object-fit: cover; }
+
+.mk-video__play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  gap: 14px;
+  align-content: center;
+  border: none;
+  cursor: pointer;
+  color: var(--mk-text);
+  background: linear-gradient(180deg, rgba(6, 9, 17, 0.15), rgba(6, 9, 17, 0.72));
+  transition: background var(--mk-dur) var(--mk-ease);
+}
+
+.mk-video__play:hover { background: linear-gradient(180deg, rgba(6, 9, 17, 0.05), rgba(6, 9, 17, 0.6)); }
+
+.mk-video__play-ring {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: transform var(--mk-dur) var(--mk-ease), background var(--mk-dur) var(--mk-ease);
+}
+
+.mk-video__play:hover .mk-video__play-ring { transform: scale(1.08); background: var(--mk-signal); border-color: var(--mk-signal); }
+.mk-video__play:hover .mk-video__play-ring svg { color: #14100a; }
+
+.mk-video__play-ring svg { width: 26px; height: 26px; margin-left: 3px; color: var(--mk-text); }
+
+.mk-video__play-label { font-size: 0.82rem; font-weight: 650; letter-spacing: 0.02em; text-shadow: 0 1px 8px rgba(6, 9, 17, 0.8); }
+
+.mk-video__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--mk-border);
+  font-size: 0.8rem;
+  color: var(--mk-text-muted);
+}
+
+.mk-video__meta strong { color: var(--mk-text-soft); font-weight: 650; }
+
+.mk-video__iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+
+/* --- app frame -------------------------------------------------------------
+   Product shots, drawn from the real interface. A photograph of a screen
+   goes stale the moment the product ships; a frame that renders the actual
+   layout stays honest, and it needs no signed-in browser to capture. */
+
+.mk-app-frame {
+  overflow: hidden;
+  border-radius: var(--mk-radius-lg);
+  border: 1px solid var(--mk-border);
+  background: var(--mk-bg-elevated);
+  box-shadow: var(--mk-shadow-lg);
+}
+
+.mk-app-frame__chrome {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--mk-border);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.mk-app-frame__dots { display: flex; gap: 6px; }
+
+.mk-app-frame__dot { width: 9px; height: 9px; border-radius: 50%; background: var(--mk-border-strong); }
+.mk-app-frame__dot:first-child { background: rgba(251, 113, 133, 0.55); }
+.mk-app-frame__dot:nth-child(2) { background: rgba(242, 163, 60, 0.55); }
+.mk-app-frame__dot:nth-child(3) { background: rgba(62, 207, 142, 0.55); }
+
+.mk-app-frame__url {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 12px;
+  border-radius: var(--mk-radius-pill);
+  background: rgba(6, 9, 17, 0.55);
+  border: 1px solid var(--mk-border);
+  font-family: var(--mk-numeral);
+  font-size: 0.68rem;
+  letter-spacing: 0.01em;
+  color: var(--mk-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mk-app-frame__body { padding: clamp(14px, 2vw, 22px); background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent); }
+
+/* The mock's own chrome — mirror of the app shell, at marketing scale. */
+.mk-mock { display: grid; gap: 12px; }
+
+.mk-mock__bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.mk-mock__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: var(--mk-radius-pill);
+  border: 1px solid var(--mk-border);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--mk-text-soft);
+  white-space: nowrap;
+}
+
+.mk-mock__pill svg { width: 13px; height: 13px; }
+
+.mk-mock__pill--verified { color: var(--mk-verified); border-color: rgba(62, 207, 142, 0.35); background: var(--mk-verified-soft); }
+.mk-mock__pill--signal { color: var(--mk-signal); border-color: rgba(242, 163, 60, 0.35); background: var(--mk-signal-soft); }
+.mk-mock__pill--insight { color: var(--mk-accent); border-color: rgba(109, 139, 255, 0.35); background: var(--mk-accent-soft); }
+
+.mk-mock__card {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: var(--mk-radius-md);
+  border: 1px solid var(--mk-border);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.mk-mock__card-head { display: flex; align-items: flex-start; gap: 12px; }
+
+.mk-mock__title { margin: 0; font-size: 0.92rem; font-weight: 700; line-height: 1.35; color: var(--mk-text); }
+
+.mk-mock__org { margin: 2px 0 0; font-size: 0.74rem; color: var(--mk-text-muted); }
+
+.mk-mock__score {
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  min-width: 46px;
+  padding: 6px 8px;
+  border-radius: var(--mk-radius-md);
+  background: var(--mk-accent-soft);
+  border: 1px solid rgba(109, 139, 255, 0.35);
+}
+
+.mk-mock__score-value { font-size: 1.05rem; font-weight: 800; line-height: 1; color: var(--mk-accent); }
+
+.mk-mock__score-label { font-size: 0.56rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mk-text-muted); }
+
+.mk-mock__meta { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.7rem; color: var(--mk-text-muted); }
+.mk-mock__meta span { display: inline-flex; align-items: center; gap: 5px; }
+.mk-mock__meta svg { width: 12px; height: 12px; }
+
+.mk-mock__row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: var(--mk-radius-sm); background: rgba(255, 255, 255, 0.03); border: 1px solid var(--mk-border); }
+.mk-mock__row-label { font-size: 0.75rem; color: var(--mk-text-soft); }
+.mk-mock__row-value { margin-left: auto; font-size: 0.72rem; font-weight: 700; color: var(--mk-text); }
+.mk-mock__row-value--verified { color: var(--mk-verified); }
+.mk-mock__row-value--signal { color: var(--mk-signal); }
+
+.mk-mock__meter { height: 6px; border-radius: 99px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.mk-mock__meter span { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--mk-accent), var(--mk-signal)); }
+
+.mk-mock__lines { display: grid; gap: 7px; }
+.mk-mock__line { height: 8px; border-radius: 99px; background: rgba(255, 255, 255, 0.07); }
+.mk-mock__line:nth-child(2) { width: 88%; }
+.mk-mock__line:nth-child(3) { width: 64%; }
+.mk-mock__line:nth-child(4) { width: 76%; }
+
+/* --- faq ------------------------------------------------------------------- */
+
+.mk-faq { display: grid; gap: 12px; }
+
+.mk-faq__item {
+  border: 1px solid var(--mk-border);
+  border-radius: var(--mk-radius-md);
+  background: rgba(255, 255, 255, 0.03);
+  transition: border-color var(--mk-dur) var(--mk-ease);
+}
+
+.mk-faq__item[open] { border-color: var(--mk-border-strong); }
+
+.mk-faq__q {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  cursor: pointer;
+  font-size: 0.98rem;
+  font-weight: 650;
+  color: var(--mk-text);
+  list-style: none;
+}
+
+.mk-faq__q::-webkit-details-marker { display: none; }
+
+.mk-faq__q::after {
+  content: "";
+  margin-left: auto;
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid var(--mk-text-muted);
+  border-bottom: 2px solid var(--mk-text-muted);
+  transform: rotate(45deg);
+  transition: transform var(--mk-dur) var(--mk-ease);
+}
+
+.mk-faq__item[open] .mk-faq__q::after { transform: rotate(225deg); }
+
+.mk-faq__a { padding: 0 18px 18px 42px; font-size: 0.92rem; line-height: 1.65; color: var(--mk-text-soft); }
+
+/* --- utilities -------------------------------------------------------------- */
+
+.mk-hairline { border: 1px solid var(--mk-border); }
+
+.mk-panel {
+  border: 1px solid var(--mk-border);
+  border-radius: var(--mk-radius-lg);
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.018));
+}
+
+.mk-cta {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--mk-radius-xl);
+  border: 1px solid var(--mk-border);
+  background:
+    radial-gradient(90% 140% at 50% -20%, rgba(242, 163, 60, 0.22), transparent 60%),
+    linear-gradient(165deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
+  text-align: center;
+}
+
+/* Motion is a preference, not a default. Everything animated on the
+   marketing site settles into its final state when asked to be still. */
+@media (prefers-reduced-motion: reduce) {
+  .mk-video__play-ring,
+  .mk-faq__q::after,
+  .mk-footer__link { transition: none !important; }
+}
+
+/* --- responsive: hero split + bento ---------------------------------------
+   Inline grid definitions cannot collapse on a phone, so the measured
+   layouts live here where a media query can reach them. */
+
+.mk-hero-split { display: grid; grid-template-columns: minmax(0, 1fr); }
+
+.mk-bento { display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr); }
+
+.mk-bento__cell { display: grid; min-width: 0; }
+.mk-bento__cell > * { height: 100%; }
+
+@media (min-width: 900px) {
+  .mk-hero-split--with-media { grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); }
+  .mk-bento--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mk-bento--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .mk-bento__cell[data-span="2"] { grid-column: span 2; }
+  .mk-bento__card:hover { transform: translateY(-3px); border-color: var(--mk-border-strong); }
+}
+
+/* A wide stat band beside a photo reads better stacked on a tablet. */
+@media (max-width: 1024px) and (min-width: 621px) {
+  .mk-stat-band { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* --- responsive: editorial ------------------------------------------------- */
+
+@media (max-width: 760px) {
+  .mk-editorial__veil {
+    background:
+      linear-gradient(180deg, rgba(6, 9, 17, 0.55) 0%, rgba(6, 9, 17, 0.94) 62%),
+      radial-gradient(120% 90% at 85% 15%, rgba(242, 163, 60, 0.12), transparent 60%);
+  }
+}

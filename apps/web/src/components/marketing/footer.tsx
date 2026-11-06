@@ -15,6 +15,12 @@ import {
   Linkedin,
   Github,
   X,
+  Building2,
+  Rocket,
+  BookOpen,
+  Cookie,
+  Accessibility,
+  KeyRound,
 } from "lucide-react";
 
 const FOOTER_LINKS = {
@@ -23,19 +29,25 @@ const FOOTER_LINKS = {
     { href: "/pricing", label: "Pricing", icon: Briefcase },
     { href: "/download", label: "Download", icon: Download },
     { href: "/features#security", label: "Scam Shield", icon: ShieldCheck },
+    { href: "/employers", label: "For employers", icon: Building2 },
   ],
   Company: [
     { href: "/about", label: "About", icon: Info },
+    { href: "/careers", label: "Careers", icon: Rocket },
     { href: "/contact", label: "Contact", icon: Globe },
   ],
   Resources: [
     { href: "/faq", label: "FAQ", icon: HelpCircle },
+    { href: "/guides", label: "Guides", icon: BookOpen },
     { href: "/security", label: "Security", icon: Lock },
+    { href: "/accessibility", label: "Accessibility", icon: Accessibility },
     { href: "https://www.angisoft.co.ke", label: "AngiSoft Technologies", icon: ArrowRight, external: true },
   ],
   Legal: [
     { href: "/privacy", label: "Privacy", icon: Lock },
     { href: "/terms", label: "Terms", icon: FileText },
+    { href: "/cookies", label: "Cookie notice", icon: Cookie },
+    { href: "/consent", label: "App permissions", icon: KeyRound },
   ],
 };
 

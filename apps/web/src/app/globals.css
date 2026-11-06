@@ -9,6 +9,45 @@ html {
 }
 
 /* ==========================================================================
+   tailwind theme — one source of truth
+   The marketing tokens in marketing.css are the design system; Tailwind
+   reads them here so utilities (`text-signal`, `bg-verified/10`) and the
+   semantic classes can never drift apart. Colour values resolve through
+   the runtime vars, so the five themes swap through the same contract.
+   ========================================================================== */
+
+@theme inline {
+  --color-ink: var(--mk-bg);
+  --color-ink-elevated: var(--mk-bg-elevated);
+  --color-surface: var(--mk-surface-solid);
+  --color-hairline: var(--mk-border);
+  --color-text: var(--mk-text);
+  --color-text-soft: var(--mk-text-soft);
+  --color-text-muted: var(--mk-text-muted);
+
+  /* Signal colours. Opportunity is amber, verification is green,
+     intelligence stays violet — a posting that passed the trust engine
+     reads green, a call to act reads amber, and a match reads violet. */
+  --color-signal: var(--mk-signal);
+  --color-signal-soft: var(--mk-signal-soft);
+  --color-verified: var(--mk-verified);
+  --color-verified-soft: var(--mk-verified-soft);
+  --color-insight: var(--mk-accent);
+  --color-insight-soft: var(--mk-accent-soft);
+  --color-danger: var(--mk-danger);
+  --color-danger-soft: var(--mk-danger-soft);
+
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+  --font-mono: var(--font-mono);
+
+  --radius-card: var(--mk-radius-lg);
+  --radius-pill: var(--mk-radius-pill);
+
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ==========================================================================
    mboqara design tokens
    Five themes share one semantic token contract. A theme swaps the token
    values and its shell component, so every component works everywhere.
