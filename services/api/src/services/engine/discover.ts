@@ -102,13 +102,12 @@ function boardPageUrl(board: AtsBoard): string | null {
  * read the way they write it: the employer's name first, then the
  * board's own address — "KCB Group", "Centific|Wd1|Centific Global".
  */
-async function boardEmployerName(board: AtsBoard): Promise<string> {
+async function boardEmployerName(board: AtsBoard): Promise<string | null> {
   const addressed = board.kind === "oracle" || board.kind === "workday";
   const rawToken = addressed
     ? (board.token.split("|")[0] ?? board.token)
     : board.token;
-  const fallback =
-    normaliseCompanyName(prettify(rawToken)) ?? prettify(rawToken);
+  const fallback = normaliseCompanyName(prettify(rawToken)) ?? prettify(rawToken);
   // A token that reads as words is good enough on its own — unless it
   // is an address, which never is.
   if (!addressed && /[-_]/.test(board.token)) return fallback;
@@ -119,7 +118,10 @@ async function boardEmployerName(board: AtsBoard): Promise<string> {
   try {
     const scraped = await scrapeUrl(page, { onlyMainContent: false });
     const title =
-      scraped.metadata?.title ?? scraped.metadata?.ogTitle ?? null;
+      scraped.metadata?.ogSiteName ??
+      scraped.metadata?.title ??
+      scraped.metadata?.ogTitle ??
+      null;
     const first = addressed ? (title?.split("|")[0] ?? title) : title;
     const name = normaliseCompanyName(first);
     if (name) return name;
@@ -129,7 +131,24 @@ async function boardEmployerName(board: AtsBoard): Promise<string> {
       "Board name lookup failed; using the token",
     );
   }
-  return fallback;
+
+  // An addressed board's token is an address, and an address is not an
+  // employer's name: "Erey.Fa.Em3.Oraclecloud.Com" is Airtel Africa.
+  // So when the page cannot be read, the board's own reader is left to
+  // name the employer — for Oracle, that is the employer's own name in
+  // the requisition.
+  return addressed ? null : fallback;
+}
+
+/**
+ * The employer's name, as the board's page writes it.
+ *
+ * Exported so a repair can ask the same question the pipeline asks:
+ * a tenant-address row in the catalogue ("Erey.Fa.Em3.Oraclecloud.Com")
+ * is Airtel Africa, and only the board's page knows that.
+ */
+export async function boardEmployer(board: AtsBoard): Promise<string | null> {
+  return boardEmployerName(board);
 }
 
 function toDescription(html: string | null | undefined): string {
@@ -636,6 +655,10 @@ interface OracleRequisition {
   PostedDate?: string;
   WorkplaceType?: string;
   ShortDescriptionStr?: string;
+  /** The employer, as Oracle holds it. */
+  LegalEmployer?: string;
+  Organization?: string;
+  BusinessUnit?: string;
   SecondaryLocations?: Array<{ LocationName?: string }>;
 }
 
@@ -651,8 +674,32 @@ const COUNTRY_NAMES: Record<string, string> = {
 
 const oracleCompanyCache = new Map<string, string>();
 
-/** Oracle HCM hides the employer name in the API; the careers page has it. */
-async function oracleCompany(host: string, site: string): Promise<string> {
+/**
+ * The employer's name, as the board writes it.
+ *
+ * Oracle's own endpoint does not name the employer: the postings come
+ * back with a title and a location, and the tenant's address says
+ * nothing at all — "eoin.fa.em3.oraclecloud.com|CX_3001" is KCB Group,
+ * and "erey.fa.em3.oraclecloud.com|CX_1" is Airtel Africa.
+ *
+ * The board's page carries the name ("Airtel Africa Careers", "KCB
+ * Group"), so the page is read. It is read only once per board: the
+ * name is the same for every posting on it.
+ *
+ * When the page cannot be read — and it cannot be read sometimes, for
+ * a tenant that is slow to answer — the employer's own name in the
+ * requisition is used instead: Oracle holds it in `LegalEmployer`,
+ * which is the same organisation the page is about. That fallback is
+ * not remembered, so the page is tried again on the next cycle: the
+ * page's name is the one the employer publishes under, and the legal
+ * entity's name is not always the same thing ("Safaricom PLC" and
+ * "Safaricom" are one employer and two rows).
+ */
+async function oracleCompany(
+  host: string,
+  site: string,
+  fallback = "",
+): Promise<string> {
   const key = `${host}|${site}`;
   const cached = oracleCompanyCache.get(key);
   if (cached) return cached;
@@ -665,16 +712,25 @@ async function oracleCompany(host: string, site: string): Promise<string> {
   const raw =
     landing?.metadata.ogSiteName ??
     landing?.metadata.title ??
-    landing?.markdown.split("\n").find((line) => line.trim().length > 0) ??
+    landing?.metadata.ogTitle ??
     "";
 
   const name = raw
+    // "Search Jobs - Central Bank of Kenya Careers" is the board's own
+    // label for the page, not the employer's name.
+    .replace(/^(?:search\s+jobs?|join\s+our\s+team|job\s+search|careers?)\s*[-–—|:]\s*/i, "")
     .replace(/\s*[|\-–—]\s*(careers?|jobs?|job search|home).*$/i, "")
     .replace(/\s*(careers?|jobs?)\s*$/i, "")
     .trim();
 
-  if (name) oracleCompanyCache.set(key, name);
-  return name || prettify(host.split(".")[0] ?? "Company");
+  if (name) {
+    oracleCompanyCache.set(key, name);
+    return name;
+  }
+
+  if (fallback) return fallback;
+
+  return prettify(host.split(".")[0] ?? "Company");
 }
 
 /**
@@ -713,7 +769,11 @@ async function oracleBoard(token: string): Promise<RawJob[]> {
   const list = (payload.items ?? []).flatMap((item) => item.requisitionList ?? []);
   if (list.length === 0) return [];
 
-  const company = await oracleCompany(host, site);
+  const company = await oracleCompany(
+    host,
+    site,
+    list[0]?.LegalEmployer ?? list[0]?.Organization ?? list[0]?.BusinessUnit ?? "",
+  );
 
   return list
     .filter((job) => job.Id && job.Title)
@@ -784,6 +844,13 @@ export async function fetchAtsBoard(board: AtsBoard): Promise<RawJob[]> {
   })();
 
   if (jobs.length === 0) return jobs;
+
+  // The employer's name is applied to every posting — but only when the
+  // board's page gave one. An addressed board whose page could not be
+  // read keeps the name its own reader found: for Oracle, that is the
+  // employer's own name in the requisition, which is better than the
+  // tenant's address.
+  if (!employer) return jobs;
 
   return jobs.map((job) => ({
     ...job,
