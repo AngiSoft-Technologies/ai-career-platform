@@ -35,6 +35,7 @@ import {
   employerSegment,
 } from "../services/api/src/services/engine/discover.js";
 import { boardKey } from "../services/api/src/services/engine/ats.js";
+import { addressOf } from "../services/api/src/services/agents/dedup-agent.js";
 import {
   isUnreadableHost,
   jobUrlRefusal,
@@ -1317,6 +1318,41 @@ console.log("\n[19] finding the boards");
     "an employer is asked about once",
     new Set(employerQueries).size === employerQueries.length,
     employerQueries.join(" | "),
+  );
+
+  // The posting's own address.
+  //
+  // The same posting read from a board and read from a search result
+  // has two fingerprints when the two pages name the employer
+  // differently, and the second one was promoted as though it were a
+  // new role. The address does not change, and it is what says "the
+  // same posting".
+  const address = addressOf(
+    "https://www.ajirahub.co.ke/jobs/aeef61ae-2ee8-46ad-991a-f5459458caae",
+    null,
+  );
+  check(
+    "an address is read without its case and its trailing slash",
+    address ===
+      addressOf(
+        "https://www.ajirahub.co.ke/jobs/aeef61ae-2ee8-46ad-991a-f5459458caae/",
+        null,
+      ),
+    String(address),
+  );
+  check(
+    "two postings on one host are two addresses",
+    address !==
+      addressOf(
+        "https://www.ajirahub.co.ke/jobs/8613166b-6477-4bed-810c-50470d7bf679",
+        null,
+      ),
+    String(address),
+  );
+  check(
+    "the address is the page, not the query",
+    addressOf("https://example.test/job?ref=search", null) === "example.test/job",
+    String(addressOf("https://example.test/job?ref=search", null)),
   );
 }
 

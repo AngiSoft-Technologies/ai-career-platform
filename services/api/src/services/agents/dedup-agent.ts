@@ -131,6 +131,29 @@ export function opportunityIdentity(
 }
 
 /**
+ * The posting's own address.
+ *
+ * The address a posting is applied to and the address it was found at
+ * are the same page in every case that matters, and the address is
+ * compared without its trailing slash and without its case.
+ */
+export function addressOf(
+  applyUrl: string | null | undefined,
+  sourceUrl: string | null | undefined,
+): string | null {
+  const raw = applyUrl ?? sourceUrl;
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    return `${parsed.hostname.toLowerCase()}${parsed.pathname
+      .replace(/\/+$/, "")
+      .toLowerCase()}`;
+  } catch {
+    return raw.trim().toLowerCase().replace(/\/+$/, "");
+  }
+}
+
+/**
  * Deduplication Agent
  *
  * Deduplicates discovery_candidates:
@@ -158,8 +181,11 @@ export class DeduplicationAgent extends BaseDiscoveryAgent {
       company: string | null;
       description: string | null;
       simhash: string | null;
+      apply_url: string | null;
+      source_url: string | null;
     }>(
-      `SELECT id, fingerprint, title, company, description, simhash
+      `SELECT id, fingerprint, title, company, description, simhash,
+              apply_url, source_url
          FROM discovery_candidates
         WHERE status = 'pending'
         ORDER BY discovered_at ASC
@@ -186,6 +212,23 @@ export class DeduplicationAgent extends BaseDiscoveryAgent {
       .map((c) => c.fingerprint)
       .filter((f): f is string => Boolean(f));
     const existingOpps = await this.fingerprintExists(opportunityFingerprints);
+
+    // The same posting, under another employer's name.
+    //
+    // The fingerprint is the employer's name, the title, the city and
+    // the date — so the same posting read from a board and read from a
+    // search result has two fingerprints when the two pages name the
+    // employer differently, and the second one is promoted as though it
+    // were a new role.
+    //
+    // The address does not change: it is the same page, and the
+    // catalogue holds one row per page. So the address is checked too,
+    // and a posting that is already in the catalogue is a duplicate
+    // whatever the two pages called it.
+    const candidateAddresses = candidates.rows
+      .map((candidate) => addressOf(candidate.apply_url, candidate.source_url))
+      .filter((address): address is string => Boolean(address));
+    const existingAddresses = await this.addressExists(candidateAddresses);
     // Exclude this batch's own rows: otherwise a candidate matches itself and
     // every single one is classified as a duplicate, so nothing is ever
     // promoted. Within-batch duplicates are handled by `seenInBatch` below.
@@ -213,6 +256,14 @@ export class DeduplicationAgent extends BaseDiscoveryAgent {
 
       // Already in opportunities?
       if (existingOpps.has(fp)) {
+        decisions.push({ id: candidate.id, status: "duplicate" });
+        totalDuplicate += 1;
+        continue;
+      }
+
+      // The same posting, already in the catalogue under another name.
+      const address = addressOf(candidate.apply_url, candidate.source_url);
+      if (address && existingAddresses.has(address)) {
         decisions.push({ id: candidate.id, status: "duplicate" });
         totalDuplicate += 1;
         continue;
@@ -586,6 +637,26 @@ export class DeduplicationAgent extends BaseDiscoveryAgent {
       [fingerprints],
     );
     return new Set(result.rows.map((row) => row.fingerprint));
+  }
+
+  /**
+   * Checks whether an address is already in the opportunities table.
+   *
+   * The address is the posting's own page, and the catalogue holds one
+   * row per page: the address is the one thing that says "this is the
+   * same posting" when the employer's name is written differently on
+   * two pages.
+   */
+  private async addressExists(addresses: string[]): Promise<Set<string>> {
+    if (addresses.length === 0) return new Set();
+    const result = await query<{ apply_url: string }>(
+      `SELECT apply_url FROM opportunities
+        WHERE lower(rtrim(apply_url, '/')) = ANY($1::text[])`,
+      [addresses.map((address) => address.replace(/\/+$/, ""))],
+    );
+    return new Set(
+      result.rows.map((row) => row.apply_url.trim().toLowerCase().replace(/\/+$/, "")),
+    );
   }
 
   /**
