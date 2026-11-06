@@ -132,6 +132,46 @@ class _OpportunityDetailScreenState extends State<OpportunityDetailScreen> {
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),
+              // What the trust engine made of it. It is a decision, not
+              // a score for its own sake: 359 postings are held by it
+              // right now, and a held posting does not reach the feed.
+              if (opportunity.riskScore != null) ...[
+                const Divider(height: 24),
+                Row(
+                  children: [
+                    Text(
+                      'Trust score',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '${opportunity.riskScore}',
+                      style: Theme.of(context).textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                  ],
+                ),
+                if (opportunity.riskFlags.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: opportunity.riskFlags
+                          .map(
+                            (flag) => Chip(
+                              label: Text(
+                                flag,
+                                style: Theme.of(context).textTheme.labelSmall,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ),
+              ],
             ],
           ),
         ),
@@ -175,6 +215,13 @@ class _OpportunityDetailScreenState extends State<OpportunityDetailScreen> {
                 icon: Icons.business_rounded,
                 label: 'Posted on',
                 value: opportunity.sourceKind ?? _title(opportunity.platform),
+              ),
+              _DetailRow(
+                icon: Icons.event_busy_outlined,
+                label: 'Closes',
+                value: opportunity.expiresAt != null
+                    ? AppFormatters.date(opportunity.expiresAt)
+                    : 'Not stated',
               ),
             ],
           ),

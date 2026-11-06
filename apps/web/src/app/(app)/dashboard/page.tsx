@@ -489,12 +489,15 @@ function scoreTone(score: number): Tone {
 /* ========================================================================== */
 
 function ModeratorDashboard() {
-  const opportunities = useApi<{ items: Opportunity[] }>("/opportunities", { limit: 12 });
+  // The held postings are their own queue now. They used to be filtered
+  // out of the ordinary feed — which is exactly where the trust engine's
+  // decision was being ignored — so the queue asks for them directly.
+  const held = useApi<{ items: Opportunity[] }>("/opportunities/held", {
+    limit: 12,
+  });
 
-  const flagged = (opportunities.data?.items ?? []).filter(
-    (item) => (item.riskScore ?? 0) > 0,
-  );
-  const queue = flagged.length > 0 ? flagged : opportunities.data?.items ?? [];
+  const queue = held.data?.items ?? [];
+  const publishedToday = useApi<{ totals: { activeOpportunities: number } }>("/stats");
 
   return (
     <DashboardFrame
@@ -509,8 +512,16 @@ function ModeratorDashboard() {
     >
       <div className="grid-3">
         <StatTile label="Awaiting review" value={queue.length} tone="warning" />
-        <StatTile label="Flagged by model" value={flagged.length} tone="danger" />
-        <StatTile label="Published today" value={opportunities.data?.items.length ?? 0} tone="success" />
+        <StatTile
+          label="Flagged by model"
+          value={queue.filter((item) => item.riskScore && item.riskScore > 0).length}
+          tone="danger"
+        />
+        <StatTile
+          label="Published today"
+          value={publishedToday.data?.totals.activeOpportunities ?? 0}
+          tone="success"
+        />
       </div>
 
       {queue.length === 0 ? (

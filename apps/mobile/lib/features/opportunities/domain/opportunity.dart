@@ -26,6 +26,10 @@ class Opportunity {
     this.sourceKind,
     this.eligibility,
     this.eligibilityReasons = const [],
+    this.riskScore,
+    this.riskAction,
+    this.riskFlags = const [],
+    this.expiresAt,
   });
 
   final String id;
@@ -58,7 +62,17 @@ class Opportunity {
 
   /// Why the eligibility decision was what it was.
   final List<String> eligibilityReasons;
+
+  /// What the trust engine made of the posting, 0–100.
+  final int? riskScore;
+
+  /// What it decided: `publish`, `hold`, `reject`.
+  final String? riskAction;
+
+  /// What it found, in its own words.
+  final List<String> riskFlags;
   final DateTime? postedAt;
+  final DateTime? expiresAt;
   final List<String> skills;
   final String description;
   final JobMatch? match;
@@ -110,6 +124,10 @@ class Opportunity {
       sourceKind: json['sourceKind'] as String?,
       eligibility: json['eligibility'] as String?,
       eligibilityReasons: _strings(json['eligibilityReasons']),
+      riskScore: _integer(json['riskScore']),
+      riskAction: json['riskAction'] as String?,
+      riskFlags: _strings(json['riskFlags']),
+      expiresAt: DateTime.tryParse(json['expiresAt'] as String? ?? ''),
       postedAt: DateTime.tryParse(json['postedAt'] as String? ?? ''),
       skills: _strings(json['skills']),
       description: json['description'] as String? ?? '',
@@ -140,6 +158,10 @@ class Opportunity {
     if (sourceKind != null) 'sourceKind': sourceKind,
     if (eligibility != null) 'eligibility': eligibility,
     if (eligibilityReasons.isNotEmpty) 'eligibilityReasons': eligibilityReasons,
+    if (riskScore != null) 'riskScore': riskScore,
+    if (riskAction != null) 'riskAction': riskAction,
+    if (riskFlags.isNotEmpty) 'riskFlags': riskFlags,
+    if (expiresAt != null) 'expiresAt': expiresAt!.toIso8601String(),
     if (postedAt != null) 'postedAt': postedAt!.toIso8601String(),
     'skills': skills,
     'description': description,
@@ -164,6 +186,7 @@ class OpportunitySearch {
     this.country,
     this.workMode,
     this.seniority,
+    this.employmentType,
     this.eligibility,
     this.semantic = false,
   });
@@ -172,6 +195,11 @@ class OpportunitySearch {
   final String? country;
   final String? workMode;
   final String? seniority;
+
+  /// The kind of commitment — permanent, contract, internship. The web
+  /// feed filters on it and so does the API; without it a candidate
+  /// looking for an internship is shown permanent contracts.
+  final String? employmentType;
 
   /// "eligible" keeps the roles a candidate can actually hold, which is
   /// what most of the catalogue is not — the bulk of it is posted in
@@ -188,6 +216,8 @@ class OpportunitySearch {
         'workMode': workMode!,
       if (seniority != null && seniority!.trim().isNotEmpty)
         'seniority': seniority!,
+      if (employmentType != null && employmentType!.trim().isNotEmpty)
+        'employmentType': employmentType!,
       if (eligibility != null && eligibility!.trim().isNotEmpty)
         'eligibility': eligibility!,
       'semantic': semantic.toString(),

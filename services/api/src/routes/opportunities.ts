@@ -2,11 +2,15 @@ import { Router } from "express";
 import { z } from "zod";
 import { cacheGet, cacheSet } from "../db/redis.js";
 import { ensureBlueprint } from "../services/applications.js";
+import { requirePermission } from "../middleware/rbac.js";
 import {
   getOpportunityWithMatch,
   rankedOpportunities,
 } from "../services/matching.js";
-import { listOpportunities } from "../services/opportunities.js";
+import {
+  listHeldOpportunities,
+  listOpportunities,
+} from "../services/opportunities.js";
 
 const searchSchema = z.object({
   country: z.string().min(1).optional(),
@@ -34,7 +38,35 @@ const searchSchema = z.object({
     .transform((value) => value !== "false"),
 });
 
+const heldSchema = z.object({
+  country: z.string().min(1).optional(),
+  q: z.string().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+});
+
 export const opportunitiesRouter = Router();
+
+/**
+ * The postings the trust engine is holding, for the queue that reviews
+ * them.
+ *
+ * The feed no longer carries a held posting — the engine's decision is
+ * finally honoured — so the review queue asks for them directly, and
+ * only someone who is allowed to act on the queue may ask.
+ */
+opportunitiesRouter.get(
+  "/held",
+  requirePermission("moderation:queue"),
+  async (request, response, next) => {
+    try {
+      const filters = heldSchema.parse(request.query);
+      const items = await listHeldOpportunities(filters);
+      response.json({ items, cached: false });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 opportunitiesRouter.get("/", async (request, response) => {
   const userId = response.locals.userId as string;
@@ -57,8 +89,7 @@ opportunitiesRouter.get("/", async (request, response) => {
   response.json({ items, cached: false });
 });
 
-opportunitiesRouter.get("/:id", async (request, response) => {
-  const item = await getOpportunityWithMatch(
+opportunitiesRouter.get("/:id", async (request, response) => {  const item = await getOpportunityWithMatch(
     response.locals.userId as string,
     request.params.id,
   );

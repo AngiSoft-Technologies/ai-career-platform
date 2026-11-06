@@ -52,6 +52,7 @@ class OpportunityController extends ChangeNotifier {
     String? country,
     String? workMode,
     String? seniority,
+    String? employmentType,
     String? eligibility,
     bool? semantic,
   }) async {
@@ -60,6 +61,7 @@ class OpportunityController extends ChangeNotifier {
       country: country ?? _search.country,
       workMode: workMode ?? _search.workMode,
       seniority: seniority ?? _search.seniority,
+      employmentType: employmentType ?? _search.employmentType,
       eligibility: eligibility ?? _search.eligibility,
       semantic: semantic ?? _search.semantic,
     );

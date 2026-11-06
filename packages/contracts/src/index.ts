@@ -109,6 +109,12 @@ export interface Opportunity {
   eligibility?: Eligibility;
   /** Why the eligibility decision was what it was, for the user to read. */
   eligibilityReasons?: string[];
+  /** What the trust engine made of the posting, 0–100. */
+  riskScore?: number;
+  /** What it decided: `publish`, `hold`, `reject`. */
+  riskAction?: string;
+  /** What it found, in its own words. */
+  riskFlags?: string[];
 }
 
 export interface MatchFactors {

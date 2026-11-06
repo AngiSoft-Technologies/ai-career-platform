@@ -36,6 +36,10 @@ interface OpportunityRow {
   skills: string[];
   eligibility: string | null;
   eligibility_reasons: unknown;
+  /** Postgres returns `numeric` as a string; the mapper coerces it. */
+  risk_score: number | string | null;
+  risk_action: string | null;
+  risk_flags: unknown;
 }
 
 /**
@@ -112,6 +116,18 @@ function mapOpportunity(row: OpportunityRow): Opportunity {
           (reason): reason is string => typeof reason === "string",
         ) as string[])
       : undefined,
+    // `numeric` comes back from Postgres as a string, and a score that
+    // arrives as "54.00" is a score a client has to coerce.
+    riskScore:
+      row.risk_score === null || row.risk_score === undefined
+        ? undefined
+        : Number(row.risk_score),
+    riskAction: row.risk_action ?? undefined,
+    riskFlags: Array.isArray(row.risk_flags)
+      ? (row.risk_flags.filter(
+          (flag): flag is string => typeof flag === "string",
+        ) as string[])
+      : undefined,
   };
 }
 
@@ -121,6 +137,7 @@ const baseSelect = `
     o.work_mode, o.seniority, o.employment_type, o.salary_min, o.salary_max,
     o.currency, o.apply_url, o.application_method, o.platform, o.posted_at,
     o.expires_at, o.status, o.eligibility, o.eligibility_reasons,
+    o.risk_score, o.risk_action, o.risk_flags,
     COALESCE(array_agg(os.skill ORDER BY os.skill) FILTER (WHERE os.skill IS NOT NULL), '{}') AS skills
   FROM opportunities o
   JOIN companies c ON c.id = o.company_id
@@ -130,7 +147,17 @@ const baseSelect = `
 export async function listOpportunities(
   filters: OpportunityFilters,
 ): Promise<Opportunity[]> {
-  const clauses = ["o.status = 'active'"];
+  // A posting the trust engine held is not a posting a candidate sees.
+  //
+  // The engine scores every posting and writes what it decided — 359 of
+  // them are held right now — but nothing read the decision back, so the
+  // held postings sat in the feed anyway and the whole judgement was
+  // decoration. The detail view is deliberately left open: a reviewer
+  // has to be able to open the row they are deciding about.
+  const clauses = [
+    "o.status = 'active'",
+    "COALESCE(o.risk_action, 'publish') <> 'hold'",
+  ];
   const values: unknown[] = [];
 
   if (filters.country) {
@@ -170,6 +197,51 @@ export async function listOpportunities(
      WHERE ${clauses.join(" AND ")}
      GROUP BY o.id, c.id
      ORDER BY o.posted_at DESC
+     LIMIT $${values.length}`,
+    values,
+  );
+
+  return result.rows.map(mapOpportunity);
+}
+
+/**
+ * The postings the trust engine is holding.
+ *
+ * A held posting is not in the feed — that is the decision being honoured
+ * — so the queue that reviews them has to be able to ask for them
+ * directly. Newest judgement first: a posting scored an hour ago is the
+ * one worth looking at.
+ *
+ * The route in front of this is permission-gated; the function is not,
+ * because it is a query, not a decision about who may ask.
+ */
+export async function listHeldOpportunities(
+  filters: OpportunityFilters,
+): Promise<Opportunity[]> {
+  const clauses = ["o.status = 'active'", "o.risk_action = 'hold'"];
+  const values: unknown[] = [];
+
+  if (filters.country) {
+    values.push(`%${filters.country}%`);
+    clauses.push(`o.country ILIKE $${values.length}`);
+  }
+  if (filters.q) {
+    values.push(filters.q);
+    clauses.push(
+      `(o.search_vector @@ plainto_tsquery('english', $${values.length})
+        OR o.title ILIKE '%' || $${values.length} || '%'
+        OR c.name ILIKE '%' || $${values.length} || '%')`,
+    );
+  }
+
+  const limit = Math.min(Math.max(filters.limit ?? 30, 1), 100);
+  values.push(limit);
+
+  const result = await query<OpportunityRow>(
+    `${baseSelect}
+     WHERE ${clauses.join(" AND ")}
+     GROUP BY o.id, c.id
+     ORDER BY o.risk_scored_at DESC NULLS LAST, o.posted_at DESC
      LIMIT $${values.length}`,
     values,
   );

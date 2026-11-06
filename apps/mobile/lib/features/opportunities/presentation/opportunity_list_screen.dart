@@ -151,6 +151,7 @@ class _OpportunityListScreenState extends State<OpportunityListScreen> {
     var country = controller.search.country ?? '';
     var workMode = controller.search.workMode;
     var seniority = controller.search.seniority;
+    var employmentType = controller.search.employmentType;
     var eligibility = controller.search.eligibility;
     var semantic = controller.search.semantic;
     final countryController = TextEditingController(text: country);
@@ -225,6 +226,46 @@ class _OpportunityListScreenState extends State<OpportunityListScreen> {
                     onChanged: (value) =>
                         setModalState(() => seniority = value),
                   ),
+                  const SizedBox(height: 14),
+                  DropdownButtonFormField<String?>(
+                    initialValue: employmentType,
+                    decoration: const InputDecoration(
+                      labelText: 'Employment type',
+                      prefixIcon: Icon(Icons.badge_outlined),
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: null,
+                        child: Text('Any commitment'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'full_time',
+                        child: Text('Permanent'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'part_time',
+                        child: Text('Part time'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'contract',
+                        child: Text('Contract'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'internship',
+                        child: Text('Internship'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'trainee',
+                        child: Text('Trainee'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'freelance',
+                        child: Text('Freelance'),
+                      ),
+                    ],
+                    onChanged: (value) =>
+                        setModalState(() => employmentType = value),
+                  ),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Roles I can hold'),
@@ -255,6 +296,7 @@ class _OpportunityListScreenState extends State<OpportunityListScreen> {
                         country: country,
                         workMode: workMode,
                         seniority: seniority,
+                        employmentType: employmentType,
                         eligibility: eligibility,
                         semantic: semantic,
                       );
@@ -373,11 +415,55 @@ class _OpportunityCard extends StatelessWidget {
                       _SourceChip(source: opportunity.sourceKind!),
                     if (opportunity.match != null)
                       MatchScoreBadge(score: opportunity.match!.score),
+                    if (opportunity.riskScore != null &&
+                        opportunity.riskScore! >= 60)
+                      _RiskChip(
+                        score: opportunity.riskScore!,
+                        flags: opportunity.riskFlags,
+                      ),
                   ],
                 ),
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// What the trust engine made of the posting. It is a real decision —
+/// a posting it holds is not in the feed at all — so a candidate who
+/// sees one on a saved or cached copy deserves to know why.
+class _RiskChip extends StatelessWidget {
+  const _RiskChip({required this.score, required this.flags});
+
+  final int score;
+  final List<String> flags;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final color = score >= 80 ? scheme.error : scheme.tertiary;
+    return Semantics(
+      label: 'Risk score $score',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.shield_outlined, size: 15, color: color),
+            const SizedBox(width: 5),
+            Text(
+              'Risk $score',
+              style: Theme.of(context).textTheme.labelLarge
+                  ?.copyWith(color: color, fontWeight: FontWeight.w700),
+            ),
+          ],
         ),
       ),
     );
