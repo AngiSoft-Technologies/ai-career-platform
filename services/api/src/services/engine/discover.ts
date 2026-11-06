@@ -149,6 +149,31 @@ export function employerSegment(title: string | null | undefined): string | null
 }
 
 /**
+ * The words that begin a phrase rather than name an employer.
+ *
+ * "Our Work Experience", "Your Career", "We Are Hiring" — a board's own
+ * heading, written about the employer rather than by it. A subject
+ * that begins with one of these is not the employer's name, however
+ * the sentence reads.
+ */
+const PRONOUN_SUBJECTS = new Set([
+  "our",
+  "your",
+  "their",
+  "his",
+  "her",
+  "its",
+  "we",
+  "they",
+  "it",
+  "this",
+  "these",
+  "those",
+  "there",
+  "here",
+]);
+
+/**
  * The employer's name, as Workday's board writes it.
  *
  * Workday's boards are the least generous of the vendors. Their title
@@ -189,11 +214,15 @@ async function workdayEmployerName(
 
     const description = page.metadata?.ogDescription ?? "";
     // "Tiger Brands is proudly Africa's largest…"
+    //
+    // The subject has to *be* a name. "Our Work Experience" is the
+    // board's own heading, and it was read as the employer's name on
+    // every Workday board whose description opens with a pronoun.
     const subject =
       /^([A-Z][\w&'’.()-]*(?:\s+[A-Z][\w&'’.()-]*){0,4})\s+(?:is|are|has|have|was|were)\b/.exec(
         description,
       )?.[1];
-    if (subject) {
+    if (subject && !PRONOUN_SUBJECTS.has((subject.split(" ")[0] ?? "").toLowerCase())) {
       const fromDescription = normaliseCompanyName(subject);
       if (fromDescription) return fromDescription;
     }
@@ -207,11 +236,36 @@ async function workdayEmployerName(
       const fromDescription = normaliseCompanyName(named);
       if (fromDescription) return fromDescription;
     }
+
+    // "…grow your career with Flutter!"
+    //
+    // The employer's name is often at the end of the board's own
+    // sentence, and nowhere else on the page.
+    const withName =
+      /\bwith\s+([A-Z][\w'’-]{2,}(?:\s[A-Z][\w'’-]{2,}){0,2})\s*[!.]/.exec(
+        description,
+      )?.[1];
+    if (withName) {
+      const fromDescription = normaliseCompanyName(withName);
+      if (fromDescription) return fromDescription;
+    }
   }
 
-  // The name the site is published under.
-  const fromSite = normaliseCompanyName(prettify(site));
-  if (fromSite) return fromSite;
+  // The name the *site* is published under.
+  //
+  // "FlutterUKI_External" is Flutter's board, and "Betway_Africa" is
+  // Betway's: the brand is the first word, and the rest is the board's
+  // own address. Where the site has no brand in it ("Group_External"),
+  // the tenant is tried instead.
+  const fromSite = prettify(site);
+  const brand = fromSite.split(" ")[0];
+  if (brand && brand.length >= 3 && !BOARD_WORDS.has(brand.toLowerCase())) {
+    const name = normaliseCompanyName(brand);
+    if (name) return name;
+  }
+
+  const fromSiteFull = normaliseCompanyName(fromSite);
+  if (fromSiteFull) return fromSiteFull;
 
   return null;
 }
@@ -249,6 +303,32 @@ async function boardEmployerName(board: AtsBoard): Promise<string | null> {
     ? (board.token.split("|")[0] ?? board.token)
     : board.token;
   const fallback = normaliseCompanyName(prettify(rawToken)) ?? prettify(rawToken);
+
+  // Workable's token is the employer's *legal* name, and it is often
+  // misspelled: "suculture-limited" is SunCulture Limited. The board's
+  // own page knows the name, and it is one cached request.
+  if (board.kind === "workable") {
+    const page = await boardPageUrl(board);
+    if (page) {
+      try {
+        const scraped = await scrapeUrl(page, { onlyMainContent: false });
+        const title =
+          scraped.metadata?.ogSiteName ??
+          scraped.metadata?.ogTitle ??
+          scraped.metadata?.title ??
+          null;
+        const name = normaliseCompanyName(title);
+        if (name) return name;
+      } catch (error) {
+        logger.debug(
+          { board: board.kind, token: board.token, error },
+          "Board name lookup failed; using the token",
+        );
+      }
+    }
+    return fallback;
+  }
+
   // A token that reads as words is good enough on its own — unless it
   // is an address, which never is.
   if (!addressed && /[-_]/.test(board.token)) return fallback;
@@ -322,8 +402,8 @@ async function boardEmployerName(board: AtsBoard): Promise<string | null> {
     const scraped = await scrapeUrl(page, { onlyMainContent: false });
     const title =
       scraped.metadata?.ogSiteName ??
-      scraped.metadata?.title ??
       scraped.metadata?.ogTitle ??
+      scraped.metadata?.title ??
       null;
     const first = addressed ? employerSegment(title) : title;
     const name = normaliseCompanyName(first);

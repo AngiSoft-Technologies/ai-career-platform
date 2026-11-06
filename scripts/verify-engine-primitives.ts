@@ -877,6 +877,18 @@ console.log("\n[16] the identity of an employer");
       "Safaricom",
     String(normaliseCompanyName("Safaricom Candidate Experience site")),
   );
+
+  // An employer's other name.
+  check(
+    "an employer's newer name is the name the catalogue knows",
+    normaliseCompanyName("Flutter") === "Flutterwave",
+    String(normaliseCompanyName("Flutter")),
+  );
+  check(
+    "the name the catalogue knows is left alone",
+    normaliseCompanyName("Flutterwave") === "Flutterwave",
+    String(normaliseCompanyName("Flutterwave")),
+  );
   check(
     "the board's own label for itself is not the employer's name",
     normaliseCompanyName("SCI Career Site") === "SCI",

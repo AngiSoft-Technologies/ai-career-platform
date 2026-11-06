@@ -172,6 +172,22 @@ const LEGAL_FORMS = [
 ] as const;
 
 /**
+ * The names an employer has had.
+ *
+ * The catalogue is given employers by the names the people who set it
+ * up know them by, and an employer's own board may write a newer one:
+ * Flutterwave renamed itself Flutter, so its board says "Flutter" and
+ * the catalogue says "Flutterwave". Left alone, that is two employers
+ * and one employer's roles split between them.
+ *
+ * The key is the name as it is written, lowercased; the value is the
+ * name the catalogue knows the employer by.
+ */
+const EMPLOYER_ALIASES: Record<string, string> = {
+  flutter: "Flutterwave",
+};
+
+/**
  * The cleanest form of a raw employer name.
  *
  * Returns null when the name cannot be an employer: a job title, a page
@@ -247,6 +263,16 @@ export function normaliseCompanyName(
   if (withoutLegal.length >= 2) name = withoutLegal;
 
   if (!isPlausibleEmployer(name)) return null;
+
+  // The names an employer has had.
+  //
+  // Flutterwave is Flutter now: the board's own page says "Flutter",
+  // and the catalogue was given "Flutterwave" — one employer, two
+  // names. In the catalogue two names are two employers, and the roles
+  // of one employer are split between them.
+  const alias = EMPLOYER_ALIASES[name.toLowerCase()];
+  if (alias) return alias;
+
   return name;
 }
 
