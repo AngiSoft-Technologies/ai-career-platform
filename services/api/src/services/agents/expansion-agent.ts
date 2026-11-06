@@ -368,29 +368,36 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
       if (found.length >= limit) break;
     }
 
-    // The known boards first, oldest first, then the ones found in the
-    // candidates — which have never been read, so they are read before
-    // the ones that were read yesterday.
+    // The order is the value of the board.
     //
-    // A board with no time on it has never been read: the search agent
-    // learns boards it finds and leaves them without a time, so they
-    // come first. A board that is read gets its time, and it goes back
-    // into the rotation.
+    // A board that has never been read comes first: the search agent
+    // learns boards and leaves them with no time on them, and a board
+    // that has just been found has never been read. It is worth more
+    // than a board that was read yesterday, whose postings are already
+    // known.
+    //
+    // Then the boards that are visible in what has been discovered and
+    // have never been read at all, and then the known boards — oldest
+    // first, so the refresh rotates and every board is read in turn.
+    const neverRead = [...boards.entries()]
+      .filter(([key]) => lastSeen.get(key) === null)
+      .map(([, board]) => board);
+
     const known = [...boards.entries()]
-      .filter(([key]) => lastSeen.has(key))
+      .filter(([key]) => {
+        const seen = lastSeen.get(key);
+        return seen !== null && seen !== undefined;
+      })
       .sort((left, right) => {
-        const leftSeen = lastSeen.get(left[0]);
-        const rightSeen = lastSeen.get(right[0]);
-        // Never read first.
-        if (!leftSeen && rightSeen) return -1;
-        if (leftSeen && !rightSeen) return 1;
-        return (leftSeen?.getTime() ?? 0) - (rightSeen?.getTime() ?? 0);
+        const leftSeen = lastSeen.get(left[0])?.getTime() ?? 0;
+        const rightSeen = lastSeen.get(right[0])?.getTime() ?? 0;
+        return leftSeen - rightSeen;
       })
       .map(([, board]) => board);
 
     const fresh = found.map((entry) => entry.board);
 
-    return [...fresh, ...known].slice(0, limit);
+    return [...neverRead, ...fresh, ...known].slice(0, limit);
   }
 
   /**
