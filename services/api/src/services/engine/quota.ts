@@ -114,15 +114,22 @@ export async function quotaUsed(scope: string, subject: string): Promise<number>
 //
 // A queue with four hundred and sixty-three pages from one site is a
 // site that has nothing: each page is a request, and each request
-// answers with a page that holds no posting. The host is read three
-// times, and then not at all for an hour.
+// answers with a page that holds no posting. The host is read twice,
+// and then not at all for six hours.
+//
+// The window is six hours because of how often a host is reached. The
+// Kenya agent reads sixteen of its seventy-four platforms per cycle,
+// so a host comes round every five cycles — four hours or so. A one
+// hour window expired long before the host was next reached, and the
+// count was raised again from nothing: the host was read, and read
+// again, and the platforms that do post were still waiting behind it.
 //
 // The count is in Redis and expires with it. When Redis cannot answer,
 // the host is read — this must never stop the work.
 // ---------------------------------------------------------------------------
 
-const QUIET_HOST_THRESHOLD = 3;
-const QUIET_HOST_TTL_SECONDS = 60 * 60;
+const QUIET_HOST_THRESHOLD = 2;
+const QUIET_HOST_TTL_SECONDS = 6 * 60 * 60;
 
 /**
  * Notes that a host's page held no posting.
@@ -132,7 +139,10 @@ export async function noteQuietHost(host: string): Promise<void> {
   try {
     const key = `quiet:${host}`;
     const count = await redis.incr(key);
-    if (count === QUIET_HOST_THRESHOLD) {
+    // The window is set as soon as the threshold is reached, and it is
+    // set again on every later count — so a host that stays quiet keeps
+    // its window and is not read again when it expires.
+    if (count >= QUIET_HOST_THRESHOLD) {
       await redis.expire(key, QUIET_HOST_TTL_SECONDS);
     }
   } catch {
@@ -156,7 +166,7 @@ export async function noteLoudHost(host: string): Promise<void> {
 }
 
 /**
- * True when the host has had nothing to say, three times running.
+ * True when the host has had nothing to say, twice running.
  */
 export async function hostIsQuiet(host: string): Promise<boolean> {
   if (!host || !redisIsReady()) return false;

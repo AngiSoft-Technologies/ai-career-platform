@@ -68,6 +68,11 @@ export class KenyaPlatformAgent extends BaseDiscoveryAgent {
     let processed = 0;
     let skipped = 0;
     const errors: string[] = [];
+    // The hosts that were read, and what each of them answered. The
+    // rotation is the whole diagnosis of the yield: a platform that is
+    // read every cycle and answers the same postings is not a source,
+    // it is a repetition.
+    const read: Array<{ host: string; jobs: number }> = [];
 
     for (const target of targets) {
       if (Date.now() > deadline) {
@@ -97,6 +102,7 @@ export class KenyaPlatformAgent extends BaseDiscoveryAgent {
           maxAgeMs: Number(ctx.config.index_max_age_ms ?? 1000 * 60 * 45),
         });
         processed += 1;
+        read.push({ host, jobs: jobs.length });
 
         // A host that answered with a posting is read again, and the
         // count of the times it had nothing is forgotten.
@@ -195,6 +201,9 @@ export class KenyaPlatformAgent extends BaseDiscoveryAgent {
         targetsSelected: targets.length,
         targetsProcessed: processed,
         targetsSkippedQuiet: skipped,
+        // What each host answered, so the next cycle's rotation can be
+        // judged against what the hosts actually hold.
+        read,
         eligibleForKenya: eligible,
         microTaskPlatforms: includeMicroTask,
         budgetMs,
@@ -367,11 +376,19 @@ export class KenyaPlatformAgent extends BaseDiscoveryAgent {
 
       // 6. Screen capture — reads the page's own JS state, which is where
       //    micro-task platforms hide their live role lists.
+      //
+      //    Two links are read and no more. A platform's careers page
+      //    holds dozens of links, and each capture costs a browser; the
+      //    budget is small and the platforms that post were waiting
+      //    behind this one.
       if (raw.length === 0) {
         const capture = await capturePage(target.url, { maxJobs: 40 }).catch(() => null);
         if (capture) {
           raw.push(...extractListingJobs(capture.html, capture.finalUrl));
-          for (const link of capture.links.filter((link) => /job|career|role|vacanc|hiring|apply/i.test(link))) {
+          const links = capture.links
+            .filter((link) => /job|career|role|vacanc|hiring|apply/i.test(link))
+            .slice(0, 2);
+          for (const link of links) {
             if (raw.length >= 40) break;
             const page = await capturePage(link, { maxJobs: 20 }).catch(() => null);
             if (!page) continue;
@@ -382,9 +399,13 @@ export class KenyaPlatformAgent extends BaseDiscoveryAgent {
     }
 
     // 7. Search fallback — for platforms whose site is entirely gated.
+    //
+    //    Two results are captured and no more: the search is looking
+    //    for the platform's own roles page, and the first result is
+    //    usually it.
     if (raw.length === 0) {
       const planned = await searchWebPlanned(`${target.url} careers hiring`, {
-        limit: 8,
+        limit: 4,
         // This search is looking for a *listing* — a careers page, a job
         // board — not a posting, so the job-posting gate is turned off.
         // The gate is right for everything else in the pipeline and wrong
@@ -392,9 +413,12 @@ export class KenyaPlatformAgent extends BaseDiscoveryAgent {
         isValidResult: () => true,
       }).catch(() => null);
       const results = planned?.results ?? [];
+      let captured = 0;
       for (const result of results) {
+        if (captured >= 2) break;
         const page = await capturePage(result.url, { maxJobs: 20 }).catch(() => null);
         if (!page) continue;
+        captured += 1;
         raw.push(...extractListingJobs(page.html, page.finalUrl));
       }
     }
