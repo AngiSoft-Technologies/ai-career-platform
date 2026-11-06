@@ -42,6 +42,10 @@ export type { AtsBoard, AtsKind } from "./ats.js";
 function prettify(token: string): string {
   return token
     .replace(/[-_]+/g, " ")
+    // A name written as one word is often two words: "WorldVision
+    // International", "BetwayAfrica". The capitals are where the words
+    // start, and the employer's name is written with them.
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .replace(/\b\w/g, (character) => character.toUpperCase())
     .trim();
 }
@@ -53,7 +57,7 @@ function prettify(token: string): string {
  * and turning that into a name ("Weloglobal") is a guess. The board's
  * page knows the employer's name: its title is "Welo Global".
  */
-function boardPageUrl(board: AtsBoard): string | null {
+async function boardPageUrl(board: AtsBoard): Promise<string | null> {
   const token = board.token;
   switch (board.kind) {
     case "lever":
@@ -70,8 +74,14 @@ function boardPageUrl(board: AtsBoard): string | null {
       return `https://${token}.recruitee.com`;
     case "workday": {
       const [tenant, wd, site] = token.split("|");
-      if (!tenant || !wd || !site) return null;
-      return `https://${tenant}.${wd}.myworkdayjobs.com/${site}`;
+      if (!tenant || !wd) return null;
+      const origin = `https://${tenant}.${wd}.myworkdayjobs.com`;
+      // The tenant's own file names the sites it publishes under, so a
+      // board that does not name one is asked for rather than guessed
+      // at: "alliancewd" publishes under "renault-group-careers".
+      const known = site || (await workdaySitePaths(origin))[0];
+      if (!known) return null;
+      return `${origin}/${known}`;
     }
     case "oracle": {
       const [host, site] = token.split("|");
@@ -81,6 +91,120 @@ function boardPageUrl(board: AtsBoard): string | null {
     default:
       return null;
   }
+}
+
+/**
+ * The words a board puts in front of the employer's name.
+ *
+ * Workday writes its board's title as "Careers | Renault Group" — the
+ * board's own word, then the employer's. Oracle writes "Centific|Wd1|
+ * Centific Global", where the employer's name is in the middle. So
+ * the segments are read in order and the first one that is not the
+ * board talking about itself is the employer's.
+ */
+const BOARD_WORDS = new Set([
+  "careers",
+  "career site",
+  "careers site",
+  "jobs",
+  "job search",
+  "search jobs",
+  "search job",
+  "home",
+  "join our team",
+  "join us",
+  "work with us",
+  "vacancies",
+  "external",
+  "candidate experience",
+  "candidate experience site",
+  "wd",
+]);
+
+/**
+ * The employer's name, as the board's title writes it.
+ */
+export function employerSegment(title: string | null | undefined): string | null {
+  if (!title) return null;
+
+  const parts = title
+    .split("|")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length === 0) return title;
+
+  for (const part of parts) {
+    if (!BOARD_WORDS.has(part.toLowerCase())) return part;
+  }
+  return parts[0] ?? null;
+}
+
+/**
+ * The employer's name, as Workday's board writes it.
+ *
+ * Workday's boards are the least generous of the vendors. Their title
+ * is often the board's own word — "Careers", or nothing at all — and
+ * the employer's name is in the page's description instead:
+ * "Tiger Brands is proudly Africa's largest listed manufacturer of
+ * fast-moving consumer goods."
+ *
+ * So the name is looked for in three places, in order of how much they
+ * can be trusted:
+ *
+ *   1. the title — "Careers | Renault Group", "Job Openings at WFP";
+ *   2. the description's own opening — the employer naming itself;
+ *   3. the name the site is published under — "Betway_Africa" is
+ *      Betway Africa, and "renault-group-careers" is Renault Group.
+ *
+ * The third is a guess, and it is the last one: a board that says
+ * nothing at all still has a name, and a name that is nearly right is
+ * better than a tenant's address.
+ */
+async function workdayEmployerName(
+  origin: string,
+  site: string,
+): Promise<string | null> {
+  const page = await scrapeUrl(`${origin}/${site}`, { onlyMainContent: false }).catch(
+    () => null,
+  );
+
+  if (page) {
+    const title = page.metadata?.ogTitle ?? page.metadata?.title ?? null;
+    const segment = employerSegment(title);
+    if (segment) {
+      // "Job Openings at WFP" — the employer's name is after the "at".
+      const afterAt = /\bat\s+(.+)$/i.exec(segment)?.[1];
+      const fromTitle = normaliseCompanyName(afterAt ?? segment);
+      if (fromTitle) return fromTitle;
+    }
+
+    const description = page.metadata?.ogDescription ?? "";
+    // "Tiger Brands is proudly Africa's largest…"
+    const subject =
+      /^([A-Z][\w&'’.()-]*(?:\s+[A-Z][\w&'’.()-]*){0,4})\s+(?:is|are|has|have|was|were)\b/.exec(
+        description,
+      )?.[1];
+    if (subject) {
+      const fromDescription = normaliseCompanyName(subject);
+      if (fromDescription) return fromDescription;
+    }
+
+    // "…the Gates Foundation works to help all people…"
+    const named =
+      /\bthe\s+([A-Z][\w&'’.()-]*(?:\s+[A-Z][\w&'’.()-]*){0,3})\s+(?:works|is|has|provides|helps|seeks|offers|serves)\b/.exec(
+        description,
+      )?.[1];
+    if (named) {
+      const fromDescription = normaliseCompanyName(named);
+      if (fromDescription) return fromDescription;
+    }
+  }
+
+  // The name the site is published under.
+  const fromSite = normaliseCompanyName(prettify(site));
+  if (fromSite) return fromSite;
+
+  return null;
 }
 
 /**
@@ -103,6 +227,11 @@ function boardPageUrl(board: AtsBoard): string | null {
  * board's own address — "KCB Group", "Centific|Wd1|Centific Global".
  */
 async function boardEmployerName(board: AtsBoard): Promise<string | null> {
+  // A token with a separator in it ("acme-corp") already makes a
+  // readable name, and no request is needed. A single run-on token
+  // ("weloglobal") makes a guess, and one request to the board's own page
+  // buys the right name for every posting on it — the page cache holds it
+  // for the next cycle.
   const addressed = board.kind === "oracle" || board.kind === "workday";
   const rawToken = addressed
     ? (board.token.split("|")[0] ?? board.token)
@@ -112,8 +241,27 @@ async function boardEmployerName(board: AtsBoard): Promise<string | null> {
   // is an address, which never is.
   if (!addressed && /[-_]/.test(board.token)) return fallback;
 
-  const page = boardPageUrl(board);
-  if (!page) return fallback;
+  // Workday writes its boards differently from the others, and its own
+  // reader knows how to ask it: the title is often the board's word and
+  // the employer's name is in the description.
+  if (board.kind === "workday") {
+    const [tenant, wd, site] = board.token.split("|");
+    if (!tenant || !wd) return null;
+    const origin = `https://${tenant}.${wd}.myworkdayjobs.com`;
+    const known = site || (await workdaySitePaths(origin))[0];
+    if (!known) return null;
+
+    const name = await workdayEmployerName(origin, known);
+    if (name) return name;
+
+    // The tenant's own name, which is a guess but a close one: the
+    // tenant is named after the employer.
+    const fromTenant = normaliseCompanyName(prettify(tenant));
+    return fromTenant ?? null;
+  }
+
+  const page = await boardPageUrl(board);
+  if (!page) return addressed ? null : fallback;
 
   try {
     const scraped = await scrapeUrl(page, { onlyMainContent: false });
@@ -122,7 +270,7 @@ async function boardEmployerName(board: AtsBoard): Promise<string | null> {
       scraped.metadata?.title ??
       scraped.metadata?.ogTitle ??
       null;
-    const first = addressed ? (title?.split("|")[0] ?? title) : title;
+    const first = addressed ? employerSegment(title) : title;
     const name = normaliseCompanyName(first);
     if (name) return name;
   } catch (error) {
@@ -559,36 +707,38 @@ async function workdayBoard(token: string): Promise<RawJob[]> {
 
   const origin = `https://${tenant}.${pod}.myworkdayjobs.com`;
 
-  let postings: WorkdayJob[] | null = null;
-  let lastError: unknown = null;
+  // The tenant's own file names every site it publishes under, and a
+  // tenant publishes under more than one: "alliancewd" has a board for
+  // the group and a board for each brand. The board is the union of
+  // them, so all of them are read — up to three, which is enough to
+  // cover the employers that split their careers by country.
+  const sites: string[] = [];
+  if (site) sites.push(site);
+  for (const candidate of await workdaySitePaths(origin)) {
+    if (sites.length >= 3) break;
+    if (candidate === site) continue;
+    sites.push(candidate);
+  }
 
-  // The name in the address first.
-  if (site) {
+  const postings: WorkdayJob[] = [];
+  let lastError: unknown = null;
+  let read = 0;
+
+  for (const candidate of sites) {
     try {
-      postings = await fetchWorkdayBoard(origin, tenant, site);
+      const batch = await fetchWorkdayBoard(origin, tenant, candidate);
+      read += 1;
+      postings.push(...batch);
+      if (read >= 3) break;
     } catch (error) {
       lastError = error;
     }
   }
 
-  // Then the names the tenant's own file gives.
-  if (!postings) {
-    for (const candidate of await workdaySitePaths(origin)) {
-      if (candidate === site) continue;
-      try {
-        postings = await fetchWorkdayBoard(origin, tenant, candidate);
-        break;
-      } catch (error) {
-        lastError = error;
-      }
-    }
-  }
-
-  if (!postings) {
+  if (read === 0) {
     // Nothing was named and nothing was found: the tenant publishes
     // its boards under a name this catalogue cannot reach. That is a
     // fact about the employer, not a failure of the cycle.
-    if (!site && !lastError) return [];
     if (lastError) throw lastError;
     return [];
   }

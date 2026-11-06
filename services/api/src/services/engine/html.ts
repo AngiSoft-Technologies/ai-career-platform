@@ -549,11 +549,24 @@ export function extractMetadata(html: string, url?: string): PageMetadata {
   const byName = new Map<string, string>();
   for (const tag of metaTags) {
     const attributes = parseAttributes(tag);
-    const key = attributes["name"] ?? attributes["property"] ?? attributes["itemprop"];
     const content = attributes["content"];
-    if (!key || content === undefined) continue;
-    if (!byName.has(key.toLowerCase())) {
-      byName.set(key.toLowerCase(), content);
+    if (content === undefined) continue;
+
+    // OpenGraph's own spelling comes first.
+    //
+    // "<meta name='title' property='og:title' content='Careers | Renault
+    // Group'>" is an OpenGraph tag that also happens to carry a name.
+    // Reading the name first hid the tag behind its own alias, and the
+    // employer's name — which is written only there — was lost.
+    const property = attributes["property"];
+    const name = attributes["name"];
+    const keys: string[] = [];
+    if (property) keys.push(property);
+    if (name && name !== property) keys.push(name);
+
+    for (const key of keys) {
+      const lower = key.toLowerCase();
+      if (!byName.has(lower)) byName.set(lower, content);
     }
   }
 

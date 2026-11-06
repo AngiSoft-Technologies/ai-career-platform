@@ -78,7 +78,17 @@ const BOARD_SUFFIX = new RegExp(
   "i",
 );
 
-const BOARD_ALONE = new Set<string>(BOARD_NAMES);
+const BOARD_ALONE = new Set<string>([
+  ...BOARD_NAMES,
+  "careers",
+  "career",
+  "job",
+  "jobs",
+  "vacancies",
+  "openings",
+  "positions",
+  "roles",
+]);
 
 /**
  * The role words that a firm puts at the end of its own name.
@@ -194,6 +204,11 @@ export function normaliseCompanyName(
   ) {
     return null;
   }
+
+  // The board's own word, on its own. A board whose title is "Careers"
+  // says nothing about the employer, and a row called "Careers" is
+  // not an employer — it is the board's word written down.
+  if (BOARD_ALONE.has(name.toLowerCase())) return null;
 
   // The board's name, appended to the employer's own.
   name = name.replace(BOARD_SUFFIX, "").trim();

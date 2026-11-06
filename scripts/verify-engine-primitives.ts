@@ -32,6 +32,7 @@ import {
   oracleFinder,
   buildBoardQueries,
   buildEmployerQueries,
+  employerSegment,
 } from "../services/api/src/services/engine/discover.js";
 import { boardKey } from "../services/api/src/services/engine/ats.js";
 import {
@@ -496,6 +497,29 @@ console.log("\n[13] bounded HTML processing");
   check("metadata reads the open-graph title", reversed.ogTitle === "OG title");
   check("metadata reads the canonical link", reversed.canonical === "https://example.test/canonical");
   check("metadata reads the language", reversed.language === "en");
+
+  // A tag that carries both a name and an OpenGraph property.
+  //
+  // "<meta name='title' property='og:title' content='Careers | Renault
+  // Group'>" is how Workday writes the employer's name. Reading the
+  // name first hid the tag behind its own alias, and the name was
+  // lost.
+  const both = extractMetadata(
+    '<html><head><meta name="title" property="og:title" content="Careers | Renault Group">' +
+      '<meta name="description" property="og:description" content="Renault Group has been reinvented.">' +
+      "</head><body></body></html>",
+    "https://example.test/board",
+  );
+  check(
+    "a tag that carries both names is read as an open-graph tag",
+    both.ogTitle === "Careers | Renault Group",
+    String(both.ogTitle),
+  );
+  check(
+    "a tag that carries both names still fills the plain name",
+    both.description === "Renault Group has been reinvented.",
+    String(both.description),
+  );
 }
 
 console.log("\n[14] search-engine redirect wrappers");
@@ -818,6 +842,34 @@ console.log("\n[16] the identity of an employer");
     normaliseCompanyName("Happyrobot.ai") === "Happyrobot.ai",
     String(normaliseCompanyName("Happyrobot.ai")),
   );
+  // The board's own word is not the employer's name.
+  check(
+    "a board that calls itself Careers has not named its employer",
+    normaliseCompanyName("Careers") === null,
+    String(normaliseCompanyName("Careers")),
+  );
+  check(
+    "a board that calls itself Jobs has not named its employer",
+    normaliseCompanyName("Jobs") === null,
+    String(normaliseCompanyName("Jobs")),
+  );
+  check(
+    "the board's word after the employer's name is left out",
+    employerSegment("Careers | Renault Group") === "Renault Group",
+    String(employerSegment("Careers | Renault Group")),
+  );
+  check(
+    "the employer's name is read from the board's own title",
+    employerSegment("Centific|Wd1|Centific Global") === "Centific",
+    String(employerSegment("Centific|Wd1|Centific Global")),
+  );
+  check(
+    "a title that is only the board's word names nobody",
+    normaliseCompanyName(employerSegment("Careers")) === null,
+    String(employerSegment("Careers")),
+  );
+
+  // The board's own word, on its own.
   check(
     "the system's own label for a site is not the employer's name",
     normaliseCompanyName("Safaricom Candidate Experience site") ===
