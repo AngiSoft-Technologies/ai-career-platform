@@ -52,6 +52,7 @@ class OpportunityController extends ChangeNotifier {
     String? country,
     String? workMode,
     String? seniority,
+    String? eligibility,
     bool? semantic,
   }) async {
     _search = OpportunitySearch(
@@ -59,10 +60,18 @@ class OpportunityController extends ChangeNotifier {
       country: country ?? _search.country,
       workMode: workMode ?? _search.workMode,
       seniority: seniority ?? _search.seniority,
+      eligibility: eligibility ?? _search.eligibility,
       semantic: semantic ?? _search.semantic,
     );
     await load();
   }
+
+  /// Keeps only the roles a candidate can hold. The switch is on the
+  /// filter sheet because the default answer is no: three quarters of
+  /// the catalogue is posted elsewhere, with a residency rule on it.
+  Future<void> toggleEligibility() => searchNow(
+    eligibility: _search.eligibility == 'eligible' ? null : 'eligible',
+  );
 
   Future<void> toggleSaved(Opportunity opportunity) async {
     final willSave = !_savedIds.contains(opportunity.id);

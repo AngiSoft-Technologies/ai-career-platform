@@ -16,6 +16,13 @@ const searchSchema = z.object({
     .enum(["full_time", "part_time", "contract", "internship", "trainee", "industrial_attachment"])
     .optional(),
   seniority: z.enum(["intern", "junior", "mid", "senior", "lead"]).optional(),
+  // "Can I hold this role" — answered from what the posting says about
+  // location and work authorisation. A candidate filtering on this is
+  // not asking for a wider net; they are asking for the roles that are
+  // open to them.
+  eligibility: z
+    .enum(["eligible", "unlikely", "ineligible", "unknown"])
+    .optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
   semantic: z
     .enum(["true", "false"])

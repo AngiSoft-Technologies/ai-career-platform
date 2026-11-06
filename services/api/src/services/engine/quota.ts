@@ -177,3 +177,34 @@ export async function hostIsQuiet(host: string): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * The quiet hosts among a list, in one round trip.
+ *
+ * The Kenya agent's target list is read as a whole before the cycle
+ * begins, and every target is checked against the quiet list before it
+ * is chosen — otherwise a cycle spends half its slots on hosts that are
+ * going to be skipped, and the platforms that do post wait behind
+ * them. Asking Redis once for the whole list is the difference between
+ * seventy-four round trips and one.
+ *
+ * When Redis cannot answer, no host is quiet: the page is read.
+ */
+export async function quietHosts(hosts: string[]): Promise<Set<string>> {
+  const quiet = new Set<string>();
+  const unique = [...new Set(hosts.filter(Boolean))];
+  if (unique.length === 0 || !redisIsReady()) return quiet;
+
+  try {
+    const values = await redis.mget(unique.map((host) => `quiet:${host}`));
+    values.forEach((value, index) => {
+      if (value === null || Number(value) < QUIET_HOST_THRESHOLD) return;
+      const host = unique[index];
+      if (host) quiet.add(host);
+    });
+  } catch {
+    // Fail open: no host is quiet.
+  }
+
+  return quiet;
+}

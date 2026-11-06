@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../../shared/formatting/app_formatters.dart';
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/eligibility_badge.dart';
 import '../../../shared/widgets/match_score_badge.dart';
 import '../domain/opportunity.dart';
 import 'opportunity_controller.dart';
@@ -150,6 +151,7 @@ class _OpportunityListScreenState extends State<OpportunityListScreen> {
     var country = controller.search.country ?? '';
     var workMode = controller.search.workMode;
     var seniority = controller.search.seniority;
+    var eligibility = controller.search.eligibility;
     var semantic = controller.search.semantic;
     final countryController = TextEditingController(text: country);
     await showModalBottomSheet<void>(
@@ -225,6 +227,20 @@ class _OpportunityListScreenState extends State<OpportunityListScreen> {
                   ),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
+                    title: const Text('Roles I can hold'),
+                    subtitle: Text(
+                      eligibility == 'eligible'
+                          ? 'Only postings that are open to you'
+                          : 'Showing everything, including roles that need relocation',
+                    ),
+                    value: eligibility == 'eligible',
+                    onChanged: (value) => setModalState(
+                      () => eligibility = value ? 'eligible' : null,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
                     title: const Text('Semantic ranking'),
                     subtitle: const Text(
                       'Blend role and skill meaning into the ranking',
@@ -239,6 +255,7 @@ class _OpportunityListScreenState extends State<OpportunityListScreen> {
                         country: country,
                         workMode: workMode,
                         seniority: seniority,
+                        eligibility: eligibility,
                         semantic: semantic,
                       );
                       Navigator.pop(sheetContext);
@@ -346,17 +363,48 @@ class _OpportunityCard extends StatelessWidget {
                         .toList(),
                   ),
                 ],
-                if (opportunity.match != null) ...[
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: MatchScoreBadge(score: opportunity.match!.score),
-                  ),
-                ],
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    EligibilityBadge(eligibility: opportunity.eligibility),
+                    if (opportunity.sourceKind != null)
+                      _SourceChip(source: opportunity.sourceKind!),
+                    if (opportunity.match != null)
+                      MatchScoreBadge(score: opportunity.match!.score),
+                  ],
+                ),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Where the employer publishes this role. The catalogue reads a hundred
+/// and thirty boards, and the answer used to be a vendor token nobody
+/// could read ("workday:alliancewd").
+class _SourceChip extends StatelessWidget {
+  const _SourceChip({required this.source});
+
+  final String source;
+
+  @override
+  Widget build(BuildContext context) {
+    final onSurfaceVariant = Theme.of(context).colorScheme.onSurfaceVariant;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        border: Border.all(color: Theme.of(context).dividerColor),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        source,
+        style: Theme.of(context).textTheme.labelLarge
+            ?.copyWith(color: onSurfaceVariant, fontWeight: FontWeight.w600),
       ),
     );
   }

@@ -95,6 +95,46 @@ export function riskTone(score?: number | null): "success" | "warning" | "danger
   return "danger";
 }
 
+/**
+ * What the eligibility decision means, in a word or two.
+ *
+ * The pipeline answers one question for every posting — can a candidate
+ * in Kenya actually hold this role — and the answer is read off the
+ * posting itself rather than guessed from the country it names. A role
+ * that says "open worldwide" is one a candidate can hold; one that says
+ * "must be authorised to work in the US" is not, and saying so plainly
+ * saves the candidate an application that was never going to be read.
+ */
+export function eligibilityLabel(
+  eligibility?: string | null,
+): string {
+  switch (eligibility) {
+    case "eligible":
+      return "You can hold this";
+    case "unlikely":
+      return "Relocation likely";
+    case "ineligible":
+      return "Not open to you";
+    default:
+      return "Not stated";
+  }
+}
+
+export function eligibilityTone(
+  eligibility?: string | null,
+): "success" | "warning" | "danger" | "neutral" {
+  switch (eligibility) {
+    case "eligible":
+      return "success";
+    case "unlikely":
+      return "warning";
+    case "ineligible":
+      return "danger";
+    default:
+      return "neutral";
+  }
+}
+
 export function slugify(value: string): string {
   return value
     .toLowerCase()

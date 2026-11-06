@@ -23,6 +23,9 @@ class Opportunity {
     this.currency,
     this.description = '',
     this.match,
+    this.sourceKind,
+    this.eligibility,
+    this.eligibilityReasons = const [],
   });
 
   final String id;
@@ -42,10 +45,39 @@ class Opportunity {
   final String applyUrl;
   final String applicationMethod;
   final String platform;
+
+  /// Where the employer published this role, in words — "Workday board",
+  /// "Oracle HCM careers site", "Greenhouse board". The catalogue reads a
+  /// hundred and thirty boards, and this is the answer to the question
+  /// "where does this company post vacancies".
+  final String? sourceKind;
+
+  /// Whether a candidate in Kenya can hold this role, read off what the
+  /// posting itself says about location and work authorisation.
+  final String? eligibility;
+
+  /// Why the eligibility decision was what it was.
+  final List<String> eligibilityReasons;
   final DateTime? postedAt;
   final List<String> skills;
   final String description;
   final JobMatch? match;
+
+  /// The eligibility decision, in the words a candidate would use.
+  String get eligibilityLabel {
+    switch (eligibility) {
+      case 'eligible':
+        return 'You can hold this';
+      case 'unlikely':
+        return 'Relocation likely';
+      case 'ineligible':
+        return 'Not open to you';
+      default:
+        return 'Not stated';
+    }
+  }
+
+  bool get isEligible => eligibility == 'eligible';
 
   String get locationLabel {
     final parts = <String>[
@@ -75,6 +107,9 @@ class Opportunity {
       applyUrl: json['applyUrl'] as String? ?? '',
       applicationMethod: json['applicationMethod'] as String? ?? 'unknown',
       platform: json['platform'] as String? ?? 'unknown',
+      sourceKind: json['sourceKind'] as String?,
+      eligibility: json['eligibility'] as String?,
+      eligibilityReasons: _strings(json['eligibilityReasons']),
       postedAt: DateTime.tryParse(json['postedAt'] as String? ?? ''),
       skills: _strings(json['skills']),
       description: json['description'] as String? ?? '',
@@ -102,6 +137,9 @@ class Opportunity {
     'applyUrl': applyUrl,
     'applicationMethod': applicationMethod,
     'platform': platform,
+    if (sourceKind != null) 'sourceKind': sourceKind,
+    if (eligibility != null) 'eligibility': eligibility,
+    if (eligibilityReasons.isNotEmpty) 'eligibilityReasons': eligibilityReasons,
     if (postedAt != null) 'postedAt': postedAt!.toIso8601String(),
     'skills': skills,
     'description': description,
@@ -126,6 +164,7 @@ class OpportunitySearch {
     this.country,
     this.workMode,
     this.seniority,
+    this.eligibility,
     this.semantic = false,
   });
 
@@ -133,6 +172,11 @@ class OpportunitySearch {
   final String? country;
   final String? workMode;
   final String? seniority;
+
+  /// "eligible" keeps the roles a candidate can actually hold, which is
+  /// what most of the catalogue is not — the bulk of it is posted in
+  /// Germany and the United States with a residency rule on it.
+  final String? eligibility;
   final bool semantic;
 
   Map<String, String> toQueryParameters() {
@@ -144,6 +188,8 @@ class OpportunitySearch {
         'workMode': workMode!,
       if (seniority != null && seniority!.trim().isNotEmpty)
         'seniority': seniority!,
+      if (eligibility != null && eligibility!.trim().isNotEmpty)
+        'eligibility': eligibility!,
       'semantic': semantic.toString(),
       'ranked': 'true',
       'limit': '50',

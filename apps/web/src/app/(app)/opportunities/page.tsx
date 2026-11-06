@@ -15,7 +15,13 @@ import {
   cx,
 } from "@/components/ui";
 import { useApi, useDebounced } from "@/lib/hooks";
-import { formatSalary, relativeTime, titleCase } from "@/lib/format";
+import {
+  eligibilityLabel,
+  eligibilityTone,
+  formatSalary,
+  relativeTime,
+  titleCase,
+} from "@/lib/format";
 import type { Opportunity } from "@/lib/types";
 
 interface OpportunitiesResponse {
@@ -35,6 +41,7 @@ function OpportunitiesPageInner() {
   const [workMode, setWorkMode] = useState(params.get("workMode") ?? "");
   const [employmentType, setEmploymentType] = useState(params.get("employmentType") ?? "");
   const [seniority, setSeniority] = useState(params.get("seniority") ?? "");
+  const [eligibility, setEligibility] = useState(params.get("eligibility") ?? "");
   const [semantic, setSemantic] = useState(false);
 
   const debounced = useDebounced(search);
@@ -45,10 +52,11 @@ function OpportunitiesPageInner() {
       workMode: workMode || undefined,
       employmentType: employmentType || undefined,
       seniority: seniority || undefined,
+      eligibility: eligibility || undefined,
       semantic: semantic ? "true" : undefined,
       limit: 40,
     }),
-    [debounced, country, workMode, employmentType, seniority, semantic],
+    [debounced, country, workMode, employmentType, seniority, eligibility, semantic],
   );
 
   useEffect(() => {
@@ -58,10 +66,11 @@ function OpportunitiesPageInner() {
     if (workMode) next.set("workMode", workMode);
     if (employmentType) next.set("employmentType", employmentType);
     if (seniority) next.set("seniority", seniority);
+    if (eligibility) next.set("eligibility", eligibility);
     if (semantic) next.set("semantic", "true");
     const suffix = next.toString();
     router.replace(suffix ? `/opportunities?${suffix}` : "/opportunities", { scroll: false });
-  }, [country, debounced, router, semantic, seniority, workMode, employmentType]);
+  }, [country, debounced, router, semantic, seniority, workMode, employmentType, eligibility]);
 
   const { data, loading, error, offline, refresh } = useApi<OpportunitiesResponse>(
     "/opportunities",
@@ -191,6 +200,19 @@ function OpportunitiesPageInner() {
             <Chip active={semantic} onClick={() => setSemantic((value) => !value)}>
               Semantic AI search
             </Chip>
+            {/* The question the product exists to answer, as a filter.
+                Twenty thousand of the catalogue's roles are in Germany
+                or the United States, and a candidate who cannot hold
+                them has no use for them. */}
+            <span className="eyebrow" style={{ margin: "0 0.3rem 0 0.8rem" }}>
+              You can hold
+            </span>
+            <Chip
+              active={eligibility === "eligible"}
+              onClick={() => toggle("eligibility", "eligible", setEligibility)}
+            >
+              Open to me
+            </Chip>
           </div>
         </div>
       </Card>
@@ -253,6 +275,11 @@ function OpportunityRow({ item }: { item: Opportunity }) {
             <Badge tone="info">{titleCase(item.workMode)}</Badge>
             {item.employmentType ? (
               <Badge tone="neutral">{titleCase(item.employmentType)}</Badge>
+            ) : null}
+            {item.eligibility && item.eligibility !== "unknown" ? (
+              <Badge tone={eligibilityTone(item.eligibility)}>
+                {eligibilityLabel(item.eligibility)}
+              </Badge>
             ) : null}
             {risk !== null && risk >= 60 ? <Badge tone="danger">Risk {Math.round(risk)}</Badge> : null}
           </div>

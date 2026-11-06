@@ -552,7 +552,7 @@ export default function DocumentEditorPage() {
       ) : null}
 
       {tab === "ats" ? (
-        <div className="grid-2" style={{ gridTemplateColumns: "minmax(0,1fr) minmax(0,1.2fr)" }}>
+        <div className="grid-rail grid-rail--flip">
           <Card style={{ padding: "1.2rem" }}>
             <SectionTitle eyebrow="ATS readiness" title="Parser simulation" />
             {report ? (

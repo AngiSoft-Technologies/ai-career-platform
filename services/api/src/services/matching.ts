@@ -315,12 +315,26 @@ export async function rankedOpportunities(
     })
     .filter((item): item is (Opportunity & { match: MatchResult }) => item !== null);
 
-  // Sort by: location score first (descending), then total score (descending)
-  // This ensures jobs closer to the user appear first
+  // Sort by: location score first (descending), then whether the role is
+  // one the candidate can hold, then total score. This ensures jobs
+  // closer to the user appear first, and — at the same distance — that a
+  // posting which says it is open to them comes before one which says it
+  // is not.
+  const eligibleRank = (item: Opportunity & { match: MatchResult }): number =>
+    item.eligibility === "eligible"
+      ? 2
+      : item.eligibility === "unlikely" || item.eligibility === "unknown"
+        ? 1
+        : 0;
+
   ranked.sort((a, b) => {
     // First sort by location score (higher = closer = better)
     const locationDiff = b.match.factors.location - a.match.factors.location;
     if (locationDiff !== 0) return locationDiff;
+
+    // Then by whether the role can be held at all
+    const eligibilityDiff = eligibleRank(b) - eligibleRank(a);
+    if (eligibilityDiff !== 0) return eligibilityDiff;
 
     // Then sort by total score
     return b.match.score - a.match.score;

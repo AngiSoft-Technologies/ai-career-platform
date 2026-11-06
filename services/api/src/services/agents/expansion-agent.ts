@@ -12,6 +12,7 @@ import type { AtsBoard, AtsKind } from "../engine/discover.js";
 import { computeFingerprint, computeSimhash } from "../engine/extract.js";
 import { hostOf, jobUrlRefusal } from "../engine/job-url.js";
 import { DEFAULT_MAX_QUEUE_DEPTH, queueRoom } from "../engine/queue.js";
+import { pooled } from "../engine/index.js";
 import { hostIsQuiet, noteLoudHost, noteQuietHost } from "../engine/quota.js";
 import { capturePage, embeddedJobsToRaw } from "../engine/screen.js";
 import type { RawJob } from "../engine/sources.js";
@@ -254,12 +255,24 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
     // of the budget. A board that is refreshed every cycle costs fifteen
     // seconds each, which is why the sources the catalogue was given are
     // read first.
+    //
+    // The boards are read four at a time. Read one at a time, a cycle's
+    // budget bought eight of the fifteen boards it had chosen, and the
+    // seven it did not reach were put back in front of the queue — so
+    // the same cycle's first eight were read over and over while a board
+    // holding a hundred postings waited for the budget it never got.
+    // Boards are different hosts, so reading them together is four
+    // requests to four employers, not four requests to one.
     const boards = await this.findBoards(maxBoards);
-    for (const board of boards) {
+    const concurrency = Math.max(1, Number(ctx.config.board_concurrency ?? 4));
+
+    await pooled(boards, concurrency, async (board) => {
       if (Date.now() > deadline) {
         stoppedOnBudget = true;
-        break;
+        return;
       }
+
+      const key = `${board.kind}:${board.token}`;
       try {
         const jobs = await fetchAtsBoard(board);
         discovered += jobs.length;
@@ -272,14 +285,26 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
            VALUES ($1, 'ats', $2, now(), now())
            ON CONFLICT (domain) DO UPDATE
              SET jobs_found = EXCLUDED.jobs_found, last_seen = now()`,
-          [`${board.kind}:${board.token}`, jobs.length],
+          [key, jobs.length],
         );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        errors.push(`${board.kind}:${board.token}: ${message}`);
+        errors.push(`${key}: ${message}`);
         logger.debug({ board, error: message }, "ATS board expansion failed");
+
+        // A board that could not be read is still a board that was
+        // *tried*. Its time is stamped anyway, or it stays at the front
+        // of the never-read queue for every cycle and the boards behind
+        // it are never reached.
+        await query(
+          `INSERT INTO discovery_known_sources (domain, source_type, jobs_found, last_seen, created_at)
+           VALUES ($1, 'ats', 0, now(), now())
+           ON CONFLICT (domain) DO UPDATE
+             SET last_seen = now()`,
+          [key],
+        ).catch(() => undefined);
       }
-    }
+    });
 
     return {
       // A board that answers 404 is a finding, not a failed cycle. The
@@ -313,11 +338,21 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
     // board is read in turn. Ordered the other way — newest first — the
     // same two boards were read every cycle and the other ten were read
     // when the budget allowed.
+    //
+    // The boards that have never been read are ordered by when they were
+    // *learned*, not by the order the database happens to return. Thirty
+    // boards had never been read at all while the search agent kept
+    // learning more, because a row that is updated moves to the end of
+    // its heap page: the sort of a hundred rows with the same NULL key
+    // comes out in a different order every cycle, so the cycle kept
+    // picking the same boards and starving the rest. One board with two
+    // hundred and twenty-eight postings on it had never been read once
+    // in seven hours.
     const learned = await query<{ domain: string; last_seen: Date | null }>(
       `SELECT domain, last_seen FROM discovery_known_sources
-        WHERE source_type = 'ats'
-        ORDER BY last_seen ASC NULLS FIRST
-        LIMIT 500`,
+         WHERE source_type = 'ats'
+         ORDER BY last_seen ASC NULLS FIRST, created_at ASC
+         LIMIT 500`,
     );
 
     const lastSeen = new Map<string, Date | null>();

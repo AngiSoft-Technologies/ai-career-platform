@@ -11,7 +11,7 @@ import { extractListingJobs } from "../engine/discover.js";
 import { computeFingerprint, computeSimhash } from "../engine/extract.js";
 import { assessEligibility } from "../engine/eligibility.js";
 import { shouldReuseIndexed } from "../engine/freshness.js";
-import { hostIsQuiet, noteLoudHost, noteQuietHost } from "../engine/quota.js";
+import { quietHosts, hostIsQuiet, noteLoudHost, noteQuietHost } from "../engine/quota.js";
 import { hostOf } from "../engine/job-url.js";
 import type { RawJob } from "../engine/sources.js";
 
@@ -59,14 +59,17 @@ export class KenyaPlatformAgent extends BaseDiscoveryAgent {
     const budgetMs = Number(ctx.config.budget_ms ?? 360_000);
     const deadline = Date.now() + budgetMs;
 
-    const targets = await this.loadTargets(maxTargets, includeMicroTask);
+    const { targets, skippedQuiet } = await this.loadTargets(
+      maxTargets,
+      includeMicroTask,
+    );
     let discovered = 0;
     let stored = 0;
     let duplicate = 0;
     let eligible = 0;
     let stoppedOnBudget = false;
     let processed = 0;
-    let skipped = 0;
+    let skipped = skippedQuiet;
     const errors: string[] = [];
     // The hosts that were read, and what each of them answered. The
     // rotation is the whole diagnosis of the yield: a platform that is
@@ -216,11 +219,21 @@ export class KenyaPlatformAgent extends BaseDiscoveryAgent {
    * Reads the target list. Anything is a valid target: a domain, a careers
    * URL, a board URL, or a micro-task platform. The table is also written to
    * by the expansion agent, so this is a learned list, not a curated one.
+   *
+   * The list is read *whole* and the quiet hosts are taken out of it
+   * before the cycle's slots are handed out. The slots used to be handed
+   * out first and the quiet hosts discovered afterwards, so half of every
+   * cycle was spent on hosts that were going to be skipped: eleven
+   * platforms read out of twenty-four, while the platforms that do post
+   * waited behind the ones that do not.
    */
   private async loadTargets(
     limit: number,
     includeMicroTask: boolean,
-  ): Promise<Array<{ url: string; kind: string; worldwideByDefault: boolean }>> {
+  ): Promise<{
+    targets: Array<{ url: string; kind: string; worldwideByDefault: boolean }>;
+    skippedQuiet: number;
+  }> {
     const filter = includeMicroTask ? "" : "AND kind <> 'micro_task'";
     const result = await query<{
       url: string;
@@ -232,8 +245,7 @@ export class KenyaPlatformAgent extends BaseDiscoveryAgent {
          FROM discovery_platform_targets
         WHERE enabled = true ${filter}
         ORDER BY priority DESC, last_seen ASC NULLS FIRST, created_at ASC
-        LIMIT $1`,
-      [limit],
+        LIMIT 500`,
     );
 
     // Seed the table the first time so the agent has something to chew on
@@ -252,18 +264,33 @@ export class KenyaPlatformAgent extends BaseDiscoveryAgent {
           LIMIT $1`,
         [limit],
       );
-      return seeded.rows.map((row) => ({
-        url: row.url,
-        kind: row.kind,
-        worldwideByDefault: row.worldwide_by_default ?? true,
-      }));
+      return {
+        targets: seeded.rows.map((row) => ({
+          url: row.url,
+          kind: row.kind,
+          worldwideByDefault: row.worldwide_by_default ?? true,
+        })),
+        skippedQuiet: 0,
+      };
     }
 
-    return result.rows.map((row) => ({
+    const targets = result.rows.map((row) => ({
       url: row.url,
       kind: row.kind,
       worldwideByDefault: row.worldwide_by_default ?? true,
     }));
+
+    // The hosts that are quiet are left out of the cycle, and the slots
+    // they would have taken go to the platforms that can be read.
+    const quiet = await quietHosts(targets.map((target) => hostOf(target.url)));
+    const readable = targets.filter(
+      (target) => !quiet.has(hostOf(target.url)),
+    );
+
+    return {
+      targets: readable.slice(0, limit),
+      skippedQuiet: quiet.size,
+    };
   }
 
   private async seedTargets(): Promise<void> {

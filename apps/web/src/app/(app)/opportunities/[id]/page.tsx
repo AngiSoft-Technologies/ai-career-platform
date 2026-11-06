@@ -25,7 +25,14 @@ import {
 } from "@/components/ui";
 import { useApi } from "@/lib/hooks";
 import { api } from "@/lib/api";
-import { formatDate, formatSalary, relativeTime, titleCase } from "@/lib/format";
+import {
+  eligibilityLabel,
+  eligibilityTone,
+  formatDate,
+  formatSalary,
+  relativeTime,
+  titleCase,
+} from "@/lib/format";
 import type { ApplicationAnalysis, Opportunity } from "@/lib/types";
 
 interface OpportunityDetail extends Omit<Opportunity, "match"> {
@@ -164,6 +171,11 @@ export default function OpportunityDetailPage() {
               <Badge tone="accent">{titleCase(item.seniority)}</Badge>
               <Badge tone="info">{titleCase(item.workMode)}</Badge>
               <Badge tone="neutral">{titleCase(item.employmentType)}</Badge>
+              {item.eligibility && item.eligibility !== "unknown" ? (
+                <Badge tone={eligibilityTone(item.eligibility)}>
+                  {eligibilityLabel(item.eligibility)}
+                </Badge>
+              ) : null}
               {item.riskAction && item.riskAction !== "publish" ? (
                 <Badge tone="danger">{titleCase(item.riskAction)} by risk engine</Badge>
               ) : (
@@ -232,7 +244,7 @@ export default function OpportunityDetailPage() {
       />
 
       {tab === "overview" ? (
-        <div className="grid-2" style={{ gridTemplateColumns: "minmax(0,1.6fr) minmax(0,1fr)" }}>
+        <div className="grid-rail">
           <Card style={{ padding: "1.2rem" }}>
             <SectionTitle eyebrow="Role description" title="What the employer asked for" />
             <div
@@ -250,10 +262,36 @@ export default function OpportunityDetailPage() {
 
           <div className="stack">
             <Card style={{ padding: "1.2rem" }}>
+              <SectionTitle eyebrow="Eligibility" title="Can you hold this role" />
+              <div className="stack" style={{ marginTop: "0.9rem", gap: "0.5rem" }}>
+                <div className="row row-wrap" style={{ gap: "0.4rem" }}>
+                  <Badge tone={eligibilityTone(item.eligibility)}>
+                    {eligibilityLabel(item.eligibility)}
+                  </Badge>
+                </div>
+                <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", margin: 0, lineHeight: 1.6 }}>
+                  Read from what the posting itself says about location and
+                  work authorisation — not from the country it happens to
+                  name. A role that says “open worldwide” is one you can
+                  hold; one that names a country and a residency rule is
+                  not.
+                </p>
+                {(item.eligibilityReasons ?? []).slice(0, 4).map((reason) => (
+                  <p key={reason} style={{ fontSize: "0.8rem", color: "var(--text-soft)", margin: 0 }}>
+                    · {reason}
+                  </p>
+                ))}
+              </div>
+            </Card>
+
+            <Card style={{ padding: "1.2rem" }}>
               <SectionTitle eyebrow="Apply" title="How to apply" />
               <div className="stack" style={{ marginTop: "0.9rem", gap: "0.5rem" }}>
                 <InfoRow label="Method" value={titleCase(item.applicationMethod)} />
-                <InfoRow label="Platform" value={titleCase(item.platform)} />
+                {/* Where the employer publishes. The catalogue reads a
+                    hundred and thirty boards, and the answer to "where
+                    does this company post" is on the posting itself. */}
+                <InfoRow label="Posted on" value={item.sourceKind ?? titleCase(item.platform)} />
                 <InfoRow label="Expires" value={item.expiresAt ? formatDate(item.expiresAt) : "Not stated"} />
                 <Button
                   size="sm"
@@ -284,7 +322,7 @@ export default function OpportunityDetailPage() {
       ) : null}
 
       {tab === "match" ? (
-        <div className="grid-2" style={{ gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)" }}>
+        <div className="grid-2">
           <Card style={{ padding: "1.2rem" }}>
             <SectionTitle eyebrow="Why this score" title="Match factors" />
             <div className="stack" style={{ marginTop: "0.9rem", gap: "0.6rem" }}>
@@ -334,7 +372,7 @@ export default function OpportunityDetailPage() {
       ) : null}
 
       {tab === "apply" ? (
-        <div className="grid-2" style={{ gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)" }}>
+        <div className="grid-2">
           <Card style={{ padding: "1.2rem" }}>
             <SectionTitle
               eyebrow="Workspace"

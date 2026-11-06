@@ -756,6 +756,44 @@ a {
   }
 }
 
+/* A page with a point and a rail beside it.
+   The proportions were written inline on the pages
+   ("minmax(0,1.6fr) minmax(0,1fr)"), and an inline style cannot be
+   undone by a media query: the rule in the query never wins against it.
+   So a page that was meant to collapse on a phone stayed two columns
+   wide on a 375px screen, and each column came out 160px. The
+   proportions live here, where the small screen can undo them. */
+.grid-rail {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+/* The same, with the point on the right. */
+.grid-rail--flip {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+}
+
+/* A row of content and one action beside it. */
+.grid-rail--aside {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1.2rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .grid-rail,
+  .grid-rail--flip,
+  .grid-rail--aside {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .grid-rail--aside > * {
+    min-width: 0;
+  }
+}
+
 .app-grid {
   display: grid;
   grid-template-columns: var(--sidenav-w) minmax(0, 1fr);

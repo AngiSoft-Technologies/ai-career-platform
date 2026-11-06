@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../../shared/formatting/app_formatters.dart';
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/eligibility_badge.dart';
 import '../../applications/presentation/application_controller.dart';
 import '../../company_intelligence/data/company_intelligence_repository.dart';
 import '../../company_intelligence/presentation/company_intelligence_card.dart';
@@ -105,6 +106,38 @@ class _OpportunityDetailScreenState extends State<OpportunityDetailScreen> {
         const SizedBox(height: 18),
         SectionCard(
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Can you hold this role',
+                style: Theme.of(context).textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 10),
+              EligibilityBadge(eligibility: opportunity.eligibility),
+              const SizedBox(height: 10),
+              Text(
+                'Read from what the posting itself says about location and '
+                'work authorisation — not from the country it happens to '
+                'name.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              for (final reason in opportunity.eligibilityReasons.take(4))
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    '· $reason',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        SectionCard(
+          child: Column(
             children: [
               _DetailRow(
                 icon: Icons.location_on_outlined,
@@ -134,6 +167,14 @@ class _OpportunityDetailScreenState extends State<OpportunityDetailScreen> {
                 icon: Icons.schedule_rounded,
                 label: 'Posted',
                 value: AppFormatters.relativeDate(opportunity.postedAt),
+              ),
+              // Where the employer publishes. The catalogue reads a
+              // hundred and thirty boards, and this is the answer to
+              // "where does this company post vacancies".
+              _DetailRow(
+                icon: Icons.business_rounded,
+                label: 'Posted on',
+                value: opportunity.sourceKind ?? _title(opportunity.platform),
               ),
             ],
           ),

@@ -31,10 +31,15 @@ export interface Opportunity {
   applyUrl: string;
   applicationMethod: string;
   platform: string;
+  /** Where the employer published this role, in words. */
+  sourceKind?: string;
   postedAt: string;
   expiresAt?: string;
   status: string;
   skills: string[];
+  /** Can a candidate in Kenya hold this, as the posting states it. */
+  eligibility?: "eligible" | "unlikely" | "ineligible" | "unknown";
+  eligibilityReasons?: string[];
   riskScore?: number | null;
   riskAction?: string | null;
   riskFlags?: string[];

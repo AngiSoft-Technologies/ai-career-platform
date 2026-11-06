@@ -14,8 +14,9 @@ import {
 import { boardKey, detectAts, type AtsBoard } from "../engine/ats.js";
 import { pooled } from "../engine/index.js";
 import { cleanJobTitle, isListingTitle } from "../engine/extract.js";
-import { jobUrlRefusal } from "../engine/job-url.js";
+import { hostOf, jobUrlRefusal } from "../engine/job-url.js";
 import { DEFAULT_MAX_QUEUE_DEPTH, queueRoom } from "../engine/queue.js";
+import { hostIsQuiet } from "../engine/quota.js";
 
 /**
  * The search engine discovery agent.
@@ -204,6 +205,7 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
     let totalListings = 0;
     let totalDeferred = 0;
     let totalBoards = 0;
+    let totalQuiet = 0;
     let timedOut = false;
     const errors: string[] = [];
     const engines = new Set<string>();
@@ -338,6 +340,18 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
           continue;
         }
 
+        // And so is the host. Fifty-nine rows in the queue yesterday
+        // were pages from hosts the browse agent had already given up
+        // on: each of them was fetched out of the queue and refused
+        // again, and each of them held a slot the pipeline needed. The
+        // host is left out until it says something, the same way the
+        // browse agent leaves it out.
+        const host = hostOf(result.url);
+        if (await hostIsQuiet(host)) {
+          totalQuiet += 1;
+          continue;
+        }
+
         // The queue is bounded. Beyond the bound the results are
         // dropped for this run and the next run finds them again.
         if (totalStored >= maxQueuePerRun) {
@@ -427,6 +441,8 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
         seedEmployers: seeds.employers?.slice(0, 10) ?? [],
         // Results found but not queued, because the queue was full.
         deferred: totalDeferred,
+        // Results from hosts that have already said they had nothing.
+        quietHosts: totalQuiet,
       },
     };
   }

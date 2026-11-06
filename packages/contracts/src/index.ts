@@ -5,6 +5,17 @@ export type Seniority = "intern" | "junior" | "mid" | "senior" | "lead";
 export type ApplicationMethod = "email" | "website" | "form" | "ats" | "unknown";
 export type EmploymentType = "full_time" | "part_time" | "contract" | "internship" | "industrial_attachment" | "trainee" | "freelance";
 
+/**
+ * Whether a candidate can actually hold a role, read off what the
+ * posting says rather than off the country it happens to name.
+ *
+ * The question the product exists to answer is "is this role open to
+ * someone in Kenya" — and the answer is on the page, or it is not there
+ * at all. `unknown` means the posting said nothing about location or
+ * authorisation, which is not a yes and not a no.
+ */
+export type Eligibility = "eligible" | "unlikely" | "ineligible" | "unknown";
+
 export type ApplicationStatus =
   | "DISCOVERED"
   | "SHORTLISTED"
@@ -88,10 +99,16 @@ export interface Opportunity {
   applyUrl: string;
   applicationMethod: ApplicationMethod;
   platform: string;
+  /** Where the employer published this role — the board, vendor or page. */
+  sourceKind?: string;
   postedAt: string;
   expiresAt?: string;
   status: string;
   skills: string[];
+  /** Can a candidate in Kenya hold this, as the posting states it. */
+  eligibility?: Eligibility;
+  /** Why the eligibility decision was what it was, for the user to read. */
+  eligibilityReasons?: string[];
 }
 
 export interface MatchFactors {

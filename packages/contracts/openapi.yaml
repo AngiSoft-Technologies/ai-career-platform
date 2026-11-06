@@ -405,6 +405,11 @@ paths:
         - { name: country, in: query, schema: { type: string } }
         - { name: workMode, in: query, schema: { type: string, enum: [onsite, hybrid, remote] } }
         - { name: seniority, in: query, schema: { type: string, enum: [intern, junior, mid, senior, lead] } }
+        - { name: employmentType, in: query, schema: { type: string } }
+        - name: eligibility
+          in: query
+          description: Roles a candidate in Kenya can actually hold, as the posting states it.
+          schema: { type: string, enum: [eligible, unlikely, ineligible, unknown] }
         - { name: limit, in: query, schema: { type: integer, maximum: 100 } }
         - { name: semantic, in: query, schema: { type: boolean }, description: "Blend vector similarity into ranking" }
         - { name: ranked, in: query, schema: { type: boolean } }
@@ -1270,8 +1275,16 @@ components:
         applyUrl: { type: string }
         applicationMethod: { type: string }
         platform: { type: string }
+        sourceKind:
+          type: string
+          description: Where the employer published this role, in words.
         postedAt: { type: string, format: date-time }
         skills: { type: array, items: { type: string } }
+        eligibility:
+          type: string
+          enum: [eligible, unlikely, ineligible, unknown]
+          description: Whether a candidate can hold this role, as the posting states it.
+        eligibilityReasons: { type: array, items: { type: string } }
         match:
           type: object
           properties:

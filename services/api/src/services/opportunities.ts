@@ -1,4 +1,4 @@
-import type { Opportunity } from "@angisoft/mboqara-contracts";
+import type { Eligibility, Opportunity } from "@angisoft/mboqara-contracts";
 import { query } from "../db/pool.js";
 
 export interface OpportunityFilters {
@@ -7,6 +7,7 @@ export interface OpportunityFilters {
   workMode?: string;
   employmentType?: string;
   seniority?: string;
+  eligibility?: Eligibility;
   limit?: number;
 }
 
@@ -33,6 +34,50 @@ interface OpportunityRow {
   expires_at: Date | null;
   status: string;
   skills: string[];
+  eligibility: string | null;
+  eligibility_reasons: unknown;
+}
+
+/**
+ * Where the employer publishes a role, in words.
+ *
+ * `platform` carries the board's own address — "workday:alliancewd",
+ * "oracle:fa-eqnk…|CX_3001", "greenhouse:jumia" — which is the answer
+ * to "where does this company post", and is not something to show a
+ * candidate. The vendor's name is.
+ */
+function sourceKindOf(platform: string): string {
+  const vendor = platform.split(":")[0] ?? platform;
+  switch (vendor) {
+    case "workday":
+      return "Workday board";
+    case "oracle":
+      return "Oracle HCM careers site";
+    case "greenhouse":
+      return "Greenhouse board";
+    case "lever":
+      return "Lever board";
+    case "ashby":
+      return "Ashby board";
+    case "taleo":
+      return "Taleo careers section";
+    case "breezy":
+      return "Breezy board";
+    case "workable":
+      return "Workable board";
+    case "smartrecruiters":
+      return "SmartRecruiters site";
+    case "recruitee":
+      return "Recruitee site";
+    case "careers_page":
+      return "Employer's careers page";
+    case "listing_link":
+      return "Job listing page";
+    case "custom":
+      return "Employer's own site";
+    default:
+      return vendor ? `${vendor} listing` : "Employer's own site";
+  }
 }
 
 function mapOpportunity(row: OpportunityRow): Opportunity {
@@ -56,10 +101,17 @@ function mapOpportunity(row: OpportunityRow): Opportunity {
     applicationMethod:
       row.application_method as Opportunity["applicationMethod"],
     platform: row.platform,
+    sourceKind: sourceKindOf(row.platform),
     postedAt: row.posted_at.toISOString(),
     expiresAt: row.expires_at?.toISOString(),
     status: row.status,
     skills: row.skills,
+    eligibility: (row.eligibility ?? undefined) as Opportunity["eligibility"],
+    eligibilityReasons: Array.isArray(row.eligibility_reasons)
+      ? (row.eligibility_reasons.filter(
+          (reason): reason is string => typeof reason === "string",
+        ) as string[])
+      : undefined,
   };
 }
 
@@ -68,7 +120,7 @@ const baseSelect = `
     c.website AS company_website, o.title, o.description, o.country, o.city,
     o.work_mode, o.seniority, o.employment_type, o.salary_min, o.salary_max,
     o.currency, o.apply_url, o.application_method, o.platform, o.posted_at,
-    o.expires_at, o.status,
+    o.expires_at, o.status, o.eligibility, o.eligibility_reasons,
     COALESCE(array_agg(os.skill ORDER BY os.skill) FILTER (WHERE os.skill IS NOT NULL), '{}') AS skills
   FROM opportunities o
   JOIN companies c ON c.id = o.company_id
@@ -104,6 +156,10 @@ export async function listOpportunities(
   if (filters.employmentType) {
     values.push(filters.employmentType);
     clauses.push(`o.employment_type = $${values.length}`);
+  }
+  if (filters.eligibility) {
+    values.push(filters.eligibility);
+    clauses.push(`o.eligibility = $${values.length}`);
   }
 
   const limit = Math.min(Math.max(filters.limit ?? 30, 1), 100);

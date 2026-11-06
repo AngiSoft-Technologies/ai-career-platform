@@ -528,6 +528,7 @@ function ModeratorDashboard() {
                 gap: "1.2rem",
                 alignItems: "start",
               }}
+              className="grid-rail--aside"
             >
               <div style={{ minWidth: 0 }}>
                 <div className="eyebrow">
@@ -615,7 +616,7 @@ function SupportDashboard() {
         <StatTile label="Connected channels" value={channels.length} tone="success" />
       </div>
 
-      <div className="grid-2" style={{ gridTemplateColumns: "minmax(0,1.4fr) minmax(0,1fr)" }}>
+      <div className="grid-rail">
         <Card style={{ padding: "1.1rem" }}>
           <SectionTitle eyebrow="case list" title="Latest cases" />
           <div className="stack" style={{ marginTop: "0.9rem", gap: "0.45rem" }}>
@@ -713,7 +714,7 @@ function CuratorDashboard() {
         <StatTile label="Awaiting verification" value={pending.length} tone="warning" />
       </div>
 
-      <div className="grid-2" style={{ gridTemplateColumns: "minmax(0,1.3fr) minmax(0,1fr)" }}>
+      <div className="grid-rail">
         <Card style={{ padding: "1.1rem" }}>
           <SectionTitle eyebrow="network" title="Source register" />
           <div className="table-scroll" style={{ marginTop: "0.8rem" }}>
@@ -920,7 +921,7 @@ function AdminDashboard() {
         <StatTile label="Documents" value={formatNumber(stats.data?.totals.documents ?? 0)} tone="info" />
       </div>
 
-      <div className="grid-2" style={{ gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)" }}>
+      <div className="grid-2">
         <Card style={{ padding: "1.1rem" }}>
           <SectionTitle eyebrow="roles" title="Access model" />
           <div className="stack" style={{ marginTop: "0.9rem", gap: "0.5rem" }}>
