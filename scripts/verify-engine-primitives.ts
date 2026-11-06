@@ -1037,6 +1037,42 @@ console.log("\n[18] the address of a posting");
     "an address that is not an address is refused",
     !looksLikeJobUrl("not a url"),
   );
+
+  // A search is a page of postings, not a posting.
+  check(
+    "a keyword search is refused",
+    !looksLikeJobUrl("https://za.indeed.com/q-clinical-research-l-remote-jobs.html?vjk=ed8bd6a78aaa9c3b"),
+  );
+  check(
+    "a location search is refused",
+    !looksLikeJobUrl("https://www.indeed.com/l-Nashua,-NH-jobs.html"),
+  );
+  check(
+    "a location search without the file is refused",
+    !looksLikeJobUrl("https://za.indeed.com/jobs-in-Johannesburg,-Gauteng"),
+  );
+  check(
+    "the main search is refused",
+    !looksLikeJobUrl("https://www.indeed.com/jobs?q=developer"),
+  );
+  check(
+    "a posting on the same host is not refused",
+    looksLikeJobUrl("https://www.indeed.com/viewjob?jk=abc123"),
+  );
+
+  // The link that leaves a posting.
+  check(
+    "the link out of a posting is refused",
+    !looksLikeJobUrl("https://remowork.life/jobs/6aeb25a2fcc61424c1ce1fc5/apply-out?ch=card"),
+  );
+  check(
+    "an apply link at the end is refused",
+    !looksLikeJobUrl("https://example.com/jobs/12345/apply"),
+  );
+  check(
+    "a posting under an apply path is not refused",
+    looksLikeJobUrl("https://example.com/apply/12345"),
+  );
 }
 
 console.log("\n[19] finding the boards");

@@ -11,6 +11,8 @@ import { extractListingJobs } from "../engine/discover.js";
 import { computeFingerprint, computeSimhash } from "../engine/extract.js";
 import { assessEligibility } from "../engine/eligibility.js";
 import { shouldReuseIndexed } from "../engine/freshness.js";
+import { hostIsQuiet, noteLoudHost, noteQuietHost } from "../engine/quota.js";
+import { hostOf } from "../engine/job-url.js";
 import type { RawJob } from "../engine/sources.js";
 
 /**
@@ -63,6 +65,8 @@ export class KenyaPlatformAgent extends BaseDiscoveryAgent {
     let duplicate = 0;
     let eligible = 0;
     let stoppedOnBudget = false;
+    let processed = 0;
+    let skipped = 0;
     const errors: string[] = [];
 
     for (const target of targets) {
@@ -70,11 +74,34 @@ export class KenyaPlatformAgent extends BaseDiscoveryAgent {
         stoppedOnBudget = true;
         break;
       }
+
+      // A host that has had nothing to say, three times running, is not
+      // read again for an hour.
+      //
+      // Forty-four of the seventy-four platforms have never produced a
+      // posting. Each of them costs a request at best and a crawl plus
+      // a screen capture plus a search at worst, and the budget is
+      // small: the platforms that *do* post were waiting behind them.
+      // The count lives in Redis and expires with it, and when Redis
+      // cannot answer the host is read — a broken cache must never stop
+      // the work.
+      const host = hostOf(target.url);
+      if (await hostIsQuiet(host)) {
+        skipped += 1;
+        continue;
+      }
+
       try {
         const jobs = await this.harvestTarget(target, {
           maxSites: maxSitesPerCycle,
           maxAgeMs: Number(ctx.config.index_max_age_ms ?? 1000 * 60 * 45),
         });
+        processed += 1;
+
+        // A host that answered with a posting is read again, and the
+        // count of the times it had nothing is forgotten.
+        if (jobs.length > 0) await noteLoudHost(host);
+        else await noteQuietHost(host);
 
         for (const job of jobs) {
           discovered += 1;
@@ -162,7 +189,12 @@ export class KenyaPlatformAgent extends BaseDiscoveryAgent {
       jobsDuplicate: duplicate,
       error: errors.length > 0 ? errors.slice(0, 10).join("; ") : undefined,
       payload: {
-        targetsProcessed: targets.length,
+        // The targets that were read, not the targets that were chosen:
+        // the two are different when the budget runs out or a host is
+        // quiet, and the difference is the whole diagnosis.
+        targetsSelected: targets.length,
+        targetsProcessed: processed,
+        targetsSkippedQuiet: skipped,
         eligibleForKenya: eligible,
         microTaskPlatforms: includeMicroTask,
         budgetMs,
@@ -277,14 +309,13 @@ export class KenyaPlatformAgent extends BaseDiscoveryAgent {
     target: { url: string; kind: string; worldwideByDefault: boolean },
     budget: { maxSites: number; maxAgeMs: number },
   ): Promise<RawJob[]> {
-    const jobs: RawJob[] = [];
+    const raw: RawJob[] = [];
 
     // 1. Direct ATS board — cheapest and richest.
     const board = detectAts(target.url);
     if (board) {
       const boardJobs = await fetchAtsBoard(board).catch(() => []);
-      jobs.push(...this.normalise(boardJobs, target.url));
-      if (jobs.length > 0) return jobs;
+      raw.push(...boardJobs);
     }
 
     // 2. Careers-page harvest — embedded state + JSON-LD + links + nested ATS.
@@ -293,26 +324,38 @@ export class KenyaPlatformAgent extends BaseDiscoveryAgent {
       jobs: [] as RawJob[],
       ats: [] as AtsBoard[],
     }));
-    jobs.push(...this.normalise(harvest.jobs, target.url));
 
-    // 3. The board the careers page points at.
-    if (jobs.length === 0) {
+    // 3. The board the careers page points at — read before the page's
+    //    own state is used.
+    //
+    //    The order matters. A careers page that embeds its own list of
+    //    roles usually embeds a *partial* one — the first ten, the
+    //    featured three — while the board it links to holds every
+    //    posting the employer has, and it holds them in one request. So
+    //    the page's own state used to stop the walk before the board
+    //    was read, and a platform with three hundred roles was found
+    //    with ten of them.
+    //
+    //    Both are kept: the board's postings are the employer's, and
+    //    the page's own state may hold a posting the board has not
+    //    published yet.
+    if (raw.length === 0) {
       for (const nested of harvest.ats.slice(0, 2)) {
         const boardJobs = await fetchAtsBoard(nested).catch(() => []);
-        if (boardJobs.length === 0) continue;
-        jobs.push(...this.normalise(boardJobs, target.url));
-        break;
+        raw.push(...boardJobs);
       }
     }
 
+    raw.push(...harvest.jobs);
+
     // 4. The postings the careers page links to directly.
-    if (jobs.length === 0) {
+    if (raw.length === 0) {
       const linked = await this.followPostingLinks(harvest.links, 8);
-      jobs.push(...this.normalise(linked, target.url));
+      raw.push(...linked);
     }
 
     // 5. Bounded crawl when the site is JS-heavy and the harvest came up dry.
-    if (jobs.length === 0) {
+    if (raw.length === 0) {
       const crawl = await crawlSite(target.url, {
         maxPages: Math.min(6, budget.maxSites),
         maxDepth: 3,
@@ -320,33 +363,26 @@ export class KenyaPlatformAgent extends BaseDiscoveryAgent {
         jobBias: true,
       }).catch(() => ({ jobUrls: [] as string[], jobs: [] as RawJob[], pagesVisited: 0, skipped: [] as Array<{url:string;reason:string}> }));
 
-      if (crawl.jobs.length > 0) jobs.push(...this.normalise(crawl.jobs, target.url));
+      if (crawl.jobs.length > 0) raw.push(...crawl.jobs);
 
       // 6. Screen capture — reads the page's own JS state, which is where
       //    micro-task platforms hide their live role lists.
-      if (jobs.length === 0) {
+      if (raw.length === 0) {
         const capture = await capturePage(target.url, { maxJobs: 40 }).catch(() => null);
         if (capture) {
-          jobs.push(
-            ...this.normalise(
-              extractListingJobs(capture.html, capture.finalUrl),
-              target.url,
-            ),
-          );
+          raw.push(...extractListingJobs(capture.html, capture.finalUrl));
           for (const link of capture.links.filter((link) => /job|career|role|vacanc|hiring|apply/i.test(link))) {
-            if (jobs.length >= 40) break;
+            if (raw.length >= 40) break;
             const page = await capturePage(link, { maxJobs: 20 }).catch(() => null);
             if (!page) continue;
-            jobs.push(
-              ...this.normalise(extractListingJobs(page.html, page.finalUrl), link),
-            );
+            raw.push(...extractListingJobs(page.html, page.finalUrl));
           }
         }
       }
     }
 
     // 7. Search fallback — for platforms whose site is entirely gated.
-    if (jobs.length === 0) {
+    if (raw.length === 0) {
       const planned = await searchWebPlanned(`${target.url} careers hiring`, {
         limit: 8,
         // This search is looking for a *listing* — a careers page, a job
@@ -359,12 +395,20 @@ export class KenyaPlatformAgent extends BaseDiscoveryAgent {
       for (const result of results) {
         const page = await capturePage(result.url, { maxJobs: 20 }).catch(() => null);
         if (!page) continue;
-        jobs.push(
-          ...this.normalise(extractListingJobs(page.html, page.finalUrl), result.url),
-        );
+        raw.push(...extractListingJobs(page.html, page.finalUrl));
       }
     }
 
+    const jobs = this.normalise(raw, target.url);
+
+    // The target is marked as seen — always.
+    //
+    // The mark is what moves the target through the rotation, and a
+    // target that yields a hundred postings but is never marked is
+    // read again on the next cycle and the one after that, while the
+    // targets that were never read stay behind it for ever. The
+    // platform that posts the most would then be read the most and
+    // nothing else would be read at all.
     await query(
       `INSERT INTO discovery_platform_targets (url, kind, jobs_found, last_seen, created_at, updated_at)
        VALUES ($1, $2, $3, now(), now(), now())

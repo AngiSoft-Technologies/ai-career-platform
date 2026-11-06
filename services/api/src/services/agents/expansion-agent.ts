@@ -10,7 +10,7 @@ import {
 } from "../engine/discover.js";
 import type { AtsBoard, AtsKind } from "../engine/discover.js";
 import { computeFingerprint, computeSimhash } from "../engine/extract.js";
-import { jobUrlRefusal } from "../engine/job-url.js";
+import { hostOf, jobUrlRefusal } from "../engine/job-url.js";
 import { DEFAULT_MAX_QUEUE_DEPTH, queueRoom } from "../engine/queue.js";
 import { hostIsQuiet, noteLoudHost, noteQuietHost } from "../engine/quota.js";
 import { capturePage, embeddedJobsToRaw } from "../engine/screen.js";
@@ -41,21 +41,6 @@ const ATS_KIND_SET: Record<AtsKind, true> = {
  * with its own expiry, so a host that recovers is read again.
  */
 const EMPTY_SOURCE_RETRY_MS = 30 * 60 * 1000;
-
-/**
- * The host of an address.
- *
- * The remembered source is a host, so that the same employer's careers
- * page is expanded once however it was written — "https://kcbgroup.com/careers"
- * and "https://www.kcbgroup.com/" are one employer.
- */
-function hostOf(url: string): string {
-  try {
-    return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
-  } catch {
-    return url.trim().toLowerCase().replace(/^www\./, "");
-  }
-}
 
 /**
  * Expansion Agent.

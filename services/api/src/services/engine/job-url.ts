@@ -59,6 +59,78 @@ const NEVER_A_POSTING = [
 ];
 
 /**
+ * The link that leaves a posting, rather than the posting itself.
+ *
+ * "…/jobs/<id>/apply-out?ch=card" is the employer's own form: it is
+ * behind a sign-in, it holds no description of the role, and reading
+ * it teaches nothing. The posting it leaves from is the one worth
+ * reading.
+ *
+ * The word is only refused at the *end* of the address. "/apply/12345"
+ * is a posting on some sites, and refusing it would throw away a real
+ * vacancy to save one request.
+ */
+const APPLY_LINKS = [
+  /(^|\/)(apply|apply-out|applyout|application|submit-application)\/?$/i,
+];
+
+/**
+ * The searches, on the hosts that answer them.
+ *
+ * A search is a page of postings, not a posting, and a search on a
+ * host that refuses to be read is a request spent for nothing.
+ *
+ * Indeed's addresses are the worst of it: "/q-nurse-jobs.html",
+ * "/l-Nairobi-jobs.html", "/jobs-in-Nairobi,-Kenya" are all searches,
+ * and each one names a different shape. They are refused here rather
+ * than one at a time.
+ */
+const SEARCH_SHAPES: Array<{ hosts: string[]; paths: RegExp[] }> = [
+  {
+    hosts: ["indeed.com"],
+    paths: [
+      /^\/q-[^/]*-jobs\.html?$/i,
+      /^\/l-[^/]*-jobs\.html?$/i,
+      /^\/jobs-in-[^/]*$/i,
+      /^\/jobs\/?$/i,
+      /^\/j\/?$/i,
+      /^\/advance_search\/?/i,
+      /^\/jobs\/search\/?/i,
+      /^\/search\/?/i,
+    ],
+  },
+  {
+    hosts: ["linkedin.com"],
+    paths: [/^\/jobs\/?$/i, /^\/jobs\/search\/?/i],
+  },
+  {
+    hosts: ["glassdoor.com", "monster.com", "ziprecruiter.com", "jooble.org"],
+    paths: [/^\/jobs\/?$/i, /^\/search\/?/i],
+  },
+];
+
+/**
+ * True when the address is a search rather than a posting.
+ */
+export function isSearchUrl(rawUrl: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return false;
+  }
+
+  const host = url.hostname.toLowerCase();
+  for (const shape of SEARCH_SHAPES) {
+    if (!shape.hosts.some((name) => host === name || host.endsWith(`.${name}`))) {
+      continue;
+    }
+    if (shape.paths.some((pattern) => pattern.test(url.pathname))) return true;
+  }
+  return false;
+}
+
+/**
  * True when the host is one we cannot read postings from.
  */
 export function isUnreadableHost(rawUrl: string): boolean {
@@ -91,12 +163,15 @@ export function looksLikeJobUrl(rawUrl: string): boolean {
 
   if (url.protocol !== "http:" && url.protocol !== "https:") return false;
   if (isUnreadableHost(rawUrl)) return false;
+  if (isSearchUrl(rawUrl)) return false;
 
   const path = url.pathname;
   if (!path || path === "/") return false;
 
   // A query-only address is a search, not a posting.
   if (path === "/" && url.search) return false;
+
+  if (APPLY_LINKS.some((pattern) => pattern.test(path))) return false;
 
   return !NEVER_A_POSTING.some((pattern) => pattern.test(path));
 }
@@ -108,4 +183,19 @@ export function jobUrlRefusal(rawUrl: string): string | null {
   if (isUnreadableHost(rawUrl)) return "HOST_NOT_READABLE";
   if (!looksLikeJobUrl(rawUrl)) return "NOT_A_JOB_URL";
   return null;
+}
+
+/**
+ * The host of an address.
+ *
+ * The remembered source is a host, so that the same employer's careers
+ * page is expanded once however it was written — "https://kcbgroup.com/careers"
+ * and "https://www.kcbgroup.com/" are one employer.
+ */
+export function hostOf(rawUrl: string): string {
+  try {
+    return new URL(rawUrl).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return rawUrl.trim().toLowerCase().replace(/^www\./, "");
+  }
 }

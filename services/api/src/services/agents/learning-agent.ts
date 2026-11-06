@@ -1,6 +1,7 @@
 import { query } from "../../db/pool.js";
 import { logger } from "../../logger.js";
 import { BaseDiscoveryAgent, type AgentContext, type AgentRunResult } from "./base.js";
+import { boardKey, detectAts } from "../engine/ats.js";
 
 /**
  * Learning Agent
@@ -22,13 +23,17 @@ export class LearningAgent extends BaseDiscoveryAgent {
     try {
       await this.updateSourceQuality();
       await this.discoverNewSources();
+      const boards = await this.learnBoards();
       await this.optimizeSearchQueries();
       return {
         status: "success",
         jobsFound: 0,
         jobsNew: 0,
         jobsDuplicate: 0,
-        payload: { message: "Learning cycle complete" },
+        payload: {
+          message: "Learning cycle complete",
+          boardsLearned: boards,
+        },
       };
     } catch (error) {
       return {
@@ -121,10 +126,14 @@ export class LearningAgent extends BaseDiscoveryAgent {
             WHEN domain LIKE '%ngo%' OR domain LIKE '%un.org'
               OR domain LIKE '%worldbank.org'
               THEN 'ngo'
-            WHEN domain = 'lever.co' OR domain LIKE '%.lever.co'
-              OR domain = 'greenhouse.io' OR domain LIKE '%.greenhouse.io'
-              OR domain = 'workable.com' OR domain LIKE '%.workable.com'
-              THEN 'ats'
+            -- A vendor's *host* is not a board.
+            --
+            -- "jobs.lever.co" is where every Lever board lives, and it
+            -- is not one of them: the board is "jobs.lever.co/weloglobal",
+            -- and only the expansion agent can read it. A row that
+            -- said "ats" was read as a board, and the board could only
+            -- ever answer 404. The board is learned by its address in
+            -- the board pass below.
             ELSE 'job_board'
           END AS source_type,
           COUNT(*) AS jobs_found
@@ -139,8 +148,67 @@ export class LearningAgent extends BaseDiscoveryAgent {
         -- again every cycle made the number grow forever, and a source
         -- that was seen first always outranked a better one.
         jobs_found = EXCLUDED.jobs_found,
+        -- The type is re-stated, so a host that was once mistaken for a
+        -- board is corrected the next time it is seen.
+        source_type = EXCLUDED.source_type,
         last_seen = now()
     `);
+  }
+
+  /**
+   * Learns the boards the postings came from.
+   *
+   * A posting's address names the board it was published on:
+   * "jobs.lever.co/weloglobal/abc-123" is Welo Global's Lever board,
+   * and "eoin.fa.em3.oraclecloud.com|CX_3001" is KCB Group's Oracle
+   * board. The board is the employer's *whole list* of postings, and
+   * reading it costs one request — so a board learned from a posting is
+   * worth more than the posting it was learned from.
+   *
+   * The host alone was recorded before, and a host is not a board:
+   * "jobs.lever.co" is where every Lever board lives, and the board it
+   * was read as could only ever answer 404.
+   *
+   * A board that is already known is left exactly as it is. Its time is
+   * when it was *read*, and bumping it here would push the board to the
+   * back of the rotation every cycle — and a board that is always at
+   * the back is never read.
+   */
+  private async learnBoards(): Promise<number> {
+    const candidates = await query<{ source_url: string }>(
+      `SELECT source_url
+         FROM discovery_candidates
+        WHERE status IN ('verified', 'imported')
+          AND source_url IS NOT NULL
+          AND source_url LIKE 'http%://%'
+        ORDER BY discovered_at DESC
+        LIMIT 3000`,
+    ).catch(() => ({ rows: [] as Array<{ source_url: string }> }));
+
+    const boards = new Set<string>();
+    for (const row of candidates.rows) {
+      const board = detectAts(row.source_url);
+      if (!board) continue;
+      boards.add(boardKey(board));
+    }
+
+    let learned = 0;
+    for (const key of boards) {
+      const inserted = await query<{ domain: string }>(
+        `INSERT INTO discovery_known_sources
+             (domain, source_type, jobs_found, last_seen, created_at)
+         VALUES ($1, 'ats', 0, NULL, now())
+         ON CONFLICT (domain) DO NOTHING
+         RETURNING domain`,
+        [key],
+      ).catch(() => ({ rows: [] as Array<{ domain: string }> }));
+      if (inserted.rows.length > 0) learned += 1;
+    }
+
+    if (learned > 0) {
+      logger.info({ boards: learned, known: boards.size }, "Boards learned from postings");
+    }
+    return learned;
   }
 
   /**
