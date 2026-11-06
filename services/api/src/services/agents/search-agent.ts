@@ -9,6 +9,7 @@ import { buildDiscoveryQueries, type QuerySeeds } from "../engine/discover.js";
 import { pooled } from "../engine/index.js";
 import { cleanJobTitle, isListingTitle } from "../engine/extract.js";
 import { jobUrlRefusal } from "../engine/job-url.js";
+import { DEFAULT_MAX_QUEUE_DEPTH, queueRoom } from "../engine/queue.js";
 
 /**
  * The search engine discovery agent.
@@ -147,6 +148,12 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
     // are read.
     const maxQueuePerRun = Number(ctx.config.max_queue_per_run ?? 60);
 
+    // The room left in the queue of pages waiting to be read.
+    const maxQueueDepth = Number(
+      ctx.config.max_queue_depth ?? DEFAULT_MAX_QUEUE_DEPTH,
+    );
+    let room = await queueRoom(maxQueueDepth);
+
     const settle = await pooled(
       queries,
       concurrency,
@@ -247,6 +254,18 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
           continue;
         }
 
+        // The queue is bounded by its own length too.
+        //
+        // The per-run bound is sixty, but the browse agent adds hundreds
+        // of rows to the same queue when it mines a listing, so the
+        // queue's length is the bound that matters. A result that does
+        // not fit waits for the next run — and the next run finds it
+        // again, because the engines answer the same question.
+        if (room <= 0) {
+          totalDeferred += 1;
+          continue;
+        }
+
         try {
           // The unique index on source_url makes this an upsert: a URL we have
           // already seen is not re-queued.
@@ -265,8 +284,10 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
               result.description.slice(0, 1_500),
             ],
           );
-          if (inserted.rows.length > 0) totalStored += 1;
-          else totalDuplicate += 1;
+          if (inserted.rows.length > 0) {
+            totalStored += 1;
+            room -= 1;
+          } else totalDuplicate += 1;
         } catch (insertError) {
           errors.push(
             `Insert failed for ${result.url}: ${

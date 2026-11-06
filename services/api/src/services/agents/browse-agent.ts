@@ -5,6 +5,7 @@ import { BaseDiscoveryAgent, type AgentContext, type AgentRunResult } from "./ba
 import { scrapeUrl } from "../engine/fetch.js";
 import { extractJob, looksLikeJobPosting } from "../engine/extract.js";
 import { findJobLinks } from "../engine/discover.js";
+import { DEFAULT_MAX_QUEUE_DEPTH, queueRoom } from "../engine/queue.js";
 import {
   hostIsQuiet,
   noteLoudHost,
@@ -41,6 +42,9 @@ export class BrowseAgent extends BaseDiscoveryAgent {
 
   /** How many postings one listing page may contribute. Set per run. */
   private maxExpandedLinks = 15;
+
+  /** How many more pages the queue may take. Set per run. */
+  private queueRoom = 0;
 
   async run(ctx: AgentContext): Promise<AgentRunResult> {
     const batchSize = Number(ctx.config.batch_size ?? 25);
@@ -100,6 +104,18 @@ export class BrowseAgent extends BaseDiscoveryAgent {
     // hold hundreds; the queue drains at a few dozen a cycle, so a page
     // that names more than this would push everything else out of reach.
     this.maxExpandedLinks = Number(ctx.config.max_expanded_links ?? 15);
+
+    // The room left in the queue.
+    //
+    // A cycle of listing expansion can put six hundred rows into a
+    // queue that drains at eighty pages an hour, so the queue grew
+    // faster than it drained and a vacancy found today was read next
+    // week. The queue has a depth now: what is in it is read, and what
+    // would make it longer waits.
+    const maxQueueDepth = Number(
+      ctx.config.max_queue_depth ?? DEFAULT_MAX_QUEUE_DEPTH,
+    );
+    this.queueRoom = await queueRoom(maxQueueDepth);
 
     for (const row of results.rows) {
       if (Date.now() > deadline) {
@@ -252,6 +268,21 @@ export class BrowseAgent extends BaseDiscoveryAgent {
             // new or already known, the page has been read and what it
             // had to give has been queued.
             totalExpanded += expanded.queued;
+
+            if (expanded.deferred) {
+              // The queue was full, so the postings the page names did
+              // not all fit into it. The page is not done: it goes to
+              // the back of the queue and is read again when there is
+              // room, and the postings it names are not lost.
+              await query(
+                `UPDATE discovery_search_results
+                    SET fetched_at = now()
+                  WHERE id = $1`,
+                [row.id],
+              );
+              continue;
+            }
+
             await query(
               `UPDATE discovery_search_results
                   SET status = 'done', processed_at = now(), error = NULL
@@ -511,6 +542,13 @@ export class BrowseAgent extends BaseDiscoveryAgent {
    * rows in a queue that drains at forty a day, and the postings behind
    * the first five hundred would never be reached.
    *
+   * The second cap is the queue itself. A cycle of listing expansion
+   * can put six hundred rows into a queue that drains at eighty pages
+   * an hour, so the queue grew faster than it drained and the postings
+   * at the back were read a week later, by which time they had closed.
+   * When the queue is full the postings that do not fit are not lost:
+   * the page is read again later, when there is room for them.
+   *
    * The two counts are different on purpose. `links` says the page was
    * a listing — which is true whether the postings on it are new or
    * already known — and `queued` says how many of them were new.
@@ -520,14 +558,29 @@ export class BrowseAgent extends BaseDiscoveryAgent {
     baseUrl: string,
     queryLabel: string,
     agentId: string,
-  ): Promise<{ links: number; queued: number }> {
+  ): Promise<{ links: number; queued: number; deferred: boolean }> {
     const links = findJobLinks(html, baseUrl, this.maxExpandedLinks).filter(
       (link) => !samePage(link, baseUrl),
     );
-    if (links.length === 0) return { links: 0, queued: 0 };
+    if (links.length === 0) return { links: 0, queued: 0, deferred: false };
 
+    // Only what fits in the queue is queued.
+    //
+    // A link that is already in the queue does not take room: the
+    // postings the page names are read over the cycles that follow,
+    // and a page read twice must make progress on the second read.
+    const room = Math.max(0, this.queueRoom);
     let queued = 0;
+    let deferred = false;
+
     for (const link of links) {
+      if (queued >= room) {
+        // The queue is full. The rest of the page's postings are not
+        // lost: the page is read again when there is room for them.
+        deferred = true;
+        break;
+      }
+
       try {
         const inserted = await query<{ id: string }>(
           `INSERT INTO discovery_search_results
@@ -546,7 +599,9 @@ export class BrowseAgent extends BaseDiscoveryAgent {
       }
     }
 
-    return { links: links.length, queued };
+    this.queueRoom = Math.max(0, this.queueRoom - queued);
+
+    return { links: links.length, queued, deferred };
   }
 }
 

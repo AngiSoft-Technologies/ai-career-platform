@@ -11,6 +11,7 @@ import {
 import type { AtsBoard, AtsKind } from "../engine/discover.js";
 import { computeFingerprint, computeSimhash } from "../engine/extract.js";
 import { jobUrlRefusal } from "../engine/job-url.js";
+import { DEFAULT_MAX_QUEUE_DEPTH, queueRoom } from "../engine/queue.js";
 import { hostIsQuiet, noteLoudHost, noteQuietHost } from "../engine/quota.js";
 import { capturePage, embeddedJobsToRaw } from "../engine/screen.js";
 import type { RawJob } from "../engine/sources.js";
@@ -98,6 +99,14 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
     // cycle, because the budget was always gone before they were asked
     // for.
     const targetDeadline = Date.now() + Math.floor(budgetMs * 0.6);
+
+    // The room left in the queue of pages waiting to be read. A careers
+    // page can name two hundred roles, and the queue is read at eighty
+    // pages an hour: what does not fit waits for the next cycle.
+    const maxQueueDepth = Number(
+      ctx.config.max_queue_depth ?? DEFAULT_MAX_QUEUE_DEPTH,
+    );
+    let room = await queueRoom(maxQueueDepth);
 
     let discovered = 0;
     let stored = 0;
@@ -197,6 +206,12 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
           // browse agent would spend and refuse.
           if (jobUrlRefusal(link)) continue;
 
+          // The queue has a depth. A careers page that names two
+          // hundred roles must not fill the queue that the browse
+          // agent is about to read: what does not fit waits for the
+          // next cycle, and the page is read again when there is room.
+          if (room <= 0) break;
+
           const inserted = await query<{ id: string }>(
             `INSERT INTO discovery_search_results
                 (agent_id, query, source_platform, source_url, title, snippet, fetched_at)
@@ -205,8 +220,10 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
              RETURNING id`,
             [ctx.agentId, `careers:${hostOf(target)}`, link],
           );
-          if (inserted.rows.length > 0) stored += 1;
-          else duplicate += 1;
+          if (inserted.rows.length > 0) {
+            stored += 1;
+            room -= 1;
+          } else duplicate += 1;
         }
 
         await query(

@@ -39,6 +39,7 @@ import {
   opportunityIdentity,
 } from "../services/api/src/services/agents/dedup-agent.js";
 import { MATCH_UPSERT_SQL } from "../services/api/src/services/agents/match-agent.js";
+import { pendingQueueDepth, queueRoom } from "../services/api/src/services/engine/queue.js";
 import { withTransaction } from "../services/api/src/db/pool.js";
 import { pool as appPool } from "../services/api/src/db/pool.js";
 
@@ -193,17 +194,33 @@ async function main(): Promise<void> {
     );
     const first = await insertCandidate(client, marker, 1);
     const second = await insertCandidate(client, marker, 2);
+    const third = await insertCandidate(client, marker, 3);
     await client.query("COMMIT");
 
     await client.query("BEGIN");
 
-    // Another promoter holds the second candidate.
+    // The fixtures are held for the length of the test.
+    //
+    // The deployed pipeline promotes candidates with the status
+    // 'verified', and it claims them with `FOR UPDATE SKIP LOCKED` — so
+    // a fixture this transaction holds is walked past by the pipeline.
+    // Without the hold, the pipeline promotes the fixture outside this
+    // transaction, and its opportunity survives the rollback: the test
+    // then reports a leak that is really the pipeline doing its job.
+    await client.query(
+      `SELECT id FROM discovery_candidates
+        WHERE id = ANY($1::uuid[])
+        FOR UPDATE`,
+      [[first.id, second.id]],
+    );
+
+    // Another promoter holds the third candidate.
     const lockClient = await pool.connect();
     try {
       await lockClient.query("BEGIN");
       await lockClient.query(
         `SELECT id FROM discovery_candidates WHERE id = $1 FOR UPDATE`,
-        [second.id],
+        [third.id],
       );
 
       const whileLocked = await client.query<{ id: string }>(
@@ -212,7 +229,7 @@ async function main(): Promise<void> {
       );
       check(
         "a candidate another promoter is holding is not claimed",
-        !whileLocked.rows.some((row) => row.id === second.id),
+        !whileLocked.rows.some((row) => row.id === third.id),
         `claimed ${whileLocked.rows.length} rows`,
       );
 
@@ -224,7 +241,7 @@ async function main(): Promise<void> {
       );
       check(
         "a released candidate is claimed",
-        afterRelease.rows.some((row) => row.id === second.id),
+        afterRelease.rows.some((row) => row.id === third.id),
         `claimed ${afterRelease.rows.length} rows`,
       );
     } finally {
@@ -566,7 +583,6 @@ async function main(): Promise<void> {
   } finally {
     client.release();
     await pool.end();
-    await appPool.end().catch(() => undefined);
   }
 
   // -----------------------------------------------------------------------
@@ -577,6 +593,11 @@ async function main(): Promise<void> {
   // the company were fixtures, committed before the test so that another
   // connection could see them; they are removed here, and the counts are
   // checked afterwards.
+  //
+  // The rows are counted by the ids the transaction created, not by the
+  // marker's name in them: the deployed pipeline promotes the fixtures
+  // too, and a promotion the pipeline made is real work rather than a
+  // leak — counting it as one would report a failure that is not there.
   // -----------------------------------------------------------------------
 
   console.log("\n[7] nothing left behind");
@@ -587,8 +608,8 @@ async function main(): Promise<void> {
   });
   try {
     const rolledBack = await leftover.query<{ count: string }>(
-      `SELECT count(*)::text AS count FROM opportunities WHERE external_id LIKE $1`,
-      [`%${marker}%`],
+      `SELECT count(*)::text AS count FROM opportunities WHERE id = $1`,
+      [opportunityId],
     );
     check(
       "no opportunity survived the rollback",
@@ -600,8 +621,8 @@ async function main(): Promise<void> {
       `SELECT count(*)::text AS count
          FROM opportunity_skills s
          JOIN opportunities o ON o.id = s.opportunity_id
-        WHERE o.external_id LIKE $1`,
-      [`%${marker}%`],
+        WHERE s.opportunity_id = $1`,
+      [opportunityId],
     );
     check(
       "no skill survived the rollback",
@@ -642,8 +663,8 @@ async function main(): Promise<void> {
       `SELECT count(*)::text AS count
          FROM matches m
          JOIN opportunities o ON o.id = m.opportunity_id
-        WHERE o.external_id LIKE $1`,
-      [`%${marker}%`],
+        WHERE m.opportunity_id = $1`,
+      [opportunityId],
     );
     check(
       "no match was left behind",
@@ -654,13 +675,81 @@ async function main(): Promise<void> {
     await leftover.end();
   }
 
+  // -----------------------------------------------------------------------
+  // The length of the queue
+  //
+  // The queue of pages waiting to be read is bounded by its own length.
+  // A cycle of listing expansion can put six hundred rows into a queue
+  // that drains at eighty pages an hour, so the queue grew faster than
+  // it drained and a vacancy found today was read next week.
+  //
+  // The agents ask the queue how much room is left before they fill it.
+  // The answer has to be the truth: a queue that cannot be measured
+  // must not stop the work, so a failure to measure leaves the queue
+  // open rather than closed.
+  // -----------------------------------------------------------------------
+
+  console.log("\n[8] the length of the queue");
+  {
+    const counter = new pg.Pool({
+      connectionString,
+      max: 1,
+      connectionTimeoutMillis: 20_000,
+    });
+    let counted = -1;
+    try {
+      counted = await countPending(counter);
+    } finally {
+      await counter.end();
+    }
+    const measured = await pendingQueueDepth();
+
+    check(
+      "the queue's length is counted, not guessed",
+      measured === counted,
+      `measured=${measured} counted=${counted}`,
+    );
+
+    const full = await queueRoom(measured);
+    check(
+      "a queue at its limit has no room",
+      full === 0,
+      `room=${full}`,
+    );
+
+    const withRoom = await queueRoom(measured + 25);
+    check(
+      "a queue below its limit has room",
+      withRoom === 25,
+      `room=${withRoom}`,
+    );
+
+    const noLimit = await queueRoom(0);
+    check(
+      "a queue with no limit has no room",
+      noLimit === 0,
+      `room=${noLimit}`,
+    );
+  }
+
   console.log("");
+  await appPool.end().catch(() => undefined);
   if (failures > 0) {
     console.log(`${failures} CHECK(S) FAILED`);
     process.exitCode = 1;
   } else {
     console.log("ALL CHECKS PASSED");
   }
+}
+
+/** The number of pages waiting to be read, counted directly. */
+async function countPending(pool: pg.Pool): Promise<number> {
+  const result = await pool.query<{ count: string }>(
+    `SELECT count(*)::text AS count
+       FROM discovery_search_results
+      WHERE status = 'pending'`,
+  );
+  return Number(result.rows[0]?.count ?? 0);
 }
 
 void main();
