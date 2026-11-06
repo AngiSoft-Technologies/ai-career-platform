@@ -88,6 +88,15 @@ async function boardPageUrl(board: AtsBoard): Promise<string | null> {
       if (!host || !site) return null;
       return `https://${host}/hcmUI/CandidateExperience/en/sites/${site}`;
     }
+    case "taleo": {
+      const [tenant, environment] = token.split("|");
+      if (!tenant || !environment) return null;
+      return `https://${tenant}.taleo.net/careersection/${encodeURIComponent(
+        environment,
+      )}/jobsearch.ftl?lang=en`;
+    }
+    case "breezy":
+      return `https://${encodeURIComponent(token)}.breezy.hr/`;
     default:
       return null;
   }
@@ -232,7 +241,10 @@ async function boardEmployerName(board: AtsBoard): Promise<string | null> {
   // ("weloglobal") makes a guess, and one request to the board's own page
   // buys the right name for every posting on it — the page cache holds it
   // for the next cycle.
-  const addressed = board.kind === "oracle" || board.kind === "workday";
+  const addressed =
+    board.kind === "oracle" ||
+    board.kind === "workday" ||
+    board.kind === "taleo";
   const rawToken = addressed
     ? (board.token.split("|")[0] ?? board.token)
     : board.token;
@@ -240,6 +252,49 @@ async function boardEmployerName(board: AtsBoard): Promise<string | null> {
   // A token that reads as words is good enough on its own — unless it
   // is an address, which never is.
   if (!addressed && /[-_]/.test(board.token)) return fallback;
+
+  // Breezy's list carries the employer's own name with every position,
+  // so the board needs no second request to be named — and the name it
+  // carries is the employer's, not a guess from the address.
+  if (board.kind === "breezy") return null;
+
+  // Taleo writes its board's title as "Job Search" and its employer's
+  // name in the footer: "© Equity Bank Limited. All Rights Reserved".
+  if (board.kind === "taleo") {
+    const [tenant] = board.token.split("|");
+    if (!tenant) return null;
+
+    const page = await boardPageUrl(board);
+    if (page) {
+      try {
+        const scraped = await scrapeUrl(page, { onlyMainContent: false });
+        const title =
+          scraped.metadata?.ogSiteName ??
+          scraped.metadata?.title ??
+          scraped.metadata?.ogTitle ??
+          null;
+        const fromTitle = normaliseCompanyName(employerSegment(title));
+        if (fromTitle) return fromTitle;
+
+        // The footer: "© Equity Bank Limited. All Rights Reserved".
+        const copyright =
+          /(?:&copy;|©)\s*([^<>\n]{2,60}?)(?:\s+All Rights|\s*[.&]?\s*$|\s+Ltd|\s+Limited|\s+Inc)/i.exec(
+            scraped.html,
+          )?.[1];
+        const fromCopyright = normaliseCompanyName(copyright ?? "");
+        if (fromCopyright) return fromCopyright;
+      } catch (error) {
+        logger.debug(
+          { board: board.kind, token: board.token, error },
+          "Board name lookup failed; using the tenant",
+        );
+      }
+    }
+
+    // The tenant is named after the employer: "equitybank" is Equity
+    // Bank, "britam" is Britam.
+    return normaliseCompanyName(prettify(tenant));
+  }
 
   // Workday writes its boards differently from the others, and its own
   // reader knows how to ask it: the title is often the board's word and
@@ -590,6 +645,246 @@ async function recruiteeBoard(token: string): Promise<RawJob[]> {
       skills: [],
       raw: job as unknown as Record<string, unknown>,
     }));
+}
+
+// ---------------------------------------------------------------------------
+// Taleo — Oracle's older board
+// ---------------------------------------------------------------------------
+
+/**
+ * The words that are a Taleo row's title.
+ *
+ * A row is a table row, and the posting is named by the link inside it:
+ * "/careersection/ext_new/jobdetail.ftl?job=2600017K". The vendor
+ * writes the row differently from one employer to the next — some put
+ * the title in the first cell, some in the third — so the title is read
+ * from the link itself and the location from whatever cell follows it.
+ */
+const TALEO_JOB_LINK = /href="([^"]*jobdetail\.ftl\?job=[^"]+)"/i;
+const TALEO_JOB_ID = /jobdetail\.ftl\?job=([^"'&\s]+)/i;
+
+function stripTags(html: string): string {
+  return decodeEntities(
+    html
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<[^>]+>/g, " "),
+  )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * One Taleo board.
+ *
+ * Taleo is Oracle's first board, and the one still in use by the banks
+ * that moved to the newer product years ago and never came back:
+ * Britam, Equity Bank. The board's list is a search page, and its rows
+ * are the postings.
+ *
+ * The search page is asked with the parameters that make it show
+ * everything: an empty keyword, an empty location, and the sort the
+ * board's own interface uses. A board with nothing open answers "No
+ * jobs correspond to the specified criteria", which is an answer, and
+ * the board is empty rather than broken.
+ */
+async function taleoBoard(token: string): Promise<RawJob[]> {
+  const [tenant, environment] = token.split("|");
+  if (!tenant || !environment) return [];
+
+  const origin = `https://${tenant}.taleo.net`;
+  const searchUrl = `${origin}/careersection/${encodeURIComponent(
+    environment,
+  )}/jobsearch.ftl?lang=en&searchExpanded=true&sortBy=POSTING_DATES_DESC`;
+
+  const page = await scrapeUrl(searchUrl, { onlyMainContent: false }).catch(
+    (error) => {
+      logger.debug({ tenant, environment, error }, "Taleo board could not be read");
+      return null;
+    },
+  );
+  if (!page) return [];
+
+  const rows = page.html.match(/<tr\b[\s\S]*?<\/tr>/gi) ?? [];
+  const postings: Array<{
+    id: string;
+    title: string;
+    location: string | null;
+    url: string;
+    context: string;
+  }> = [];
+  const seen = new Set<string>();
+
+  for (const row of rows) {
+    const link = TALEO_JOB_LINK.exec(row);
+    if (!link?.[1]) continue;
+    const id = TALEO_JOB_ID.exec(link[1])?.[1];
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+
+    // The title is the link's own text.
+    const anchor = /<a\b[^>]*>([\s\S]*?)<\/a>/i.exec(row)?.[1] ?? "";
+    const title = stripTags(anchor);
+    if (!title) continue;
+
+    // The location is the cell after the title, when there is one that
+    // is not the requisition number and not a button.
+    const cells = [...row.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)].map(
+      (match) => stripTags(match[1] ?? ""),
+    );
+    const titleIndex = cells.findIndex(
+      (cell) => cell.length > 0 && title.toLowerCase().includes(cell.toLowerCase().slice(0, 20)),
+    );
+    const location =
+      cells
+        .slice(titleIndex >= 0 ? titleIndex + 1 : 0)
+        .map((cell) => cell.trim())
+        .find(
+          (cell) =>
+            cell.length > 1 &&
+            cell.length < 80 &&
+            !/^\d{5,}[A-Z]?$/i.test(cell) &&
+            !/^(apply|apply now|view|details?|refer a friend|select)$/i.test(cell),
+        ) ?? null;
+
+    postings.push({
+      id,
+      title,
+      location,
+      url: new URL(link[1], origin).toString(),
+      context: stripTags(row),
+    });
+  }
+
+  if (postings.length === 0) return [];
+
+  // The board's rows are titles and locations; the description is on
+  // the posting's own page. A few are read — enough for the roles to be
+  // matched and described, and not so many that a board of two hundred
+  // postings costs two hundred requests.
+  const enriched = await Promise.all(
+    postings.slice(0, 5).map(async (posting) => {
+      const detail = await scrapeUrl(posting.url, { onlyMainContent: true }).catch(
+        () => null,
+      );
+      if (!detail) return posting.context;
+      const text = htmlToMarkdown(detail.html, { onlyMainContent: true }).trim();
+      return text.length > 80 ? text.slice(0, 12_000) : posting.context;
+    }),
+  );
+
+  return postings.map((posting, index) => ({
+    sourcePlatform: `taleo:${token}`,
+    externalId: posting.id,
+    url: posting.url,
+    applyUrl: posting.url,
+    title: posting.title,
+    company: prettify(tenant),
+    description: enriched[index] ?? posting.context,
+    location: posting.location,
+    country: null,
+    city: posting.location,
+    workMode: workMode(`${posting.location ?? ""} ${posting.title}`),
+    employmentType: "full_time",
+    salaryMin: null,
+    salaryMax: null,
+    currency: null,
+    postedAt: null,
+    skills: [],
+    raw: { id: posting.id, location: posting.location } as Record<string, unknown>,
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Breezy
+// ---------------------------------------------------------------------------
+
+interface BreezyPosition {
+  id?: string;
+  friendly_id?: string;
+  name?: string;
+  url?: string;
+  published_date?: string;
+  type?: { id?: string; name?: string };
+  department?: string | null;
+  salary?: string;
+  location?: {
+    name?: string;
+    city?: string;
+    is_remote?: boolean;
+    country?: { name?: string; id?: string };
+  };
+  company?: { name?: string; friendly_id?: string };
+}
+
+/**
+ * One Breezy board.
+ *
+ * Breezy gives the whole list as JSON at the board's own address:
+ * "cellulant-group.breezy.hr/json". It is the only vendor that serves
+ * the employer's own name with the list — every position carries the
+ * company's name — so the board needs no second request to be named.
+ *
+ * The list has no description either, so a few of the postings are read
+ * for the description that the matching reads.
+ */
+async function breezyBoard(token: string): Promise<RawJob[]> {
+  const payload = await fetchJson<BreezyPosition[]>(
+    `https://${encodeURIComponent(token)}.breezy.hr/json`,
+  );
+  const positions = Array.isArray(payload) ? payload : [];
+  if (positions.length === 0) return [];
+
+  const enriched = await Promise.all(
+    positions.slice(0, 5).map(async (position) => {
+      if (!position.url) return "";
+      const detail = await scrapeUrl(position.url, { onlyMainContent: true }).catch(
+        () => null,
+      );
+      if (!detail) return "";
+      const text = htmlToMarkdown(detail.html, { onlyMainContent: true }).trim();
+      return text.length > 80 ? text.slice(0, 12_000) : "";
+    }),
+  );
+
+  return positions
+    .filter((position) => position.name && position.url)
+    .map((position, index) => {
+      const location = position.location;
+      const country = location?.country?.name ?? null;
+      const city = location?.city ?? location?.name ?? null;
+      const description = [
+        position.department,
+        position.salary,
+        enriched[index],
+      ]
+        .filter((part): part is string => Boolean(part))
+        .join("\n\n")
+        .trim();
+      return {
+        sourcePlatform: `breezy:${token}`,
+        externalId: position.id ?? position.friendly_id ?? position.url!,
+        url: position.url!,
+        applyUrl: position.url!,
+        title: position.name!.trim(),
+        company: position.company?.name ?? prettify(token),
+        description: description || position.name!.trim(),
+        location: location?.name ?? null,
+        country,
+        city,
+        workMode: workMode(
+          `${location?.name ?? ""} ${location?.is_remote ? "remote" : ""}`,
+          location?.is_remote,
+        ),
+        employmentType: employment(position.type?.id ?? position.type?.name),
+        salaryMin: null,
+        salaryMax: null,
+        currency: null,
+        postedAt: dateOrNull(position.published_date),
+        skills: [],
+        raw: position as unknown as Record<string, unknown>,
+      } satisfies RawJob;
+    });
 }
 
 interface WorkdayJob {
@@ -988,6 +1283,10 @@ export async function fetchAtsBoard(board: AtsBoard): Promise<RawJob[]> {
         return workdayBoard(board.token);
       case "oracle":
         return oracleBoard(board.token);
+      case "taleo":
+        return taleoBoard(board.token);
+      case "breezy":
+        return breezyBoard(board.token);
       default:
         return [];
     }

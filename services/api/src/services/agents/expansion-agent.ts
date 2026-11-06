@@ -25,6 +25,8 @@ const ATS_KIND_SET: Record<AtsKind, true> = {
   recruitee: true,
   workday: true,
   oracle: true,
+  taleo: true,
+  breezy: true,
 };
 
 /**

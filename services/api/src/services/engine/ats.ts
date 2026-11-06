@@ -21,7 +21,9 @@ export type AtsKind =
   | "smartrecruiters"
   | "recruitee"
   | "workday"
-  | "oracle";
+  | "oracle"
+  | "taleo"
+  | "breezy";
 
 export interface AtsBoard {
   kind: AtsKind;
@@ -35,11 +37,24 @@ const ATS_PATTERNS: Array<{
 }> = [
   {
     kind: "greenhouse",
-    regex: /(?:boards|job-boards)\.greenhouse\.io\/([^/?#]+)/i,
+    // The host carries a region: "job-boards.eu.greenhouse.io" is
+    // Jumia's board, and "boards.greenhouse.io" is the same vendor's
+    // other one. The region is part of the address and not part of the
+    // board, so it is read past.
+    regex:
+      /(?:[a-z0-9-]+\.)*(?:boards|job-boards)\.(?:[a-z0-9-]+\.)*greenhouse\.io\/([^/?#]+)/i,
     tokenIndex: 1,
   },
-  { kind: "lever", regex: /jobs\.lever\.co\/([^/?#]+)/i, tokenIndex: 1 },
-  { kind: "ashby", regex: /jobs\.ashbyhq\.com\/([^/?#]+)/i, tokenIndex: 1 },
+  {
+    kind: "lever",
+    regex: /jobs(?:\.[a-z0-9-]+)*\.lever\.co\/([^/?#]+)/i,
+    tokenIndex: 1,
+  },
+  {
+    kind: "ashby",
+    regex: /jobs(?:\.[a-z0-9-]+)*\.ashbyhq\.com\/([^/?#]+)/i,
+    tokenIndex: 1,
+  },
   {
     kind: "workable",
     regex: /apply\.workable\.com\/([^/?#]+)/i,
@@ -47,11 +62,53 @@ const ATS_PATTERNS: Array<{
   },
   {
     kind: "smartrecruiters",
-    regex: /jobs\.smartrecruiters\.com\/([^/?#]+)/i,
+    regex: /jobs(?:\.[a-z0-9-]+)*\.smartrecruiters\.com\/([^/?#]+)/i,
     tokenIndex: 1,
   },
   { kind: "recruitee", regex: /([a-z0-9-]+)\.recruitee\.com/i, tokenIndex: 1 },
 ];
+
+/**
+ * The paths that are not a board's own name.
+ *
+ * "boards.greenhouse.io/embed/job_board?for=jumia" is the board's own
+ * embed script, and the board's name is not in it.
+ */
+const NOT_A_BOARD = new Set(["jobs", "api", "embed", "v1", "v0"]);
+
+/**
+ * Oracle's older board — Taleo.
+ *
+ * "britam.taleo.net/careersection/ke/jobsearch.ftl" is Britam's board,
+ * and "equitybank.taleo.net/careersection/ext_new/jobsearch.ftl" is
+ * Equity Bank's. The tenant is the employer and the environment is the
+ * board's own name — "ke", "ext_new", "external - britam" — and both
+ * are needed to reach it.
+ */
+function detectTaleo(rawUrl: string): AtsBoard | null {
+  const match =
+    /^https?:\/\/([a-z0-9-]+)\.taleo\.net\/careersection\/([^/?#]+)/i.exec(
+      rawUrl,
+    );
+  if (!match?.[1] || !match[2]) return null;
+  return { kind: "taleo", token: `${match[1]}|${decodeURIComponent(match[2])}` };
+}
+
+/**
+ * Breezy's board.
+ *
+ * The employer's board is the employer's own sub-domain:
+ * "cellulant-group.breezy.hr". The board's own address holds no name
+ * beyond that, and the list is served as JSON at the same address with
+ * "/json" on the end.
+ */
+function detectBreezy(rawUrl: string): AtsBoard | null {
+  const match = /^https?:\/\/([a-z0-9-]+)\.breezy\.hr(?![a-z0-9-])/i.exec(
+    rawUrl,
+  );
+  if (!match?.[1]) return null;
+  return { kind: "breezy", token: match[1] };
+}
 
 /**
  * The Workday board behind a URL, if the URL names one.
@@ -113,11 +170,16 @@ export function detectAts(rawUrl: string): AtsBoard | null {
   for (const pattern of ATS_PATTERNS) {
     const match = pattern.regex.exec(rawUrl);
     const token = match?.[pattern.tokenIndex];
-    if (token && token !== "jobs" && token !== "api") {
+    if (token && !NOT_A_BOARD.has(token.toLowerCase())) {
       return { kind: pattern.kind, token };
     }
   }
-  return detectWorkday(rawUrl) ?? detectOracle(rawUrl);
+  return (
+    detectWorkday(rawUrl) ??
+    detectOracle(rawUrl) ??
+    detectTaleo(rawUrl) ??
+    detectBreezy(rawUrl)
+  );
 }
 
 /**

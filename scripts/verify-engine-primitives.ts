@@ -1206,6 +1206,87 @@ console.log("\n[19] finding the boards");
     boardKey({ kind: "oracle", token: "esal.fa.ocs.oraclecloud.com|CX_2" }),
   );
 
+  // The host carries a region.
+  //
+  // Jumia publishes at "job-boards.eu.greenhouse.io/jumia", and the
+  // region in the middle of the host made the address unreadable: the
+  // board was never recognised, and Jumia's twenty-five postings were
+  // found one at a time, or not at all.
+  const jumia = detectAts("https://job-boards.eu.greenhouse.io/jumia/jobs/4980196101");
+  check(
+    "a board's host carries a region",
+    jumia?.kind === "greenhouse" && jumia.token === "jumia",
+    `${jumia?.kind}:${jumia?.token}`,
+  );
+  check(
+    "the region's board is read the same way",
+    detectAts("https://boards.greenhouse.io/swordhealth")?.token === "swordhealth",
+    String(detectAts("https://boards.greenhouse.io/swordhealth")?.token),
+  );
+  check(
+    "the vendor's own API is not a board",
+    detectAts("https://boards-api.greenhouse.io/v1/boards/jumia/jobs") === null,
+    String(detectAts("https://boards-api.greenhouse.io/v1/boards/jumia/jobs")?.token),
+  );
+  check(
+    "the board's own embed script is not a board",
+    detectAts("https://boards.greenhouse.io/embed/job_board?for=jumia") === null,
+    String(detectAts("https://boards.greenhouse.io/embed/job_board?for=jumia")?.token),
+  );
+
+  // The banks that never moved off Oracle's first board.
+  //
+  // Britam and Equity Bank still publish on Taleo, and Taleo is
+  // addressed by the tenant and the environment — the board is
+  // "britam.taleo.net/careersection/ke", and both parts are needed to
+  // reach it.
+  const taleo = detectAts("https://britam.taleo.net/careersection/ke/jobsearch.ftl");
+  check(
+    "a Taleo board is recognised",
+    taleo?.kind === "taleo",
+    `${taleo?.kind}:${taleo?.token}`,
+  );
+  check(
+    "a Taleo board is addressed by the tenant and the environment",
+    taleo?.token === "britam|ke",
+    String(taleo?.token),
+  );
+  check(
+    "a Taleo posting names the same board",
+    detectAts("https://equitybank.taleo.net/careersection/ext_new/jobdetail.ftl?job=2600017K")
+      ?.token === "equitybank|ext_new",
+    String(
+      detectAts(
+        "https://equitybank.taleo.net/careersection/ext_new/jobdetail.ftl?job=2600017K",
+      )?.token,
+    ),
+  );
+
+  // Breezy gives the employer's board its own sub-domain.
+  const breezy = detectAts("https://cellulant-group.breezy.hr/p/bfa611e0c2df-role");
+  check(
+    "a Breezy board is recognised",
+    breezy?.kind === "breezy",
+    `${breezy?.kind}:${breezy?.token}`,
+  );
+  check(
+    "a Breezy board is addressed by the employer's own name",
+    breezy?.token === "cellulant-group",
+    String(breezy?.token),
+  );
+  check(
+    "the vendor's own site is not an employer's board",
+    detectAts("https://breezy.hr/pricing") === null,
+    String(detectAts("https://breezy.hr/pricing")?.token),
+  );
+
+  // The board's own word is not an employer's name.
+  check(
+    "a board that calls itself Job Search has not named its employer",
+    normaliseCompanyName("Job Search") === null,
+    String(normaliseCompanyName("Job Search")),
+  );
+
   // The employer's own name is a query of its own.
   //
   // Most of the catalogue's careers pages are JavaScript shells or
