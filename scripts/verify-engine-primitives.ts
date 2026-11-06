@@ -65,6 +65,7 @@ import { directFetch } from "../services/api/src/services/engine/egress.js";
 import {
   canonicalCompanyKey,
   companySlug,
+  hostBrand,
   isPlausibleEmployer,
   normaliseCompanyName,
   rawCompanyKey,
@@ -895,6 +896,36 @@ console.log("\n[16] the identity of an employer");
     String(normaliseCompanyName("SCI Career Site")),
   );
 
+  // A board that names nobody at all. Oracle's placeholder —
+  // "Candidate Experience site" — was written down as the employer's
+  // name, and four unrelated employers became one fake company with
+  // ninety-one postings.
+  check(
+    "the vendor's placeholder names no employer",
+    normaliseCompanyName("Candidate Experience site") === null,
+    String(normaliseCompanyName("Candidate Experience site")),
+  );
+  check(
+    "the vendor's placeholder names no employer, with or without a suffix",
+    normaliseCompanyName("Candidate Experience") === null &&
+      normaliseCompanyName("Career Site") === null &&
+      normaliseCompanyName("Job Board") === null,
+    String(normaliseCompanyName("Candidate Experience")),
+  );
+
+  // The tenant code is what is worth keeping of a host: "fa-" and the
+  // pod belong to Oracle, not to the employer.
+  check(
+    "a tenant code is read as a brand",
+    hostBrand("fa-eocc-saasfaprod1.fa.ocs.oraclecloud.com") === "Eocc",
+    hostBrand("fa-eocc-saasfaprod1.fa.ocs.oraclecloud.com"),
+  );
+  check(
+    "a plain tenant code is read as a brand",
+    hostBrand("elhr.fa.us2.oraclecloud.com") === "Elhr",
+    hostBrand("elhr.fa.us2.oraclecloud.com"),
+  );
+
   // A name that is not an employer still has an identity of its own, or
   // every such posting in the catalogue would share one.
   check(
@@ -1021,21 +1052,32 @@ console.log("\n[17] the address of a board");
     oracleBoard ? `${oracleBoard.kind}:${oracleBoard.token}` : "none",
   );
 
-  // The finder's separators are semicolons. With commas, Oracle reads
-  // the first part and ignores the rest — and whether the postings come
-  // back at all depends on the tenant: one employer's board answered
-  // with seven roles, the next answered with none, and the board was
-  // not empty.
+  // The finder's parameters are separated by commas and the facets
+  // list by semicolons — the shape the board's own page uses. With
+  // semicolons everywhere Oracle answered with its first page for every
+  // offset, so a board holding four thousand postings was read as
+  // twenty-five.
   const finder = oracleFinder("CX_3001");
   check(
-    "the Oracle finder is separated by semicolons",
-    finder.includes("siteNumber=CX_3001;facetsList=") && !finder.includes(","),
-    finder.slice(0, 80),
+    "the Oracle finder separates its parameters by commas",
+    finder.includes("siteNumber=CX_3001,facetsList=") &&
+      finder.includes(",limit=25,offset=0,sortBy="),
+    finder.slice(0, 120),
+  );
+  check(
+    "the Oracle finder keeps the facets in one semicolon-separated value",
+    finder.includes("facetsList=LOCATIONS;WORK_LOCATIONS;"),
+    finder.slice(0, 120),
   );
   check(
     "the Oracle finder asks for the site",
     finder.startsWith("findReqs;siteNumber=CX_3001"),
     finder.slice(0, 40),
+  );
+  check(
+    "the Oracle finder asks for the page that was requested",
+    oracleFinder("CX_3001", 3).includes(",offset=3,"),
+    oracleFinder("CX_3001", 3).slice(0, 120),
   );
 }
 
@@ -1365,6 +1407,68 @@ console.log("\n[19] finding the boards");
     "the address is the page, not the query",
     addressOf("https://example.test/job?ref=search", null) === "example.test/job",
     String(addressOf("https://example.test/job?ref=search", null)),
+  );
+
+  // Oracle publishes the same board under more than one site number —
+  // "CX" and "CX_1" are aliases — and the posting is the id after
+  // /job/. Left alone, every Oracle posting was stored once per site.
+  check(
+    "two Oracle site numbers are one posting",
+    addressOf(
+      "https://erey.fa.em3.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX/job/118",
+      null,
+    ) ===
+      addressOf(
+        "https://erey.fa.em3.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/job/118",
+        null,
+      ),
+    String(
+      addressOf(
+        "https://erey.fa.em3.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX/job/118",
+        null,
+      ),
+    ),
+  );
+  check(
+    "two Oracle requisitions are two postings",
+    addressOf(
+      "https://erey.fa.em3.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX/job/118",
+      null,
+    ) !==
+      addressOf(
+        "https://erey.fa.em3.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX/job/119",
+        null,
+      ),
+    "same",
+  );
+
+  // Taleo keeps the posting id in the query string. Dropping the query
+  // would make every Taleo posting the same address, and the dedup
+  // agent would refuse all but the first.
+  check(
+    "a Taleo posting keeps the id from its query",
+    addressOf(
+      "https://britam.taleo.net/careersection/ke/jobdetail.ftl?job=12345&tz=GMT",
+      null,
+    ) === "britam.taleo.net/careersection/ke/jobdetail.ftl?job=12345",
+    String(
+      addressOf(
+        "https://britam.taleo.net/careersection/ke/jobdetail.ftl?job=12345&tz=GMT",
+        null,
+      ),
+    ),
+  );
+  check(
+    "two Taleo postings are two addresses",
+    addressOf(
+      "https://britam.taleo.net/careersection/ke/jobdetail.ftl?job=12345",
+      null,
+    ) !==
+      addressOf(
+        "https://britam.taleo.net/careersection/ke/jobdetail.ftl?job=12346",
+        null,
+      ),
+    "same",
   );
 }
 

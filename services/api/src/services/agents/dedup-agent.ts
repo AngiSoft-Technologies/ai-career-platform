@@ -6,6 +6,11 @@ import {
   normaliseCompanyName,
   rawCompanyKey,
 } from "../engine/company.js";
+import { addressOf } from "../engine/job-url.js";
+
+// The address rules live with the other URL rules; they are re-exported
+// here because the dedup agent is the caller that made them public.
+export { addressOf } from "../engine/job-url.js";
 
 /**
  * The statement that claims the candidates a promotion is going to work
@@ -128,29 +133,6 @@ export function opportunityIdentity(
   const id = (externalId ?? "").trim();
   if (!id || id === sourceUrl || id === "undefined") return sourceUrl;
   return `${id}${sourceUrl}`;
-}
-
-/**
- * The posting's own address.
- *
- * The address a posting is applied to and the address it was found at
- * are the same page in every case that matters, and the address is
- * compared without its trailing slash and without its case.
- */
-export function addressOf(
-  applyUrl: string | null | undefined,
-  sourceUrl: string | null | undefined,
-): string | null {
-  const raw = applyUrl ?? sourceUrl;
-  if (!raw) return null;
-  try {
-    const parsed = new URL(raw);
-    return `${parsed.hostname.toLowerCase()}${parsed.pathname
-      .replace(/\/+$/, "")
-      .toLowerCase()}`;
-  } catch {
-    return raw.trim().toLowerCase().replace(/\/+$/, "");
-  }
 }
 
 /**
@@ -649,14 +631,29 @@ export class DeduplicationAgent extends BaseDiscoveryAgent {
    */
   private async addressExists(addresses: string[]): Promise<Set<string>> {
     if (addresses.length === 0) return new Set();
+
+    // The addresses are host-and-path; the catalogue stores full URLs.
+    // Comparing the two directly never matched, so the address check
+    // that was meant to catch "the same posting under another name"
+    // caught nothing. The hosts are extracted in SQL so the scan stays
+    // small, and the addresses are then normalised in one place — the
+    // same `addressOf` the candidates are put through.
+    const hosts = [
+      ...new Set(addresses.map((address) => address.split("/")[0]).filter(Boolean)),
+    ];
     const result = await query<{ apply_url: string }>(
       `SELECT apply_url FROM opportunities
-        WHERE lower(rtrim(apply_url, '/')) = ANY($1::text[])`,
-      [addresses.map((address) => address.replace(/\/+$/, ""))],
+        WHERE split_part(regexp_replace(lower(apply_url), '^https?://', ''), '/', 1) = ANY($1::text[])`,
+      [hosts],
     );
-    return new Set(
-      result.rows.map((row) => row.apply_url.trim().toLowerCase().replace(/\/+$/, "")),
-    );
+
+    const wanted = new Set(addresses);
+    const found = new Set<string>();
+    for (const row of result.rows) {
+      const address = addressOf(row.apply_url, null);
+      if (address && wanted.has(address)) found.add(address);
+    }
+    return found;
   }
 
   /**

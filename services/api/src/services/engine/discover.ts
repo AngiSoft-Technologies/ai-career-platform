@@ -26,7 +26,7 @@ import {
   extractJobPostingsJsonLd,
   htmlToMarkdown,
 } from "./html.js";
-import { normaliseCompanyName } from "./company.js";
+import { hostBrand, normaliseCompanyName } from "./company.js";
 import { detectAts, type AtsBoard, type AtsKind } from "./ats.js";
 import type { RawJob } from "./sources.js";
 
@@ -1220,7 +1220,7 @@ const oracleCompanyCache = new Map<string, string>();
  * entity's name is not always the same thing ("Safaricom PLC" and
  * "Safaricom" are one employer and two rows).
  */
-async function oracleCompany(
+export async function oracleCompany(
   host: string,
   site: string,
   fallback = "",
@@ -1240,67 +1240,169 @@ async function oracleCompany(
     landing?.metadata.ogTitle ??
     "";
 
-  const name = raw
-    // "Search Jobs - Central Bank of Kenya Careers" is the board's own
-    // label for the page, not the employer's name.
+  // "Search Jobs - Central Bank of Kenya Careers" is the board's own
+  // label for the page, not the employer's name.
+  const cleaned = raw
     .replace(/^(?:search\s+jobs?|join\s+our\s+team|job\s+search|careers?)\s*[-–—|:]\s*/i, "")
     .replace(/\s*[|\-–—]\s*(careers?|jobs?|job search|home).*$/i, "")
-    .replace(/\s*(careers?|jobs?)\s*$/i, "")
     .trim();
 
+  // The catalogue's own rules know the rest: "Safaricom Candidate
+  // Experience site" is Safaricom, "SCI Career Site" is SCI, and the
+  // vendor's placeholder — "Candidate Experience site" — is nobody.
+  // Before, that placeholder was returned as the employer, and four
+  // unrelated boards were filed under one fake company.
+  const name = normaliseCompanyName(cleaned);
   if (name) {
     oracleCompanyCache.set(key, name);
     return name;
   }
 
-  if (fallback) return fallback;
+  // The employer as Oracle's own requisition holds it, when the page
+  // has nothing to say.
+  const legal = normaliseCompanyName(fallback);
+  if (legal) return legal;
 
-  return prettify(host.split(".")[0] ?? "Company");
+  // The board's own image is often served from the employer's site: a
+  // wealth manager's unbranded board served its logo from "cetera.com",
+  // which is the employer's own domain and a better name than the
+  // tenant code.
+  const image = landing?.metadata.ogImage ?? "";
+  if (image) {
+    try {
+      const imageHost = new URL(image).hostname.toLowerCase();
+      if (imageHost !== host && !isVendorHost(imageHost)) {
+        const brand = normaliseCompanyName(hostBrand(imageHost));
+        if (brand) {
+          oracleCompanyCache.set(key, brand);
+          return brand;
+        }
+      }
+    } catch {
+      // The image is not an address; the host still is.
+    }
+  }
+
+  // The host is the only thing left that is unique to the employer.
+  return hostBrand(host) || prettify(host.split(".")[0] ?? "Company");
 }
 
 /**
- * The finder that asks an Oracle board for its postings.
+ * Hosts that serve images for other people.
  *
- * The finder's own separators are semicolons. With commas, Oracle reads
- * the first part and ignores the rest — and whether the postings come
- * back at all depends on the tenant: one employer's board answered with
- * seven roles, the next answered with none, and the board was not
- * empty.
+ * A logo on one of these says nothing about the employer, and taking
+ * the host for the employer's name would name the CDN.
  */
-export function oracleFinder(site: string): string {
+const VENDOR_HOSTS = [
+  "oraclecloud.com",
+  "oracle.com",
+  "cloudfront.net",
+  "amazonaws.com",
+  "akamai.net",
+  "akamaized.net",
+  "googleusercontent.com",
+  "licdn.com",
+  "fbcdn.net",
+  "cloudinary.com",
+  "imgix.net",
+  "cdn.com",
+];
+
+function isVendorHost(host: string): boolean {
+  return VENDOR_HOSTS.some(
+    (vendor) => host === vendor || host.endsWith(`.${vendor}`),
+  );
+}
+
+/**
+ * One page of an Oracle board, and how many pages are worth walking.
+ *
+ * Oracle caps a response at twenty-five postings whatever `limit` asks
+ * for, and reports the whole board's size in `TotalJobsCount`. The
+ * board is therefore walked a page at a time, newest first. Four pages
+ * is a hundred postings — more than any one employer publishes in the
+ * window between refreshes, and a bound on what one giant tenant (some
+ * hold thousands) can cost the cycle.
+ */
+const ORACLE_PAGE_SIZE = 25;
+const ORACLE_MAX_PAGES = 4;
+
+/**
+ * The finder that asks an Oracle board for one page of postings.
+ *
+ * The finder's parameters are separated by **commas**; the facets list
+ * is the one value that is separated by semicolons, because it is a
+ * list. This is the shape the board's own page uses, and it is the
+ * shape that makes `offset` mean anything: with semicolons everywhere,
+ * Oracle ignored the offset and answered with the first page for every
+ * page asked for. A board holding four thousand postings was read as
+ * twenty-five, forever.
+ *
+ * `offset` is a **page number**, not a row number: the page starts at
+ * `limit * offset` (the board's own code computes it that way).
+ */
+export function oracleFinder(site: string, page = 0): string {
   return [
     `findReqs;siteNumber=${site}`,
     "facetsList=LOCATIONS;WORK_LOCATIONS;WORKPLACE_TYPES;TITLES;CATEGORIES;ORGANIZATIONS;POSTING_DATES;FLEX_FIELDS",
-    "limit=50",
-    "offset=0",
+    `limit=${ORACLE_PAGE_SIZE}`,
+    `offset=${page}`,
     "sortBy=POSTING_DATES_DESC",
-  ].join(";");
+  ].join(",");
 }
 
 async function oracleBoard(token: string): Promise<RawJob[]> {
   const [host, site] = token.split("|");
   if (!host || !site) return [];
 
-  const finder = oracleFinder(site);
+  const postings: OracleRequisition[] = [];
+  let total: number | null = null;
 
-  const endpoint =
-    `https://${host}/hcmRestApi/resources/latest/recruitingCEJobRequisitions` +
-    `?onlyData=true&expand=requisitionList.secondaryLocations&finder=${encodeURIComponent(finder)}`;
+  for (let page = 0; page < ORACLE_MAX_PAGES; page += 1) {
+    const endpoint =
+      `https://${host}/hcmRestApi/resources/latest/recruitingCEJobRequisitions` +
+      `?onlyData=true&expand=requisitionList.secondaryLocations&finder=${encodeURIComponent(oracleFinder(site, page))}`;
 
-  const payload = await fetchJson<{
-    items?: Array<{ requisitionList?: OracleRequisition[] }>;
-  }>(endpoint, { headers: { Accept: "application/json" } });
+    let payload: {
+      items?: Array<{ TotalJobsCount?: number; requisitionList?: OracleRequisition[] }>;
+    };
+    try {
+      payload = await fetchJson<{
+        items?: Array<{ TotalJobsCount?: number; requisitionList?: OracleRequisition[] }>;
+      }>(endpoint, { headers: { Accept: "application/json" } });
+    } catch (error) {
+      // A later page failing must not throw away the pages that were
+      // already read. The board is still the employer's list; it is
+      // just shorter this cycle.
+      logger.debug(
+        { host, site, page, error: error instanceof Error ? error.message : String(error) },
+        "Oracle board page failed",
+      );
+      break;
+    }
 
-  const list = (payload.items ?? []).flatMap((item) => item.requisitionList ?? []);
-  if (list.length === 0) return [];
+    const item = payload.items?.[0];
+    const batch = item?.requisitionList ?? [];
+
+    if (page === 0 && typeof item?.TotalJobsCount === "number") {
+      total = item.TotalJobsCount;
+    }
+
+    postings.push(...batch);
+
+    if (batch.length < ORACLE_PAGE_SIZE) break;
+    if (total !== null && postings.length >= total) break;
+  }
+
+  if (postings.length === 0) return [];
 
   const company = await oracleCompany(
     host,
     site,
-    list[0]?.LegalEmployer ?? list[0]?.Organization ?? list[0]?.BusinessUnit ?? "",
+    postings[0]?.LegalEmployer ?? postings[0]?.Organization ?? postings[0]?.BusinessUnit ?? "",
   );
 
-  return list
+  return postings
     .filter((job) => job.Id && job.Title)
     .map((job) => {
       const url = `https://${host}/hcmUI/CandidateExperience/en/sites/${site}/job/${job.Id}`;

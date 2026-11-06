@@ -82,14 +82,19 @@ const BOARD_ALONE = new Set<string>([
   ...BOARD_NAMES,
   "careers",
   "career",
+  "career site",
+  "careers site",
   "job",
   "jobs",
   "job search",
   "search jobs",
   "job posting",
   "job postings",
+  "job board",
   "all jobs",
   "job opportunities",
+  "candidate experience",
+  "candidate experience site",
   "vacancies",
   "openings",
   "positions",
@@ -274,6 +279,29 @@ export function normaliseCompanyName(
   if (alias) return alias;
 
   return name;
+}
+
+/**
+ * A brand read off a host, when the board names no employer at all.
+ *
+ * Some Oracle tenants publish a board whose label is the vendor's own
+ * placeholder — "Candidate Experience site" — and whose postings carry
+ * no legal employer. The host is then the only thing that is actually
+ * unique to the employer, so it becomes the name.
+ *
+ * The tenant code is what is worth keeping: "elhr.fa.us2…" is "Elhr",
+ * and "fa-eocc-saasfaprod1.fa.ocs…" is "Eocc" — the "fa-" prefix and
+ * the pod belong to Oracle, not to the employer.
+ */
+export function hostBrand(host: string): string {
+  const label = (host.split(".")[0] ?? "").trim();
+  const tenant = /^fa-([a-z0-9]+)-saasfaprod/i.exec(label)?.[1] ?? label;
+
+  return tenant
+    .replace(/[-_]+/g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/\b\w/g, (character) => character.toUpperCase())
+    .trim();
 }
 
 /**

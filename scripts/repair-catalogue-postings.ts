@@ -37,8 +37,11 @@ import pg from "pg";
 import {
   canonicalCompanyKey,
   companySlug,
+  hostBrand,
   normaliseCompanyName,
 } from "../services/api/src/services/engine/company.js";
+import { addressOf, hostOf } from "../services/api/src/services/engine/job-url.js";
+import { oracleCompany } from "../services/api/src/services/engine/discover.js";
 
 // The database is reached over IPv4: the Node resolver picks the IPv6
 // address first, and the route to it does not exist.
@@ -135,14 +138,57 @@ interface OpportunityRow {  id: string;
   created_at: Date;
 }
 
+/**
+ * The posting's address, by the catalogue's own rules.
+ *
+ * Oracle's site number is an alias — "CX" and "CX_1" are one board —
+ * and Taleo keeps the posting id in the query string. The repair has
+ * to group the copies the same way the dedup agent does, or it leaves
+ * behind exactly the duplicates the pipeline will refuse to make.
+ */
 function keyOf(url: string): string {
-  try {
-    const parsed = new URL(url);
-    const path = parsed.pathname.replace(/\/+$/, "");
-    return `${parsed.hostname.toLowerCase()}${path.toLowerCase()}`;
-  } catch {
-    return url.trim().toLowerCase();
-  }
+  return addressOf(url, null) ?? url.trim().toLowerCase();
+}
+
+/**
+ * The employer row for a name, made when it is not there yet.
+ *
+ * The canonical key's index is partial ("WHERE canonical_key IS NOT
+ * NULL"), so the conflict cannot be named in the statement — the row
+ * is looked for first and the insert is plain.
+ */
+async function companyIdFor(
+  client: pg.Client,
+  name: string,
+): Promise<string | null> {
+  const key = canonicalKeyOf(name);
+  const byKey = await client.query<{ id: string }>(
+    `SELECT id FROM companies WHERE canonical_key = $1 LIMIT 1`,
+    [key],
+  );
+  if (byKey.rows[0]?.id) return byKey.rows[0].id;
+
+  const slug = slugOf(name);
+  const bySlug = await client.query<{ id: string }>(
+    `SELECT id FROM companies WHERE slug = $1 LIMIT 1`,
+    [slug],
+  );
+  if (bySlug.rows[0]?.id) return bySlug.rows[0].id;
+
+  const created = await client.query<{ id: string }>(
+    `INSERT INTO companies (name, slug, canonical_key, created_at, updated_at)
+     VALUES ($1, $2, $3, now(), now())
+     ON CONFLICT (slug) DO NOTHING
+     RETURNING id`,
+    [name, slug, key],
+  );
+  if (created.rows[0]?.id) return created.rows[0].id;
+
+  const raced = await client.query<{ id: string }>(
+    `SELECT id FROM companies WHERE slug = $1 OR canonical_key = $2 LIMIT 1`,
+    [slug, key],
+  );
+  return raced.rows[0]?.id ?? null;
 }
 
 async function main(): Promise<void> {
@@ -472,6 +518,90 @@ async function main(): Promise<void> {
         await client.query(`DELETE FROM companies WHERE id = $1`, [source.id]);
       }
     }
+
+    // ---------------------------------------------------------------------
+    // 3b. An employer named after the board's placeholder.
+    // ---------------------------------------------------------------------
+    //
+    // An Oracle tenant with no branding of its own answers "Candidate
+    // Experience site", and the reader used to write that down as the
+    // employer: four unrelated boards — a US department store, a French
+    // industrial group, a US wealth manager and Airtel Africa — became
+    // one fake company with ninety-one postings.
+    //
+    // The rows go back to the employer each host is actually known by:
+    // another name already in the catalogue on the same host when there
+    // is one (Airtel Africa publishes two site numbers on the same
+    // host), and the host's own tenant brand when there is not.
+    const GENERIC_EMPLOYER =
+      /^(?:candidate experience(?: site)?|careers?(?: site)?|career site|job search|search jobs|all jobs|job board|home)$/i;
+
+    const genericEmployers = companies.rows.filter((row) =>
+      GENERIC_EMPLOYER.test(row.name),
+    );
+    console.log(`employers named after the board: ${genericEmployers.length}`);
+
+    let reassigned = 0;
+    for (const employer of genericEmployers) {
+      const postings = await client.query<{ id: string; apply_url: string }>(
+        `SELECT id, apply_url FROM opportunities WHERE company_id = $1`,
+        [employer.id],
+      );
+
+      const byHost = new Map<string, string[]>();
+      for (const posting of postings.rows) {
+        const host = hostOf(posting.apply_url);
+        const ids = byHost.get(host);
+        if (ids) ids.push(posting.id);
+        else byHost.set(host, [posting.id]);
+      }
+
+      for (const [host, ids] of byHost) {
+        const known = await client.query<{ id: string; name: string }>(
+          `SELECT c.id, c.name
+             FROM opportunities o
+             JOIN companies c ON c.id = o.company_id
+            WHERE o.company_id <> $1
+              AND split_part(regexp_replace(lower(o.apply_url), '^https?://', ''), '/', 1) = $2
+            GROUP BY c.id, c.name
+            ORDER BY count(*) DESC
+            LIMIT 1`,
+          [employer.id, host],
+        );
+
+        // The board's current name, read the way the reader reads it —
+        // "Cetera" came from the logo the board serves from cetera.com,
+        // not from the database's tenant code. Using a different name
+        // here would leave the old rows under one employer and the next
+        // cycle's rows under another, which is the fault being repaired.
+        const site = postings.rows
+          .map((posting) => /\/sites\/([^/]+)\/job\//i.exec(posting.apply_url)?.[1])
+          .find(Boolean);
+        const boardName = site
+          ? await oracleCompany(host, site).catch(() => null)
+          : null;
+
+        const name = known.rows[0]?.name ?? boardName ?? hostBrand(host);
+        if (!name) continue;
+
+        console.log(
+          `   "${employer.name}" — ${ids.length} postings on ${host} -> "${name}"`,
+        );
+        reassigned += ids.length;
+
+        if (!apply) continue;
+
+        const targetId = known.rows[0]?.id ?? (await companyIdFor(client, name));
+        if (!targetId || targetId === employer.id) continue;
+
+        await client.query(
+          `UPDATE opportunities SET company_id = $1, updated_at = now()
+            WHERE id = ANY($2::uuid[])`,
+          [targetId, ids],
+        );
+      }
+    }
+    console.log(`postings re-attributed: ${reassigned}`);
 
     // ---------------------------------------------------------------------
     // 4. The employer rows left empty by the repair.

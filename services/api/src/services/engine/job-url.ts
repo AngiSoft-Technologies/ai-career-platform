@@ -199,3 +199,56 @@ export function hostOf(rawUrl: string): string {
     return rawUrl.trim().toLowerCase().replace(/^www\./, "");
   }
 }
+
+/**
+ * The address a posting is known by, in the form two copies share.
+ *
+ * The catalogue learned the same posting from two places often enough
+ * for the same role to be stored twice, and the copies rarely agree on
+ * the query string, the trailing slash or the case. So the address is
+ * reduced to the part that names the posting: the host and the path.
+ *
+ * Two boards write the posting's identity somewhere other than the
+ * path, and both have to be read the way the board means them:
+ *
+ *   - **Oracle** carries the site number in the path —
+ *     `/sites/CX_1/job/118` — but the site number is an alias. "CX" and
+ *     "CX_1" are the same board with the same postings, and the posting
+ *     is the id after `/job/`. Left alone, every Oracle posting was
+ *     stored twice, once per site number.
+ *   - **Taleo** keeps the posting id in the query string
+ *     (`jobdetail.ftl?job=123`), so dropping the query would make every
+ *     Taleo posting the same address. It is kept, alone.
+ */
+export function addressOf(
+  applyUrl: string | null | undefined,
+  sourceUrl: string | null | undefined,
+): string | null {
+  const raw = applyUrl ?? sourceUrl;
+  if (!raw) return null;
+
+  try {
+    const parsed = new URL(raw);
+    const host = parsed.hostname.toLowerCase();
+    let path = parsed.pathname.replace(/\/+$/, "").toLowerCase();
+
+    // Oracle's site number is an alias; the requisition id is the
+    // posting.
+    const oracle = /^\/hcmui\/candidateexperience\/[^/]+\/sites\/[^/]+\/job\/([^/]+)$/.exec(
+      path,
+    );
+    if (oracle?.[1]) {
+      path = `/hcmui/candidateexperience/job/${oracle[1]}`;
+    }
+
+    // Taleo's posting id lives in the query string.
+    if (/(^|\.)taleo\.net$/.test(host)) {
+      const job = parsed.searchParams.get("job");
+      if (job) return `${host}${path}?job=${job.toLowerCase()}`;
+    }
+
+    return `${host}${path}`;
+  } catch {
+    return raw.trim().toLowerCase().replace(/\/+$/, "");
+  }
+}
