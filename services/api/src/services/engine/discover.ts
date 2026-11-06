@@ -1171,13 +1171,36 @@ export function buildBoardQueries(seeds: QuerySeeds): string[] {
   const places = countries.length > 0 ? countries : ["Kenya"];
 
   const queries: string[] = [];
-  for (const country of places) {
-    queries.push(`"hcmUI/CandidateExperience" jobs ${country}`);
-    queries.push(`"CandidateExperience/en/sites" careers ${country}`);
-    queries.push(`oraclecloud hcmUI vacancies ${country}`);
+
+  // Oracle — the vendor's own name, the path that holds the board, and
+  // the place.
+  //
+  // The phrase is not quoted, and that matters: `"hcmUI/
+  // CandidateExperience" jobs Kenya` is answered by the engines with
+  // something else entirely — a video, a forum, an unrelated
+  // definition — while the same words unquoted bring back nine boards,
+  // among them Central Bank of Kenya's and KCB Group's.
+  for (const place of places) {
+    queries.push(`oraclecloud.com hcmUI jobs ${place}`);
+    queries.push(`oraclecloud hcmUI vacancies ${place}`);
+    queries.push(`oracle cloud candidate experience careers ${place}`);
   }
-  queries.push(`"myworkdayjobs" careers jobs ${places[0] ?? "Kenya"}`);
-  queries.push(`"jobs.lever.co" OR "boards.greenhouse.io" careers`);
+  queries.push("site:oraclecloud.com hcmUI jobs");
+  queries.push("oraclecloud hcmUI jobs Africa");
+
+  // Workday — the same shape. A board's address there names the tenant
+  // and the site, and the tenant's own robots.txt names every site it
+  // publishes under.
+  for (const place of places) {
+    queries.push(`myworkdayjobs careers ${place}`);
+  }
+  queries.push("myworkdayjobs jobs Africa");
+
+  // The other vendors, by their own name.
+  for (const place of places) {
+    queries.push(`greenhouse.io careers ${place}`);
+    queries.push(`lever.co careers ${place}`);
+  }
 
   return [...new Set(queries)];
 }

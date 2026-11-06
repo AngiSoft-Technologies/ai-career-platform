@@ -1087,19 +1087,25 @@ console.log("\n[19] finding the boards");
   });
   check(
     "the board queries ask for the address of an Oracle board",
-    boardQueries.some((query) => query.includes("hcmUI/CandidateExperience")),
+    boardQueries.some((query) => query.includes("oraclecloud") && query.includes("hcmUI")),
     boardQueries[0],
   );
   check(
     "the board queries that name a place name it",
     boardQueries
       .filter((query) => !query.includes(" OR "))
+      .filter((query) => !query.includes("Africa") && !query.startsWith("site:"))
       .every((query) => query.includes("Kenya")),
     boardQueries.join(" | "),
   );
   check(
     "the board queries ask for the address of a Workday board",
     boardQueries.some((query) => query.includes("myworkdayjobs")),
+    boardQueries.join(" | "),
+  );
+  check(
+    "the board queries are not quoted into nothing",
+    !boardQueries.some((query) => query.includes('"hcmUI')),
     boardQueries.join(" | "),
   );
 
