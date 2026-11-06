@@ -5,7 +5,8 @@ import {
   jobDiscoveryGate,
   searchWebPlannedAll,
 } from "../engine/search-orchestrator.js";
-import { buildDiscoveryQueries, type QuerySeeds } from "../engine/discover.js";
+import { buildBoardQueries, buildDiscoveryQueries, type QuerySeeds } from "../engine/discover.js";
+import { boardKey, detectAts, type AtsBoard } from "../engine/ats.js";
 import { pooled } from "../engine/index.js";
 import { cleanJobTitle, isListingTitle } from "../engine/extract.js";
 import { jobUrlRefusal } from "../engine/job-url.js";
@@ -77,6 +78,7 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
 
     const seeds = await this.loadSeeds();
     const generated = buildDiscoveryQueries(seeds);
+    const boardQueries = buildBoardQueries(seeds);
 
     // Operators can pin extra queries in the agent config; they are additive,
     // never a replacement for generated discovery.
@@ -121,7 +123,37 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
         Math.max(0, pinnedQuota - (configured.length - offset)),
       ),
     ];
-    const queries = [...new Set([...pinned, ...generated])].slice(
+
+    // The board queries have a share of their own.
+    //
+    // A board's answer is worth more than a posting's: one address is
+    // the employer's whole list, read in one request. They are a third
+    // of the discovery effort rather than a part of the role queries,
+    // because the role queries would otherwise fill the budget with
+    // postings one at a time.
+    //
+    // The list is longer than the share, so it is read from a window
+    // that moves with the hour: over a day every board query is used.
+    const boardQuota = Math.max(
+      1,
+      Math.min(
+        boardQueries.length,
+        Math.floor(maxQueries / 6) || 1,
+      ),
+    );
+    const boardOffset =
+      boardQueries.length > boardQuota
+        ? (new Date().getUTCHours() * boardQuota) % boardQueries.length
+        : 0;
+    const boards = [
+      ...boardQueries.slice(boardOffset, boardOffset + boardQuota),
+      ...boardQueries.slice(
+        0,
+        Math.max(0, boardQuota - (boardQueries.length - boardOffset)),
+      ),
+    ];
+
+    const queries = [...new Set([...pinned, ...boards, ...generated])].slice(
       0,
       Math.max(1, maxQueries),
     );
@@ -135,6 +167,7 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
     let totalNotAJob = 0;
     let totalListings = 0;
     let totalDeferred = 0;
+    let totalBoards = 0;
     let timedOut = false;
     const errors: string[] = [];
     const engines = new Set<string>();
@@ -212,6 +245,28 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
 
       for (const result of results) {
         engines.add(result.engine);
+
+        // A board's address is learned, not queued.
+        //
+        // The address is the employer's whole list of postings, and the
+        // expansion agent reads boards properly — through the board's
+        // own endpoint, with the employer's name taken from the board's
+        // own page. Queuing the address for the browse agent would
+        // spend a page read on a page that holds no posting, because
+        // the board renders its list in the browser.
+        //
+        // Oracle's boards are the clearest case: the address is a
+        // tenant id and a site id, and the employer's name is only on
+        // the board's page. A search for "hcmUI/CandidateExperience"
+        // finds Central Bank of Kenya's board and KCB Group's; without
+        // this, both were dropped — the title of a board names no role.
+        const board = detectAts(result.url);
+        if (board) {
+          const learned = await this.learnBoard(board);
+          if (learned) totalBoards += 1;
+          else totalDuplicate += 1;
+          continue;
+        }
 
         // The title is checked before the URL is queued.
         //
@@ -329,10 +384,38 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
         notAJobTitle: totalNotAJob,
         // Results that named a page of postings rather than a posting.
         listings: totalListings,
+        // Boards learned — the employer's whole list of postings, read
+        // by the expansion agent.
+        boards: totalBoards,
         // Results found but not queued, because the queue was full.
         deferred: totalDeferred,
       },
     };
+  }
+
+  /**
+   * Remembers a board so the expansion agent reads it.
+   *
+   * A board that has never been read is remembered with no time on it,
+   * and the expansion agent reads those first: a board that is new is
+   * worth more than one that was read yesterday.
+   *
+   * A board that is already known is left exactly as it is. Its time is
+   * when it was *read*, and bumping it here would push the board to the
+   * back of the rotation every cycle it appeared in a search result —
+   * and a board that is always at the back is never read.
+   */
+  private async learnBoard(board: AtsBoard): Promise<boolean> {
+    const inserted = await query<{ domain: string }>(
+      `INSERT INTO discovery_known_sources
+           (domain, source_type, jobs_found, last_seen, created_at)
+       VALUES ($1, 'ats', 0, NULL, now())
+       ON CONFLICT (domain) DO NOTHING
+       RETURNING domain`,
+      [boardKey(board)],
+    ).catch(() => ({ rows: [] as Array<{ domain: string }> }));
+
+    return inserted.rows.length > 0;
   }
 
   /**

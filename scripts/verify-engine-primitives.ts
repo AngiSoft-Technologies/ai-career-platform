@@ -25,11 +25,14 @@ import { hashJitterMs, deferredRunAt } from "../services/api/src/lib/jitter.js";
 import { AbortManager, timeoutInstance } from "../services/api/src/lib/abort-manager.js";
 import { normaliseUrlIdentity, hotKeySafe, isUuidV7 } from "../services/api/src/lib/ids.js";
 import { overfetchLimitFor } from "../services/api/src/services/engine/search-orchestrator.js";
+import { jobDiscoveryGate } from "../services/api/src/services/engine/search-orchestrator.js";
 import {
   findJobLinks,
   detectAts,
   oracleFinder,
+  buildBoardQueries,
 } from "../services/api/src/services/engine/discover.js";
+import { boardKey } from "../services/api/src/services/engine/ats.js";
 import {
   isUnreadableHost,
   jobUrlRefusal,
@@ -820,6 +823,11 @@ console.log("\n[16] the identity of an employer");
       "Safaricom",
     String(normaliseCompanyName("Safaricom Candidate Experience site")),
   );
+  check(
+    "the board's own label for itself is not the employer's name",
+    normaliseCompanyName("SCI Career Site") === "SCI",
+    String(normaliseCompanyName("SCI Career Site")),
+  );
 
   // A name that is not an employer still has an identity of its own, or
   // every such posting in the catalogue would share one.
@@ -1027,6 +1035,80 @@ console.log("\n[18] the address of a posting");
   check(
     "an address that is not an address is refused",
     !looksLikeJobUrl("not a url"),
+  );
+}
+
+console.log("\n[19] finding the boards");
+{
+  // -------------------------------------------------------------------------
+  // An employer's vacancies often exist in one place only, and that place
+  // is addressed rather than named: "eoin.fa.em3.oraclecloud.com|CX_3001"
+  // says nothing about KCB Group, and the board's own page is the only
+  // place the employer's name is written.
+  //
+  // So the board has to be found by its address, and the search layer
+  // has to keep it: the title of a board names no role, and the address
+  // says nothing about the query, so both the title gate and the query
+  // check refuse a board that is worth more than a hundred postings.
+  // -------------------------------------------------------------------------
+
+  const boardGate = jobDiscoveryGate("software engineer jobs Kenya");
+
+  const oracleResult = {
+    url: "https://esal.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_2/jobs",
+    title: "Search Jobs - Central Bank of Kenya Careers",
+    description: "",
+    engine: "duckduckgo",
+  };
+  check(
+    "a board's title names no role, and the board is kept",
+    boardGate(oracleResult),
+    "refused",
+  );
+
+  const unrelated = {
+    url: "https://www.forexfactory.com/calendar",
+    title: "Calendar | Forex Factory",
+    description: "",
+    engine: "bing",
+  };
+  check(
+    "a page that is not about a role is still refused",
+    !boardGate(unrelated),
+    "kept",
+  );
+
+  // The queries that look for boards.
+  const boardQueries = buildBoardQueries({
+    roles: [],
+    skills: [],
+    countries: ["Kenya"],
+    knownDomains: [],
+  });
+  check(
+    "the board queries ask for the address of an Oracle board",
+    boardQueries.some((query) => query.includes("hcmUI/CandidateExperience")),
+    boardQueries[0],
+  );
+  check(
+    "the board queries that name a place name it",
+    boardQueries
+      .filter((query) => !query.includes(" OR "))
+      .every((query) => query.includes("Kenya")),
+    boardQueries.join(" | "),
+  );
+  check(
+    "the board queries ask for the address of a Workday board",
+    boardQueries.some((query) => query.includes("myworkdayjobs")),
+    boardQueries.join(" | "),
+  );
+
+  // A board is remembered under its kind and its token together.
+  check(
+    "a board is remembered under its address",
+    boardKey({ kind: "oracle", token: "esal.fa.ocs.oraclecloud.com|CX_2" }) ===
+      "oracle:esal.fa.ocs.oraclecloud.com|CX_2",
+    boardKey({ kind: "oracle", token: "esal.fa.ocs.oraclecloud.com|CX_2" }),
   );
 }
 

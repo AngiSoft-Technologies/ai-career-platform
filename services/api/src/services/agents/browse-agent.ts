@@ -5,6 +5,7 @@ import { BaseDiscoveryAgent, type AgentContext, type AgentRunResult } from "./ba
 import { scrapeUrl } from "../engine/fetch.js";
 import { extractJob, looksLikeJobPosting } from "../engine/extract.js";
 import { findJobLinks } from "../engine/discover.js";
+import { detectAts } from "../engine/ats.js";
 import { DEFAULT_MAX_QUEUE_DEPTH, queueRoom } from "../engine/queue.js";
 import {
   hostIsQuiet,
@@ -150,6 +151,26 @@ export class BrowseAgent extends BaseDiscoveryAgent {
                     error = $2
               WHERE id = $1`,
             [row.id, "REDIRECT_WRAPPER"],
+          );
+          continue;
+        }
+
+        // A board's address is not a posting, and it is not a page of
+        // postings either: the board renders its list in the browser,
+        // so the page holds no links and no text.
+        //
+        // The expansion agent reads boards through their own endpoint,
+        // which is the whole list in one request. Reading the board's
+        // page here would spend a request to learn nothing.
+        const board = detectAts(target);
+        if (board) {
+          totalSkipped += 1;
+          await query(
+            `UPDATE discovery_search_results
+                SET status = 'done', processed_at = now(),
+                    error = $2
+              WHERE id = $1`,
+            [row.id, "ATS_BOARD"],
           );
           continue;
         }

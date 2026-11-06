@@ -212,6 +212,12 @@ export function normaliseCompanyName(
     .trim();
   if (!name) return null;
 
+  // The board's own label for itself: "SCI Career Site" is SCI, and
+  // "Welo Global Careers Site" is Welo Global. The word "site" belongs
+  // to the board, not to the employer.
+  name = name.replace(/\s+careers?\s+site\.?$/i, "").trim();
+  if (!name) return null;
+
   // The legal form, once.
   const withoutLegal = name.replace(
     new RegExp(`\\s+(?:${LEGAL_FORMS.join("|")})\\.?$`, "i"),

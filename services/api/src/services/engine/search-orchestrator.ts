@@ -20,6 +20,7 @@
 import { logger } from "../../logger.js";
 import { sampled } from "../../lib/rollout.js";
 import { searchWeb, type SearchOptions, type WebSearchResult } from "./search.js";
+import { detectAts } from "./ats.js";
 import { cleanJobTitle, isAboutQuery, isListingTitle } from "./job-title.js";
 import { isNewsRedirectWrapper } from "./redirect.js";
 import {
@@ -92,6 +93,22 @@ const MAX_OVERFETCH = 100;
 export function jobDiscoveryGate(query: string): (result: WebSearchResult) => boolean {
   return (result: WebSearchResult): boolean => {
     if (isNewsRedirectWrapper(result.url)) return false;
+
+    // A board's address is the employer's whole list of postings.
+    //
+    // The board's page says nothing about a role — "Search Jobs - KCB
+    // Group Careers", "Central Bank of Kenya Careers" — so the title
+    // gate refuses it, and the address says nothing about the query
+    // either. Both refusals are wrong here: the board is worth more
+    // than any one posting, because reading it yields every posting
+    // the employer has.
+    //
+    // Oracle's boards are the clearest case. Their address is a tenant
+    // id and a site id — "eoin.fa.em3.oraclecloud.com|CX_3001" — and
+    // the employer's name is on the board's own page, so the board is
+    // the only way to reach KCB Group's vacancies.
+    if (detectAts(result.url)) return true;
+
     if (cleanJobTitle(result.title) === null && !isListingTitle(result.title)) {
       return false;
     }

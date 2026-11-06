@@ -326,14 +326,14 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
     // board is read in turn. Ordered the other way — newest first — the
     // same two boards were read every cycle and the other ten were read
     // when the budget allowed.
-    const learned = await query<{ domain: string; last_seen: Date }>(
+    const learned = await query<{ domain: string; last_seen: Date | null }>(
       `SELECT domain, last_seen FROM discovery_known_sources
         WHERE source_type = 'ats'
-        ORDER BY last_seen ASC
+        ORDER BY last_seen ASC NULLS FIRST
         LIMIT 500`,
     );
 
-    const lastSeen = new Map<string, Date>();
+    const lastSeen = new Map<string, Date | null>();
     const boards = new Map<string, AtsBoard>();
 
     for (const row of learned.rows) {
@@ -371,12 +371,20 @@ export class ExpansionAgent extends BaseDiscoveryAgent {
     // The known boards first, oldest first, then the ones found in the
     // candidates — which have never been read, so they are read before
     // the ones that were read yesterday.
+    //
+    // A board with no time on it has never been read: the search agent
+    // learns boards it finds and leaves them without a time, so they
+    // come first. A board that is read gets its time, and it goes back
+    // into the rotation.
     const known = [...boards.entries()]
       .filter(([key]) => lastSeen.has(key))
       .sort((left, right) => {
-        const leftSeen = lastSeen.get(left[0])?.getTime() ?? 0;
-        const rightSeen = lastSeen.get(right[0])?.getTime() ?? 0;
-        return leftSeen - rightSeen;
+        const leftSeen = lastSeen.get(left[0]);
+        const rightSeen = lastSeen.get(right[0]);
+        // Never read first.
+        if (!leftSeen && rightSeen) return -1;
+        if (leftSeen && !rightSeen) return 1;
+        return (leftSeen?.getTime() ?? 0) - (rightSeen?.getTime() ?? 0);
       })
       .map(([, board]) => board);
 
