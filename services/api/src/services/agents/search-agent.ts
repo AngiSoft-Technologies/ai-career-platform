@@ -5,7 +5,12 @@ import {
   jobDiscoveryGate,
   searchWebPlannedAll,
 } from "../engine/search-orchestrator.js";
-import { buildBoardQueries, buildDiscoveryQueries, type QuerySeeds } from "../engine/discover.js";
+import {
+  buildBoardQueries,
+  buildDiscoveryQueries,
+  buildEmployerQueries,
+  type QuerySeeds,
+} from "../engine/discover.js";
 import { boardKey, detectAts, type AtsBoard } from "../engine/ats.js";
 import { pooled } from "../engine/index.js";
 import { cleanJobTitle, isListingTitle } from "../engine/extract.js";
@@ -79,6 +84,7 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
     const seeds = await this.loadSeeds();
     const generated = buildDiscoveryQueries(seeds);
     const boardQueries = buildBoardQueries(seeds);
+    const employerQueries = buildEmployerQueries(seeds);
 
     // Operators can pin extra queries in the agent config; they are additive,
     // never a replacement for generated discovery.
@@ -101,12 +107,12 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
     // The pinned queries are a fixed list, and the generated ones rotate
     // with the taxonomy and the learned sources. If the pinned list is
     // given the whole budget, the rotation never runs — which is the
-    // opposite of what a discovery agent is for. Half the budget goes to
-    // each, so a cycle always explores and always honours the operator's
-    // own queries.
+    // opposite of what a discovery agent is for. Two fifths of the
+    // budget goes to the pinned list, so a cycle always explores and
+    // always honours the operator's own queries.
     const pinnedQuota = Math.min(
       configured.length,
-      Math.max(1, Math.floor(maxQueries / 2)),
+      Math.max(1, Math.floor(maxQueries * 0.4)),
     );
     // The pinned list is longer than the budget, so it is read from a
     // window that moves with the hour. Over a day every pinned query is
@@ -153,10 +159,40 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
       ),
     ];
 
-    const queries = [...new Set([...pinned, ...boards, ...generated])].slice(
-      0,
-      Math.max(1, maxQueries),
+    // The employer's own name is a query of its own.
+    //
+    // The catalogue was given nineteen employers, and their careers
+    // pages are read every cycle — but most of those pages are
+    // JavaScript shells or pages that answer 404, and a page that
+    // answers nothing says nothing about where the employer posts.
+    //
+    // The employer's *name* is what a search engine knows: "Airtel
+    // Kenya careers jobs" answers with Airtel Africa's Oracle board,
+    // and the board is then read. So a quarter of the budget goes to
+    // the employers' names, and the list rotates with the hour — over
+    // a day every employer is asked.
+    const employerQuota = Math.max(
+      1,
+      Math.min(
+        employerQueries.length,
+        Math.floor(maxQueries / 4) || 1,
+      ),
     );
+    const employerOffset =
+      employerQueries.length > employerQuota
+        ? (new Date().getUTCHours() * employerQuota) % employerQueries.length
+        : 0;
+    const employers = [
+      ...employerQueries.slice(employerOffset, employerOffset + employerQuota),
+      ...employerQueries.slice(
+        0,
+        Math.max(0, employerQuota - (employerQueries.length - employerOffset)),
+      ),
+    ];
+
+    const queries = [
+      ...new Set([...pinned, ...boards, ...employers, ...generated]),
+    ].slice(0, Math.max(1, maxQueries));
 
     const started = Date.now();
     const deadline = started + budgetMs;
@@ -387,6 +423,8 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
         // Boards learned — the employer's whole list of postings, read
         // by the expansion agent.
         boards: totalBoards,
+        // The employers the catalogue was given, by name.
+        seedEmployers: seeds.employers?.slice(0, 10) ?? [],
         // Results found but not queued, because the queue was full.
         deferred: totalDeferred,
       },
@@ -497,6 +535,23 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
         LIMIT 40`,
     ).catch(() => ({ rows: [] as Array<{ domain: string }> }));
 
+    // The employers the catalogue was given.
+    //
+    // Their careers pages are read every cycle, and most of them are
+    // JavaScript shells or pages that answer 404 — a page that answers
+    // nothing says nothing about where the employer posts. The
+    // employer's *name* is what a search engine knows, so the name is
+    // a seed of its own.
+    const employers = await query<{ name: string }>(
+      `SELECT c.name
+         FROM job_sources s
+         JOIN companies c ON c.id = s.company_id
+        WHERE s.type = 'company_web'
+          AND c.name IS NOT NULL AND c.name <> ''
+        ORDER BY s.created_at ASC
+        LIMIT 40`,
+    ).catch(() => ({ rows: [] as Array<{ name: string }> }));
+
     return {
       roles: [...roles].slice(0, 12),
       skills: [...skills].slice(0, 10),
@@ -504,6 +559,7 @@ export class SearchEngineAgent extends BaseDiscoveryAgent {
       knownDomains: known.rows
         .map((row) => row.domain)
         .filter((domain) => !domain.includes(":")),
+      employers: employers.rows.map((row) => row.name),
     };
   }
 }

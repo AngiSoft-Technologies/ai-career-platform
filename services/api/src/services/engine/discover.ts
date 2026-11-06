@@ -1141,6 +1141,8 @@ export interface QuerySeeds {
   skills: string[];
   countries: string[];
   knownDomains: string[];
+  /** The employers the catalogue was given, by name. */
+  employers?: string[];
 }
 
 /**
@@ -1270,4 +1272,36 @@ export function buildBoardQueries(seeds: QuerySeeds): string[] {
   }
 
   return [...new Set(queries)];
+}
+
+/**
+ * The queries that look for one employer's board by the employer's name.
+ *
+ * The catalogue was given nineteen employers — KCB Group, Safaricom,
+ * Kenya Airways, Airtel Kenya — and their careers pages are read every
+ * cycle. But most of those pages are JavaScript shells or pages that
+ * answer 404, and a page that answers nothing tells the pipeline
+ * nothing about where the employer posts.
+ *
+ * The employer's *name* is what a search engine knows: "Airtel Kenya
+ * careers jobs" answers with Airtel Africa's Oracle board, and the
+ * board is then read. The domain does not do this — a query with the
+ * domain in it is answered with the domain's own pages, and with
+ * nothing else.
+ */
+export function buildEmployerQueries(seeds: QuerySeeds): string[] {
+  const employers = [
+    ...new Set(
+      (seeds.employers ?? [])
+        .map((employer) => employer.trim())
+        .filter((employer) => employer.length > 1),
+    ),
+  ];
+
+  const queries: string[] = [];
+  for (const employer of employers) {
+    queries.push(`${employer} careers jobs`);
+    queries.push(`${employer} vacancies openings`);
+  }
+  return queries;
 }

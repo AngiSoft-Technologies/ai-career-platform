@@ -31,6 +31,7 @@ import {
   detectAts,
   oracleFinder,
   buildBoardQueries,
+  buildEmployerQueries,
 } from "../services/api/src/services/engine/discover.js";
 import { boardKey } from "../services/api/src/services/engine/ats.js";
 import {
@@ -1115,6 +1116,38 @@ console.log("\n[19] finding the boards");
     boardKey({ kind: "oracle", token: "esal.fa.ocs.oraclecloud.com|CX_2" }) ===
       "oracle:esal.fa.ocs.oraclecloud.com|CX_2",
     boardKey({ kind: "oracle", token: "esal.fa.ocs.oraclecloud.com|CX_2" }),
+  );
+
+  // The employer's own name is a query of its own.
+  //
+  // Most of the catalogue's careers pages are JavaScript shells or
+  // pages that answer 404 — a page that answers nothing says nothing
+  // about where the employer posts. The employer's *name* is what a
+  // search engine knows: "Airtel Kenya careers jobs" answers with
+  // Airtel Africa's Oracle board.
+  const employerQueries = buildEmployerQueries({
+    roles: [],
+    skills: [],
+    countries: ["Kenya"],
+    knownDomains: [],
+    employers: ["Airtel Kenya", "KCB Group"],
+  });
+  check(
+    "an employer's name is asked about by name",
+    employerQueries.some((query) => query.includes("Airtel Kenya")),
+    employerQueries.join(" | "),
+  );
+  check(
+    "the employer's name is asked about in the shape that answers",
+    employerQueries.every(
+      (query) => query.includes("careers") || query.includes("vacancies"),
+    ),
+    employerQueries.join(" | "),
+  );
+  check(
+    "an employer is asked about once",
+    new Set(employerQueries).size === employerQueries.length,
+    employerQueries.join(" | "),
   );
 }
 
