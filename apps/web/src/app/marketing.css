@@ -1257,6 +1257,32 @@
   opacity: .92;
   filter: saturate(.9) contrast(1.03) brightness(.96);
 }
+
+/* The video is decoration: no native control bar, on any browser.
+   Chrome on Android and iOS Safari draw their own controls over an
+   inline video that is not `playsinline`, and both draw a control bar
+   whenever the element can be focused or tapped — a phone user would
+   get a scrubber across the hero image. The pseudo-elements the two
+   engines use are hidden outright, the element cannot be focused or
+   tapped at all, and the poster carries the first paint instead. */
+.jr-hero__video::-webkit-media-controls,
+.jr-hero__video::-webkit-media-controls-enclosure,
+.jr-hero__video::-webkit-media-controls-panel,
+.mk-video-hero__video::-webkit-media-controls,
+.mk-video-hero__video::-webkit-media-controls-enclosure,
+.mk-video-hero__video::-webkit-media-controls-panel {
+  display: none !important;
+  -webkit-appearance: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+.jr-hero__video, .mk-video-hero__video {
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  tab-index: -1;
+}
 /* Two light passes only: a bottom fade into the next section and a gentle
    left edge for the headline. The video stays clearly visible in the middle. */
 .jr-hero__scrim {

@@ -204,6 +204,36 @@ export default function LandingPage({
   const jobs = featuredJobs.data?.jobs ?? [];
   const jobPages = chunk(jobs, JOBS_PER_SLIDE);
   const [page, setPage] = useState(0);
+  const heroVideo = useRef<HTMLVideoElement>(null);
+
+  // Starts the hero's background loop by hand.
+  //
+  // The `autoPlay` attribute is a request, not a promise: Chrome on
+  // Android and iOS Safari both refuse it on a metadata-only preload,
+  // and both refuse a play() call before the user has interacted. The
+  // poster is underneath, so a refusal costs the page nothing — but the
+  // two moments the browser does say yes are when enough of the file is
+  // fetched and when the page comes back to the foreground, and both
+  // are used.
+  useEffect(() => {
+    const video = heroVideo.current;
+    if (!video) return;
+    video.muted = true;
+
+    const start = () => {
+      if (video.paused) void video.play().catch(() => undefined);
+    };
+
+    video.addEventListener("loadeddata", start);
+    video.addEventListener("canplay", start);
+    document.addEventListener("visibilitychange", start);
+
+    return () => {
+      video.removeEventListener("loadeddata", start);
+      video.removeEventListener("canplay", start);
+      document.removeEventListener("visibilitychange", start);
+    };
+  }, []);
   const gate = (path: string) =>
     session ? path : `/signup?next=${encodeURIComponent(path)}`;
 
@@ -215,18 +245,30 @@ export default function LandingPage({
     <MarketingLayout>
       <section className="jr-hero" aria-labelledby="hero-title">
         {/* Background video. Decorative: no controls, no sound, and it never
-            receives pointer events. The poster covers the first paint. */}
+            receives pointer events. The poster covers the first paint.
+
+            Phones do not always honour the `autoPlay` attribute on a
+            `<video>`: a metadata-only preload leaves not enough of the
+            file fetched to start, and a browser that has decided the
+            user has not interacted yet refuses the play promise. So
+            playback is started from the page once there is enough of
+            the file, and retried when the page comes back to the
+            foreground — the two moments the browser can say yes. */}
         <div className="jr-hero__bg" aria-hidden="true">
           <video
+            ref={heroVideo}
             className="jr-hero__video"
             poster="/media/radar-poster.jpg"
-            preload="metadata"
+            preload="auto"
             muted
             loop
             autoPlay
             playsInline
+            controls={false}
             disablePictureInPicture
             disableRemotePlayback
+            tabIndex={-1}
+            aria-hidden={true}
           >
             <source src="/media/radar-loop.mp4" type="video/mp4" />
           </video>
