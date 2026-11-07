@@ -229,9 +229,14 @@ Cache and outbox are legitimate client concerns. Inventing server state is not.
    reaches a client.
 6. **Rate limits and audit apply to auth.** `/v1/auth/*` sits behind the same limiter
    (`app.ts:55-66`) and writes an audit row on success and failure.
-7. **Secrets fail closed.** `JWT_SECRET` (`config.ts:54`) is currently declared and unused; when it
-   becomes the signing key it must have no default in production and the process must refuse to
-   boot without it.
+7. **Secrets fail closed.** `JWT_SECRET` (`config.ts:54`) has a development default, so a
+   production boot with the variable unset does not crash — it reaches the first request that
+   mints a session and returns 503 `AUTH_NOT_CONFIGURED` there. It did exactly that: the API
+   was deployed without the variable, so every sign-in and sign-up failed for every user while
+   the sign-in page, the redirect chain and the Google handshake all looked healthy. The
+   variable was set on Fly on 2026-11-07 (64 random bytes, kept in the operator's `.env.local`,
+   never in the repo). When the signing key changes, existing tokens stop verifying — a
+   deliberate trade, since tokens are valid for 15 minutes and the refresh token is rotated.
 
 ---
 
