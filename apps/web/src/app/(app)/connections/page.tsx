@@ -84,20 +84,20 @@ export default function ConnectionsPage() {
   const providers = connections.data?.providers ?? [];
 
   return (
-    <div className="stack" style={{ gap: "1.2rem" }}>
+    <div className="stack gap-[1.2rem]">
       <div>
         <div className="eyebrow">Channels</div>
-        <h1 className="display" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)", marginTop: 4 }}>
+        <h1 className="display mt-1" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)" }}>
           Connected accounts
         </h1>
-        <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginTop: 4 }}>
+        <p className="text-muted text-[0.9rem] mt-1">
           Connect the channels you already use. We read them to find roles. We never post as you.
         </p>
       </div>
 
-      <Card style={{ padding: "1.2rem" }}>
+      <Card className="p-[1.2rem]">
         <SectionTitle eyebrow="Available" title="Add a channel" />
-        <div className="grid-2" style={{ marginTop: "1rem" }}>
+        <div className="grid-2 mt-4">
           {connections.loading && providers.length === 0 ? (
             <Skeleton height={120} />
           ) : null}
@@ -123,9 +123,9 @@ export default function ConnectionsPage() {
                 >
                   <Icon size={17} />
                 </span>
-                <div style={{ flex: 1 }}>
-                  <div className="row row-wrap" style={{ gap: "0.4rem" }}>
-                    <strong style={{ fontSize: "0.92rem" }}>{provider.label}</strong>
+                <div className="flex-1">
+                  <div className="row row-wrap gap-1.5">
+                    <strong className="text-[0.92rem]">{provider.label}</strong>
                     {provider.configured ? (
                       <Badge tone="success">ready</Badge>
                     ) : (
@@ -153,9 +153,9 @@ export default function ConnectionsPage() {
         </div>
       </Card>
 
-      <Card style={{ padding: "1.2rem" }}>
+      <Card className="p-[1.2rem]">
         <SectionTitle eyebrow="Active" title="Your connections" />
-        <div style={{ marginTop: "0.9rem" }}>
+        <div className="mt-[0.9rem]">
           {connections.loading && items.length === 0 ? (
             <Skeleton height={120} />
           ) : items.length === 0 ? (
@@ -165,7 +165,7 @@ export default function ConnectionsPage() {
               description="Connect an email account so we can find the roles you already saved."
             />
           ) : (
-            <div className="stack" style={{ gap: "0.5rem" }}>
+            <div className="stack gap-2">
               {items.map((connection) => {
                 const Icon = ICONS[connection.provider] ?? Link2;
                 return (
@@ -179,12 +179,12 @@ export default function ConnectionsPage() {
                       borderRadius: "var(--radius-md)",
                     }}
                   >
-                    <Icon size={16} style={{ color: "var(--accent)" }} />
-                    <div style={{ flex: 1, minWidth: 200 }}>
-                      <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>
+                    <Icon size={16} className="text-accent" />
+                    <div className="flex-1" style={{ minWidth: 200 }}>
+                      <div className="font-semibold text-[0.88rem]">
                         {connection.displayName ?? titleCase(connection.provider)}
                       </div>
-                      <div style={{ fontSize: "0.76rem", color: "var(--text-muted)" }}>
+                      <div className="text-[0.76rem] text-muted">
                         {connection.accountEmail ?? "—"} · connected{" "}
                         {formatDateTime(connection.createdAt)}
                       </div>

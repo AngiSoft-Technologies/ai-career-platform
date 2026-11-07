@@ -147,7 +147,7 @@ export default function CareersPage() {
 
         <section className="mk-section" aria-labelledby="open-roles-heading">
           <div className="mk-container">
-            <div className="mk-panel" style={{ padding: "clamp(26px, 4vw, 44px)", display: "grid", gap: "20px" }}>
+            <div className="mk-panel grid gap-5 p-[clamp(26px,4vw,44px)]">
               <span className="mk-eyebrow mk-eyebrow--signal">
                 <span className="mk-eyebrow__rule" aria-hidden="true" />
                 Open roles
@@ -155,17 +155,17 @@ export default function CareersPage() {
               <h2 id="open-roles-heading" className="mk-display mk-display--sm" style={{ fontSize: "clamp(1.6rem, 3vw, 2.2rem)" }}>
                 No advertised roles right now
               </h2>
-              <p style={{ margin: 0, maxWidth: "68ch", fontSize: "1rem", lineHeight: 1.7, color: "var(--mk-text-soft)" }}>
+              <p style={{ margin: 0, maxWidth: "min(100%, 60rem)", fontSize: "1rem", lineHeight: 1.7, color: "var(--mk-text-soft)" }}>
                 We would rather say that plainly than keep a listings page warm with roles that do not exist.
                 When something opens, it is posted here and in the feed — and it is usually filled by
                 someone who wrote to us first.
               </p>
-              <p style={{ margin: 0, maxWidth: "68ch", fontSize: "0.98rem", lineHeight: 1.7, color: "var(--mk-text-soft)" }}>
+              <p style={{ margin: 0, maxWidth: "min(100%, 60rem)", fontSize: "0.98rem", lineHeight: 1.7, color: "var(--mk-text-soft)" }}>
                 Send a speculative application anyway: what you have built, what you would want to work on
                 here, and the kind of work you want more of. We keep them and read them when a role opens —
                 the last engineer we hired arrived that way.
               </p>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "12px" }}>
+              <div className="flex flex-wrap gap-3">
                 <a href={`mailto:${SITE.email}?subject=Speculative%20application`} className="mk-btn mk-btn--signal">
                   <Mail className="mk-btn__icon" aria-hidden="true" /> Write to us
                 </a>
@@ -195,7 +195,7 @@ export default function CareersPage() {
                 { term: "5. An answer", detail: "Either way, within a week — with reasons" },
               ]}
             />
-            <p style={{ margin: "20px 0 0", maxWidth: "68ch", fontSize: "0.92rem", lineHeight: 1.65, color: "var(--mk-text-muted)" }}>
+            <p className="mt-5 mb-0 max-w-prose-wide text-[0.92rem] leading-[1.65] text-text-muted">
               Take-home tests are unpaid work disguised as diligence; five rounds are a way of never deciding.
               We pay for the piece of work, we tell you what we decided, and we tell you why.
             </p>
@@ -239,7 +239,7 @@ export default function CareersPage() {
         <section className="mk-section" aria-labelledby="careers-faq-heading">
           <div className="mk-container">
             <SectionHeading eyebrow="Questions" title={<span id="careers-faq-heading">Before you write</span>} />
-            <div style={{ maxWidth: "820px" }}>
+            <div className="max-w-prose-wide">
               <Faq
                 label="Questions about working at AngiSoft"
                 items={[

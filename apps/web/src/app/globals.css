@@ -45,6 +45,15 @@ html {
   --radius-pill: var(--mk-radius-pill);
 
   --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Tailwind's container scale, sized for marketing prose. The site was
+     capping sections by hand at 780px and 880px, which left two thirds
+     of a large display empty; these are the same decisions expressed as
+     utilities (`max-w-marketing`, `max-w-prose-wide`) so the pages reach
+     for Tailwind's system instead of private pixel values. */
+  --container-prose: 48rem;
+  --container-prose-wide: 60rem;
+  --container-marketing: 96rem;
 }
 
 /* ==========================================================================

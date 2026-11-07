@@ -143,12 +143,12 @@ export default function OpportunityDetailPage() {
   const match = matches.data?.match ?? item.match;
 
   return (
-    <div className="stack" style={{ gap: "1.2rem" }}>
-      <div className="row row-wrap" style={{ justifyContent: "space-between" }}>
+    <div className="stack gap-[1.2rem]">
+      <div className="row row-wrap justify-between">
         <Button variant="ghost" size="sm" icon={<ArrowLeft size={14} />} onClick={() => router.back()}>
           Back
         </Button>
-        <div className="row" style={{ gap: "0.5rem" }}>
+        <div className="row gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -166,7 +166,7 @@ export default function OpportunityDetailPage() {
 
       <Card style={{ padding: "1.3rem" }}>
         <div className="row row-wrap" style={{ gap: "1.2rem", alignItems: "flex-start" }}>
-          <div style={{ flex: 1, minWidth: 260 }}>
+          <div className="flex-1" style={{ minWidth: 260 }}>
             <div className="row row-wrap" style={{ gap: "0.4rem", marginBottom: 8 }}>
               <Badge tone="accent">{titleCase(item.seniority)}</Badge>
               <Badge tone="info">{titleCase(item.workMode)}</Badge>
@@ -184,17 +184,17 @@ export default function OpportunityDetailPage() {
                 </Badge>
               )}
             </div>
-            <h1 className="display" style={{ fontSize: "clamp(1.5rem, 3.6vw, 2.2rem)" }}>
+            <h1 className="display " style={{ fontSize: "clamp(1.5rem, 3.6vw, 2.2rem)" }}>
               {item.title}
             </h1>
             <div
               className="row row-wrap"
               style={{ gap: "0.9rem", marginTop: 8, fontSize: "0.88rem", color: "var(--text-muted)" }}
             >
-              <span className="row" style={{ gap: "0.35rem" }}>
+              <span className="row gap-1.5">
                 <Building2 size={14} /> {item.companyName}
               </span>
-              <span className="row" style={{ gap: "0.35rem" }}>
+              <span className="row gap-1.5">
                 <MapPin size={14} /> {item.city ? `${item.city}, ` : ""}
                 {item.country}
               </span>
@@ -222,7 +222,7 @@ export default function OpportunityDetailPage() {
           </div>
 
           {match ? (
-            <div style={{ textAlign: "center", minWidth: 130 }}>
+            <div className="text-center" style={{ minWidth: 130 }}>
               <MatchRing score={match.score} size={92} />
               <div className="eyebrow" style={{ marginTop: 6 }}>
                 match score
@@ -245,7 +245,7 @@ export default function OpportunityDetailPage() {
 
       {tab === "overview" ? (
         <div className="grid-rail">
-          <Card style={{ padding: "1.2rem" }}>
+          <Card className="p-[1.2rem]">
             <SectionTitle eyebrow="Role description" title="What the employer asked for" />
             <div
               style={{
@@ -261,10 +261,10 @@ export default function OpportunityDetailPage() {
           </Card>
 
           <div className="stack">
-            <Card style={{ padding: "1.2rem" }}>
+            <Card className="p-[1.2rem]">
               <SectionTitle eyebrow="Eligibility" title="Can you hold this role" />
-              <div className="stack" style={{ marginTop: "0.9rem", gap: "0.5rem" }}>
-                <div className="row row-wrap" style={{ gap: "0.4rem" }}>
+              <div className="stack mt-[0.9rem] gap-2">
+                <div className="row row-wrap gap-1.5">
                   <Badge tone={eligibilityTone(item.eligibility)}>
                     {eligibilityLabel(item.eligibility)}
                   </Badge>
@@ -277,16 +277,16 @@ export default function OpportunityDetailPage() {
                   not.
                 </p>
                 {(item.eligibilityReasons ?? []).slice(0, 4).map((reason) => (
-                  <p key={reason} style={{ fontSize: "0.8rem", color: "var(--text-soft)", margin: 0 }}>
+                  <p key={reason} className="text-[0.8rem] text-soft m-0">
                     · {reason}
                   </p>
                 ))}
               </div>
             </Card>
 
-            <Card style={{ padding: "1.2rem" }}>
+            <Card className="p-[1.2rem]">
               <SectionTitle eyebrow="Apply" title="How to apply" />
-              <div className="stack" style={{ marginTop: "0.9rem", gap: "0.5rem" }}>
+              <div className="stack mt-[0.9rem] gap-2">
                 <InfoRow label="Method" value={titleCase(item.applicationMethod)} />
                 {/* Where the employer publishes. The catalogue reads a
                     hundred and thirty boards, and the answer to "where
@@ -307,9 +307,9 @@ export default function OpportunityDetailPage() {
               </div>
             </Card>
 
-            <Card style={{ padding: "1.2rem" }}>
+            <Card className="p-[1.2rem]">
               <SectionTitle eyebrow="Company" title={item.companyName} />
-              <div className="stack" style={{ marginTop: "0.8rem", gap: "0.5rem" }}>
+              <div className="stack mt-[0.8rem] gap-2">
                 <InfoRow label="Industry" value={item.companyName ? "—" : "—"} />
                 <InfoRow label="Website" value={item.companyWebsite ?? "Not provided"} />
                 <Link href={`/companies?slug=${item.companySlug}`} className="btn btn-ghost btn-sm">
@@ -323,15 +323,15 @@ export default function OpportunityDetailPage() {
 
       {tab === "match" ? (
         <div className="grid-2">
-          <Card style={{ padding: "1.2rem" }}>
+          <Card className="p-[1.2rem]">
             <SectionTitle eyebrow="Why this score" title="Match factors" />
-            <div className="stack" style={{ marginTop: "0.9rem", gap: "0.6rem" }}>
+            <div className="stack mt-[0.9rem] gap-2.5">
               {match
                 ? Object.entries(match.factors ?? {}).map(([key, value]) => (
                     <div key={key}>
                       <div className="row" style={{ justifyContent: "space-between", marginBottom: 4 }}>
-                        <span style={{ fontSize: "0.84rem" }}>{titleCase(key)}</span>
-                        <span className="mono" style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                        <span className="text-[0.84rem]">{titleCase(key)}</span>
+                        <span className="mono text-[0.8rem] text-muted">
                           {Math.round(value)}
                         </span>
                       </div>
@@ -343,17 +343,17 @@ export default function OpportunityDetailPage() {
                 : null}
             </div>
             {match?.explanation ? (
-              <p style={{ marginTop: "1rem", fontSize: "0.86rem", color: "var(--text-muted)" }}>
+              <p className="mt-4 text-[0.86rem] text-muted">
                 {match.explanation}
               </p>
             ) : null}
           </Card>
 
-          <Card style={{ padding: "1.2rem" }}>
+          <Card className="p-[1.2rem]">
             <SectionTitle eyebrow="Gaps" title="What is missing" />
-            <div className="stack" style={{ marginTop: "0.9rem", gap: "0.4rem" }}>
+            <div className="stack mt-[0.9rem] gap-1.5">
               {(match?.gaps ?? []).length === 0 ? (
-                <p style={{ fontSize: "0.86rem", color: "var(--text-muted)" }}>
+                <p className="text-[0.86rem] text-muted">
                   Nothing significant is missing from your profile.
                 </p>
               ) : (
@@ -373,7 +373,7 @@ export default function OpportunityDetailPage() {
 
       {tab === "apply" ? (
         <div className="grid-2">
-          <Card style={{ padding: "1.2rem" }}>
+          <Card className="p-[1.2rem]">
             <SectionTitle
               eyebrow="Workspace"
               title="Application assistant"
@@ -390,10 +390,10 @@ export default function OpportunityDetailPage() {
                 </Button>
               }
             />
-            <div style={{ marginTop: "1rem" }}>
+            <div className="mt-4">
               {analysis ? (
                 <div className="stack" style={{ gap: "0.9rem" }}>
-                  <div className="row row-wrap" style={{ gap: "0.4rem" }}>
+                  <div className="row row-wrap gap-1.5">
                     <Badge tone="accent">{titleCase(analysis.platform)}</Badge>
                     <Badge tone="neutral">{titleCase(analysis.method)}</Badge>
                     <Badge tone="info">{analysis.fields.length} fields</Badge>
@@ -404,10 +404,10 @@ export default function OpportunityDetailPage() {
 
                   {analysis.requiresUserInput.length > 0 ? (
                     <div>
-                      <div className="eyebrow" style={{ marginBottom: "0.4rem" }}>
+                      <div className="eyebrow mb-1.5">
                         Requires your input
                       </div>
-                      <div className="stack" style={{ gap: "0.35rem" }}>
+                      <div className="stack gap-1.5">
                         {analysis.requiresUserInput.map((item) => (
                           <div
                             key={item}
@@ -419,7 +419,7 @@ export default function OpportunityDetailPage() {
                             }}
                           >
                             <strong>{item}</strong>
-                            <div style={{ color: "var(--text-muted)", fontSize: "0.78rem" }}>
+                            <div className="text-muted text-[0.78rem]">
                               Enter or confirm this value on the employer’s form.
                             </div>
                           </div>
@@ -430,7 +430,7 @@ export default function OpportunityDetailPage() {
 
                   {analysis.questions.length > 0 ? (
                     <div>
-                      <div className="eyebrow" style={{ marginBottom: "0.4rem" }}>
+                      <div className="eyebrow mb-1.5">
                         Screening questions
                       </div>
                       <ul style={{ paddingLeft: "1.1rem", fontSize: "0.84rem", lineHeight: 1.7 }}>
@@ -450,10 +450,10 @@ export default function OpportunityDetailPage() {
 
                   {analysis.requiredDocuments.length > 0 ? (
                     <div>
-                      <div className="eyebrow" style={{ marginBottom: "0.4rem" }}>
+                      <div className="eyebrow mb-1.5">
                         Documents required
                       </div>
-                      <div className="row row-wrap" style={{ gap: "0.35rem" }}>
+                      <div className="row row-wrap gap-1.5">
                         {analysis.requiredDocuments.map((doc) => (
                           <Badge key={doc} tone="neutral">
                             {doc}
@@ -463,9 +463,9 @@ export default function OpportunityDetailPage() {
                     </div>
                   ) : null}
 
-                  <div className="stack" style={{ gap: "0.3rem" }}>
+                  <div className="stack gap-1.5">
                     {analysis.instructions.map((instruction, index) => (
-                      <p key={index} style={{ fontSize: "0.84rem", color: "var(--text-muted)" }}>
+                      <p key={index} className="text-[0.84rem] text-muted">
                         {instruction}
                       </p>
                     ))}
@@ -481,23 +481,23 @@ export default function OpportunityDetailPage() {
             </div>
           </Card>
 
-          <Card style={{ padding: "1.2rem" }}>
+          <Card className="p-[1.2rem]">
             <SectionTitle eyebrow="Documents" title="Prepare your application" />
-            <div className="stack" style={{ marginTop: "0.9rem", gap: "0.5rem" }}>
+            <div className="stack mt-[0.9rem] gap-2">
               <Link href={`/documents?opportunityId=${item.id}`}>
-                <Button variant="outline" style={{ width: "100%" }} icon={<FileText size={15} />}>
+                <Button variant="outline" className="w-full" icon={<FileText size={15} />}>
                   Open document editor
                 </Button>
               </Link>
               <Link href="/documents">
-                <Button variant="ghost" style={{ width: "100%" }}>
+                <Button variant="ghost" className="w-full">
                   All documents
                 </Button>
               </Link>
               <Button
                 loading={generating}
                 onClick={() => void startApplication()}
-                style={{ width: "100%" }}
+                className="w-full"
               >
                 {item.applicationMethod === "email" ? "Prepare application email" : "Start guided application"}
               </Button>
@@ -524,20 +524,20 @@ export default function OpportunityDetailPage() {
       ) : null}
 
       {tab === "risk" ? (
-        <Card style={{ padding: "1.2rem" }}>
+        <Card className="p-[1.2rem]">
           <SectionTitle
             eyebrow="Trust signals"
             title="How we scored this posting"
             description="Every listing is checked before publication. This is the reasoning behind the decision."
           />
-          <div className="grid-3" style={{ marginTop: "1rem" }}>
+          <div className="grid-3 mt-4">
             <StatBlock label="Risk score" value={String(Math.round(item.riskScore ?? 0))} />
             <StatBlock label="Decision" value={titleCase(item.riskAction ?? "publish")} />
             <StatBlock label="Flags" value={String(item.riskFlags?.length ?? 0)} />
           </div>
-          <div className="stack" style={{ marginTop: "1rem", gap: "0.4rem" }}>
+          <div className="stack mt-4 gap-1.5">
             {(item.riskFlags ?? []).length === 0 ? (
-              <p style={{ fontSize: "0.88rem", color: "var(--text-muted)" }}>
+              <p className="text-[0.88rem] text-muted">
                 No risk signals fired. The listing passed every check.
               </p>
             ) : (
@@ -565,8 +565,8 @@ export default function OpportunityDetailPage() {
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="row" style={{ justifyContent: "space-between", gap: "0.8rem" }}>
-      <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>{label}</span>
+    <div className="row justify-between gap-[0.8rem]">
+      <span className="text-[0.8rem] text-muted">{label}</span>
       <span style={{ fontSize: "0.84rem", fontWeight: 600, textAlign: "right" }}>{value}</span>
     </div>
   );

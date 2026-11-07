@@ -77,11 +77,11 @@ export default function CookiesPage() {
       />
       <MarketingLayout>
         <section className="mk-section mk-legal" aria-labelledby="cookies-title">
-          <div className="mk-container mk-grid mk-grid--2" style={{ gap: "48px", alignItems: "start" }}>
+          <div className="mk-container mk-grid mk-grid--2 gap-12 items-start">
             <aside className="mk-legal__toc">
               <nav className="mk-legal__toc-inner">
                 <h3 className="mk-legal__toc-title">
-                  <Cookie size={14} aria-hidden="true" style={{ verticalAlign: "-2px", marginRight: 6 }} />
+                  <Cookie size={14} aria-hidden="true" className="align-[-2px] mr-1.5" />
                   On this page
                 </h3>
                 <ul className="mk-legal__toc-list">
@@ -97,7 +97,7 @@ export default function CookiesPage() {
             </aside>
 
             <article className="mk-legal__content">
-              <span className="mk-eyebrow mk-eyebrow--signal" style={{ marginBottom: "14px" }}>
+              <span className="mk-eyebrow mk-eyebrow--signal mb-3.5">
                 <span className="mk-eyebrow__rule" aria-hidden="true" />
                 Cookie notice
               </span>
@@ -118,7 +118,7 @@ export default function CookiesPage() {
                 </section>
               ))}
 
-              <div className="mk-panel" style={{ marginTop: "28px", padding: "20px 22px", display: "grid", gap: "10px" }}>
+              <div className="mk-panel mt-7 grid gap-2.5 p-5 lg:px-5.5">
                 <h2 className="mk-legal__section-title" style={{ fontSize: "1.05rem" }}>
                   The list, in one place
                 </h2>
@@ -146,7 +146,7 @@ export default function CookiesPage() {
                 </ul>
               </div>
 
-              <p className="mk-legal__text" style={{ marginTop: "24px" }}>
+              <p className="mk-legal__text mt-6">
                 Related reading: the{" "}
                 <Link className="mk-link" href="/privacy">
                   privacy policy

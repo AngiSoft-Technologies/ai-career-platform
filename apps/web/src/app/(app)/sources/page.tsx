@@ -100,13 +100,13 @@ export default function SourcesPage() {
   const items = sources.data?.items ?? [];
 
   return (
-    <div className="stack" style={{ gap: "1.2rem" }}>
+    <div className="stack gap-[1.2rem]">
       <div>
         <div className="eyebrow">Coverage</div>
-        <h1 className="display" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)", marginTop: 4 }}>
+        <h1 className="display mt-1" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)" }}>
           Where jobs come from
         </h1>
-        <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginTop: 4 }}>
+        <p className="text-muted text-[0.9rem] mt-1">
           We monitor hundreds of boards. If one is missing, tell us and our curators verify it.
         </p>
       </div>
@@ -143,7 +143,7 @@ export default function SourcesPage() {
                 {items.map((source) => (
                   <tr key={source.id}>
                     <td>
-                      <div style={{ fontWeight: 600 }}>{source.name}</div>
+                      <div className="font-semibold">{source.name}</div>
                       <a
                         href={source.url}
                         target="_blank"
@@ -174,7 +174,7 @@ export default function SourcesPage() {
                         {source.health ?? "unknown"}
                       </Badge>
                     </td>
-                    <td style={{ fontSize: "0.78rem" }}>
+                    <td className="text-[0.78rem]">
                       {source.last_checked_at ? formatDateTime(source.last_checked_at) : "never"}
                     </td>
                   </tr>
@@ -191,13 +191,13 @@ export default function SourcesPage() {
         ) : (queue.data?.items?.length ?? 0) === 0 ? (
           <EmptyState icon={<ShieldCheck size={28} />} title="Queue is clear" description="No sources awaiting review." />
         ) : (
-          <div className="stack" style={{ gap: "0.5rem" }}>
+          <div className="stack gap-2">
             {queue.data?.items?.map((source) => (
               <Card key={source.id} style={{ padding: "0.85rem 1rem" }}>
-                <div className="row row-wrap" style={{ gap: "1rem" }}>
-                  <div style={{ flex: 1, minWidth: 220 }}>
-                    <div style={{ fontWeight: 600 }}>{source.name}</div>
-                    <div style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
+                <div className="row row-wrap gap-4">
+                  <div className="flex-1" style={{ minWidth: 220 }}>
+                    <div className="font-semibold">{source.name}</div>
+                    <div className="text-[0.78rem] text-muted">
                       {source.url}
                     </div>
                   </div>
@@ -219,17 +219,17 @@ export default function SourcesPage() {
 
       {tab === "catalog" ? (
         <div className="stack" style={{ gap: "0.7rem" }}>
-          <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+          <p className="text-[0.85rem] text-muted">
             {catalog.data?.note}
           </p>
           <div className="grid-3">
             {catalog.data?.adapters?.map((adapter) => (
-              <Card key={adapter.name} style={{ padding: "1rem" }}>
+              <Card key={adapter.name} className="p-4">
                 <div className="row" style={{ gap: "0.5rem", marginBottom: "0.5rem" }}>
-                  <Link2 size={15} style={{ color: "var(--accent)" }} />
-                  <strong style={{ fontSize: "0.92rem" }}>{adapter.name}</strong>
+                  <Link2 size={15} className="text-accent" />
+                  <strong className="text-[0.92rem]">{adapter.name}</strong>
                 </div>
-                <p style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
+                <p className="text-[0.78rem] text-muted">
                   {adapter.exampleUrl}
                 </p>
                 <div className="row row-wrap" style={{ gap: "0.3rem", marginTop: "0.6rem" }}>
@@ -242,13 +242,13 @@ export default function SourcesPage() {
       ) : null}
 
       {tab === "submit" ? (
-        <Card style={{ padding: "1.2rem" }}>
+        <Card className="p-[1.2rem]">
           <SectionTitle
             eyebrow="Contribution"
             title="Submit a job board"
             description="We fetch it safely from our own servers, classify the layout and add it to the rotation."
           />
-          <div className="stack" style={{ marginTop: "1rem", gap: "0.8rem" }}>
+          <div className="stack mt-4 gap-[0.8rem]">
             <Field label="Board URL">
               <Input
                 value={url}

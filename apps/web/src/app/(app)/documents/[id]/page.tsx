@@ -324,19 +324,19 @@ export default function DocumentEditorPage() {
 
   return (
     <div className="stack" style={{ gap: "1.1rem" }}>
-      <div className="row row-wrap" style={{ justifyContent: "space-between" }}>
-        <div className="row" style={{ gap: "0.6rem" }}>
+      <div className="row row-wrap justify-between">
+        <div className="row gap-2.5">
           <Button variant="ghost" size="sm" icon={<ArrowLeft size={14} />} onClick={() => router.back()}>
             Back
           </Button>
           <div>
             <div className="eyebrow">{titleCase(data.type)} editor</div>
-            <h1 className="display" style={{ fontSize: "clamp(1.3rem, 3vw, 1.9rem)" }}>
+            <h1 className="display " style={{ fontSize: "clamp(1.3rem, 3vw, 1.9rem)" }}>
               {title}
             </h1>
           </div>
         </div>
-        <div className="row row-wrap" style={{ gap: "0.4rem" }}>
+        <div className="row row-wrap gap-1.5">
           <Badge tone={dirty ? "warning" : "success"}>{saving ? "Saving…" : dirty ? "Unsaved changes" : "All changes saved"}</Badge>
           <Button variant="outline" size="sm" icon={<Wand2 size={14} />} loading={validating} onClick={() => void validate()}>
             ATS check
@@ -355,7 +355,7 @@ export default function DocumentEditorPage() {
         </div>
       </div>
 
-      <div className="row row-wrap" style={{ gap: "0.4rem" }}>
+      <div className="row row-wrap gap-1.5">
         <TemplateGallery
           selectedTemplate={template}
           onSelect={(key) => {
@@ -369,7 +369,7 @@ export default function DocumentEditorPage() {
                 ),
               );
           }}
-          style={{ flex: 1, minWidth: 280 }}
+          className="flex-1" style={{ minWidth: 280 }}
         />
         <span className="eyebrow">Export</span>
         {(["pdf", "docx", "pptx", "png"] as const).map((format) => (
@@ -384,7 +384,7 @@ export default function DocumentEditorPage() {
           </Button>
         ))}
         <span className="spacer" />
-        <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>
+        <span className="text-[0.74rem] text-muted">
           Last saved {formatDateTime(data.createdAt)}
         </span>
       </div>
@@ -392,7 +392,7 @@ export default function DocumentEditorPage() {
       {data.parentDocumentId && baseDocument ? (
         <Card style={{ padding: "0.8rem 1rem" }}>
           <span className="eyebrow">Job-specific version</span>
-          <span style={{ marginLeft: "0.5rem", fontSize: "0.84rem" }}>Based on <Link href={`/documents/${baseDocument.id}`} style={{ color: "var(--accent)" }}>{baseDocument.title}</Link></span>
+          <span style={{ marginLeft: "0.5rem", fontSize: "0.84rem" }}>Based on <Link href={`/documents/${baseDocument.id}`} className="text-accent">{baseDocument.title}</Link></span>
           {jobVersions.length > 0 ? (
             <div className="row row-wrap" style={{ gap: "0.45rem", marginTop: "0.6rem" }}>
               {jobVersions.map((version) => <Link key={version.id} href={`/documents/${version.id}`}><Badge tone={version.id === data.id ? "accent" : "neutral"}>{version.title}</Badge></Link>)}
@@ -422,7 +422,7 @@ export default function DocumentEditorPage() {
 
       {tab === "edit" ? (
         <div className="editor-pane">
-          <div className="stack" style={{ gap: "0.6rem" }}>
+          <div className="stack gap-2.5">
             <Card style={{ padding: "0.85rem" }}>
               <div className="field">
                 <span className="label">Document title</span>
@@ -508,7 +508,7 @@ export default function DocumentEditorPage() {
           </div>
 
           <div style={{ position: "sticky", top: "5.5rem" }}>
-            <div className="stack" style={{ gap: "0.75rem" }}>
+            <div className="stack gap-3">
               <ATSSidebar documentId={params.id} content={content} opportunityId={tailoringOpportunityId || data.opportunityId} />
               <Card style={{ padding: "0" }}>
                 <div style={{ padding: "0.8rem 1rem", borderBottom: "1px solid var(--border)" }}>
@@ -543,7 +543,7 @@ export default function DocumentEditorPage() {
       ) : null}
 
       {tab === "preview" ? (
-        <Card style={{ padding: "1.5rem" }}>
+        <Card className="p-6">
           <div className={`paper paper-${template}`} style={{ maxWidth: 780, margin: "0 auto" }}>
             <h1>{title}</h1>
             <div dangerouslySetInnerHTML={{ __html: buildPreviewHtml(title, sections) }} />
@@ -553,18 +553,18 @@ export default function DocumentEditorPage() {
 
       {tab === "ats" ? (
         <div className="grid-rail grid-rail--flip">
-          <Card style={{ padding: "1.2rem" }}>
+          <Card className="p-[1.2rem]">
             <SectionTitle eyebrow="ATS readiness" title="Parser simulation" />
             {report ? (
-              <div style={{ marginTop: "1rem" }}>
+              <div className="mt-4">
                 <div className="row" style={{ justifyContent: "space-between", marginBottom: 6 }}>
-                  <span style={{ fontSize: "0.86rem" }}>Overall score</span>
+                  <span className="text-[0.86rem]">Overall score</span>
                   <span className="display" style={{ fontSize: "1.6rem" }}>
                     {report.score}
                   </span>
                 </div>
                 <Meter value={report.score} />
-                <div className="row" style={{ gap: "0.4rem", marginTop: "0.8rem" }}>
+                <div className="row gap-1.5 mt-[0.8rem]">
                   <Badge tone={report.passed ? "success" : "danger"}>
                     {report.grade}
                   </Badge>
@@ -590,8 +590,8 @@ export default function DocumentEditorPage() {
                       ["Skills", report.metrics.hasSkillsSection],
                     ] as const
                   ).map(([label, present]) => (
-                    <div key={label} className="row" style={{ justifyContent: "space-between" }}>
-                      <span style={{ fontSize: "0.84rem" }}>{label}</span>
+                    <div key={label} className="row justify-between">
+                      <span className="text-[0.84rem]">{label}</span>
                       <Badge tone={present ? "success" : "warning"}>
                         {present ? "found" : "missing"}
                       </Badge>
@@ -613,11 +613,11 @@ export default function DocumentEditorPage() {
             )}
           </Card>
 
-          <Card style={{ padding: "1.2rem" }}>
+          <Card className="p-[1.2rem]">
             <SectionTitle eyebrow="Findings" title="What to fix" />
-            <div className="stack" style={{ marginTop: "0.9rem", gap: "0.5rem" }}>
+            <div className="stack mt-[0.9rem] gap-2">
               {!report ? (
-                <p style={{ fontSize: "0.86rem", color: "var(--text-muted)" }}>
+                <p className="text-[0.86rem] text-muted">
                   No findings yet.
                 </p>
               ) : report.issues.length === 0 ? (
@@ -648,8 +648,8 @@ export default function DocumentEditorPage() {
                       }`,
                     }}
                   >
-                    <div className="row" style={{ justifyContent: "space-between", gap: "0.5rem" }}>
-                      <strong style={{ fontSize: "0.86rem" }}>{issue.message}</strong>
+                    <div className="row justify-between gap-2">
+                      <strong className="text-[0.86rem]">{issue.message}</strong>
                       <Badge
                         tone={
                           issue.severity === "error"
@@ -663,7 +663,7 @@ export default function DocumentEditorPage() {
                       </Badge>
                     </div>
                     {issue.hint ? (
-                      <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: 4 }}>
+                      <p className="text-[0.8rem] text-muted mt-1">
                         {issue.hint}
                       </p>
                     ) : null}
@@ -674,10 +674,10 @@ export default function DocumentEditorPage() {
 
             {report && report.metrics.missingKeywords.length > 0 ? (
               <div style={{ marginTop: "1.1rem" }}>
-                <div className="eyebrow" style={{ marginBottom: "0.4rem" }}>
+                <div className="eyebrow mb-1.5">
                   Missing keywords
                 </div>
-                <div className="row row-wrap" style={{ gap: "0.3rem" }}>
+                <div className="row row-wrap gap-1.5">
                   {report.metrics.missingKeywords.slice(0, 20).map((keyword) => (
                     <span
                       key={keyword}
@@ -700,7 +700,7 @@ export default function DocumentEditorPage() {
       ) : null}
 
       {tab === "library" ? (
-        <div className="stack" style={{ gap: "0.5rem" }}>
+        <div className="stack gap-2">
           {(list.data?.documents ?? []).map((document) => (
             <Link
               key={document.id}
@@ -708,10 +708,10 @@ export default function DocumentEditorPage() {
               className="surface surface-hover"
               style={{ padding: "0.75rem 0.9rem", display: "flex", gap: "0.8rem", alignItems: "center" }}
             >
-              <FileText size={16} style={{ color: "var(--text-muted)" }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>{document.title}</div>
-                <div style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>
+              <FileText size={16} className="text-muted" />
+              <div className="flex-1 min-w-0">
+                <div className="text-[0.9rem] font-semibold">{document.title}</div>
+                <div className="text-[0.74rem] text-muted">
                   {titleCase(document.type)} · {formatDateTime(document.createdAt)}
                 </div>
               </div>
@@ -747,7 +747,7 @@ export default function DocumentEditorPage() {
         }
       >
         <div className="stack" style={{ gap: "0.9rem" }}>
-          <p style={{ color: "var(--text-muted)", fontSize: "0.86rem" }}>
+          <p className="text-muted text-[0.86rem]">
             MboQara analyses this document against the role title, posting, requirements and responsibilities. It creates a separate draft, keeps the original intact, and leaves the final review to you.
           </p>
           <label className="field">
@@ -760,17 +760,17 @@ export default function DocumentEditorPage() {
             </select>
           </label>
           {tailorBusy && !tailoringProposal ? (
-            <div className="surface" style={{ padding: "1rem" }}>The document agents are comparing your evidence with the role and preparing a reviewable draft…</div>
+            <div className="surface p-4">The document agents are comparing your evidence with the role and preparing a reviewable draft…</div>
           ) : null}
           {tailoringProposal ? (
             <>
-              <div className="grid-2" style={{ gap: "0.8rem" }}>
+              <div className="grid-2 gap-[0.8rem]">
                 <Card style={{ padding: "0.9rem" }}>
                   <div className="eyebrow">What changed</div>
                   <ul style={{ paddingLeft: "1.1rem", marginTop: "0.5rem", fontSize: "0.82rem" }}>
                     {tailoringProposal.changes.map((change, index) => <li key={`${index}-${change}`}>{change}</li>)}
                   </ul>
-                  <div className="eyebrow" style={{ marginTop: "0.8rem" }}>Supported requirements</div>
+                  <div className="eyebrow mt-[0.8rem]">Supported requirements</div>
                   <ul style={{ paddingLeft: "1.1rem", marginTop: "0.5rem", fontSize: "0.82rem" }}>
                     {tailoringProposal.matchedRequirements.map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}
                   </ul>

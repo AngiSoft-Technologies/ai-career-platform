@@ -51,13 +51,13 @@ export default function FollowUpsPage() {
   ];
 
   return (
-    <div className="stack" style={{ gap: "1.2rem" }}>
+    <div className="stack gap-[1.2rem]">
       <div>
         <div className="eyebrow">Follow-ups</div>
-        <h1 className="display" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)", marginTop: 4 }}>
+        <h1 className="display mt-1" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)" }}>
           Never chase twice
         </h1>
-        <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginTop: 4 }}>
+        <p className="text-muted text-[0.9rem] mt-1">
           We remind you when an application needs chasing. You decide whether and how to reply.
         </p>
       </div>
@@ -83,11 +83,11 @@ export default function FollowUpsPage() {
           }
         />
       ) : (
-        <div className="stack" style={{ gap: "0.55rem" }}>
+        <div className="stack gap-[0.55rem]">
           {visible.map((item) => (
             <Card key={item.id} style={{ padding: "0.85rem 1rem" }}>
-              <div className="row row-wrap" style={{ gap: "1rem" }}>
-                <div style={{ flex: 1, minWidth: 220 }}>
+              <div className="row row-wrap gap-4">
+                <div className="flex-1" style={{ minWidth: 220 }}>
                   <div className="row row-wrap" style={{ gap: "0.4rem", marginBottom: 4 }}>
                     <Badge
                       tone={
@@ -101,18 +101,18 @@ export default function FollowUpsPage() {
                       {titleCase(item.status)}
                     </Badge>
                     <Badge tone="neutral">{titleCase(item.channel)}</Badge>
-                    <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>
+                    <span className="text-[0.74rem] text-muted">
                       due {relativeTime(item.dueAt)}
                     </span>
                   </div>
-                  <div style={{ fontSize: "0.92rem", fontWeight: 600 }}>{item.opportunityTitle}</div>
-                  <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                  <div className="text-[0.92rem] font-semibold">{item.opportunityTitle}</div>
+                  <div className="text-[0.8rem] text-muted">
                     {item.companyName}
                     {item.note ? ` · ${item.note}` : ""}
                   </div>
                 </div>
-                <div className="row" style={{ gap: "0.4rem" }}>
-                  <span className="mono" style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>
+                <div className="row gap-1.5">
+                  <span className="mono text-[0.74rem] text-muted">
                     {formatDateTime(item.dueAt)}
                   </span>
                   {item.status !== "COMPLETED" ? (

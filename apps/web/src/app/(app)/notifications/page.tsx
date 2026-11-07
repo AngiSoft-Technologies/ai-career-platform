@@ -58,14 +58,14 @@ export default function NotificationsPage() {
   };
 
   return (
-    <div className="stack" style={{ gap: "1.2rem" }}>
+    <div className="stack gap-[1.2rem]">
       <div className="row row-wrap" style={{ gap: "1rem", alignItems: "flex-start" }}>
-        <div style={{ flex: 1, minWidth: 240 }}>
+        <div className="flex-1" style={{ minWidth: 240 }}>
           <div className="eyebrow">Notifications</div>
-          <h1 className="display" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)", marginTop: 4 }}>
+          <h1 className="display mt-1" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)" }}>
             What changed
           </h1>
-          <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginTop: 4 }}>
+          <p className="text-muted text-[0.9rem] mt-1">
             Application moves, generated documents and scheduled follow-ups. Read on one device,
             read everywhere.
           </p>
@@ -99,7 +99,7 @@ export default function NotificationsPage() {
           }
         />
       ) : (
-        <div className="stack" style={{ gap: "0.55rem" }}>
+        <div className="stack gap-[0.55rem]">
           {items.map((item) => (
             <Link
               key={item.id}
@@ -115,17 +115,17 @@ export default function NotificationsPage() {
                     : "3px solid var(--accent)",
                 }}
               >
-                <div className="row row-wrap" style={{ gap: "0.75rem" }}>
-                  <div style={{ flex: 1, minWidth: 220 }}>
+                <div className="row row-wrap gap-3">
+                  <div className="flex-1" style={{ minWidth: 220 }}>
                     <div className="row row-wrap" style={{ gap: "0.4rem", marginBottom: 4 }}>
                       <Badge tone={item.isRead ? "neutral" : "accent"}>{item.type}</Badge>
-                      <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>
+                      <span className="text-[0.74rem] text-muted">
                         {relativeTime(item.createdAt)}
                       </span>
                     </div>
-                    <div style={{ fontSize: "0.92rem", fontWeight: 600 }}>{item.title}</div>
+                    <div className="text-[0.92rem] font-semibold">{item.title}</div>
                     {item.body ? (
-                      <div style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>
+                      <div className="text-[0.82rem] text-muted">
                         {item.body}
                       </div>
                     ) : null}

@@ -60,14 +60,7 @@ export function BentoCard({
     <div className="mk-bento__cell" data-span={span}>
       <Reveal delay={delay}>
         <article
-          className="mk-panel mk-bento__card"
-          style={{
-            display: "grid",
-            gap: "12px",
-            alignContent: "start",
-            padding: "clamp(20px, 2.4vw, 28px)",
-            transition: "transform var(--mk-dur) var(--mk-ease), border-color var(--mk-dur) var(--mk-ease)",
-          }}
+          className="mk-panel mk-bento__card grid content-start gap-3 p-5 lg:p-7 transition-[transform,border-color] duration-200"
         >
         {icon ? (
           <span

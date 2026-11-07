@@ -26,35 +26,35 @@ export default function SettingsPage() {
   );
 
   return (
-    <div className="stack" style={{ gap: "1.2rem" }}>
+    <div className="stack gap-[1.2rem]">
       <div>
         <div className="eyebrow">Settings</div>
-        <h1 className="display" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)", marginTop: 4 }}>
+        <h1 className="display mt-1" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)" }}>
           Preferences
         </h1>
       </div>
 
-      <Card style={{ padding: "1.2rem" }}>
+      <Card className="p-[1.2rem]">
         <SectionTitle
           eyebrow="Appearance"
           title="Theme"
           description="Five layouts. Pick the one you like and it stays on this device."
-          action={<Palette size={17} style={{ color: "var(--text-muted)" }} />}
+          action={<Palette size={17} className="text-muted" />}
         />
-        <div style={{ marginTop: "1rem" }}>
+        <div className="mt-4">
           <ThemePicker />
         </div>
       </Card>
 
       {isStaff ? (
-      <Card style={{ padding: "1.2rem" }}>
+      <Card className="p-[1.2rem]">
         <SectionTitle
           eyebrow="Access"
           title="Your roles and permissions"
           description="Roles are assigned by administrators. You cannot change them yourself."
-          action={<UserCog size={17} style={{ color: "var(--text-muted)" }} />}
+          action={<UserCog size={17} className="text-muted" />}
         />
-        <div style={{ marginTop: "1rem" }}>
+        <div className="mt-4">
           <label className="field" style={{ maxWidth: 320 }}>
             <span className="label">Your role</span>
             <div style={{
@@ -68,7 +68,7 @@ export default function SettingsPage() {
             </div>
           </label>
 
-          <div className="row row-wrap" style={{ gap: "0.35rem", marginTop: "1rem" }}>
+          <div className="row row-wrap gap-1.5 mt-4">
             {roles.length === 0 ? <Badge tone="neutral">no roles assigned</Badge> : null}
             {roles.map((item) => (
               <Badge key={item} tone="accent">
@@ -77,7 +77,7 @@ export default function SettingsPage() {
             ))}
           </div>
 
-          <details style={{ marginTop: "1rem" }}>
+          <details className="mt-4">
             <summary style={{ cursor: "pointer", fontSize: "0.86rem", color: "var(--text-muted)" }}>
               {permissions.length} granted permissions
             </summary>
@@ -103,16 +103,16 @@ export default function SettingsPage() {
       </Card>
       ) : null}
 
-      <Card style={{ padding: "1.2rem" }}>
+      <Card className="p-[1.2rem]">
         <SectionTitle eyebrow="Offline" title="Changes waiting to send" />
-        <div style={{ marginTop: "0.9rem" }}>
+        <div className="mt-[0.9rem]">
           {outbox.length === 0 ? (
-            <p style={{ fontSize: "0.86rem", color: "var(--text-muted)" }}>
+            <p className="text-[0.86rem] text-muted">
               Nothing queued. Changes you make without a connection are stored locally and replayed
               automatically.
             </p>
           ) : (
-            <div className="stack" style={{ gap: "0.4rem" }}>
+            <div className="stack gap-1.5">
               {outbox.map((item) => (
                 <div
                   key={item.id}
@@ -146,18 +146,18 @@ export default function SettingsPage() {
         </div>
       </Card>
 
-      <Card style={{ padding: "1.2rem" }}>
+      <Card className="p-[1.2rem]">
         <SectionTitle eyebrow="Account" title="Session" />
-        <div className="row row-wrap" style={{ gap: "1rem", marginTop: "0.9rem", justifyContent: "space-between" }}>
+        <div className="row row-wrap gap-4 mt-[0.9rem] justify-between">
           <div>
-            <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>
+            <div className="text-[0.9rem] font-semibold">
               {session?.user.name ?? session?.user.email ?? "Not signed in"}
             </div>
-            <div style={{ fontSize: "0.76rem", color: "var(--text-muted)" }}>
+            <div className="text-[0.76rem] text-muted">
               {session?.user.email}
             </div>
           </div>
-          <div className="row row-wrap" style={{ gap: "0.6rem" }}>
+          <div className="row row-wrap gap-2.5">
             <Button
               variant="outline"
               onClick={async () => {
@@ -189,7 +189,7 @@ export default function SettingsPage() {
         </div>
       </Card>
 
-      <Card style={{ padding: "1.2rem" }}>
+      <Card className="p-[1.2rem]">
         <SectionTitle eyebrow="Trust" title="How MboQara treats your data" />
         <ul style={{ paddingLeft: "1.1rem", marginTop: "0.9rem", lineHeight: 1.9, fontSize: "0.88rem" }}>
           <li>Your CV and personal documents are private. They are never public files.</li>
@@ -208,7 +208,7 @@ export default function SettingsPage() {
             fontSize: "0.84rem",
           }}
         >
-          <ShieldCheck size={15} style={{ color: "var(--accent)" }} />
+          <ShieldCheck size={15} className="text-accent" />
           Your documents stay private and are only shared through time-limited links.
         </div>
       </Card>

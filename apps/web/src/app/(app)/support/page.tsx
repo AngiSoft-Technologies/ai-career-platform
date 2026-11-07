@@ -57,13 +57,13 @@ export default function SupportPage() {
   };
 
   return (
-    <div className="stack" style={{ gap: "1.2rem" }}>
+    <div className="stack gap-[1.2rem]">
       <div>
         <div className="eyebrow">Support desk</div>
-        <h1 className="display" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)", marginTop: 4 }}>
+        <h1 className="display mt-1" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)" }}>
           Help people get unstuck
         </h1>
-        <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginTop: 4 }}>
+        <p className="text-muted text-[0.9rem] mt-1">
           Look up a user, see their application state and draft a reply. You send it.
         </p>
       </div>
@@ -79,18 +79,18 @@ export default function SupportPage() {
       />
 
       {tab === "queue" ? (
-        <Card style={{ padding: "1.1rem" }}>
+        <Card className="p-[1.1rem]">
           <SectionTitle
             eyebrow="Tickets"
             title="Recent applications"
-            action={<Ticket size={16} style={{ color: "var(--text-muted)" }} />}
+            action={<Ticket size={16} className="text-muted" />}
           />
           {applications.loading && apps.length === 0 ? (
             <Skeleton height={160} />
           ) : apps.length === 0 ? (
             <EmptyState title="No applications yet" />
           ) : (
-            <div className="table-scroll" style={{ marginTop: "0.8rem" }}>
+            <div className="table-scroll mt-[0.8rem]">
               <table className="data-table">
                 <thead>
                   <tr>
@@ -106,8 +106,7 @@ export default function SupportPage() {
                       <td>
                         <Link
                           href={`/applications/${application.id}`}
-                          className="mono"
-                          style={{ fontSize: "0.76rem" }}
+                          className="mono text-[0.76rem]"
                         >
                           {application.id.slice(0, 8)}
                         </Link>
@@ -117,10 +116,10 @@ export default function SupportPage() {
                           {titleCase(application.status)}
                         </Badge>
                       </td>
-                      <td style={{ fontSize: "0.76rem" }}>
+                      <td className="text-[0.76rem]">
                         {formatDateTime(application.createdAt)}
                       </td>
-                      <td style={{ fontSize: "0.76rem" }}>
+                      <td className="text-[0.76rem]">
                         {formatDateTime(application.updatedAt)}
                       </td>
                     </tr>
@@ -133,20 +132,20 @@ export default function SupportPage() {
       ) : null}
 
       {tab === "users" ? (
-        <Card style={{ padding: "1.1rem" }}>
+        <Card className="p-[1.1rem]">
           <SectionTitle
             eyebrow="Directory"
             title="Find a user"
-            action={<UserRound size={16} style={{ color: "var(--text-muted)" }} />}
+            action={<UserRound size={16} className="text-muted" />}
           />
-          <div style={{ marginTop: "0.8rem" }}>
+          <div className="mt-[0.8rem]">
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search by email"
             />
           </div>
-          <div className="table-scroll" style={{ marginTop: "0.8rem" }}>
+          <div className="table-scroll mt-[0.8rem]">
             <table className="data-table">
               <thead>
                 <tr>
@@ -168,7 +167,7 @@ export default function SupportPage() {
                         ))}
                       </div>
                     </td>
-                    <td style={{ fontSize: "0.76rem" }}>{formatDateTime(user.created_at)}</td>
+                    <td className="text-[0.76rem]">{formatDateTime(user.created_at)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -178,14 +177,14 @@ export default function SupportPage() {
       ) : null}
 
       {tab === "reply" ? (
-        <Card style={{ padding: "1.1rem" }}>
+        <Card className="p-[1.1rem]">
           <SectionTitle
             eyebrow="Response"
             title="Draft a reply"
             description="Draft it here, review it, then send from the channel you normally use."
-            action={<MessageCircle size={16} style={{ color: "var(--text-muted)" }} />}
+            action={<MessageCircle size={16} className="text-muted" />}
           />
-          <div className="stack" style={{ marginTop: "0.9rem", gap: "0.8rem" }}>
+          <div className="stack mt-[0.9rem] gap-[0.8rem]">
             <Field label="Recipient email">
               <Input placeholder="candidate@example.com" />
             </Field>
@@ -206,18 +205,18 @@ export default function SupportPage() {
         </Card>
       ) : null}
 
-      <Card style={{ padding: "1.1rem" }}>
-        <div className="row" style={{ gap: "0.6rem" }}>
-          <LifeBuoy size={17} style={{ color: "var(--accent)" }} />
+      <Card className="p-[1.1rem]">
+        <div className="row gap-2.5">
+          <LifeBuoy size={17} className="text-accent" />
           <div>
-            <strong style={{ fontSize: "0.92rem" }}>Escalate to engineering</strong>
-            <p style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>
+            <strong className="text-[0.92rem]">Escalate to engineering</strong>
+            <p className="text-[0.82rem] text-muted">
               If a user reports a failure, capture the request id and check the event stream before
               escalating.
             </p>
           </div>
         </div>
-        <div style={{ marginTop: "0.8rem" }}>
+        <div className="mt-[0.8rem]">
           <Link href="/admin">
             <Button variant="outline" size="sm">
               Open event stream

@@ -567,10 +567,10 @@
 
 /* ---------- Common utilities ---------- */
 .mk-section { padding: 88px 24px; }
-.mk-container { margin: 0 auto; padding: 0 24px; width: 100%; max-width: var(--mk-container-max, 1240px); box-sizing: border-box; }
+.mk-container { margin: 0 auto; padding: 0 24px; width: 100%; max-width: min(100%, 96rem); box-sizing: border-box; }
 .mk-eyebrow { display: inline-block; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--mk-accent); margin-bottom: 12px; }
 .mk-heading { font-size: clamp(2.2rem, 5vw, 3.8rem); font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; color: var(--mk-text); margin: 0 0 16px; }
-.mk-lede { font-size: clamp(1.05rem, 2.2vw, 1.25rem); line-height: 1.7; color: var(--mk-text-soft); max-width: 64ch; margin: 0 0 28px; }
+.mk-lede { font-size: clamp(1.05rem, 2.2vw, 1.25rem); line-height: 1.7; color: var(--mk-text-soft); max-width: min(100%, 60rem); margin: 0 0 28px; }
 .mk-tag { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: var(--mk-radius-pill); font-size: 0.72rem; font-weight: 700; background: var(--mk-accent-soft); color: var(--mk-accent); border: 1px solid rgba(109, 139, 255, 0.3); }
 .mk-grid { display: grid; gap: 24px; }
 .mk-grid--2 { grid-template-columns: repeat(2, 1fr); }
@@ -1895,7 +1895,7 @@
   display: grid;
   gap: 28px;
   padding-block: clamp(64px, 9vw, 116px);
-  max-width: 780px;
+  max-width: min(100%, 60rem);
 }
 
 /* --- stat band ----------------------------------------------------------- */
@@ -1903,17 +1903,20 @@
 .mk-stat-band {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1px;
-  border: 1px solid var(--mk-border);
-  border-radius: var(--mk-radius-lg);
-  background: var(--mk-border);
-  overflow: hidden;
+  /* Real space, not a hairline. The 1px trick relied on the band's own
+     background showing through as a divider, which at this scale reads
+     as four cards glued together — the numbers have nothing between
+     them to tell them apart. */
+  gap: 16px;
 }
 
 .mk-stat {
   display: grid;
   gap: 6px;
+  align-content: start;
   padding: 26px 24px;
+  border: 1px solid var(--mk-border);
+  border-radius: var(--mk-radius-lg);
   background: linear-gradient(165deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015));
 }
 
@@ -1947,12 +1950,12 @@
 .mk-timeline__item {
   position: relative;
   display: grid;
-  /* Two tracks: the date column and the body. The marker is absolutely
-     positioned over the first track rather than a third grid column —
-     as a column it pushed the body onto a second row, 92px wide, under
-     its own label. */
-  grid-template-columns: 132px minmax(0, 1fr);
-  gap: 20px 32px;
+  /* Three tracks: the date, the marker's own column, and the body.
+     The marker used to be absolutely positioned over the date column,
+     which put the dot on top of the words. Giving it a track of its
+     own is the only structure that can't overlap. */
+  grid-template-columns: 152px 28px minmax(0, 1fr);
+  align-items: start;
   padding-bottom: 40px;
 }
 
@@ -1962,7 +1965,7 @@
 .mk-timeline__item::before {
   content: "";
   position: absolute;
-  left: 65px;
+  left: 165px;
   top: 26px;
   bottom: -2px;
   width: 1px;
@@ -1972,12 +1975,12 @@
 .mk-timeline__item:last-child::before { display: none; }
 
 .mk-timeline__marker {
-  position: absolute;
-  left: 54px;
+  position: relative;
   z-index: 1;
   width: 23px;
   height: 23px;
-  margin-top: 4px;
+  margin-top: 3px;
+  margin-left: 2px;
   border-radius: 50%;
   background: var(--mk-bg-elevated);
   border: 1px solid var(--mk-border-strong);
@@ -2012,10 +2015,12 @@
 .mk-timeline__text { margin: 0; font-size: 0.95rem; line-height: 1.65; color: var(--mk-text-soft); }
 
 @media (max-width: 620px) {
-  .mk-timeline__item { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  /* The date hides and its track collapses; the marker moves to the
+     first track so the spine and the dots stay aligned with it. */
+  .mk-timeline__item { grid-template-columns: 28px minmax(0, 1fr); gap: 0 12px; }
   .mk-timeline__when { display: none; }
-  .mk-timeline__marker { left: 2px; }
-  .mk-timeline__item::before { left: 13px; }
+  .mk-timeline__marker { margin-left: 0; }
+  .mk-timeline__item::before { left: 12px; }
 }
 
 /* --- quote --------------------------------------------------------------- */

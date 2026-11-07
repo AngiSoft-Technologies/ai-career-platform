@@ -51,25 +51,25 @@ function DocumentsPageInner() {
   };
 
   return (
-    <div className="stack" style={{ gap: "1.2rem" }}>
+    <div className="stack gap-[1.2rem]">
       <div>
         <div className="eyebrow">Documents</div>
-        <h1 className="display" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)", marginTop: 4 }}>
+        <h1 className="display mt-1" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)" }}>
           Your application kit
         </h1>
-        <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginTop: 4 }}>
+        <p className="text-muted text-[0.9rem] mt-1">
           Keep a source resume, create job-specific copies, and prepare matching cover letters. Review edits and gaps before exporting.
         </p>
       </div>
 
-      <Card style={{ padding: "1.1rem" }}>
+      <Card className="p-[1.1rem]">
         <SectionTitle
           eyebrow="Generate"
           title="Create a new document"
           description="Generated from your real profile and the live job description. Nothing is invented."
         />
-        <div className="row row-wrap" style={{ gap: "0.6rem", marginTop: "0.9rem", alignItems: "flex-end" }}>
-          <label className="field" style={{ flex: 1, minWidth: 240 }}>
+        <div className="row row-wrap gap-2.5 mt-[0.9rem] items-end">
+          <label className="field flex-1" style={{ minWidth: 240 }}>
             <span className="label">Opportunity</span>
             <select
               className="select"
@@ -126,12 +126,12 @@ function DocumentsPageInner() {
               className="surface surface-hover"
               style={{ padding: "1rem 1.1rem" }}
             >
-              <div className="row" style={{ justifyContent: "space-between", gap: "0.6rem" }}>
-                <FileText size={18} style={{ color: "var(--text-muted)" }} />
+              <div className="row justify-between gap-2.5">
+                <FileText size={18} className="text-muted" />
                 <Badge tone="accent">{document.parentDocumentId ? "Job version" : titleCase(document.type)}</Badge>
               </div>
               <h3 style={{ fontSize: "1rem", marginTop: "0.7rem" }}>{document.title}</h3>
-              <p style={{ fontSize: "0.76rem", color: "var(--text-muted)", marginTop: 4 }}>
+              <p className="text-[0.76rem] text-muted mt-1">
                 Created {formatDateTime(document.createdAt)}
               </p>
             </Link>
@@ -144,7 +144,7 @@ function DocumentsPageInner() {
 
 export default function DocumentsPage() {
   return (
-    <Suspense fallback={<div className="stack" style={{ gap: "0.6rem" }}><div className="surface" style={{ padding: "1rem" }} /><div className="surface" style={{ padding: "1rem" }} /></div>}>
+    <Suspense fallback={<div className="stack gap-2.5"><div className="surface p-4" /><div className="surface p-4" /></div>}>
       <DocumentsPageInner />
     </Suspense>
   );

@@ -72,11 +72,11 @@ export default function AccessibilityPage() {
       />
       <MarketingLayout>
         <section className="mk-section mk-legal" aria-labelledby="a11y-title">
-          <div className="mk-container mk-grid mk-grid--2" style={{ gap: "48px", alignItems: "start" }}>
+          <div className="mk-container mk-grid mk-grid--2 gap-12 items-start">
             <aside className="mk-legal__toc">
               <nav className="mk-legal__toc-inner">
                 <h3 className="mk-legal__toc-title">
-                  <Accessibility size={14} aria-hidden="true" style={{ verticalAlign: "-2px", marginRight: 6 }} />
+                  <Accessibility size={14} aria-hidden="true" className="align-[-2px] mr-1.5" />
                   On this page
                 </h3>
                 <ul className="mk-legal__toc-list">
@@ -92,7 +92,7 @@ export default function AccessibilityPage() {
             </aside>
 
             <article className="mk-legal__content">
-              <span className="mk-eyebrow mk-eyebrow--verified" style={{ marginBottom: "14px" }}>
+              <span className="mk-eyebrow mk-eyebrow--verified mb-3.5">
                 <span className="mk-eyebrow__rule" aria-hidden="true" />
                 Accessibility
               </span>
@@ -113,7 +113,7 @@ export default function AccessibilityPage() {
                 </section>
               ))}
 
-              <p className="mk-legal__text" style={{ marginTop: "24px" }}>
+              <p className="mk-legal__text mt-6">
                 Related: the{" "}
                 <Link className="mk-link" href="/security">
                   security page

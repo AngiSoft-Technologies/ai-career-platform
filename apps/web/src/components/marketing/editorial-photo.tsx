@@ -90,13 +90,13 @@ export function EditorialBand({
             </span>
             <h2 className="mk-display mk-display--sm">{title}</h2>
             {children ? (
-              <div style={{ display: "grid", gap: "16px", fontSize: "1.02rem", lineHeight: 1.7, color: "var(--mk-text-soft)", maxWidth: "58ch" }}>
+              <div className="grid gap-4 text-[1.02rem] leading-[1.7] text-text-soft max-w-prose-wide">
                 {children}
               </div>
             ) : null}
             {aside}
             {imageCredit ? (
-              <p style={{ margin: 0, fontSize: "0.68rem", letterSpacing: "0.05em", color: "rgba(238,242,255,0.55)" }}>
+              <p className="m-0 text-[0.68rem] tracking-[0.05em] text-[rgba(238,242,255,0.55)]">
                 Photograph: {imageCredit}
               </p>
             ) : null}

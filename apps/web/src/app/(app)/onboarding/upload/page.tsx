@@ -153,23 +153,19 @@ export default function OnboardingUploadPage() {
           Your resume is ready
         </h1>
         {atsScore !== null ? (
-          <Card style={{ padding: "1rem" }}>
-            <div className="stack" style={{ gap: "0.6rem" }}>
+          <Card className="p-4">
+            <div className="stack gap-2.5">
               <div
-                className="row"
-                style={{
-                  justifyContent: "space-between",
-                  fontSize: "0.85rem",
-                }}
+                className="row justify-between text-[0.85rem]"
               >
                 <span>ATS readiness</span>
-                <span style={{ fontWeight: 600 }}>{atsScore}/100</span>
+                <span className="font-semibold">{atsScore}/100</span>
               </div>
               <Meter value={atsScore} />
             </div>
           </Card>
         ) : null}
-        <p style={{ color: "var(--text-muted)", margin: 0 }}>
+        <p className="text-muted m-0">
           We extracted your details, rebuilt the document and ran an ATS check.
           Next, tell us how you want to be matched to roles.
         </p>
@@ -189,7 +185,7 @@ export default function OnboardingUploadPage() {
       className="stack"
       style={{ gap: "1.5rem", maxWidth: 620, margin: "0 auto" }}
     >
-      <div style={{ textAlign: "center" }}>
+      <div className="text-center">
         <Link
           href="/onboarding"
           style={{
@@ -203,7 +199,7 @@ export default function OnboardingUploadPage() {
         >
           <X size={14} /> Back to options
         </Link>
-        <div className="eyebrow" style={{ justifyContent: "center" }}>
+        <div className="eyebrow justify-center">
           <Upload size={16} /> Upload resume
         </div>
         <h1
@@ -212,7 +208,7 @@ export default function OnboardingUploadPage() {
         >
           Upload your existing resume
         </h1>
-        <p style={{ color: "var(--text-muted)", marginTop: 4 }}>
+        <p className="text-muted mt-1">
           PDF, DOCX, or an image. Maximum 10MB.
         </p>
       </div>
@@ -223,7 +219,7 @@ export default function OnboardingUploadPage() {
         onDrop={handleDrop}
       >
         {file ? (
-          <div className="stack" style={{ gap: "1rem" }}>
+          <div className="stack gap-4">
             <div
               className="row"
               style={{
@@ -234,8 +230,8 @@ export default function OnboardingUploadPage() {
                 borderRadius: "var(--radius-md)",
               }}
             >
-              <FileText size={24} style={{ color: "var(--accent)" }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
+              <FileText size={24} className="text-accent" />
+              <div className="flex-1 min-w-0">
                 <div
                   style={{
                     fontWeight: 600,
@@ -246,7 +242,7 @@ export default function OnboardingUploadPage() {
                 >
                   {file.name}
                 </div>
-                <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                <div className="text-[0.8rem] text-muted">
                   {(file.size / 1024 / 1024).toFixed(1)} MB
                 </div>
               </div>
@@ -262,7 +258,7 @@ export default function OnboardingUploadPage() {
                 <X size={14} />
               </Button>
             </div>
-            <Button size="lg" loading={busy} onClick={runImport} style={{ width: "100%" }}>
+            <Button size="lg" loading={busy} onClick={runImport} className="w-full">
               {busy ? <Loader2 size={16} /> : null}
               {busy ? "Working..." : "Extract & build resume"}
             </Button>
@@ -289,7 +285,7 @@ export default function OnboardingUploadPage() {
               <div style={{ fontSize: "1.05rem", fontWeight: 500 }}>
                 Drag & drop or click to select
               </div>
-              <div style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+              <div className="text-[0.85rem] text-muted">
                 PDF, DOCX, PNG, JPG, WebP · Maximum 10MB
               </div>
             </button>
@@ -317,10 +313,9 @@ export default function OnboardingUploadPage() {
 
       {busy ? (
         <Card style={{ padding: "1.25rem" }}>
-          <div className="stack" style={{ gap: "0.6rem" }}>
+          <div className="stack gap-2.5">
             <div
-              className="row"
-              style={{ justifyContent: "space-between", fontSize: "0.85rem" }}
+              className="row justify-between text-[0.85rem]"
             >
               <span>{STAGE_LABEL[stage]}</span>
               <span>{stage === "uploading" ? "40%" : "80%"}</span>
@@ -340,7 +335,7 @@ export default function OnboardingUploadPage() {
         >
           <div className="row" style={{ gap: "0.5rem", color: "var(--danger)" }}>
             <AlertCircle size={16} />
-            <span style={{ fontSize: "0.88rem" }}>{error}</span>
+            <span className="text-[0.88rem]">{error}</span>
           </div>
         </Card>
       ) : null}

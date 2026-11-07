@@ -154,14 +154,14 @@ export default function AdminPage() {
   const totals = stats.data?.totals;
 
   return (
-    <div className="stack" style={{ gap: "1.2rem" }}>
-      <div className="row row-wrap" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
+    <div className="stack gap-[1.2rem]">
+      <div className="row row-wrap justify-between items-end">
         <div>
           <div className="eyebrow">Operations</div>
-          <h1 className="display" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)", marginTop: 4 }}>
+          <h1 className="display mt-1" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)" }}>
             Control room
           </h1>
-          <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginTop: 4 }}>
+          <p className="text-muted text-[0.9rem] mt-1">
             Platform health, people and the knowledge that makes matching work.
           </p>
         </div>
@@ -200,28 +200,28 @@ export default function AdminPage() {
           </div>
 
           <div className="grid-2">
-            <Card style={{ padding: "1.1rem" }}>
+            <Card className="p-[1.1rem]">
               <SectionTitle eyebrow="Coverage" title="Opportunities by country" />
               <div className="stack" style={{ marginTop: "0.8rem", gap: "0.35rem" }}>
                 {(stats.data?.opportunitiesByCountry ?? []).slice(0, 12).map((row) => (
-                  <div key={row.country} className="row" style={{ justifyContent: "space-between" }}>
-                    <span style={{ fontSize: "0.85rem" }}>{row.country}</span>
-                    <span className="mono" style={{ fontSize: "0.8rem" }}>
+                  <div key={row.country} className="row justify-between">
+                    <span className="text-[0.85rem]">{row.country}</span>
+                    <span className="mono text-[0.8rem]">
                       {row.count}
                     </span>
                   </div>
                 ))}
               </div>
             </Card>
-            <Card style={{ padding: "1.1rem" }}>
+            <Card className="p-[1.1rem]">
               <SectionTitle
                 eyebrow="Trust"
                 title="Risk distribution"
-                action={<ShieldAlert size={16} style={{ color: "var(--text-muted)" }} />}
+                action={<ShieldAlert size={16} className="text-muted" />}
               />
               <div className="stack" style={{ marginTop: "0.8rem", gap: "0.35rem" }}>
                 {(stats.data?.riskDistribution ?? []).map((row) => (
-                  <div key={row.risk_action} className="row" style={{ justifyContent: "space-between" }}>
+                  <div key={row.risk_action} className="row justify-between">
                     <Badge
                       tone={
                         row.risk_action === "block"
@@ -233,7 +233,7 @@ export default function AdminPage() {
                     >
                       {row.risk_action}
                     </Badge>
-                    <span className="mono" style={{ fontSize: "0.8rem" }}>
+                    <span className="mono text-[0.8rem]">
                       {row.count}
                     </span>
                   </div>
@@ -242,15 +242,15 @@ export default function AdminPage() {
             </Card>
           </div>
 
-          <Card style={{ padding: "1.1rem" }}>
+          <Card className="p-[1.1rem]">
             <SectionTitle eyebrow="Flow" title="Application pipeline" />
-            <div className="row row-wrap" style={{ gap: "0.5rem", marginTop: "0.8rem" }}>
+            <div className="row row-wrap gap-2 mt-[0.8rem]">
               {(stats.data?.pipeline ?? []).map((row) => (
                 <div key={row.status} className="surface" style={{ padding: "0.6rem 0.8rem" }}>
                   <div className="mono" style={{ fontSize: "1.2rem", fontWeight: 700 }}>
                     {row.count}
                   </div>
-                  <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
+                  <div className="text-[0.72rem] text-muted">
                     {titleCase(row.status)}
                   </div>
                 </div>
@@ -261,13 +261,13 @@ export default function AdminPage() {
       ) : null}
 
       {tab === "users" ? (
-        <Card style={{ padding: "1.1rem" }}>
+        <Card className="p-[1.1rem]">
           <SectionTitle
             eyebrow="People"
             title="Registered users"
-            action={<Users size={16} style={{ color: "var(--text-muted)" }} />}
+            action={<Users size={16} className="text-muted" />}
           />
-          <div className="table-scroll" style={{ marginTop: "0.8rem" }}>
+          <div className="table-scroll mt-[0.8rem]">
             <table className="data-table">
               <thead>
                 <tr>
@@ -297,7 +297,7 @@ export default function AdminPage() {
                         )}
                       </div>
                     </td>
-                    <td style={{ fontSize: "0.78rem" }}>{formatDateTime(user.created_at)}</td>
+                    <td className="text-[0.78rem]">{formatDateTime(user.created_at)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -308,11 +308,11 @@ export default function AdminPage() {
 
       {tab === "roles" ? (
         <div className="grid-2">
-          <Card style={{ padding: "1.1rem" }}>
+          <Card className="p-[1.1rem]">
             <SectionTitle
               eyebrow="Access control"
               title="Assign a role"
-              action={<UserCog size={16} style={{ color: "var(--text-muted)" }} />}
+              action={<UserCog size={16} className="text-muted" />}
             />
             <div className="stack" style={{ marginTop: "0.9rem", gap: "0.7rem" }}>
               <Field label="User id">
@@ -338,7 +338,7 @@ export default function AdminPage() {
             </div>
           </Card>
 
-          <Card style={{ padding: "1.1rem" }}>
+          <Card className="p-[1.1rem]">
             <SectionTitle eyebrow="Catalogue" title={`${roles.data?.permissions?.length ?? 0} permissions`} />
             <div className="row row-wrap" style={{ gap: "0.3rem", marginTop: "0.8rem" }}>
               {(roles.data?.permissions ?? []).map((permission) => (
@@ -361,15 +361,15 @@ export default function AdminPage() {
       ) : null}
 
       {tab === "taxonomy" ? (
-        <div className="stack" style={{ gap: "1rem" }}>
-          <Card style={{ padding: "1.1rem" }}>
+        <div className="stack gap-4">
+          <Card className="p-[1.1rem]">
             <SectionTitle
               eyebrow="Knowledge"
               title="Add a profession"
               description="Every profession gets a path, aliases and a salary median."
-              action={<Tags size={16} style={{ color: "var(--text-muted)" }} />}
+              action={<Tags size={16} className="text-muted" />}
             />
-            <div className="grid-2" style={{ marginTop: "0.9rem" }}>
+            <div className="grid-2 mt-[0.9rem]">
               <Field label="Name">
                 <Input value={newName} onChange={(event) => setNewName(event.target.value)} />
               </Field>
@@ -383,21 +383,21 @@ export default function AdminPage() {
                 <Input value={newDomain} onChange={(event) => setNewDomain(event.target.value)} />
               </Field>
             </div>
-            <div style={{ marginTop: "0.9rem" }}>
+            <div className="mt-[0.9rem]">
               <Button loading={busy} disabled={!newSlug || !newName} onClick={() => void addProfession()}>
                 Add profession
               </Button>
             </div>
           </Card>
 
-          <Card style={{ padding: "1.1rem" }}>
+          <Card className="p-[1.1rem]">
             <SectionTitle
               eyebrow="Catalogue"
               title={`${taxonomy.data?.professions?.length ?? 0} professions · ${
                 taxonomy.data?.opportunityLinks?.length ?? 0
               } linked to live roles`}
             />
-            <div className="table-scroll" style={{ marginTop: "0.8rem" }}>
+            <div className="table-scroll mt-[0.8rem]">
               <table className="data-table">
                 <thead>
                   <tr>
@@ -411,7 +411,7 @@ export default function AdminPage() {
                 <tbody>
                   {(taxonomy.data?.professions ?? []).slice(0, 120).map((profession) => (
                     <tr key={profession.id}>
-                      <td style={{ fontWeight: 600 }}>
+                      <td className="font-semibold">
                         {profession.depth > 0 ? "· ".repeat(profession.depth) : ""}
                         {profession.name}
                       </td>
@@ -433,19 +433,19 @@ export default function AdminPage() {
       ) : null}
 
       {tab === "scam" ? (
-        <Card style={{ padding: "1.1rem" }}>
+        <Card className="p-[1.1rem]">
           <SectionTitle
             eyebrow="Trust and safety"
             title={`${scam.data?.total ?? 0} known scam fingerprints`}
             description="Every posting is fingerprinted and compared against this corpus."
-            action={<Fingerprint size={16} style={{ color: "var(--text-muted)" }} />}
+            action={<Fingerprint size={16} className="text-muted" />}
           />
           {scam.loading ? (
             <Skeleton height={160} />
           ) : (scam.data?.items?.length ?? 0) === 0 ? (
             <EmptyState title="Corpus is empty" />
           ) : (
-            <div className="table-scroll" style={{ marginTop: "0.8rem" }}>
+            <div className="table-scroll mt-[0.8rem]">
               <table className="data-table">
                 <thead>
                   <tr>
@@ -461,10 +461,10 @@ export default function AdminPage() {
                       <td>
                         <Badge tone="danger">{signature.label}</Badge>
                       </td>
-                      <td className="mono" style={{ fontSize: "0.72rem" }}>
+                      <td className="mono text-[0.72rem]">
                         {signature.simhash}
                       </td>
-                      <td style={{ fontSize: "0.76rem" }}>
+                      <td className="text-[0.76rem]">
                         {signature.sample_url ? (
                           <a href={signature.sample_url} target="_blank" rel="noopener noreferrer">
                             open
@@ -473,7 +473,7 @@ export default function AdminPage() {
                           "—"
                         )}
                       </td>
-                      <td style={{ fontSize: "0.76rem" }}>
+                      <td className="text-[0.76rem]">
                         {formatDateTime(signature.created_at)}
                       </td>
                     </tr>
@@ -488,7 +488,7 @@ export default function AdminPage() {
       {tab === "invitations" ? <InvitationsPanel /> : null}
 
       {tab === "events" ? (
-        <Card style={{ padding: "1.1rem" }}>
+        <Card className="p-[1.1rem]">
           <SectionTitle eyebrow="Audit" title="Recent platform events" />
           {events.loading ? (
             <Skeleton height={200} />
@@ -508,10 +508,10 @@ export default function AdminPage() {
                     borderRadius: "var(--radius-sm)",
                   }}
                 >
-                  <span className="mono" style={{ fontSize: "0.78rem" }}>
+                  <span className="mono text-[0.78rem]">
                     {event.type}
                   </span>
-                  <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>
+                  <span className="text-[0.74rem] text-muted">
                     {event.aggregate_type ?? "—"} · {formatDateTime(event.occurred_at)}
                   </span>
                 </div>

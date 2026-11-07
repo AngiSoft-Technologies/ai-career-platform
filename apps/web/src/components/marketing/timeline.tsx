@@ -70,21 +70,14 @@ export function FactList({
   label: string;
 }) {
   return (
-    <dl aria-label={label} style={{ display: "grid", gap: 0, margin: 0 }}>
+    <dl aria-label={label} className="grid m-0">
       {items.map((item) => (
         <div
           key={item.term}
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "6px 20px",
-            justifyContent: "space-between",
-            padding: "14px 0",
-            borderBottom: "1px solid var(--mk-border)",
-          }}
+          className="flex flex-wrap justify-between gap-1.5 gap-x-5 py-3.5 border-b border-hairline"
         >
-          <dt style={{ fontSize: "0.88rem", color: "var(--mk-text-muted)" }}>{item.term}</dt>
-          <dd style={{ margin: 0, fontSize: "0.9rem", fontWeight: 600, color: "var(--mk-text)", textAlign: "right" }}>
+          <dt className="text-[0.88rem] text-text-muted">{item.term}</dt>
+          <dd className="m-0 text-[0.9rem] font-semibold text-text text-right">
             {item.detail}
           </dd>
         </div>

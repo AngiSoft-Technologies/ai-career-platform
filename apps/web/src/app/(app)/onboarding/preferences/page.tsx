@@ -125,7 +125,7 @@ export default function OnboardingPreferencesPage() {
       style={{ gap: "1.5rem", maxWidth: 720, margin: "0 auto" }}
     >
       <div style={{ textAlign: "center", paddingTop: "2rem" }}>
-        <div className="eyebrow" style={{ justifyContent: "center" }}>
+        <div className="eyebrow justify-center">
           <MapPin size={16} /> Almost there
         </div>
         <h1
@@ -149,10 +149,10 @@ export default function OnboardingPreferencesPage() {
         </p>
       </div>
 
-      <Card style={{ padding: "1.5rem" }}>
+      <Card className="p-6">
         <div className="stack" style={{ gap: "1.25rem" }}>
           <ToggleRow
-            icon={<Wifi size={18} style={{ color: "var(--accent)" }} />}
+            icon={<Wifi size={18} className="text-accent" />}
             title="Remote roles only"
             description="Hide onsite and hybrid roles. You will only ever be shown remote work."
             checked={preferences.remoteOnly}
@@ -161,7 +161,7 @@ export default function OnboardingPreferencesPage() {
             }
           />
           <ToggleRow
-            icon={<Plane size={18} style={{ color: "var(--accent)" }} />}
+            icon={<Plane size={18} className="text-accent" />}
             title="I am willing to relocate"
             description="Let us surface roles in other cities and countries, not just where you are now."
             checked={preferences.willingToRelocate}
@@ -173,7 +173,7 @@ export default function OnboardingPreferencesPage() {
             }
           />
           <ToggleRow
-            icon={<Bell size={18} style={{ color: "var(--accent)" }} />}
+            icon={<Bell size={18} className="text-accent" />}
             title="Job alerts"
             description="Get notified when a role that matches your profile is discovered."
             checked={preferences.notificationsEnabled}
@@ -187,11 +187,11 @@ export default function OnboardingPreferencesPage() {
         </div>
       </Card>
 
-      <Card style={{ padding: "1.5rem" }}>
-        <div className="stack" style={{ gap: "1rem" }}>
-          <div className="row" style={{ gap: "0.5rem", alignItems: "center" }}>
-            <Globe size={18} style={{ color: "var(--accent)" }} />
-            <h3 style={{ fontSize: "1rem", margin: 0 }}>Where do you want to work?</h3>
+      <Card className="p-6">
+        <div className="stack gap-4">
+          <div className="row gap-2 items-center">
+            <Globe size={18} className="text-accent" />
+            <h3 className="text-[1rem] m-0">Where do you want to work?</h3>
           </div>
           <Field
             label="Preferred countries"
@@ -246,8 +246,8 @@ export default function OnboardingPreferencesPage() {
 
       <Card style={{ padding: "1.25rem" }}>
         <div className="row" style={{ gap: "0.5rem", alignItems: "center", marginBottom: "0.75rem" }}>
-          <Briefcase size={18} style={{ color: "var(--accent)" }} />
-          <h3 style={{ fontSize: "1rem", margin: 0 }}>Employment types we cover</h3>
+          <Briefcase size={18} className="text-accent" />
+          <h3 className="text-[1rem] m-0">Employment types we cover</h3>
         </div>
         <div className="row" style={{ gap: "0.4rem", flexWrap: "wrap" }}>
           {EMPLOYMENT_TYPES.map((type) => (
@@ -279,10 +279,10 @@ export default function OnboardingPreferencesPage() {
         </p>
       </Card>
 
-      <div className="row" style={{ justifyContent: "space-between" }}>
+      <div className="row justify-between">
         <Link
           href={documentId ? `/documents/${documentId}` : "/documents"}
-          style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}
+          className="text-muted text-[0.9rem]"
         >
           ← Skip, choose a template
         </Link>
@@ -318,8 +318,8 @@ function ToggleRow({
       style={{ gap: "0.75rem", alignItems: "flex-start", flexWrap: "wrap" }}
     >
       <span style={{ flexShrink: 0, marginTop: 2 }}>{icon}</span>
-      <div style={{ flex: 1, minWidth: 200 }}>
-        <div style={{ fontWeight: 600, fontSize: "0.92rem" }}>{title}</div>
+      <div className="flex-1" style={{ minWidth: 200 }}>
+        <div className="font-semibold text-[0.92rem]">{title}</div>
         <p
           style={{
             margin: "0.25rem 0 0",

@@ -299,7 +299,7 @@ export default function OnboardingManualPage() {
         </div>
       </Card>
 
-      <Card style={{ padding: "1.5rem" }}>
+      <Card className="p-6">
         <div
           className="row"
           style={{ gap: "0.6rem", alignItems: "center", marginBottom: "1.5rem" }}
@@ -329,7 +329,7 @@ export default function OnboardingManualPage() {
         </div>
 
         {currentStep === "basics" ? (
-          <div className="stack" style={{ gap: "1rem" }}>
+          <div className="stack gap-4">
             <Field label="Full name">
               <Input
                 value={form.fullName}
@@ -441,7 +441,7 @@ export default function OnboardingManualPage() {
         ) : null}
 
         {currentStep === "experience" ? (
-          <div className="stack" style={{ gap: "1rem" }}>
+          <div className="stack gap-4">
             <div
               className="row"
               style={{
@@ -452,11 +452,7 @@ export default function OnboardingManualPage() {
               }}
             >
               <p
-                style={{
-                  fontSize: "0.85rem",
-                  color: "var(--text-muted)",
-                  margin: 0,
-                }}
+                className="text-[0.85rem] text-muted m-0"
               >
                 Add each role separately. Most recent first.
               </p>
@@ -486,10 +482,9 @@ export default function OnboardingManualPage() {
               <EmptyHint text='No experience added yet. Click "Add role" to start.' />
             ) : (
               experiences.map((entry, index) => (
-                <Card key={entry.id} style={{ padding: "1rem" }}>
+                <Card key={entry.id} className="p-4">
                   <div
-                    className="row"
-                    style={{ justifyContent: "space-between", marginBottom: "1rem" }}
+                    className="row justify-between mb-4"
                   >
                     <Badge tone="accent">Role {index + 1}</Badge>
                     <Button
@@ -504,7 +499,7 @@ export default function OnboardingManualPage() {
                       <X size={14} />
                     </Button>
                   </div>
-                  <div className="grid-2" style={{ gap: "0.75rem" }}>
+                  <div className="grid-2 gap-3">
                     <Field label="Job title">
                       <Input
                         value={entry.title}
@@ -559,7 +554,7 @@ export default function OnboardingManualPage() {
                         />
                       </Field>
                     </div>
-                    <div style={{ gridColumn: "1 / -1" }}>
+                    <div className="" style={{ gridColumn: "1 / -1" }}>
                       <label
                         className="row"
                         style={{
@@ -584,7 +579,7 @@ export default function OnboardingManualPage() {
                         Currently working here
                       </label>
                     </div>
-                    <div style={{ gridColumn: "1 / -1" }}>
+                    <div className="" style={{ gridColumn: "1 / -1" }}>
                       <Field
                         label="Description"
                         hint="Use action verbs and measurable results. One bullet per line."
@@ -611,7 +606,7 @@ export default function OnboardingManualPage() {
         ) : null}
 
         {currentStep === "education" ? (
-          <div className="stack" style={{ gap: "1rem" }}>
+          <div className="stack gap-4">
             <div
               className="row"
               style={{
@@ -622,11 +617,7 @@ export default function OnboardingManualPage() {
               }}
             >
               <p
-                style={{
-                  fontSize: "0.85rem",
-                  color: "var(--text-muted)",
-                  margin: 0,
-                }}
+                className="text-[0.85rem] text-muted m-0"
               >
                 Degrees, certifications, and bootcamps.
               </p>
@@ -654,10 +645,9 @@ export default function OnboardingManualPage() {
               <EmptyHint text='No education added yet. Click "Add entry" to start.' />
             ) : (
               education.map((entry, index) => (
-                <Card key={entry.id} style={{ padding: "1rem" }}>
+                <Card key={entry.id} className="p-4">
                   <div
-                    className="row"
-                    style={{ justifyContent: "space-between", marginBottom: "1rem" }}
+                    className="row justify-between mb-4"
                   >
                     <Badge tone="neutral">Entry {index + 1}</Badge>
                     <Button
@@ -670,7 +660,7 @@ export default function OnboardingManualPage() {
                       <X size={14} />
                     </Button>
                   </div>
-                  <div className="grid-2" style={{ gap: "0.75rem" }}>
+                  <div className="grid-2 gap-3">
                     <Field label="Degree / certification">
                       <Input
                         value={entry.degree}
@@ -730,7 +720,7 @@ export default function OnboardingManualPage() {
         ) : null}
 
         {currentStep === "skills" ? (
-          <div className="stack" style={{ gap: "1rem" }}>
+          <div className="stack gap-4">
             <Field
               label="Technical skills"
               hint="Comma or line separated. Group by category if helpful."
@@ -760,7 +750,7 @@ export default function OnboardingManualPage() {
         ) : null}
 
         {currentStep === "projects" ? (
-          <div className="stack" style={{ gap: "1rem" }}>
+          <div className="stack gap-4">
             <div
               className="row"
               style={{
@@ -771,11 +761,7 @@ export default function OnboardingManualPage() {
               }}
             >
               <p
-                style={{
-                  fontSize: "0.85rem",
-                  color: "var(--text-muted)",
-                  margin: 0,
-                }}
+                className="text-[0.85rem] text-muted m-0"
               >
                 Side projects, open source, publications, awards.
               </p>
@@ -802,10 +788,9 @@ export default function OnboardingManualPage() {
               <EmptyHint text='No projects added yet. Click "Add project" to start.' />
             ) : (
               projects.map((entry, index) => (
-                <Card key={entry.id} style={{ padding: "1rem" }}>
+                <Card key={entry.id} className="p-4">
                   <div
-                    className="row"
-                    style={{ justifyContent: "space-between", marginBottom: "1rem" }}
+                    className="row justify-between mb-4"
                   >
                     <Badge tone="neutral">Project {index + 1}</Badge>
                     <Button
@@ -818,7 +803,7 @@ export default function OnboardingManualPage() {
                       <X size={14} />
                     </Button>
                   </div>
-                  <div className="grid-2" style={{ gap: "0.75rem" }}>
+                  <div className="grid-2 gap-3">
                     <Field label="Project name">
                       <Input
                         value={entry.name}
@@ -848,7 +833,7 @@ export default function OnboardingManualPage() {
                         placeholder="github.com/user/project"
                       />
                     </Field>
-                    <div style={{ gridColumn: "1 / -1" }}>
+                    <div className="" style={{ gridColumn: "1 / -1" }}>
                       <Field label="Description">
                         <Textarea
                           rows={3}

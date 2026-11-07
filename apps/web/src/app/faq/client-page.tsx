@@ -35,7 +35,7 @@ export default function FAQPage({
 
   return (
     <MarketingLayout>
-      <section className="mk-section" style={{ paddingTop: "140px" }} aria-labelledby="faq-title">
+      <section className="mk-section pt-[140px]" aria-labelledby="faq-title">
         <div className="mk-container">
           <header className="mk-section-header">
             <span className="mk-section-eyebrow">FAQ</span>

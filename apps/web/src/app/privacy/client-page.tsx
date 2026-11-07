@@ -33,8 +33,8 @@ export default function PrivacyPage({
 
   return (
     <MarketingLayout>
-      <section className="mk-section mk-legal" style={{ paddingTop: "140px" }} aria-labelledby="privacy-title">
-        <div className="mk-container mk-grid mk-grid--2" style={{ gap: "48px", alignItems: "start" }}>
+      <section className="mk-section mk-legal pt-[140px]" aria-labelledby="privacy-title">
+        <div className="mk-container mk-grid mk-grid--2 gap-12 items-start">
           <aside className="mk-legal__toc">
             <nav className="mk-legal__toc-inner">
               <h3 className="mk-legal__toc-title">On this page</h3>

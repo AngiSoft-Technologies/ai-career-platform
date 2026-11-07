@@ -161,7 +161,7 @@ export default function GuidesPage() {
           }
         />
 
-        <section className="mk-section" style={{ paddingTop: "24px" }} aria-label="Figures behind the guides">
+        <section className="mk-section pt-6" aria-label="Figures behind the guides">
           <div className="mk-container">
             <Reveal>
               <StatBand stats={GUIDE_STATS} label="The numbers the guides are built around" />
@@ -177,12 +177,12 @@ export default function GuidesPage() {
               title={<span id="videos-heading">Four videos worth your evening</span>}
               lede="Each one loads nothing from YouTube until you press play — the page stays fast and private until you choose otherwise."
             />
-            <div style={{ display: "grid", gap: "20px", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))" }}>
+            <div className="grid gap-5 grid-cols-[repeat(auto-fit,minmax(320px,1fr))]">
               {VIDEOS.map((video, i) => (
                 <Reveal key={video.id} delay={i * 80}>
-                  <div style={{ display: "grid", gap: "12px" }}>
+                  <div className="grid gap-3">
                     <VideoEmbed videoId={video.id} title={video.title} channel={video.channel} />
-                    <p style={{ margin: 0, fontSize: "0.88rem", lineHeight: 1.6, color: "var(--mk-text-muted)" }}>
+                    <p className="m-0 text-[0.88rem] leading-[1.6] text-text-muted">
                       {video.note}
                     </p>
                   </div>
@@ -200,10 +200,10 @@ export default function GuidesPage() {
               title={<span id="written-heading">Six guides, each a few minutes</span>}
               lede="Written for this market. Short, specific, and checkable against your own experience."
             />
-            <div style={{ display: "grid", gap: "20px", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))" }}>
+            <div className="grid gap-5 grid-cols-[repeat(auto-fit,minmax(320px,1fr))]">
               {GUIDES.map((guide, i) => (
                 <Reveal key={guide.id} delay={i * 60}>
-                  <article className="mk-panel" style={{ padding: "24px 26px", display: "grid", gap: "12px", alignContent: "start", height: "100%" }}>
+                  <article className="mk-panel grid content-start gap-3 h-full p-6 lg:px-6.5">
                     <span
                       aria-hidden="true"
                       style={{
@@ -219,10 +219,10 @@ export default function GuidesPage() {
                     >
                       {guide.icon}
                     </span>
-                    <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 750, letterSpacing: "-0.01em", color: "var(--mk-text)" }}>
+                    <h3 className="m-0 text-[1.05rem] font-bold tracking-[-0.01em] text-text">
                       {guide.title}
                     </h3>
-                    <p style={{ margin: 0, fontSize: "0.9rem", lineHeight: 1.65, color: "var(--mk-text-soft)" }}>
+                    <p className="m-0 text-[0.9rem] leading-[1.65] text-text-soft">
                       {guide.body}
                     </p>
                     <p className="mk-numeral" style={{ margin: 0, fontSize: "0.74rem", letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--mk-text-muted)" }}>
@@ -241,7 +241,7 @@ export default function GuidesPage() {
               eyebrow="Questions"
               title={<span id="guides-faq-heading">About the search, not the product</span>}
             />
-            <div style={{ maxWidth: "820px" }}>
+            <div className="max-w-prose-wide">
               <Faq
                 label="Questions about job hunting"
                 items={[

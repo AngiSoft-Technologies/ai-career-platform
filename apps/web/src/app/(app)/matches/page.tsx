@@ -17,14 +17,14 @@ export default function MatchesPage() {
   const items = data?.items ?? [];
 
   return (
-    <div className="stack" style={{ gap: "1.2rem" }}>
-      <div className="row row-wrap" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
+    <div className="stack gap-[1.2rem]">
+      <div className="row row-wrap justify-between items-end">
         <div>
           <div className="eyebrow">Ranking</div>
-          <h1 className="display" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)", marginTop: 4 }}>
+          <h1 className="display mt-1" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)" }}>
             Your best matches
           </h1>
-          <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginTop: 4 }}>
+          <p className="text-muted text-[0.9rem] mt-1">
             Skills, location, work mode and seniority shape each role’s fit score.
           </p>
         </div>
@@ -51,7 +51,7 @@ export default function MatchesPage() {
           }
         />
       ) : (
-        <div className="stack" style={{ gap: "0.55rem" }}>
+        <div className="stack gap-[0.55rem]">
           {items.map((item) => (
             <Link
               key={item.id}
@@ -66,19 +66,19 @@ export default function MatchesPage() {
               }}
             >
               <MatchRing score={item.match?.score ?? 0} size={54} />
-              <div style={{ flex: 1, minWidth: 220 }}>
+              <div className="flex-1" style={{ minWidth: 220 }}>
                 <div style={{ fontWeight: 700, fontSize: "0.95rem" }}>{item.title}</div>
-                <div style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>
+                <div className="text-[0.82rem] text-muted">
                   {item.companyName} · {item.country} · {titleCase(item.workMode)} ·{" "}
                   {formatSalary(item.salaryMin, item.salaryMax, item.currency)}
                 </div>
                 {item.match?.explanation ? (
-                  <div style={{ fontSize: "0.76rem", color: "var(--text-muted)", marginTop: 4 }}>
+                  <div className="text-[0.76rem] text-muted mt-1">
                     {item.match.explanation}
                   </div>
                 ) : null}
               </div>
-              <div className="row row-wrap" style={{ gap: "0.3rem" }}>
+              <div className="row row-wrap gap-1.5">
                 {(item.match?.gaps ?? []).slice(0, 2).map((gap) => (
                   <Badge key={gap} tone="warning">
                     {gap}

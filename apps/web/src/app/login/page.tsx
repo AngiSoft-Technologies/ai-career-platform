@@ -180,7 +180,7 @@ function LoginInner() {
   };
 
   return (
-    <main className="landing" style={{ minHeight: "100dvh" }}>
+    <main className="landing min-h-dvh">
       <nav className="landing-nav">
         <Link href="/" className="landing-brand" aria-label="MboQara home">
           <img
@@ -224,15 +224,15 @@ function LoginInner() {
               { icon: ShieldCheck, text: "Clear fit details for every role" },
               { icon: KeyRound, text: "Your documents stay private to you" },
             ].map((item) => (
-              <div key={item.text} className="row" style={{ gap: "0.55rem" }}>
-                <item.icon size={15} style={{ color: "var(--accent)" }} />
-                <span style={{ fontSize: "0.88rem" }}>{item.text}</span>
+              <div key={item.text} className="row gap-[0.55rem]">
+                <item.icon size={15} className="text-accent" />
+                <span className="text-[0.88rem]">{item.text}</span>
               </div>
             ))}
           </div>
         </section>
 
-        <section className="surface" style={{ padding: "1.5rem" }}>
+        <section className="surface p-6">
           {notice ? (
             <p
               role="alert"
@@ -286,9 +286,9 @@ function LoginInner() {
               whiteSpace: "nowrap",
             }}
           >
-            <hr className="divider" style={{ flex: 1 }} />
+            <hr className="divider flex-1" />
             or continue with email
-            <hr className="divider" style={{ flex: 1 }} />
+            <hr className="divider flex-1" />
           </div>
 
           <div className="row" style={{ gap: "0.4rem", marginBottom: "1.1rem" }}>
@@ -296,8 +296,7 @@ function LoginInner() {
               <button
                 key={option}
                 type="button"
-                className={`btn btn-sm ${mode === option ? "btn-primary" : "btn-ghost"}`}
-                style={{ flex: 1 }}
+                className={`btn btn-sm flex-1 ${mode === option ? "btn-primary" : "btn-ghost"}`}
                 onClick={() => setMode(option)}
               >
                 {option === "signin" ? "Sign in" : "Create account"}
@@ -305,7 +304,7 @@ function LoginInner() {
             ))}
           </div>
 
-          <form className="stack" style={{ gap: "0.8rem" }} onSubmit={submit}>
+          <form className="stack gap-[0.8rem]" onSubmit={submit}>
             {mode === "signup" ? (
               <Field label="Full name">
                 <Input
@@ -341,7 +340,7 @@ function LoginInner() {
               />
             </Field>
 
-            <Button type="submit" loading={busy} style={{ justifyContent: "center" }}>
+            <Button type="submit" loading={busy} className="justify-center">
               {mode === "signin" ? "Sign in" : "Create account"} <ArrowRight size={15} />
             </Button>
 
@@ -349,8 +348,7 @@ function LoginInner() {
               <p style={{ textAlign: "center", marginTop: "0.2rem" }}>
                 <Link
                   href="/reset-password"
-                  className="btn btn-ghost btn-sm"
-                  style={{ fontSize: "0.78rem" }}
+                  className="btn btn-ghost btn-sm text-[0.78rem]"
                 >
                   Forgot your password?
                 </Link>
@@ -377,7 +375,7 @@ function LoginInner() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="landing" style={{ minHeight: "100dvh" }} />}>
+    <Suspense fallback={<div className="landing min-h-dvh" />}>
       <LoginInner />
     </Suspense>
   );

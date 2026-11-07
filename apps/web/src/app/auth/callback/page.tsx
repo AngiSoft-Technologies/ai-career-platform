@@ -38,7 +38,7 @@ function AuthCallbackInner() {
   }, [router]);
 
   return (
-    <main className="landing" style={{ minHeight: "100dvh" }}>
+    <main className="landing min-h-dvh">
       <div
         className="surface"
         style={{
@@ -61,8 +61,7 @@ function AuthCallbackInner() {
             </p>
             <button
               type="button"
-              className="btn btn-primary"
-              style={{ marginTop: "1rem" }}
+              className="btn btn-primary mt-4"
               onClick={() => router.replace("/login")}
             >
               Back to sign in
@@ -70,7 +69,7 @@ function AuthCallbackInner() {
           </>
         ) : (
           <>
-            <ShieldCheck size={28} style={{ color: "var(--accent)" }} />
+            <ShieldCheck size={28} className="text-accent" />
             <h1 className="display" style={{ fontSize: "1.4rem", marginTop: "0.8rem" }}>
               You are signed in
             </h1>
@@ -86,7 +85,7 @@ function AuthCallbackInner() {
 
 export default function AuthCallbackPage() {
   return (
-    <Suspense fallback={<div className="landing" style={{ minHeight: "100dvh" }} />}>
+    <Suspense fallback={<div className="landing min-h-dvh" />}>
       <AuthCallbackInner />
     </Suspense>
   );

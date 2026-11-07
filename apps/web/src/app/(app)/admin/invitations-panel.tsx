@@ -136,12 +136,12 @@ export function InvitationsPanel() {
   };
 
   return (
-    <div className="stack" style={{ gap: "1rem" }}>
-      <Card style={{ padding: "1.1rem" }}>
+    <div className="stack gap-4">
+      <Card className="p-[1.1rem]">
         <SectionTitle
           eyebrow="People"
           title="Invite someone to MboQara"
-          action={<UserPlus size={15} style={{ color: "var(--accent)" }} />}
+          action={<UserPlus size={15} className="text-accent" />}
         />
         <p
           style={{
@@ -186,7 +186,7 @@ export function InvitationsPanel() {
             loading={busy}
             disabled={!email.trim()}
             onClick={() => void invite()}
-            style={{ justifyContent: "center" }}
+            className="justify-center"
           >
             <Mail size={14} /> Send invite
           </Button>
@@ -217,9 +217,9 @@ export function InvitationsPanel() {
         ) : null}
       </Card>
 
-      <Card style={{ padding: "1.1rem" }}>
+      <Card className="p-[1.1rem]">
         <SectionTitle eyebrow="History" title="Invitations" />
-        <div style={{ marginTop: "0.8rem" }}>
+        <div className="mt-[0.8rem]">
           {(invitations.data?.items ?? []).length === 0 ? (
             <EmptyState
               title="No invitations yet"
@@ -227,7 +227,7 @@ export function InvitationsPanel() {
               icon={<UserPlus size={18} />}
             />
           ) : (
-            <div className="stack" style={{ gap: "0.55rem" }}>
+            <div className="stack gap-[0.55rem]">
               {(invitations.data?.items ?? []).map((item) => (
                 <div
                   key={item.id}
@@ -241,7 +241,7 @@ export function InvitationsPanel() {
                   }}
                 >
                   <div>
-                    <div style={{ fontSize: "0.88rem", fontWeight: 600 }}>
+                    <div className="text-[0.88rem] font-semibold">
                       {item.email}
                     </div>
                     <div

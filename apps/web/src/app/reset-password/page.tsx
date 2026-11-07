@@ -57,7 +57,7 @@ function ResetPasswordInner() {
   };
 
   return (
-    <main className="landing" style={{ minHeight: "100dvh" }}>
+    <main className="landing min-h-dvh">
       <nav className="landing-nav">
         <Link href="/" className="landing-brand" aria-label="MboQara home">
           <img
@@ -115,7 +115,7 @@ function ResetPasswordInner() {
             </Button>
           </form>
         ) : sent ? (
-          <p style={{ color: "var(--text-muted)", marginTop: "0.8rem" }}>
+          <p className="text-muted mt-[0.8rem]">
             If that address has an account, a reset link is on its way. Check your
             inbox.
           </p>
@@ -141,7 +141,7 @@ function ResetPasswordInner() {
           </form>
         )}
 
-        <p style={{ marginTop: "1rem" }}>
+        <p className="mt-4">
           <Link href="/login" className="btn btn-ghost btn-sm">
             Back to sign in
           </Link>
@@ -153,7 +153,7 @@ function ResetPasswordInner() {
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={<div className="landing" style={{ minHeight: "100dvh" }} />}>
+    <Suspense fallback={<div className="landing min-h-dvh" />}>
       <ResetPasswordInner />
     </Suspense>
   );

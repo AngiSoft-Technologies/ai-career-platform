@@ -279,7 +279,7 @@ export default function AboutPage({
         </div>
       </section>
 
-      <section className="mk-section" style={{ paddingTop: "8px" }} aria-label="Platform figures">
+      <section className="mk-section pt-2" aria-label="Platform figures">
         <div className="mk-container">
           <Reveal>
             <StatBand stats={ABOUT_STATS} label="The platform in numbers" />
@@ -295,7 +295,7 @@ export default function AboutPage({
             title={<span id="stories-heading">What changed for people using it</span>}
             lede="From the people MboQara was built for. Names shortened — the words are theirs."
           />
-          <div style={{ display: "grid", gap: "18px", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
+          <div className="grid gap-[1.125rem] grid-cols-[repeat(auto-fit,minmax(280px,1fr))]">
             {t.slice(0, 3).map((story, i) => (
               <Reveal key={story.id} delay={i * 90}>
                 <Quote text={story.quote} name={story.name} role={story.role} />
@@ -311,7 +311,7 @@ export default function AboutPage({
             eyebrow="Questions"
             title={<span id="about-faq-heading">About us, plainly</span>}
           />
-          <div style={{ maxWidth: "820px" }}>
+          <div className="max-w-prose-wide">
             <Faq
               label="Questions about MboQara and AngiSoft"
               items={[

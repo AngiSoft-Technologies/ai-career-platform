@@ -30,26 +30,25 @@ export function PageHero({
   children?: ReactNode;
 }) {
   return (
-    <section className="mk-section" style={{ paddingTop: "132px", paddingBottom: "24px" }}>
+    <section className="mk-section pt-[132px] pb-6">
       <div className="mk-container">
         <div
-          className={`mk-hero-split${media ? " mk-hero-split--with-media" : ""}`}
-          style={{ gap: "clamp(28px, 4vw, 56px)", alignItems: "center" }}
+          className={`mk-hero-split${media ? " mk-hero-split--with-media" : ""} items-center gap-7 lg:gap-14`}
         >
           <Reveal>
-            <div style={{ display: "grid", gap: "20px", justifyItems: "start" }}>
+            <div className="grid gap-5 justify-items-start">
               <span className={`mk-eyebrow mk-eyebrow--${eyebrowTone}`}>
                 <span className="mk-eyebrow__rule" aria-hidden="true" />
                 {eyebrow}
               </span>
               <h1 className="mk-display">{title}</h1>
               {lede ? (
-                <p className="mk-lede" style={{ maxWidth: "56ch" }}>
+                <p className="mk-lede max-w-prose-wide">
                   {lede}
                 </p>
               ) : null}
               {actions ? (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", marginTop: "4px" }}>{actions}</div>
+                <div className="flex flex-wrap gap-3 mt-1">{actions}</div>
               ) : null}
               {children}
             </div>
@@ -84,16 +83,7 @@ export function SectionHeading({
 }) {
   const Heading = level === 2 ? "h2" : "h3";
   return (
-    <header
-      style={{
-        display: "grid",
-        gap: "14px",
-        justifyItems: align === "center" ? "center" : "start",
-        textAlign: align === "center" ? "center" : "start",
-        maxWidth: "62ch",
-        marginBottom: "clamp(28px, 4vw, 44px)",
-      }}
-    >
+    <header className="grid gap-3.5 mb-8 lg:mb-11">
       {eyebrow ? (
         <span className={`mk-eyebrow${eyebrowTone ? ` mk-eyebrow--${eyebrowTone}` : ""}`}>
           <span className="mk-eyebrow__rule" aria-hidden="true" />
@@ -104,7 +94,7 @@ export function SectionHeading({
         {title}
       </Heading>
       {lede ? (
-        <p className="mk-lede" style={{ margin: 0 }}>
+        <p className="mk-lede max-w-prose-wide" style={{ margin: 0 }}>
           {lede}
         </p>
       ) : null}

@@ -41,22 +41,20 @@ export function CtaBand({
   return (
     <section className="mk-section" aria-label={title}>
       <div className="mk-container">
-        <div className="mk-cta" style={{ padding: "clamp(40px, 6vw, 72px) clamp(22px, 4vw, 48px)" }}>
-          <div style={{ display: "grid", gap: "18px", justifyItems: "center" }}>
-            <span className="mk-eyebrow mk-eyebrow--signal">
-              <span className="mk-eyebrow__rule" aria-hidden="true" />
-              Start where you are
-            </span>
-            <h2 className="mk-display mk-display--sm" style={{ maxWidth: "22ch" }}>
-              {title}
-            </h2>
-            <p className="mk-lede" style={{ maxWidth: "58ch", margin: 0 }}>
-              {text}
-            </p>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", justifyContent: "center", marginTop: "6px" }}>
-              {primary}
-              {secondary}
-            </div>
+        <div className="mk-cta grid justify-items-center gap-[1.125rem] p-10 lg:px-12 lg:py-18">
+          <span className="mk-eyebrow mk-eyebrow--signal">
+            <span className="mk-eyebrow__rule" aria-hidden="true" />
+            Start where you are
+          </span>
+          <h2 className="mk-display mk-display--sm max-w-prose">
+            {title}
+          </h2>
+          <p className="mk-lede max-w-prose-wide" style={{ margin: 0 }}>
+            {text}
+          </p>
+          <div className="flex flex-wrap justify-center gap-3 mt-1.5">
+            {primary}
+            {secondary}
           </div>
         </div>
       </div>

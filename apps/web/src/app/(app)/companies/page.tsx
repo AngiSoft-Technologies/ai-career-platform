@@ -41,14 +41,14 @@ export default function CompaniesPage() {
   );
 
   return (
-    <div className="stack" style={{ gap: "1.2rem" }}>
-      <div className="row row-wrap" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
+    <div className="stack gap-[1.2rem]">
+      <div className="row row-wrap justify-between items-end">
         <div>
           <div className="eyebrow">Employers</div>
-          <h1 className="display" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)", marginTop: 4 }}>
+          <h1 className="display mt-1" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)" }}>
             Companies hiring now
           </h1>
-          <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginTop: 4 }}>
+          <p className="text-muted text-[0.9rem] mt-1">
             Every company we have verified a live role for.
           </p>
         </div>
@@ -83,18 +83,18 @@ export default function CompaniesPage() {
               className="surface surface-hover"
               style={{ padding: "1.05rem", display: "block" }}
             >
-              <div className="row row-wrap" style={{ justifyContent: "space-between", gap: "0.5rem" }}>
-                <strong style={{ fontSize: "1rem" }}>{company.name}</strong>
+              <div className="row row-wrap justify-between gap-2">
+                <strong className="text-[1rem]">{company.name}</strong>
                 {company.new_this_week > 0 ? (
                   <Badge tone="success">+{company.new_this_week} this week</Badge>
                 ) : null}
               </div>
               <div
-                style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: 4 }}
+                className="text-[0.78rem] text-muted mt-1"
               >
                 {[company.industry, company.country].filter(Boolean).join(" · ") || "—"}
               </div>
-              <div style={{ marginTop: "0.8rem" }}>
+              <div className="mt-[0.8rem]">
                 <StatTile label="Open roles" value={String(company.open_roles)} />
               </div>
             </Link>
@@ -136,14 +136,14 @@ export function CompanyDetail({ slug }: { slug: string }) {
   if (!company) return <EmptyState title="Company not found" />;
 
   return (
-    <div className="stack" style={{ gap: "1.2rem" }}>
-      <div className="row row-wrap" style={{ justifyContent: "space-between" }}>
+    <div className="stack gap-[1.2rem]">
+      <div className="row row-wrap justify-between">
         <div>
           <div className="eyebrow">Employer</div>
-          <h1 className="display" style={{ fontSize: "clamp(1.6rem, 4vw, 2.3rem)", marginTop: 4 }}>
+          <h1 className="display mt-1" style={{ fontSize: "clamp(1.6rem, 4vw, 2.3rem)" }}>
             {company.name}
           </h1>
-          <p style={{ color: "var(--text-muted)", fontSize: "0.88rem", marginTop: 4 }}>
+          <p className="text-muted text-[0.88rem] mt-1">
             {[company.industry, company.country].filter(Boolean).join(" · ")}
           </p>
         </div>
@@ -171,7 +171,7 @@ export function CompanyDetail({ slug }: { slug: string }) {
         </div>
       ) : null}
 
-      <Card style={{ padding: "1.1rem" }}>
+      <Card className="p-[1.1rem]">
         <h2 style={{ fontSize: "1rem", marginBottom: "0.8rem" }}>Open roles</h2>
         <div className="stack" style={{ gap: "0.45rem" }}>
           {detail.data?.roles?.map((role) => (
@@ -181,15 +181,15 @@ export function CompanyDetail({ slug }: { slug: string }) {
               className="row row-wrap surface surface-hover"
               style={{ padding: "0.7rem 0.85rem", gap: "0.8rem" }}
             >
-              <div style={{ flex: 1, minWidth: 200 }}>
-                <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>{role.title}</div>
-                <div style={{ fontSize: "0.76rem", color: "var(--text-muted)" }}>
+              <div className="flex-1" style={{ minWidth: 200 }}>
+                <div className="font-semibold text-[0.9rem]">{role.title}</div>
+                <div className="text-[0.76rem] text-muted">
                   {role.country ?? "—"} · {titleCase(role.work_mode ?? "unknown")} ·{" "}
                   {titleCase(role.seniority ?? "unspecified")} ·{" "}
                   {formatSalary(role.salary_min ?? null, role.salary_max ?? null, role.currency ?? null)}
                 </div>
               </div>
-              {role.apply_url ? <ExternalLink size={13} style={{ color: "var(--text-muted)" }} /> : null}
+              {role.apply_url ? <ExternalLink size={13} className="text-muted" /> : null}
             </Link>
           ))}
         </div>

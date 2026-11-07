@@ -469,7 +469,7 @@ export default function LandingPage({
           </header>
           <div className="mk-grid mk-grid--4">
             {benefits.loading ? (
-              <div className="mk-grid mk-grid--4" style={{ gap: "24px" }}>
+              <div className="mk-grid mk-grid--4 gap-6">
                 {[1, 2, 3, 4].map((i) => (
                   <div key={i} className="mk-card" style={{ height: "200px", display: "flex", flexDirection: "column", gap: "12px", padding: "24px" }}>
                     <div className="mk-card__icon" style={{ color: "var(--mk-text-muted)" }}><Sparkles /></div>
@@ -517,14 +517,14 @@ export default function LandingPage({
           </header>
           <div className="mk-grid mk-grid--3">
             {comparison.loading ? (
-              <div className="mk-grid mk-grid--3" style={{ gap: "24px" }}>
+              <div className="mk-grid mk-grid--3 gap-6">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="mk-card" style={{ padding: "24px" }}>
+                  <div key={i} className="mk-card p-6">
                     <h3 className="mk-card__title" style={{ color: "var(--mk-text-muted)" }}>{"Loading…"}</h3>
                     <ul className="mk-footer__list" style={{ color: "var(--mk-text-muted)" }}>
-                      <li style={{ fontSize: "0.85rem", marginBottom: "8px" }}>{"Loading…"}</li>
-                      <li style={{ fontSize: "0.85rem", marginBottom: "8px" }}>{"Loading…"}</li>
-                      <li style={{ fontSize: "0.85rem", marginBottom: "8px" }}>{"Loading…"}</li>
+                      <li className="text-[0.85rem] mb-2">{"Loading…"}</li>
+                      <li className="text-[0.85rem] mb-2">{"Loading…"}</li>
+                      <li className="text-[0.85rem] mb-2">{"Loading…"}</li>
                     </ul>
                   </div>
                 ))}
@@ -534,12 +534,12 @@ export default function LandingPage({
             ) : (
               c.map((col, ci) => (
                 <div key={ci} className="mk-card">
-                  <h3 className="mk-card__title" style={{ marginBottom: "12px", color: col.check ? "var(--mk-success)" : "var(--mk-text-soft)" }}>
+                  <h3 className="mk-card__title mb-3" style={{ color: col.check ? "var(--mk-verified)" : "var(--mk-text-soft)" }}>
                     {col.label}
                   </h3>
                   <ul className="mk-footer__list" style={{ color: "var(--mk-text-soft)" }}>
                     {col.items.map((item, ii) => (
-                      <li key={ii} style={{ marginBottom: "8px", fontSize: "0.85rem" }}>
+                      <li key={ii} className="mb-2 text-[0.85rem]">
                         <span style={{ color: col.check ? "var(--mk-success)" : "var(--mk-text-muted)", marginRight: "6px" }}>
                           {col.check ? "✓" : "✗"}
                         </span>

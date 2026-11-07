@@ -71,7 +71,7 @@ export default function OnboardingPage() {
       style={{ gap: "1.5rem", maxWidth: 720, margin: "0 auto" }}
     >
       <div style={{ textAlign: "center", paddingTop: "2rem" }}>
-        <div className="eyebrow" style={{ justifyContent: "center" }}>
+        <div className="eyebrow justify-center">
           <Sparkles size={16} /> Welcome to MboQara
         </div>
         <h1
@@ -95,7 +95,7 @@ export default function OnboardingPage() {
         </p>
       </div>
 
-      <div className="grid-3" style={{ gap: "1rem" }}>
+      <div className="grid-3 gap-4">
         {PATHS.map((path) => {
           const Icon = path.icon;
           return (
@@ -161,7 +161,7 @@ export default function OnboardingPage() {
         })}
       </div>
 
-      <div style={{ textAlign: "center" }}>
+      <div className="text-center">
         <button
           type="button"
           onClick={skip}
@@ -203,7 +203,7 @@ export default function OnboardingPage() {
         </ol>
       </Card>
 
-      <div className="row" style={{ justifyContent: "center" }}>
+      <div className="row justify-center">
         <Link
           href="/dashboard"
           style={{

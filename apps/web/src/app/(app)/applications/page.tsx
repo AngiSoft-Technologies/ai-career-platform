@@ -54,14 +54,14 @@ export default function ApplicationsPage() {
   };
 
   return (
-    <div className="stack" style={{ gap: "1.2rem" }}>
-      <div className="row row-wrap" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
+    <div className="stack gap-[1.2rem]">
+      <div className="row row-wrap justify-between items-end">
         <div>
           <div className="eyebrow">Pipeline</div>
-          <h1 className="display" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)", marginTop: 4 }}>
+          <h1 className="display mt-1" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)" }}>
             Applications
           </h1>
-          <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginTop: 4 }}>
+          <p className="text-muted text-[0.9rem] mt-1">
             {items.length} tracked · every move you made, in one timeline.
           </p>
         </div>
@@ -102,16 +102,16 @@ export default function ApplicationsPage() {
           }
         />
       ) : (
-        <div className="stack" style={{ gap: "0.6rem" }}>
+        <div className="stack gap-2.5">
           {visible.map((application) => {
             const opportunity = byId.get(application.opportunityId);
             return (
               <Card key={application.id} style={{ padding: "0.95rem 1.05rem" }}>
-                <div className="row row-wrap" style={{ gap: "1rem" }}>
-                  <div style={{ flex: 1, minWidth: 220 }}>
+                <div className="row row-wrap gap-4">
+                  <div className="flex-1" style={{ minWidth: 220 }}>
                     <div className="row row-wrap" style={{ gap: "0.4rem", marginBottom: 4 }}>
                       <Badge tone={stageTone(application.status)}>{titleCase(application.status)}</Badge>
-                      <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>
+                      <span className="text-[0.74rem] text-muted">
                         updated {formatDateTime(application.updatedAt)}
                       </span>
                     </div>
@@ -123,7 +123,7 @@ export default function ApplicationsPage() {
                     </p>
                   </div>
 
-                  <div className="row row-wrap" style={{ gap: "0.4rem" }}>
+                  <div className="row row-wrap gap-1.5">
                     <select
                       className="select"
                       value={application.status}

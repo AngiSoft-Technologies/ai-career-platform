@@ -118,7 +118,7 @@ function InviteInner({ token }: { token: string }) {
     : "";
 
   return (
-    <main className="landing" style={{ minHeight: "100dvh" }}>
+    <main className="landing min-h-dvh">
       <nav className="landing-nav">
         <Link href="/" className="landing-brand" aria-label="MboQara home">
           <img
@@ -187,15 +187,15 @@ function InviteInner({ token }: { token: string }) {
               { icon: ShieldCheck, text: "Your documents stay private to you" },
               { icon: KeyRound, text: "You pick your own password" },
             ].map((item) => (
-              <div key={item.text} className="row" style={{ gap: "0.55rem" }}>
-                <item.icon size={15} style={{ color: "var(--accent)" }} />
-                <span style={{ fontSize: "0.88rem" }}>{item.text}</span>
+              <div key={item.text} className="row gap-[0.55rem]">
+                <item.icon size={15} className="text-accent" />
+                <span className="text-[0.88rem]">{item.text}</span>
               </div>
             ))}
           </div>
         </section>
 
-        <section className="surface" style={{ padding: "1.5rem" }}>
+        <section className="surface p-6">
           {error ? (
             <p
               role="alert"
@@ -224,7 +224,7 @@ function InviteInner({ token }: { token: string }) {
               >
                 Setting up {invitation.email}
               </p>
-              <form className="stack" style={{ gap: "0.8rem" }} onSubmit={submit}>
+              <form className="stack gap-[0.8rem]" onSubmit={submit}>
                 <Field label="Your name" hint="Optional">
                   <Input
                     value={name}
@@ -258,14 +258,14 @@ function InviteInner({ token }: { token: string }) {
                 <Button
                   type="submit"
                   loading={busy}
-                  style={{ justifyContent: "center" }}
+                  className="justify-center"
                 >
                   Set password and join <ArrowRight size={15} />
                 </Button>
               </form>
             </>
           ) : loading ? null : (
-            <Link href="/login" className="btn btn-outline" style={{ width: "100%", justifyContent: "center" }}>
+            <Link href="/login" className="btn btn-outline w-full justify-center">
               Go to sign in
             </Link>
           )}
@@ -307,7 +307,7 @@ function InviteBoundary({ params }: { params: Promise<{ token: string }> }) {
   }, [params]);
 
   if (!token) {
-    return <div className="landing" style={{ minHeight: "100dvh" }} />;
+    return <div className="landing min-h-dvh" />;
   }
   return <InviteInner token={token} />;
 }

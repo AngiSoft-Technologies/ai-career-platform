@@ -88,7 +88,7 @@ export default function DownloadPage({
 
   return (
     <MarketingLayout>
-      <section className="mk-section mk-download" style={{ paddingTop: "140px" }} aria-labelledby="download-title">
+      <section className="mk-section mk-download pt-[140px]" aria-labelledby="download-title">
         <div className="mk-container">
           <header className="mk-section-header">
             <span className="mk-section-eyebrow">Download</span>
@@ -126,7 +126,7 @@ export default function DownloadPage({
               </div>
             </Reveal>
             <Reveal delay={100}>
-              <div style={{ maxWidth: "420px" }}>
+              <div className="max-w-[420px]">
                 <div className="mk-download__badges">
                   <a href={SITE.playStoreUrl} target="_blank" rel="noopener noreferrer" className="mk-badge">
                     <Download aria-hidden="true" /> Download for Android
@@ -179,13 +179,13 @@ export default function DownloadPage({
             videoSrc="/media/radar-loop.mp4"
             className="mk-section-card"
           />
-          <div style={{ marginTop: "40px" }}>
+          <div className="mt-10">
             <Slider autoPlay autoPlayInterval={6000} className="jr-feature-slider">
               {PHONE_SLIDES.map((slide) => {
                 const Icon = slide.icon;
                 return (
                   <Reveal key={slide.id}>
-                    <article className="mk-card" style={{ minHeight: "220px" }}>
+                    <article className="mk-card min-h-[220px]">
                       <div className="mk-card__icon"><Icon aria-hidden="true" /></div>
                       <h3 className="mk-card__title">{slide.title}</h3>
                       <p className="mk-card__text">{slide.body}</p>

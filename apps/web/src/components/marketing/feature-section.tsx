@@ -48,7 +48,7 @@ export function FeatureSection({ f, index }: FeatureSectionProps) {
           <div className="mk-card" style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
             <div className="mk-card__icon"><Icon aria-hidden={true} /></div>
             <h2 id={`${f.id}-heading`} className="mk-card__title" style={{ fontSize: "clamp(1.4rem, 2.5vw, 2rem)", marginBottom: "12px" }}>{f.title}</h2>
-            <p className="mk-section-eyebrow" style={{ marginBottom: "16px", color: "var(--mk-accent)" }}>{f.subtitle}</p>
+            <p className="mk-section-eyebrow mb-4 text-insight">{f.subtitle}</p>
             <p className="mk-card__text" style={{ fontSize: "1.05rem", lineHeight: 1.75 }}>{f.text}</p>
             <ul style={{ listStyle: "none", padding: 0, margin: "24px 0 0", display: "flex", flexDirection: "column", gap: "10px" }}>
               {f.details.map((d) => (

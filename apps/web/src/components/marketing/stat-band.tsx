@@ -65,16 +65,13 @@ export function Callout({
 
   return (
     <div
-      className="mk-panel"
+      className="mk-panel grid gap-[1.125rem] p-[clamp(22px,3vw,34px)]"
       style={{
-        display: "grid",
-        gap: "18px",
-        padding: "clamp(22px, 3vw, 34px)",
         borderColor: `color-mix(in oklab, ${accent} 35%, transparent)`,
         background: `linear-gradient(165deg, color-mix(in oklab, ${accent} 9%, transparent), rgba(255,255,255,0.02))`,
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: "14px", flexWrap: "wrap" }}>
+      <div className="flex flex-wrap items-center gap-3.5">
         {icon ? (
           <span aria-hidden="true" style={{ display: "grid", placeItems: "center", color: accent }}>
             {icon}
@@ -85,7 +82,7 @@ export function Callout({
         </h3>
         {aside ? <div style={{ marginLeft: "auto" }}>{aside}</div> : null}
       </div>
-      <div style={{ display: "grid", gap: "12px", fontSize: "0.96rem", lineHeight: 1.68, color: "var(--mk-text-soft)" }}>
+      <div className="grid gap-3 text-[0.96rem] leading-[1.68] text-text-soft">
         {children}
       </div>
     </div>

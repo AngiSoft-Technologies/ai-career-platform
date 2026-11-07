@@ -64,14 +64,14 @@ export default function ModerationPage() {
   };
 
   return (
-    <div className="stack" style={{ gap: "1.2rem" }}>
-      <div className="row row-wrap" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
+    <div className="stack gap-[1.2rem]">
+      <div className="row row-wrap justify-between items-end">
         <div>
           <div className="eyebrow">Trust and safety</div>
-          <h1 className="display" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)", marginTop: 4 }}>
+          <h1 className="display mt-1" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)" }}>
             Keep the floor clean
           </h1>
-          <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginTop: 4 }}>
+          <p className="text-muted text-[0.9rem] mt-1">
             Every posting is fingerprinted. This is where the corpus and the review queue live.
           </p>
         </div>
@@ -93,15 +93,15 @@ export default function ModerationPage() {
       </div>
 
       <div className="grid-2">
-        <Card style={{ padding: "1.1rem" }}>
+        <Card className="p-[1.1rem]">
           <SectionTitle
             eyebrow="Distribution"
             title="How postings are scored"
-            action={<ShieldAlert size={16} style={{ color: "var(--text-muted)" }} />}
+            action={<ShieldAlert size={16} className="text-muted" />}
           />
-          <div className="stack" style={{ marginTop: "0.8rem", gap: "0.4rem" }}>
+          <div className="stack mt-[0.8rem] gap-1.5">
             {risk.map((row) => (
-              <div key={row.risk_action} className="row" style={{ justifyContent: "space-between" }}>
+              <div key={row.risk_action} className="row justify-between">
                 <Badge
                   tone={
                     row.risk_action === "block"
@@ -113,22 +113,22 @@ export default function ModerationPage() {
                 >
                   {row.risk_action}
                 </Badge>
-                <span className="mono" style={{ fontSize: "0.8rem" }}>
+                <span className="mono text-[0.8rem]">
                   {row.count}
                 </span>
               </div>
             ))}
             {risk.length === 0 ? (
-              <p style={{ fontSize: "0.84rem", color: "var(--text-muted)" }}>
+              <p className="text-[0.84rem] text-muted">
                 No scored postings yet.
               </p>
             ) : null}
           </div>
         </Card>
 
-        <Card style={{ padding: "1.1rem" }}>
+        <Card className="p-[1.1rem]">
           <SectionTitle eyebrow="Queue" title="Sources awaiting classification" />
-          <div className="stack" style={{ marginTop: "0.8rem", gap: "0.4rem" }}>
+          <div className="stack mt-[0.8rem] gap-1.5">
             {(queue.data?.items ?? []).map((source) => (
               <div
                 key={source.id}
@@ -141,9 +141,9 @@ export default function ModerationPage() {
                   borderRadius: "var(--radius-sm)",
                 }}
               >
-                <div style={{ minWidth: 180 }}>
-                  <div style={{ fontSize: "0.86rem", fontWeight: 600 }}>{source.name}</div>
-                  <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
+                <div className="" style={{ minWidth: 180 }}>
+                  <div className="text-[0.86rem] font-semibold">{source.name}</div>
+                  <div className="text-[0.72rem] text-muted">
                     {source.url}
                   </div>
                 </div>
@@ -158,7 +158,7 @@ export default function ModerationPage() {
               </div>
             ))}
             {(queue.data?.items?.length ?? 0) === 0 ? (
-              <p style={{ fontSize: "0.84rem", color: "var(--text-muted)" }}>
+              <p className="text-[0.84rem] text-muted">
                 The queue is clear.
               </p>
             ) : null}
@@ -166,7 +166,7 @@ export default function ModerationPage() {
         </Card>
       </div>
 
-      <Card style={{ padding: "1.1rem" }}>
+      <Card className="p-[1.1rem]">
         <SectionTitle
           eyebrow="Corpus"
           title={`${scam.data?.total ?? 0} scam fingerprints`}
@@ -177,7 +177,7 @@ export default function ModerationPage() {
         ) : (scam.data?.items?.length ?? 0) === 0 ? (
           <EmptyState title="Corpus is empty" />
         ) : (
-          <div className="table-scroll" style={{ marginTop: "0.8rem" }}>
+          <div className="table-scroll mt-[0.8rem]">
             <table className="data-table">
               <thead>
                 <tr>
@@ -216,7 +216,7 @@ export default function ModerationPage() {
         )}
       </Card>
 
-      <Card style={{ padding: "1.1rem" }}>
+      <Card className="p-[1.1rem]">
         <SectionTitle eyebrow="Policy" title="What we remove" />
         <ul style={{ paddingLeft: "1.1rem", marginTop: "0.8rem", lineHeight: 1.9, fontSize: "0.88rem" }}>
           <li>Postings that fingerprint against a known scam template.</li>
@@ -224,7 +224,7 @@ export default function ModerationPage() {
           <li>Salary ranges that fall far below the local median for that profession.</li>
           <li>Duplicate postings replayed across dozens of boards to farm applications.</li>
         </ul>
-        <div style={{ marginTop: "0.9rem" }}>
+        <div className="mt-[0.9rem]">
           <Link href="/admin">
             <Button variant="outline" size="sm">
               Open the full control room

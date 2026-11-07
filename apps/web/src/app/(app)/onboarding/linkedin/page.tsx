@@ -98,7 +98,7 @@ export default function OnboardingLinkedInPage() {
       className="stack"
       style={{ gap: "1.5rem", maxWidth: 620, margin: "0 auto" }}
     >
-      <div style={{ textAlign: "center" }}>
+      <div className="text-center">
         <Link
           href="/onboarding"
           style={{
@@ -112,7 +112,7 @@ export default function OnboardingLinkedInPage() {
         >
           <Link2 size={14} /> Back to options
         </Link>
-        <div className="eyebrow" style={{ justifyContent: "center" }}>
+        <div className="eyebrow justify-center">
           Import from LinkedIn
         </div>
         <h1
@@ -121,14 +121,14 @@ export default function OnboardingLinkedInPage() {
         >
           Connect your LinkedIn profile
         </h1>
-        <p style={{ color: "var(--text-muted)", marginTop: 4 }}>
+        <p className="text-muted mt-1">
           Sign in and we convert your experience, education and skills into a
           structured, ATS-ready resume.
         </p>
       </div>
 
-      <Card style={{ padding: "1.5rem" }}>
-        <div className="stack" style={{ gap: "1rem", textAlign: "center" }}>
+      <Card className="p-6">
+        <div className="stack gap-4 text-center">
           <div
             style={{
               width: 64,
@@ -200,7 +200,7 @@ export default function OnboardingLinkedInPage() {
         >
           <div className="row" style={{ gap: "0.5rem", color: "var(--danger)" }}>
             <AlertCircle size={16} />
-            <span style={{ fontSize: "0.88rem" }}>{error}</span>
+            <span className="text-[0.88rem]">{error}</span>
           </div>
         </Card>
       ) : null}
@@ -218,16 +218,12 @@ export default function OnboardingLinkedInPage() {
 
       {showUrlFallback ? (
         <Card style={{ padding: "1.25rem" }}>
-          <div className="stack" style={{ gap: "0.75rem" }}>
+          <div className="stack gap-3">
             <h3 style={{ fontSize: "0.98rem", margin: 0 }}>
               Paste your public profile URL
             </h3>
             <p
-              style={{
-                margin: 0,
-                fontSize: "0.82rem",
-                color: "var(--text-muted)",
-              }}
+              className="m-0 text-[0.82rem] text-muted"
             >
               We read the public page and convert it. LinkedIn may block
               automated reads — if so, upload a PDF instead.
@@ -251,7 +247,7 @@ export default function OnboardingLinkedInPage() {
           </div>
         </Card>
       ) : (
-        <div style={{ textAlign: "center" }}>
+        <div className="text-center">
           <Button
             variant="ghost"
             size="sm"
@@ -263,12 +259,12 @@ export default function OnboardingLinkedInPage() {
       )}
 
       {profile ? (
-        <Card style={{ padding: "1rem" }}>
+        <Card className="p-4">
           <div className="stack" style={{ gap: "0.3rem", fontSize: "0.85rem" }}>
-            <div style={{ fontWeight: 600 }}>
+            <div className="font-semibold">
               {profile.firstName} {profile.lastName}
             </div>
-            <div style={{ color: "var(--text-muted)" }}>{profile.headline}</div>
+            <div className="text-muted">{profile.headline}</div>
           </div>
         </Card>
       ) : null}

@@ -173,14 +173,14 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="stack" style={{ gap: "1.2rem" }}>
-      <div className="row row-wrap" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
+    <div className="stack gap-[1.2rem]">
+      <div className="row row-wrap justify-between items-end">
         <div>
           <div className="eyebrow">Your profile</div>
-          <h1 className="display" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)", marginTop: 4 }}>
+          <h1 className="display mt-1" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)" }}>
             What we know about you
           </h1>
-          <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginTop: 4 }}>
+          <p className="text-muted text-[0.9rem] mt-1">
             This is the only source the AI uses. Every suggestion traces back to what you write here.
           </p>
         </div>
@@ -189,13 +189,13 @@ export default function ProfilePage() {
         </Button>
       </div>
 
-      <Card style={{ padding: "1.2rem" }}>
+      <Card className="p-[1.2rem]">
         <SectionTitle
           eyebrow="Basics"
           title="Identity"
-          action={<UserRound size={17} style={{ color: "var(--text-muted)" }} />}
+          action={<UserRound size={17} className="text-muted" />}
         />
-        <div className="grid-2" style={{ marginTop: "1rem" }}>
+        <div className="grid-2 mt-4">
           <Field label="Full name">
             <Input
               value={form.fullName}
@@ -248,7 +248,7 @@ export default function ProfilePage() {
           </Field>
         </div>
 
-        <div style={{ marginTop: "1rem" }}>
+        <div className="mt-4">
           <Field label="Summary" hint="Two or three sentences. This is what recruiters read first">
             <Textarea
               value={form.summary}
@@ -258,7 +258,7 @@ export default function ProfilePage() {
           </Field>
         </div>
 
-        <div className="grid-2" style={{ marginTop: "1rem" }}>
+        <div className="grid-2 mt-4">
           <Field label="Skills" hint="Comma separated">
             <Textarea
               value={form.skills}
@@ -276,13 +276,13 @@ export default function ProfilePage() {
         </div>
       </Card>
 
-      <Card style={{ padding: "1.2rem" }}>
+      <Card className="p-[1.2rem]">
         <SectionTitle
           eyebrow="Targeting"
           title="Job preferences"
           description="Used to rank your feed. Set them broadly and we will surface more, or tightly and we will surface fewer but better."
         />
-        <div className="grid-2" style={{ marginTop: "1rem" }}>
+        <div className="grid-2 mt-4">
           <Field label="Preferred countries" hint="Comma separated, any country">
             <Input
               value={prefs.preferredCountries}
@@ -364,13 +364,13 @@ export default function ProfilePage() {
         </div>
       </Card>
 
-      <Card style={{ padding: "1.2rem" }}>
+      <Card className="p-[1.2rem]">
         <SectionTitle
           eyebrow="AI"
           title="Profile analysis"
           description="Ask the model what it thinks is missing from your profile."
         />
-        <div style={{ marginTop: "0.9rem" }}>
+        <div className="mt-[0.9rem]">
           <a href="/v1/ai/profile-analysis" target="_blank" rel="noopener noreferrer">
             <Button variant="outline" size="sm" icon={<Sparkles size={14} />}>
               Run profile analysis

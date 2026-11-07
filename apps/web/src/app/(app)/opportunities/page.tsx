@@ -89,18 +89,18 @@ function OpportunitiesPageInner() {
   };
 
   return (
-    <div className="stack" style={{ gap: "1.2rem" }}>
-      <div className="row row-wrap" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
+    <div className="stack gap-[1.2rem]">
+      <div className="row row-wrap justify-between items-end">
         <div>
           <div className="eyebrow">Discovery</div>
-          <h1 className="display" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)", marginTop: 4 }}>
+          <h1 className="display mt-1" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)" }}>
             Opportunities
           </h1>
-          <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginTop: 4 }}>
+          <p className="text-muted text-[0.9rem] mt-1">
             {loading ? "Searching…" : `${items.length} roles · global coverage, every profession`}
           </p>
         </div>
-        <div className="row" style={{ gap: "0.5rem" }}>
+        <div className="row gap-2">
           {offline ? <Badge tone="warning">Offline cache</Badge> : null}
           <Button variant="outline" size="sm" icon={<RefreshCw size={14} />} onClick={refresh}>
             Refresh
@@ -108,8 +108,8 @@ function OpportunitiesPageInner() {
         </div>
       </div>
 
-      <Card style={{ padding: "1rem" }}>
-        <div className="stack" style={{ gap: "0.8rem" }}>
+      <Card className="p-4">
+        <div className="stack gap-[0.8rem]">
           <div
             className="row"
             style={{
@@ -120,7 +120,7 @@ function OpportunitiesPageInner() {
               padding: "0.55rem 0.8rem",
             }}
           >
-            <Search size={16} style={{ color: "var(--text-muted)" }} />
+            <Search size={16} className="text-muted" />
             <input
               className="opportunity-search"
               value={search}
@@ -143,9 +143,9 @@ function OpportunitiesPageInner() {
             />
           </div>
 
-          <div className="row row-wrap" style={{ gap: "0.4rem" }}>
+          <div className="row row-wrap gap-1.5">
             <span className="eyebrow" style={{ marginRight: "0.3rem" }}>
-              <Filter size={12} style={{ verticalAlign: "-1px" }} /> Mode
+              <Filter size={12} className="align-[-1px]" /> Mode
             </span>
             {WORK_MODES.map((mode) => (
               <Chip
@@ -156,7 +156,7 @@ function OpportunitiesPageInner() {
                 {titleCase(mode)}
               </Chip>
             ))}
-            <span className="eyebrow" style={{ margin: "0 0.3rem 0 0.8rem" }}>
+            <span className="eyebrow " style={{ margin: "0 0.3rem 0 0.8rem" }}>
               Level
             </span>
             {SENIORITIES.map((level) => (
@@ -170,7 +170,7 @@ function OpportunitiesPageInner() {
             ))}
             {countries.length > 0 ? (
               <>
-                <span className="eyebrow" style={{ margin: "0 0.3rem 0 0.8rem" }}>
+                <span className="eyebrow " style={{ margin: "0 0.3rem 0 0.8rem" }}>
                   Country
                 </span>
                 {countries.slice(0, 8).map((item) => (
@@ -184,7 +184,7 @@ function OpportunitiesPageInner() {
                 ))}
               </>
             ) : null}
-            <span className="eyebrow" style={{ margin: "0 0.3rem 0 0.8rem" }}>
+            <span className="eyebrow " style={{ margin: "0 0.3rem 0 0.8rem" }}>
               Employment Type
             </span>
             {EMPLOYMENT_TYPES.map((type) => (
@@ -204,7 +204,7 @@ function OpportunitiesPageInner() {
                 Twenty thousand of the catalogue's roles are in Germany
                 or the United States, and a candidate who cannot hold
                 them has no use for them. */}
-            <span className="eyebrow" style={{ margin: "0 0.3rem 0 0.8rem" }}>
+            <span className="eyebrow " style={{ margin: "0 0.3rem 0 0.8rem" }}>
               You can hold
             </span>
             <Chip
@@ -218,7 +218,7 @@ function OpportunitiesPageInner() {
       </Card>
 
       {error ? (
-        <Card style={{ padding: "1rem" }}>
+        <Card className="p-4">
           <p style={{ fontSize: "0.88rem", color: "var(--danger)" }}>{error}</p>
         </Card>
       ) : null}
@@ -269,7 +269,7 @@ function OpportunityRow({ item }: { item: Opportunity }) {
           flexWrap: "wrap",
         }}
       >
-        <div style={{ flex: 1, minWidth: 240 }}>
+        <div className="flex-1" style={{ minWidth: 240 }}>
           <div className="row row-wrap" style={{ gap: "0.45rem", marginBottom: 4 }}>
             <Badge tone="neutral">{titleCase(item.seniority)}</Badge>
             <Badge tone="info">{titleCase(item.workMode)}</Badge>
@@ -283,15 +283,15 @@ function OpportunityRow({ item }: { item: Opportunity }) {
             ) : null}
             {risk !== null && risk >= 60 ? <Badge tone="danger">Risk {Math.round(risk)}</Badge> : null}
           </div>
-          <h3 style={{ fontSize: "1rem" }}>{item.title}</h3>
+          <h3 className="text-[1rem]">{item.title}</h3>
           <div
             className="row row-wrap"
             style={{ gap: "0.7rem", marginTop: 5, fontSize: "0.82rem", color: "var(--text-muted)" }}
           >
-            <span className="row" style={{ gap: "0.3rem" }}>
+            <span className="row gap-1.5">
               <Briefcase size={13} /> {item.companyName}
             </span>
-            <span className="row" style={{ gap: "0.3rem" }}>
+            <span className="row gap-1.5">
               <MapPin size={13} /> {item.city ? `${item.city}, ` : ""}
               {item.country}
             </span>
@@ -319,14 +319,14 @@ function OpportunityRow({ item }: { item: Opportunity }) {
         </div>
 
         {typeof score === "number" ? (
-          <div style={{ textAlign: "center" }}>
+          <div className="text-center">
             <MatchRing score={score} size={58} />
-            <div className="eyebrow" style={{ marginTop: 4 }}>
+            <div className="eyebrow mt-1">
               match
             </div>
           </div>
         ) : (
-          <div style={{ textAlign: "center", minWidth: 58 }}>
+          <div className="text-center" style={{ minWidth: 58 }}>
             <div className="mono" style={{ fontSize: "1.4rem", fontWeight: 800 }}>
               {item.country.slice(0, 2).toUpperCase()}
             </div>
@@ -340,7 +340,7 @@ function OpportunityRow({ item }: { item: Opportunity }) {
 
 export default function OpportunitiesPage() {
   return (
-    <Suspense fallback={<div className="stack" style={{ gap: "0.6rem" }}><div className="surface" style={{ padding: "1rem" }} /><div className="surface" style={{ padding: "1rem" }} /></div>}>
+    <Suspense fallback={<div className="stack gap-2.5"><div className="surface p-4" /><div className="surface p-4" /></div>}>
       <OpportunitiesPageInner />
     </Suspense>
   );

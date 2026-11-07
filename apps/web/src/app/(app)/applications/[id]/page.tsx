@@ -253,8 +253,8 @@ export default function ApplicationWorkspacePage() {
 
   return (
     <div className="stack" style={{ gap: "1.1rem" }}>
-      <div className="row row-wrap" style={{ justifyContent: "space-between" }}>
-        <div className="row" style={{ gap: "0.6rem" }}>
+      <div className="row row-wrap justify-between">
+        <div className="row gap-2.5">
           <Link href="/applications">
             <Button variant="ghost" size="sm" icon={<ArrowLeft size={14} />}>
               Back
@@ -262,12 +262,12 @@ export default function ApplicationWorkspacePage() {
           </Link>
           <div>
             <div className="eyebrow">Application workspace</div>
-            <h1 className="display" style={{ fontSize: "clamp(1.3rem, 3vw, 1.9rem)" }}>
+            <h1 className="display " style={{ fontSize: "clamp(1.3rem, 3vw, 1.9rem)" }}>
               {opportunity?.title ?? "Application"}
             </h1>
           </div>
         </div>
-        <div className="row row-wrap" style={{ gap: "0.4rem" }}>
+        <div className="row row-wrap gap-1.5">
           <Badge tone="accent">{titleCase(application.status)}</Badge>
           <Button
             variant="outline"
@@ -294,9 +294,9 @@ export default function ApplicationWorkspacePage() {
 
       {tab === "overview" ? (
         <div className="grid-2">
-          <Card style={{ padding: "1.2rem" }}>
+          <Card className="p-[1.2rem]">
             <SectionTitle eyebrow="Record" title="Application details" />
-            <div className="stack" style={{ marginTop: "0.9rem", gap: "0.6rem" }}>
+            <div className="stack mt-[0.9rem] gap-2.5">
               <Detail label="Status" value={titleCase(application.status)} />
               <Detail label="Created" value={formatDateTime(application.createdAt)} />
               <Detail label="Last updated" value={formatDateTime(application.updatedAt)} />
@@ -305,7 +305,7 @@ export default function ApplicationWorkspacePage() {
               <Detail label="Role" value={opportunity?.title ?? "—"} />
             </div>
           </Card>
-          <Card style={{ padding: "1.2rem" }}>
+          <Card className="p-[1.2rem]">
             <SectionTitle eyebrow="Promise" title="How this works" />
             <ul style={{ paddingLeft: "1.1rem", marginTop: "0.9rem", lineHeight: 1.9, fontSize: "0.88rem" }}>
               <li>MboQara prepares the documents and the field answers.</li>
@@ -322,7 +322,7 @@ export default function ApplicationWorkspacePage() {
                 fontSize: "0.83rem",
               }}
             >
-              <ShieldCheck size={14} style={{ verticalAlign: "-2px" }} /> No application is ever sent
+              <ShieldCheck size={14} className="align-[-2px]" /> No application is ever sent
               without your explicit action.
             </div>
           </Card>
@@ -331,7 +331,7 @@ export default function ApplicationWorkspacePage() {
 
       {tab === "apply" ? (
         <div className="application-guide">
-          <Card className="application-guide__intro" style={{ padding: "1.2rem" }}>
+          <Card className="application-guide__intro p-[1.2rem]">
             <div className="application-guide__intro-copy">
               <div className="eyebrow">Your application, step by step</div>
               <h2>{application.status === "APPLIED" ? "Submission recorded" : opportunity?.applicationMethod === "email" ? "Prepare and send your email" : "Complete the employer’s application"}</h2>
@@ -345,7 +345,7 @@ export default function ApplicationWorkspacePage() {
 
           {analysis ? (
             <>
-              <Card style={{ padding: "1.2rem" }}>
+              <Card className="p-[1.2rem]">
           <SectionTitle
             eyebrow="Employer instructions"
             title={analysis.method === "email" ? "Email application" : `${titleCase(analysis.platform)} application`}
@@ -357,8 +357,8 @@ export default function ApplicationWorkspacePage() {
             }
           />
             <div className="application-guide__layout">
-              <div className="stack" style={{ gap: "1rem" }}>
-              <div className="row row-wrap" style={{ gap: "0.4rem" }}>
+              <div className="stack gap-4">
+              <div className="row row-wrap gap-1.5">
                 <Badge tone="accent">{titleCase(analysis.platform)}</Badge>
                 <Badge tone="neutral">{titleCase(analysis.method)}</Badge>
                 {analysis.emailRecipient ? (
@@ -445,7 +445,7 @@ export default function ApplicationWorkspacePage() {
               {analysis.fields.length > 0 ? (
                 <details className="application-guide__details">
                   <summary>Detected fields and profile suggestions ({analysis.fields.length})</summary>
-                <div className="table-scroll" style={{ marginTop: "0.8rem" }}>
+                <div className="table-scroll mt-[0.8rem]">
                   <table className="data-table">
                     <thead>
                       <tr>
@@ -465,7 +465,7 @@ export default function ApplicationWorkspacePage() {
                           <td>{field.required ? "Yes" : "No"}</td>
                           <td style={{ maxWidth: 280 }}>
                             {field.suggestedValue ? (
-                              <span style={{ fontSize: "0.8rem" }}>{field.suggestedValue}</span>
+                              <span className="text-[0.8rem]">{field.suggestedValue}</span>
                             ) : (
                               <Badge tone="warning">you provide</Badge>
                             )}
@@ -477,7 +477,7 @@ export default function ApplicationWorkspacePage() {
                 </div>
                 </details>
               ) : (
-                <p style={{ fontSize: "0.88rem", color: "var(--text-muted)" }}>
+                <p className="text-[0.88rem] text-muted">
                   No structured form was detected. This employer likely uses a bespoke page.
                 </p>
               )}
@@ -531,7 +531,7 @@ export default function ApplicationWorkspacePage() {
               </Card>
             </>
           ) : (
-            <Card style={{ padding: "1.2rem" }}>
+            <Card className="p-[1.2rem]">
             <EmptyState
               icon={<Radar size={26} />}
               title="Not analysed yet"
@@ -548,13 +548,13 @@ export default function ApplicationWorkspacePage() {
       ) : null}
 
       {tab === "followup" ? (
-        <Card style={{ padding: "1.2rem" }}>
+        <Card className="p-[1.2rem]">
           <SectionTitle
             eyebrow="Nudge"
             title="Schedule a follow-up"
             description="We will remind you. We never contact the employer without you."
           />
-          <div className="row row-wrap" style={{ gap: "0.6rem", marginTop: "1rem", alignItems: "flex-end" }}>
+          <div className="row row-wrap gap-2.5 mt-4 items-end">
             <label className="field">
               <span className="label">Due date</span>
               <input
@@ -576,18 +576,17 @@ export default function ApplicationWorkspacePage() {
       ) : null}
 
       {tab === "documents" ? (
-        <Card style={{ padding: "1.2rem" }}>
+        <Card className="p-[1.2rem]">
           <SectionTitle eyebrow="Kit" title="Documents for this role" />
-          <div className="stack" style={{ marginTop: "0.9rem", gap: "0.5rem" }}>
+          <div className="stack mt-[0.9rem] gap-2">
             <Link
               href={`/documents?opportunityId=${application.opportunityId}`}
-              className="btn btn-outline"
-              style={{ width: "100%" }}
+              className="btn btn-outline w-full"
             >
               <FileText size={15} /> Open document editor
             </Link>
             <Link href={`/opportunities/${application.opportunityId}`}>
-              <Button variant="ghost" style={{ width: "100%" }}>
+              <Button variant="ghost" className="w-full">
                 View the opportunity
               </Button>
             </Link>
@@ -600,8 +599,8 @@ export default function ApplicationWorkspacePage() {
 
 function Detail({ label, value }: { label: string; value: string }) {
   return (
-    <div className="row" style={{ justifyContent: "space-between", gap: "1rem" }}>
-      <span style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>{label}</span>
+    <div className="row justify-between gap-4">
+      <span className="text-[0.82rem] text-muted">{label}</span>
       <span style={{ fontSize: "0.86rem", fontWeight: 600, textAlign: "right" }}>{value}</span>
     </div>
   );

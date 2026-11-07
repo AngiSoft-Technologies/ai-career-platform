@@ -233,7 +233,7 @@ export default function FeaturesPage({
         }
       />
 
-      <section className="mk-section" style={{ paddingTop: "24px" }} aria-label="Platform figures">
+      <section className="mk-section pt-6" aria-label="Platform figures">
         <div className="mk-container">
           <Reveal>
             <StatBand stats={PLATFORM_STATS} label="What the platform is doing right now" />
@@ -268,8 +268,8 @@ export default function FeaturesPage({
           {features.loading ? (
             <Bento columns={3}>
               {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="mk-panel" style={{ height: "220px", padding: "28px" }}>
-                  <span style={{ color: "var(--mk-text-muted)", fontSize: "0.9rem" }}>Loading…</span>
+                <div key={i} className="mk-panel h-[220px] p-7">
+                  <span className="text-text-muted text-[0.9rem]">Loading…</span>
                 </div>
               ))}
             </Bento>
@@ -284,7 +284,7 @@ export default function FeaturesPage({
                   body={feat.body}
                   tone={i % 3 === 0 ? "signal" : i % 3 === 1 ? "verified" : "insight"}
                   footer={
-                    <Link href="/signup" className="mk-btn mk-btn--ghost mk-btn--sm" style={{ marginTop: "4px", width: "fit-content" }}>
+                    <Link href="/signup" className="mk-btn mk-btn--ghost mk-btn--sm mt-1 w-fit">
                       <ArrowRight className="mk-btn__icon" aria-hidden="true" /> Get started
                     </Link>
                   }
@@ -305,21 +305,21 @@ export default function FeaturesPage({
             title={<span id="shield-heading">Job scams are a Kenyan problem. This is a Kenyan answer.</span>}
             lede="A fake posting does not cost you an application — it costs you the fee you wired for “training materials”, the cheque you deposited, or the identity you attached to it. The trust engine reads every posting before you do."
           />
-          <div className="mk-hero-split mk-hero-split--with-media" style={{ gap: "clamp(24px, 3vw, 40px)", alignItems: "start" }}>
+          <div className="mk-hero-split mk-hero-split--with-media gap-6 lg:gap-10 items-start">
             <Reveal>
-              <div style={{ display: "grid", gap: "18px" }}>
+              <div className="grid gap-[1.125rem]">
                 <Callout
                   icon={<ShieldCheck size={26} aria-hidden="true" />}
                   tone="verified"
                   title="What it checks, in its own words"
                   aside={<span className="mk-mock__pill mk-mock__pill--verified">Live</span>}
                 >
-                  <p style={{ margin: 0 }}>
+                  <p className="m-0">
                     Salary against what the same title pays elsewhere. Domain age. Posting text against known
                     templates. A fee asked before an interview. An interview that only happens over chat. Nothing
                     here is a secret: the pane shows the reasons, so you can disagree with the verdict.
                   </p>
-                  <p style={{ margin: 0 }}>
+                  <p className="m-0">
                     A held posting never enters the feed — the decision is honoured, not displayed as decoration.
                     Moderators review the queue; candidates simply never see it.
                   </p>
@@ -330,17 +330,17 @@ export default function FeaturesPage({
               </div>
             </Reveal>
             <Reveal delay={120}>
-              <div style={{ display: "grid", gap: "18px" }}>
+              <div className="grid gap-[1.125rem]">
                 <VideoEmbed
                   videoId="BIOiwpt1RAc"
                   title="Job scams: how to spot the red flags"
                   channel="Anchor News"
                 />
-                <div className="mk-panel" style={{ padding: "20px 22px", display: "grid", gap: "10px" }}>
-                  <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 750, color: "var(--mk-text)" }}>
+                <div className="mk-panel grid gap-2.5 p-5 lg:px-5.5">
+                  <h3 className="m-0 text-[1rem] font-bold text-text">
                     Watch for these on any posting
                   </h3>
-                  <ul style={{ margin: 0, paddingLeft: "1.1rem", display: "grid", gap: "8px", fontSize: "0.9rem", lineHeight: 1.6, color: "var(--mk-text-soft)" }}>
+                  <ul className="m-0 pl-[1.1rem] grid gap-2 text-[0.9rem] leading-[1.6] text-text-soft">
                     <li>A fee before an interview — training, equipment, a “background check”.</li>
                     <li>An interview that only ever happens over WhatsApp or Telegram.</li>
                     <li>A pay figure that is out of line for the title and the country.</li>
@@ -355,7 +355,7 @@ export default function FeaturesPage({
 
       <section className="mk-section" aria-labelledby="eligibility-heading">
         <div className="mk-container">
-          <div className="mk-hero-split mk-hero-split--with-media" style={{ gap: "clamp(24px, 3vw, 48px)", alignItems: "center" }}>
+          <div className="mk-hero-split mk-hero-split--with-media gap-6 lg:gap-12 items-center">
             <SectionHeading
               eyebrow="Eligibility"
               eyebrowTone="signal"
@@ -363,7 +363,7 @@ export default function FeaturesPage({
               lede="Most of the indexed catalogue is posted abroad, and much of it carries a residency rule. Reading the requirements takes minutes; MboQara already read them."
             />
             <Reveal delay={100}>
-              <div style={{ display: "grid", gap: "10px" }}>
+              <div className="grid gap-2.5">
                 {[
                   ["Citizenship or residency required", "Checked against the posting's own words"],
                   ["Years of experience", "Matched to what your profile states"],
@@ -374,12 +374,12 @@ export default function FeaturesPage({
                     <BadgeCheck size={15} color="var(--mk-verified)" aria-hidden="true" />
                     <span className="mk-mock__row-label">
                       {label}
-                      <span style={{ display: "block", fontSize: "0.68rem", color: "var(--mk-text-muted)" }}>{note}</span>
+                      <span className="block text-[0.68rem] text-text-muted">{note}</span>
                     </span>
                     <span className="mk-mock__row-value mk-mock__row-value--verified">Verified</span>
                   </div>
                 ))}
-                <p style={{ margin: "6px 0 0", fontSize: "0.8rem", color: "var(--mk-text-muted)" }}>
+                <p className="mt-1.5 mb-0 text-[0.8rem] text-text-muted">
                   Of ~28,000 indexed roles, about 3,400 state requirements a candidate in Kenya can meet.
                 </p>
               </div>
@@ -394,7 +394,7 @@ export default function FeaturesPage({
             eyebrow="Questions"
             title={<span id="features-faq-heading">Asked before signing up</span>}
           />
-          <div style={{ maxWidth: "820px" }}>
+          <div className="max-w-prose-wide">
             <Faq
               label="Questions about the platform"
               items={[

@@ -107,10 +107,10 @@ function DashboardFrame({
 }) {
   return (
     <div className="stack" style={{ gap: "1.4rem" }}>
-      <div className="row row-wrap" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
+      <div className="row row-wrap justify-between items-end">
         <div>
           <div className="eyebrow">{eyebrow}</div>
-          <h1 className="display" style={{ fontSize: "clamp(1.7rem, 4vw, 2.6rem)", marginTop: 4 }}>
+          <h1 className="display mt-1" style={{ fontSize: "clamp(1.7rem, 4vw, 2.6rem)" }}>
             {title}
           </h1>
           {description ? (
@@ -164,19 +164,19 @@ function SeekerDashboard() {
       }
     >
       <div className="bento">
-        <Card className="span-8" style={{ gridColumn: "span 8", padding: "1.2rem" }} hover>
+        <Card className="span-8 p-[1.2rem]" style={{ gridColumn: "span 8" }} hover>
           <SectionTitle
             eyebrow="Highest match"
             title="Start here"
             description="Strongest alignment with your skills, location and seniority."
           />
           {matches.loading ? (
-            <div className="stack" style={{ marginTop: "1rem" }}>
+            <div className="stack mt-4">
               <Skeleton height={68} />
               <Skeleton height={68} />
             </div>
           ) : top.length === 0 ? (
-            <div style={{ marginTop: "1rem" }}>
+            <div className="mt-4">
               <EmptyState
                 title="No ranked roles yet"
                 description="Complete your profile and we will rank every opening we monitor against it."
@@ -188,7 +188,7 @@ function SeekerDashboard() {
               />
             </div>
           ) : (
-            <div className="stack" style={{ marginTop: "1rem", gap: "0.55rem" }}>
+            <div className="stack mt-4 gap-[0.55rem]">
               {top.slice(0, 3).map((item) => (
                 <Link
                   key={item.id}
@@ -205,29 +205,29 @@ function SeekerDashboard() {
                   }}
                 >
                   <MatchRing score={item.match?.score ?? 0} size={52} />
-                  <div style={{ minWidth: 0, flex: 1 }}>
+                  <div className="min-w-0 flex-1">
                     <div style={{ fontWeight: 700, fontSize: "0.95rem" }}>{item.title}</div>
-                    <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                    <div className="text-[0.8rem] text-muted">
                       {item.companyName} · {item.city || item.country} · {titleCase(item.workMode)}
                     </div>
                   </div>
-                  <ArrowUpRight size={16} style={{ color: "var(--text-muted)" }} />
+                  <ArrowUpRight size={16} className="text-muted" />
                 </Link>
               ))}
             </div>
           )}
         </Card>
 
-        <Card style={{ gridColumn: "span 4", padding: "1.2rem" }}>
+        <Card className="p-[1.2rem]" style={{ gridColumn: "span 4" }}>
           <SectionTitle eyebrow="Pipeline" title="Your applications" />
-          <div className="stack" style={{ marginTop: "1rem", gap: "0.6rem" }}>
+          <div className="stack mt-4 gap-2.5">
             {["SHORTLISTED", "APPLIED", "INTERVIEW", "OFFER"].map((stage) => {
               const count = pipeline.filter((item) => item.status === stage).length;
               return (
                 <div key={stage}>
                   <div className="row" style={{ justifyContent: "space-between", marginBottom: 4 }}>
-                    <span style={{ fontSize: "0.82rem" }}>{titleCase(stage)}</span>
-                    <span className="mono" style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                    <span className="text-[0.82rem]">{titleCase(stage)}</span>
+                    <span className="mono text-[0.8rem] text-muted">
                       {count}
                     </span>
                   </div>
@@ -236,16 +236,16 @@ function SeekerDashboard() {
               );
             })}
           </div>
-          <Link href="/applications" className="btn btn-ghost btn-sm" style={{ marginTop: "1rem", width: "100%" }}>
+          <Link href="/applications" className="btn btn-ghost btn-sm mt-4 w-full">
             View all applications
           </Link>
         </Card>
 
-        <Card style={{ gridColumn: "span 4", padding: "1.2rem" }}>
+        <Card className="p-[1.2rem]" style={{ gridColumn: "span 4" }}>
           <SectionTitle eyebrow="Next actions" title="Follow-ups" />
-          <div className="stack" style={{ marginTop: "1rem", gap: "0.5rem" }}>
+          <div className="stack mt-4 gap-2">
             {pending.length === 0 ? (
-              <p style={{ fontSize: "0.84rem", color: "var(--text-muted)" }}>
+              <p className="text-[0.84rem] text-muted">
                 Nothing due. We will remind you when an application needs chasing.
               </p>
             ) : (
@@ -259,9 +259,9 @@ function SeekerDashboard() {
                     border: "1px solid var(--border)",
                   }}
                 >
-                  <div style={{ fontSize: "0.84rem", fontWeight: 600 }}>{item.opportunityTitle}</div>
-                  <div className="row" style={{ justifyContent: "space-between", marginTop: 4 }}>
-                    <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>
+                  <div className="text-[0.84rem] font-semibold">{item.opportunityTitle}</div>
+                  <div className="row justify-between mt-1">
+                    <span className="text-[0.74rem] text-muted">
                       {item.companyName}
                     </span>
                     <Badge tone="warning">{relativeTime(item.dueAt)}</Badge>
@@ -272,12 +272,12 @@ function SeekerDashboard() {
           </div>
         </Card>
 
-        <Card style={{ gridColumn: "span 4", padding: "1.2rem" }}>
+        <Card className="p-[1.2rem]" style={{ gridColumn: "span 4" }}>
           <SectionTitle eyebrow="Profile strength" title="How well we can match you" />
-          <div style={{ marginTop: "1rem" }}>
+          <div className="mt-4">
             <div className="row" style={{ justifyContent: "space-between", marginBottom: 6 }}>
-              <span style={{ fontSize: "0.84rem" }}>Completeness</span>
-              <span className="mono" style={{ fontSize: "0.9rem", fontWeight: 700 }}>
+              <span className="text-[0.84rem]">Completeness</span>
+              <span className="mono text-[0.9rem] font-bold">
                 {profileValue?.skills?.length ? Math.min(100, 20 + profileValue.skills.length * 6) : 20}%
               </span>
             </div>
@@ -296,14 +296,14 @@ function SeekerDashboard() {
               <li>Add years of experience</li>
             </ul>
           </div>
-          <Link href="/profile" className="btn btn-outline btn-sm" style={{ marginTop: "1rem", width: "100%" }}>
+          <Link href="/profile" className="btn btn-outline btn-sm mt-4 w-full">
             Improve profile
           </Link>
         </Card>
 
-        <Card style={{ gridColumn: "span 4", padding: "1.2rem" }}>
+        <Card className="p-[1.2rem]" style={{ gridColumn: "span 4" }}>
           <SectionTitle eyebrow="Coverage" title="Where we are looking" />
-          <div style={{ marginTop: "1rem" }}>
+          <div className="mt-4">
             <BarList
               items={[
                 { label: "Remote roles", value: 48, hint: "48" },
@@ -313,7 +313,7 @@ function SeekerDashboard() {
               ]}
             />
           </div>
-          <Link href="/opportunities" className="btn btn-ghost btn-sm" style={{ marginTop: "1rem", width: "100%" }}>
+          <Link href="/opportunities" className="btn btn-ghost btn-sm mt-4 w-full">
             Filter by work mode
           </Link>
         </Card>
@@ -354,9 +354,9 @@ function AnalystDashboard() {
       </div>
 
       <div className="grid-2">
-        <Card style={{ padding: "1.1rem" }}>
+        <Card className="p-[1.1rem]">
           <SectionTitle eyebrow="distribution" title="Opportunities by country" />
-          <div style={{ marginTop: "1rem" }}>
+          <div className="mt-4">
             {stats.loading ? (
               <Skeleton height={140} />
             ) : (
@@ -371,9 +371,9 @@ function AnalystDashboard() {
           </div>
         </Card>
 
-        <Card style={{ padding: "1.1rem" }}>
+        <Card className="p-[1.1rem]">
           <SectionTitle eyebrow="risk" title="Fraud risk distribution" />
-          <div style={{ marginTop: "1rem" }}>
+          <div className="mt-4">
             {stats.loading ? (
               <Skeleton height={140} />
             ) : (
@@ -438,9 +438,9 @@ function AnalystDashboard() {
         </div>
       </Card>
 
-      <Card style={{ padding: "1.1rem" }}>
+      <Card className="p-[1.1rem]">
         <SectionTitle eyebrow="source yield" title="Registered sources" />
-        <div className="table-scroll" style={{ marginTop: "0.8rem" }}>
+        <div className="table-scroll mt-[0.8rem]">
           <table className="data-table">
             <thead>
               <tr>
@@ -541,13 +541,13 @@ function ModeratorDashboard() {
               }}
               className="grid-rail--aside"
             >
-              <div style={{ minWidth: 0 }}>
+              <div className="min-w-0">
                 <div className="eyebrow">
                   {index === 0 ? "Lead item" : `Item ${String(index + 1).padStart(2, "0")}`} ·{" "}
                   {item.country} · {formatDate(item.postedAt)}
                 </div>
                 <h2 style={{ fontSize: "1.25rem", marginTop: 6 }}>{item.title}</h2>
-                <p style={{ color: "var(--text-soft)", fontSize: "0.88rem", marginTop: 4 }}>
+                <p className="text-soft text-[0.88rem] mt-1">
                   {item.companyName} · {titleCase(item.city || item.country)} ·{" "}
                   {formatSalary(item.salaryMin, item.salaryMax, item.currency)}
                 </p>
@@ -577,12 +577,12 @@ function ModeratorDashboard() {
                   </p>
                 )}
               </div>
-              <div className="stack" style={{ gap: "0.5rem", minWidth: 150 }}>
+              <div className="stack gap-2" style={{ minWidth: 150 }}>
                 <Badge tone={scoreTone(100 - (item.riskScore ?? 0))}>
                   Risk {Math.round(item.riskScore ?? 0)}
                 </Badge>
                 <Link href={`/opportunities/${item.id}`}>
-                  <Button variant="outline" size="sm" style={{ width: "100%" }}>
+                  <Button variant="outline" size="sm" className="w-full">
                     Review
                   </Button>
                 </Link>
@@ -628,7 +628,7 @@ function SupportDashboard() {
       </div>
 
       <div className="grid-rail">
-        <Card style={{ padding: "1.1rem" }}>
+        <Card className="p-[1.1rem]">
           <SectionTitle eyebrow="case list" title="Latest cases" />
           <div className="stack" style={{ marginTop: "0.9rem", gap: "0.45rem" }}>
             {cases.map((item) => (
@@ -643,11 +643,11 @@ function SupportDashboard() {
                   background: "var(--surface)",
                 }}
               >
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: "0.86rem", fontWeight: 600 }}>
+                <div className="min-w-0">
+                  <div className="text-[0.86rem] font-semibold">
                     Application {item.id.slice(0, 8)}
                   </div>
-                  <div style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>
+                  <div className="text-[0.74rem] text-muted">
                     updated {relativeTime(item.updatedAt)}
                   </div>
                 </div>
@@ -655,14 +655,14 @@ function SupportDashboard() {
               </div>
             ))}
             {!cases.length && !applications.loading ? (
-              <p style={{ fontSize: "0.86rem", color: "var(--text-muted)" }}>No open cases.</p>
+              <p className="text-[0.86rem] text-muted">No open cases.</p>
             ) : null}
           </div>
         </Card>
 
-        <Card style={{ padding: "1.1rem" }}>
+        <Card className="p-[1.1rem]">
           <SectionTitle eyebrow="channels" title="Messaging connections" />
-          <div className="stack" style={{ marginTop: "0.9rem", gap: "0.5rem" }}>
+          <div className="stack mt-[0.9rem] gap-2">
             {["gmail", "whatsapp", "linkedin", "github"].map((provider) => {
               const active = channels.find((item) => item.provider === provider);
               return (
@@ -682,7 +682,7 @@ function SupportDashboard() {
               );
             })}
           </div>
-          <Link href="/connections" className="btn btn-outline btn-sm" style={{ marginTop: "1rem", width: "100%" }}>
+          <Link href="/connections" className="btn btn-outline btn-sm mt-4 w-full">
             Manage connections
           </Link>
         </Card>
@@ -726,9 +726,9 @@ function CuratorDashboard() {
       </div>
 
       <div className="grid-rail">
-        <Card style={{ padding: "1.1rem" }}>
+        <Card className="p-[1.1rem]">
           <SectionTitle eyebrow="network" title="Source register" />
-          <div className="table-scroll" style={{ marginTop: "0.8rem" }}>
+          <div className="table-scroll mt-[0.8rem]">
             <table className="data-table">
               <thead>
                 <tr>
@@ -760,9 +760,9 @@ function CuratorDashboard() {
         </Card>
 
         <div className="stack">
-          <Card style={{ padding: "1.1rem" }}>
+          <Card className="p-[1.1rem]">
             <SectionTitle eyebrow="gaps" title="Where we are thin" />
-            <div style={{ marginTop: "0.9rem" }}>
+            <div className="mt-[0.9rem]">
               <BarList
                 items={(stats.data?.sourcesByType ?? []).map((entry) => ({
                   label: titleCase(entry.type),
@@ -773,17 +773,17 @@ function CuratorDashboard() {
             </div>
           </Card>
 
-          <Card style={{ padding: "1.1rem" }}>
+          <Card className="p-[1.1rem]">
             <SectionTitle eyebrow="intake" title="Verification queue" />
-            <div className="stack" style={{ marginTop: "0.9rem", gap: "0.5rem" }}>
+            <div className="stack mt-[0.9rem] gap-2">
               {pending.length === 0 ? (
-                <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                <p className="text-[0.85rem] text-muted">
                   Nothing waiting. Candidates can submit new sources from the web app.
                 </p>
               ) : (
                 pending.map((item) => (
-                  <div key={item.id} className="row" style={{ justifyContent: "space-between" }}>
-                    <span style={{ fontSize: "0.84rem" }}>{item.name}</span>
+                  <div key={item.id} className="row justify-between">
+                    <span className="text-[0.84rem]">{item.name}</span>
                     <Badge tone="warning">pending</Badge>
                   </div>
                 ))
@@ -855,18 +855,18 @@ function AutomationDashboard() {
 
         <Card style={{ padding: "1.4rem" }}>
           <div className="eyebrow">AI tasks recorded</div>
-          <div className="display" style={{ fontSize: "clamp(2.4rem, 8vw, 4rem)", marginTop: 4 }}>
+          <div className="display mt-1" style={{ fontSize: "clamp(2.4rem, 8vw, 4rem)" }}>
             {formatNumber(stats.data?.totals.aiTasks ?? 0)}
           </div>
-          <div style={{ color: "var(--text-muted)", fontSize: "0.82rem" }}>
+          <div className="text-muted text-[0.82rem]">
             latency, tokens and cost per task
           </div>
         </Card>
       </div>
 
-      <Card style={{ padding: "1.1rem" }}>
+      <Card className="p-[1.1rem]">
         <SectionTitle eyebrow="schedules" title="Source check cadence" />
-        <div className="table-scroll" style={{ marginTop: "0.8rem" }}>
+        <div className="table-scroll mt-[0.8rem]">
           <table className="data-table">
             <thead>
               <tr>
@@ -933,9 +933,9 @@ function AdminDashboard() {
       </div>
 
       <div className="grid-2">
-        <Card style={{ padding: "1.1rem" }}>
+        <Card className="p-[1.1rem]">
           <SectionTitle eyebrow="roles" title="Access model" />
-          <div className="stack" style={{ marginTop: "0.9rem", gap: "0.5rem" }}>
+          <div className="stack mt-[0.9rem] gap-2">
             {(roles.data?.roles ?? []).map((role) => (
               <div
                 key={role.id}
@@ -948,11 +948,11 @@ function AdminDashboard() {
                   borderRadius: "var(--radius-sm)",
                 }}
               >
-                <div style={{ minWidth: 0 }}>
+                <div className="min-w-0">
                   <div style={{ fontSize: "0.86rem", fontWeight: 700, fontFamily: "var(--font-mono)" }}>
                     {role.name}
                   </div>
-                  <div style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>
+                  <div className="text-[0.74rem] text-muted">
                     {role.description}
                   </div>
                 </div>
@@ -964,9 +964,9 @@ function AdminDashboard() {
           </div>
         </Card>
 
-        <Card style={{ padding: "1.1rem" }}>
+        <Card className="p-[1.1rem]">
           <SectionTitle eyebrow="directory" title="Users" />
-          <div className="table-scroll" style={{ marginTop: "0.8rem" }}>
+          <div className="table-scroll mt-[0.8rem]">
             <table className="data-table">
               <thead>
                 <tr>
@@ -997,9 +997,9 @@ function AdminDashboard() {
         </Card>
       </div>
 
-      <Card style={{ padding: "1.1rem" }}>
+      <Card className="p-[1.1rem]">
         <SectionTitle eyebrow="taxonomy" title="Profession coverage" />
-        <div style={{ marginTop: "0.9rem" }}>
+        <div className="mt-[0.9rem]">
           <BarList
             items={(stats.data?.opportunitiesByCountry ?? []).slice(0, 10).map((entry) => ({
               label: entry.country,
