@@ -15,3 +15,12 @@ licence are named here as those licences require.
 | `career-fair.webp` | Career Fair at College of DuPage 2014 16 | COD Newsroom | [by 2.0](https://creativecommons.org/licenses/by/2.0/) | [flickr](https://www.flickr.com/photos/41431665@N07/12439324954) |
 | `handshake.webp` | Handshake business | Elo_M. | [by-sa 2.0](https://creativecommons.org/licenses/by-sa/2.0/) | [flickr](https://www.flickr.com/photos/139431111@N04/24358853002) |
 | `graduation.webp` | Graduation Ceremony | Yuya Tamai | [by 2.0](https://creativecommons.org/licenses/by/2.0/) | [flickr](https://www.flickr.com/photos/76758469@N00/8619260987) |
+
+## 2026 site refresh
+
+| File | Credit |
+| --- | --- |
+| `nairobi-2025.webp` (1920x1280) | Daniel Case, CC BY-SA 4.0 |
+| `nairobi-askari-2025.webp` (1920x1280) | Bahnfrend, CC BY 4.0 |
+| `nairobi-wikimania-2025.webp` (1920x1280) | Adjoajo, CC BY 4.0 |
+| `nairobi-people-2025.webp` (1920x1280) | Rulwarih, CC BY 4.0 |

@@ -214,7 +214,7 @@ export default function FeaturesPage({
       {/* --- hero: the radar runs behind it ---------------------------------- */}
       <section className="mk-video-hero" aria-labelledby="features-title">
         <div className="mk-video-hero__media" aria-hidden="true">
-          <BackdropVideo src="/media/radar-loop.mp4" poster="/media/radar-poster.jpg" />
+          <BackdropVideo src="/media/motion-features.mp4" poster="/media/radar-poster.jpg" />
           <span className="mk-video-hero__veil" />
           <span className="mk-aurora" />
         </div>

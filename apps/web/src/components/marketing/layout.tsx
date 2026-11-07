@@ -2,6 +2,7 @@
 
 import { ReactNode } from "react";
 import { MarketingNav } from "./nav";
+import { ScrollProgress } from "./scroll-progress";
 import { MarketingFooter } from "./footer";
 
 interface MarketingLayoutProps {
@@ -11,6 +12,7 @@ interface MarketingLayoutProps {
 export function MarketingLayout({ children }: MarketingLayoutProps) {
   return (
     <div className="mk-root">
+      <ScrollProgress />
       <MarketingNav />
       <main id="main-content">{children}</main>
       <MarketingFooter />

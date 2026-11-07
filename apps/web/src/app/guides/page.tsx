@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { Reveal } from "@/components/marketing/reveal";
 import { MarketingLayout } from "@/components/marketing/layout";
-import { PageHero, SectionHeading } from "@/components/marketing/page-hero";
+import { SectionHeading } from "@/components/marketing/page-hero";
+import { BackdropVideo } from "@/components/marketing/backdrop-video";
 import { VideoEmbed } from "@/components/marketing/video-embed";
 import { StatBand } from "@/components/marketing/stat-band";
 import { Faq, CtaBand } from "@/components/marketing/faq";
@@ -144,22 +145,47 @@ export default function GuidesPage() {
         ]}
       />
       <MarketingLayout>
-        <PageHero
-          eyebrow="Guides"
-          eyebrowTone="insight"
-          title="The search itself, explained properly"
-          lede="Videos from people who do this for a living, and written guides that take minutes. None of it is about MboQara — it is about how to look for work in this market without losing a fortnight to a fake posting."
-          actions={
-            <>
-              <a href="#videos" className="mk-btn mk-btn--signal mk-btn--lg">
-                <PlayCircle className="mk-btn__icon" aria-hidden="true" /> Watch the videos
-              </a>
-              <a href="#written" className="mk-btn mk-btn--ghost mk-btn--lg">
-                <BookOpen className="mk-btn__icon" aria-hidden="true" /> Read the guides
-              </a>
-            </>
-          }
-        />
+        {/* Guides gets its own hero — people, learning — a vertical drift
+            rather than a push, so no two pages share a background. */}
+        <section className="mk-video-hero" aria-labelledby="guides-title">
+          <div className="mk-video-hero__media" aria-hidden="true">
+            <BackdropVideo
+              src="/media/motion-guides.mp4"
+              poster="/media/nairobi-wikimania-2025.webp"
+            />
+            <span className="mk-video-hero__veil" />
+            <span className="mk-aurora" />
+          </div>
+          <div className="mk-video-hero__inner">
+            <div className="mk-container">
+              <div
+                className="mk-stagger"
+                style={{ display: "grid", gap: "20px", justifyItems: "start", maxWidth: "820px" }}
+              >
+                <span className="mk-eyebrow mk-eyebrow--signal">
+                  <span className="mk-eyebrow__rule" aria-hidden="true" />
+                  Guides
+                </span>
+                <h1 id="guides-title" className="mk-display">
+                  The search itself, explained properly
+                </h1>
+                <p className="mk-lede max-w-prose-wide">
+                  Videos from people who do this for a living, and written guides that take minutes. None of it
+                  is about MboQara — it is about how to look for work in this market without losing a fortnight
+                  to a fake posting.
+                </p>
+                <div className="flex flex-wrap gap-3 mt-1">
+                  <a href="#videos" className="mk-btn mk-btn--signal mk-btn--lg mk-glow-line">
+                    <PlayCircle className="mk-btn__icon" aria-hidden="true" /> Watch the videos
+                  </a>
+                  <a href="#written" className="mk-btn mk-btn--ghost mk-btn--lg">
+                    <BookOpen className="mk-btn__icon" aria-hidden="true" /> Read the guides
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
 
         <section className="mk-section pt-6" aria-label="Figures behind the guides">
           <div className="mk-container">

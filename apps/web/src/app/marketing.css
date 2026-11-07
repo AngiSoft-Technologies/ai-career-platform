@@ -2860,3 +2860,105 @@
 .mk-chip svg { width: 15px; height: 15px; }
 .mk-chip--verified { color: var(--mk-verified); border-color: rgba(62, 207, 142, 0.32); background: var(--mk-verified-soft); }
 .mk-chip--signal { color: var(--mk-signal); border-color: rgba(242, 163, 60, 0.32); background: var(--mk-signal-soft); }
+
+/* ==========================================================================
+   System motion — between pages, while loading, while reading
+   ========================================================================== */
+
+/* --- route transitions ------------------------------------------------------ */
+
+@keyframes mk-route-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+
+.mk-route { display: contents; }
+
+.mk-route-enter > * {
+  animation: mk-route-in 420ms var(--mk-ease) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mk-route-enter > * { animation: none; }
+}
+
+/* --- reading progress -------------------------------------------------------- */
+
+.mk-scroll-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 200;
+  transform-origin: left center;
+  transform: scaleX(0);
+  background: linear-gradient(90deg, var(--mk-signal), var(--mk-verified) 55%, var(--mk-accent));
+  box-shadow: 0 0 12px rgba(242, 163, 60, 0.5);
+}
+
+/* --- skeleton loaders ----------------------------------------------------------
+   A page that flashes "Loading…" as text is a page that admits it is
+   slow. A skeleton of the shape that is coming is the same honesty
+   without the flatness, and it is what stops a slow connection feeling
+   like a broken one. */
+
+@keyframes mk-shimmer {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+
+.mk-skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--mk-radius-md);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.mk-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.09), transparent);
+  animation: mk-shimmer 1.6s var(--mk-ease) infinite;
+}
+
+.mk-skeleton--text { height: 0.9rem; border-radius: 6px; }
+.mk-skeleton--title { height: 1.4rem; border-radius: 8px; }
+.mk-skeleton--figure { height: 4.5rem; border-radius: 12px; }
+.mk-skeleton--panel { height: 220px; border-radius: var(--mk-radius-lg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .mk-skeleton::after { animation: none; }
+}
+
+/* --- spinning refresh -----------------------------------------------------------
+   The refresh affordance, for the moments a panel reloads in place. */
+
+@keyframes mk-spin-once {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.mk-spin-once { animation: mk-spin-once 720ms var(--mk-ease) 1; }
+
+/* --- navigation --------------------------------------------------------------- */
+
+/* The active link carries a rule that draws itself under the label. */
+.mk-nav__link { position: relative; }
+
+.mk-nav__link::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 6px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--mk-signal);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 260ms var(--mk-ease);
+}
+
+.mk-nav__link.is-active::after { transform: scaleX(1); }
