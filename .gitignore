@@ -79,3 +79,5 @@ apps/web/.vercel/
 
 # Playwright CLI session snapshots
 .playwright-cli/
+.vercel
+.env*

@@ -230,6 +230,22 @@ class _OpportunityDetailScreenState extends State<OpportunityDetailScreen> {
         MatchPanel(match: match),
         const SizedBox(height: 14),
         CompanyIntelligenceCard(intelligence: company),
+        // The company card answers "who is this"; the company page
+        // answers "what else are they hiring for", which is the question
+        // that actually decides where a candidate applies next.
+        if (opportunity.companySlug.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: OutlinedButton.icon(
+              onPressed: () =>
+                  context.push('/companies/${opportunity.companySlug}'),
+              icon: const Icon(Icons.business_center_outlined),
+              label: Text(
+                'See all roles from ${opportunity.companyName}',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
         if (opportunity.skills.isNotEmpty) ...[
           const SizedBox(height: 14),
           SectionCard(

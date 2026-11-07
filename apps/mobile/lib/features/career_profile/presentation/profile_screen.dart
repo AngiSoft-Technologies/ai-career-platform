@@ -155,6 +155,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           icon: const Icon(Icons.description_outlined),
           label: const Text('My documents'),
         ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: () => context.push('/companies'),
+          icon: const Icon(Icons.business_center_outlined),
+          label: const Text('Companies hiring now'),
+        ),
         if (profile.summary.isNotEmpty) ...[
           const SizedBox(height: 14),
           SectionCard(

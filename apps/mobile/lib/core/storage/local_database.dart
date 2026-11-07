@@ -47,6 +47,13 @@ class LocalDatabase {
           )
         ''');
         await db.execute('''
+          CREATE TABLE companies (
+            id TEXT PRIMARY KEY,
+            json TEXT NOT NULL,
+            updated_at INTEGER NOT NULL
+          )
+        ''');
+        await db.execute('''
           CREATE TABLE applications (
             id TEXT PRIMARY KEY,
             opportunity_id TEXT NOT NULL,
@@ -209,6 +216,32 @@ class LocalDatabase {
     );
     if (rows.isEmpty) return null;
     return _decodeMap(rows.first);
+  }
+
+  /// The companies list, cached under one row. It is browsable content,
+  /// so it is worth keeping the last good copy of it the way the rest of
+  /// the app keeps what a candidate has already read.
+  Future<void> cacheCompanies(List<Map<String, dynamic>> companies) async {
+    await _database.insert('companies', {
+      'id': 'companies-list',
+      'json': jsonEncode({'companies': companies}),
+      'updated_at': _now,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<Map<String, dynamic>>> cachedCompanies() async {
+    final rows = await _database.query(
+      'companies',
+      where: 'id = ?',
+      whereArgs: ['companies-list'],
+      limit: 1,
+    );
+    if (rows.isEmpty) return const [];
+    final decoded = _decodeMap(rows.first)['companies'];
+    if (decoded is List) {
+      return decoded.whereType<Map<String, dynamic>>().toList();
+    }
+    return const [];
   }
 
   Future<void> cacheApplication(Map<String, dynamic> application) async {

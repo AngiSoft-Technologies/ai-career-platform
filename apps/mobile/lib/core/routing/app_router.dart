@@ -5,6 +5,8 @@ import '../../features/application_workspace/presentation/application_workspace_
 import '../../features/application_workspace/presentation/application_apply_screen.dart';
 import '../../features/applications/presentation/application_list_screen.dart';
 import '../../features/career_profile/presentation/profile_screen.dart';
+import '../../features/company_intelligence/presentation/company_detail_screen.dart';
+import '../../features/company_intelligence/presentation/company_list_screen.dart';
 import '../../features/documents/presentation/document_list_screen.dart';
 import '../../features/documents/presentation/document_viewer_screen.dart';
 import '../../features/documents/presentation/resume_builder_screen.dart';
@@ -125,6 +127,15 @@ GoRouter createAppRouter(AuthSession authSession) {
         path: '/opportunities/:id',
         builder: (context, state) =>
             OpportunityDetailScreen(opportunityId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/companies',
+        builder: (context, state) => const CompanyListScreen(),
+      ),
+      GoRoute(
+        path: '/companies/:slug',
+        builder: (context, state) =>
+            CompanyDetailScreen(slug: state.pathParameters['slug']!),
       ),
       GoRoute(
         path: '/applications/:id/workspace',

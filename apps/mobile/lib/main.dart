@@ -18,6 +18,8 @@ import 'features/application_workspace/presentation/application_workspace_contro
 import 'features/applications/data/application_repository.dart';
 import 'features/applications/presentation/application_controller.dart';
 import 'features/career_intelligence/data/career_intelligence_repository.dart';
+import 'features/company_intelligence/data/company_repository.dart';
+import 'features/company_intelligence/presentation/companies_controller.dart';
 import 'features/career_intelligence/presentation/career_intelligence_controller.dart';
 import 'features/career_profile/data/profile_repository.dart';
 import 'features/career_profile/presentation/profile_controller.dart';
@@ -97,9 +99,16 @@ Future<void> main() async {
     apiClient: apiClient,
     profileRepository: profileRepository,
   );
+  final companyRepository = CompanyRepository(
+    apiClient: apiClient,
+    database: database,
+  );
 
   final opportunityController = OpportunityController(
     repository: opportunityRepository,
+  );
+  final companiesController = CompaniesController(
+    repository: companyRepository,
   );
   final profileController = ProfileController(repository: profileRepository);
   final preferencesController = PreferencesController(
@@ -138,6 +147,9 @@ Future<void> main() async {
         ChangeNotifierProvider<AuthSession>.value(value: authSession),
         ChangeNotifierProvider<OpportunityController>.value(
           value: opportunityController,
+        ),
+        ChangeNotifierProvider<CompaniesController>.value(
+          value: companiesController,
         ),
         ChangeNotifierProvider<ProfileController>.value(
           value: profileController,

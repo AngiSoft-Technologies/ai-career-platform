@@ -114,15 +114,20 @@ class SectionCard extends StatelessWidget {
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(16),
+    this.onTap,
   });
 
   final Widget child;
   final EdgeInsets padding;
 
+  /// Makes the whole card pressable — used by browsable lists, where the
+  /// card is the button.
+  final VoidCallback? onTap;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Container(
+    final card = Container(
       width: double.infinity,
       padding: padding,
       decoration: BoxDecoration(
@@ -133,6 +138,15 @@ class SectionCard extends StatelessWidget {
         ),
       ),
       child: child,
+    );
+    if (onTap == null) return card;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: card,
+      ),
     );
   }
 }
