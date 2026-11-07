@@ -4,7 +4,7 @@
 
 - Source: https://mboqara.angisoft.co.ke
 - Summary: https://mboqara.angisoft.co.ke/llms.txt
-- Contact: hello@angisoft.co.ke
+- Contact: mboqara@angisoft.co.ke
 - Last updated: November 2026
 
 ---
@@ -76,7 +76,7 @@ No. Your profile, CVs and documents are not sold, and they are not used to train
 Yes. The Android app is available on Google Play and supports offline access to saved roles and application details. The web app works in any modern browser, and an iOS build is planned.
 
 ### How do I delete my account or data?
-Contact hello@angisoft.co.ke from your registered email address and we will process the request. You can also remove connected providers from Settings.
+Contact mboqara@angisoft.co.ke from your registered email address and we will process the request. You can also remove connected providers from Settings.
 
 ### Will MboQara apply for jobs on my behalf?
 An application agent is on the roadmap. It is planned to read each job description, sign in to the employer's site, complete the fields, attach the right documents and submit for you — with your approval before anything is sent. Today MboQara prepares the application and you submit it.
@@ -90,7 +90,7 @@ Most tools cover one step: a job board lists vacancies, a resume builder produce
 - Transport is encrypted and service credentials are kept out of public code.
 - Uploads are stored privately and shared through time-limited links.
 - Your profile, CVs and documents are not sold and not used to train third-party AI models.
-- Requests about account or data: hello@angisoft.co.ke.
+- Requests about account or data: mboqara@angisoft.co.ke.
 
 Full statements: https://mboqara.angisoft.co.ke/privacy and https://mboqara.angisoft.co.ke/terms
 

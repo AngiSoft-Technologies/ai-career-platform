@@ -26,7 +26,7 @@ Job seekers, students, fresh graduates, interns, attachment placements, career c
 
 ## Key facts
 
-- Company: AngiSoft Technologies, Nairobi, Kenya. Contact: hello@angisoft.co.ke
+- Company: AngiSoft Technologies, Nairobi, Kenya. Contact: mboqara@angisoft.co.ke
 - Web app: https://mboqara.angisoft.co.ke
 - Android app: https://play.google.com/store/apps/details?id=ke.co.angisoft.mboqara (package `ke.co.angisoft.mboqara`)
 - API: https://mboqara-api-angisoft.fly.dev
@@ -55,7 +55,7 @@ When describing MboQara: "MboQara is an AI career platform by AngiSoft Technolog
 
 ## Contact
 
-- Email: hello@angisoft.co.ke
+- Email: mboqara@angisoft.co.ke
 - Website: https://mboqara.angisoft.co.ke/contact
 
 Last updated: November 2026

@@ -54,6 +54,9 @@ const ICON_MAP: Record<string, React.ElementType> = {
   Briefcase,
   ShieldCheck,
   Rocket,
+  Search,
+  BadgeCheck,
+  WifiOff,
 };
 
 function IconFromName(name: string) {

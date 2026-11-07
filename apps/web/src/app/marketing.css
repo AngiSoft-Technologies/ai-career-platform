@@ -567,7 +567,7 @@
 
 /* ---------- Common utilities ---------- */
 .mk-section { padding: 88px 24px; }
-.mk-container { margin: 0 auto; padding: 0 24px; width: 100%; max-width: none; box-sizing: border-box; }
+.mk-container { margin: 0 auto; padding: 0 24px; width: 100%; max-width: var(--mk-container-max, 1240px); box-sizing: border-box; }
 .mk-eyebrow { display: inline-block; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--mk-accent); margin-bottom: 12px; }
 .mk-heading { font-size: clamp(2.2rem, 5vw, 3.8rem); font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; color: var(--mk-text); margin: 0 0 16px; }
 .mk-lede { font-size: clamp(1.05rem, 2.2vw, 1.25rem); line-height: 1.7; color: var(--mk-text-soft); max-width: 64ch; margin: 0 0 28px; }
@@ -862,19 +862,16 @@
 .mk-value__icon svg { width: 26px; height: 26px; }
 .mk-value__title { font-size: 1.1rem; font-weight: 700; color: var(--mk-text); margin: 0 0 8px; }
 .mk-value__text { font-size: 0.88rem; line-height: 1.6; color: var(--mk-text-soft); margin: 0; }
-.mk-timeline { max-width: 800px; margin: 0 auto; position: relative; }
-.mk-timeline::before { content: ""; position: absolute; left: 20px; top: 0; bottom: 0; width: 2px; background: linear-gradient(180deg, var(--mk-accent), var(--mk-accent-2)); }
-.mk-timeline__item { position: relative; padding-left: 64px; margin-bottom: 40px; }
-.mk-timeline__dot { position: absolute; left: 11px; top: 8px; width: 20px; height: 20px; border-radius: 50%; background: linear-gradient(135deg, var(--mk-accent), var(--mk-accent-2)); border: 3px solid var(--mk-bg); z-index: 1; }
-.mk-timeline__year { font-size: 0.78rem; font-weight: 700; color: var(--mk-accent); margin: 0 0 4px; }
-.mk-timeline__title { font-size: 1.15rem; font-weight: 700; color: var(--mk-text); margin: 0 0 8px; }
-.mk-timeline__text { font-size: 0.92rem; line-height: 1.65; color: var(--mk-text-soft); margin: 0; }
+
+/* The timeline that shipped with the original about page (dot, year) was
+   orphaned when the timeline was rebuilt as a spine of decisions. Its
+   `.mk-timeline__item` rule was still landing on the new items — a
+   padding-left of 64px and a 92px first column, which squeezed the body
+   under its own label. The rebuilt timeline's styles live at the end of
+   this file. */
 
 @media (max-width: 700px) {
   .mk-about-values { grid-template-columns: repeat(2, 1fr); }
-  .mk-timeline::before { left: 12px; }
-  .mk-timeline__item { padding-left: 48px; }
-  .mk-timeline__dot { left: 3px; }
 }
 
 /* ---------- Pricing ---------- */
@@ -1945,13 +1942,17 @@
 
 /* --- timeline ------------------------------------------------------------ */
 
-.mk-timeline { display: grid; gap: 0; }
+.mk-timeline { display: grid; gap: 0; grid-template-columns: minmax(0, 1fr); }
 
 .mk-timeline__item {
   position: relative;
   display: grid;
-  grid-template-columns: 92px 1fr;
-  gap: 24px;
+  /* Two tracks: the date column and the body. The marker is absolutely
+     positioned over the first track rather than a third grid column —
+     as a column it pushed the body onto a second row, 92px wide, under
+     its own label. */
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 20px 32px;
   padding-bottom: 40px;
 }
 
@@ -1961,7 +1962,7 @@
 .mk-timeline__item::before {
   content: "";
   position: absolute;
-  left: 11px;
+  left: 65px;
   top: 26px;
   bottom: -2px;
   width: 1px;
@@ -1971,7 +1972,8 @@
 .mk-timeline__item:last-child::before { display: none; }
 
 .mk-timeline__marker {
-  position: relative;
+  position: absolute;
+  left: 54px;
   z-index: 1;
   width: 23px;
   height: 23px;
@@ -2010,8 +2012,10 @@
 .mk-timeline__text { margin: 0; font-size: 0.95rem; line-height: 1.65; color: var(--mk-text-soft); }
 
 @media (max-width: 620px) {
-  .mk-timeline__item { grid-template-columns: 34px 1fr; gap: 16px; }
+  .mk-timeline__item { grid-template-columns: minmax(0, 1fr); gap: 16px; }
   .mk-timeline__when { display: none; }
+  .mk-timeline__marker { left: 2px; }
+  .mk-timeline__item::before { left: 13px; }
 }
 
 /* --- quote --------------------------------------------------------------- */

@@ -80,7 +80,7 @@ export const FAQ_ITEMS: FaqItem[] = [
     id: "delete-data",
     question: "How do I delete my account or data?",
     answer:
-      "Contact hello@angisoft.co.ke from your registered email address and we will process the request. You can also remove connected providers from Settings.",
+      "Contact mboqara@angisoft.co.ke from your registered email address and we will process the request. You can also remove connected providers from Settings.",
   },
   {
     id: "auto-apply",

@@ -21,10 +21,12 @@ const benefits: Feature[] = [
 ];
 
 const featureSet: Feature[] = [
-  { id: "discovery", title: "Opportunity discovery", body: "Search active roles from job boards and company career pages, all in one place.", icon: "Search" },
-  { id: "matching", title: "Profile-based matching", body: "Compare role requirements with your skills, experience, work mode and location preferences.", icon: "Target" },
-  { id: "documents", title: "Application documents", body: "Generate, edit, validate and export role-focused application documents.", icon: "FileText" },
-  { id: "workspace", title: "Application workspace", body: "Keep role details, preparation notes, documents and reminders connected to an application.", icon: "Briefcase" },
+  { id: "discovery", title: "Discovery that covers the ground", body: "Company career pages and job boards are read every day — 130 employer boards across Kenya and abroad. A role posted on a company's own site is found the same day it appears, without opening nine tabs.", icon: "Search" },
+  { id: "eligibility", title: "Eligibility, before you apply", body: "The posting's own requirements decide it: citizenship, residency, years of experience, degree or licence. If a candidate in Kenya cannot hold the role, it says so — you stop wasting an afternoon on it.", icon: "BadgeCheck" },
+  { id: "trust", title: "A trust engine between you and the scam", body: "Salary outliers, brand-new domains, template spam, fees asked up front. Postings it holds never reach the feed — the decision is honoured, not displayed as decoration — and the reasons stay readable so you can judge the verdict yourself.", icon: "ShieldCheck" },
+  { id: "matching", title: "A match score that explains itself", body: "Your skills, experience, location and work-mode preferences compared with each role, newest roles weighted — with the reasons attached. A score you can argue with is more useful than a score you cannot.", icon: "Target" },
+  { id: "documents", title: "Documents drafted for the role", body: "A CV, resume, cover letter or application email written from your own information and shaped to that specific job. Edit it, then export to PDF or Word.", icon: "FileText" },
+  { id: "offline", title: "Works on the connection you have", body: "The Android app keeps your applications and documents available offline and syncs when signal returns — because a job search in Nairobi has to survive the power going out, and so should your data.", icon: "WifiOff" },
 ];
 
 const faq = [
@@ -39,7 +41,7 @@ const faq = [
   { id: "ai-documents", question: "Does MboQara write my CV for me?", answer: "MboQara drafts role-focused CVs and cover letters from the information you provide, and shows how your experience connects to the role. You review, edit and approve everything before exporting or applying." },
   { id: "ai-training", question: "Is my data used to train AI models?", answer: "No. Your profile, CVs and documents are not sold, and they are not used to train third-party AI models." },
   { id: "android-ios", question: "Can I use MboQara on my phone?", answer: "Yes. The Android app is available on Google Play and supports offline access to saved roles and application details. The web app works in any modern browser, and an iOS build is planned." },
-  { id: "delete-data", question: "How do I delete my account or data?", answer: "Contact hello@angisoft.co.ke from your registered email address and we will process the request. You can also remove connected providers from Settings." },
+  { id: "delete-data", question: "How do I delete my account or data?", answer: "Contact mboqara@angisoft.co.ke from your registered email address and we will process the request. You can also remove connected providers from Settings." },
   { id: "auto-apply", question: "Will MboQara apply for jobs on my behalf?", answer: "An application agent is on the roadmap. It is planned to read each job description, sign in to the employer's site, complete the fields, attach the right documents and submit for you — with your approval before anything is sent. Today MboQara prepares the application and you submit it." },
   { id: "all-in-one", question: "How is MboQara different from other job sites and resume builders?", answer: "Most tools cover one step: a job board lists vacancies, a resume builder produces a document, a tracker records statuses. MboQara is the only workspace that carries a job seeker the whole way — finding live roles worldwide, scoring them against your profile, drafting the CV, cover letter and application email for that specific role, and then tracking every stage and follow-up, online or offline on Android." },
 ];

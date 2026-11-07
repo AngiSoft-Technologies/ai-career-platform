@@ -278,8 +278,8 @@ export default function CareersPage() {
             </a>
           }
           secondary={
-            <Link href="/employers" className="mk-btn mk-btn--ghost mk-btn--lg">
-              Hiring instead? <ArrowRight className="mk-btn__icon" aria-hidden="true" />
+            <Link href="/contact" className="mk-btn mk-btn--ghost mk-btn--lg">
+              Hiring, not applying? <ArrowRight className="mk-btn__icon" aria-hidden="true" />
             </Link>
           }
         />

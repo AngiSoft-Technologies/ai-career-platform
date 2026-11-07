@@ -15,7 +15,6 @@ import {
   Linkedin,
   Github,
   X,
-  Building2,
   Rocket,
   BookOpen,
   Cookie,
@@ -29,7 +28,6 @@ const FOOTER_LINKS = {
     { href: "/pricing", label: "Pricing", icon: Briefcase },
     { href: "/download", label: "Download", icon: Download },
     { href: "/features#security", label: "Scam Shield", icon: ShieldCheck },
-    { href: "/employers", label: "For employers", icon: Building2 },
   ],
   Company: [
     { href: "/about", label: "About", icon: Info },
