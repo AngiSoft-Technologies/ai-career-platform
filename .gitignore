@@ -81,3 +81,5 @@ apps/web/.vercel/
 .playwright-cli/
 .vercel
 .env*
+.aidesigner/*
+!.aidesigner/.gitkeep

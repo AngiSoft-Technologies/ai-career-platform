@@ -110,9 +110,22 @@ export function Slider({
 
   return (
     <div ref={containerRef} className={clsx("mk-slider", className)} role="region" aria-label={label} aria-roledescription="carousel">
-      <div className="mk-slider__viewport" style={{ transform: `translateX(-${index * 100}%)` }}>
+      {/* A crossfading stage, not a sliding strip of panels. The track the
+          transform used to move was a physical metaphor borrowed from a
+          film reel; for an image-and-words composition, crossfading reads
+          as the photographs themselves changing, and it lets each slide
+          hold its own entrance animation. */}
+      <div className="mk-slider__stage">
         {slides.map((slide, i) => (
-          <div key={i} className="mk-slider__slide" data-direction={direction} role="group" aria-roledescription="slide" aria-label={`Slide ${i + 1} of ${count}`}>
+          <div
+            key={i}
+            className={clsx("mk-slider__slide", i === index && "is-active")}
+            data-direction={direction}
+            role="group"
+            aria-roledescription="slide"
+            aria-label={`Slide ${i + 1} of ${count}`}
+            aria-hidden={i === index ? undefined : true}
+          >
             {slide}
           </div>
         ))}

@@ -1,5 +1,4 @@
 import ClientPage, {
-  type BenefitContent,
   type HeroContent,
   type TestimonialContent,
 } from "./client-page";
@@ -16,9 +15,8 @@ export { metadata };
 export const revalidate = 300;
 
 export default async function Page() {
-  const [hero, benefits, stories] = await Promise.all([
+  const [hero, stories] = await Promise.all([
     fetchPublicContent<HeroContent>("/content/about/hero"),
-    fetchPublicContent<BenefitContent[]>("/content/about/benefits"),
     fetchPublicContent<TestimonialContent[]>("/content/stories"),
   ]);
 
@@ -40,11 +38,7 @@ export default async function Page() {
           ]),
         ]}
       />
-      <ClientPage
-        initialHero={hero}
-        initialBenefits={benefits}
-        initialStories={stories}
-      />
+      <ClientPage initialHero={hero} initialStories={stories} />
     </>
   );
 }

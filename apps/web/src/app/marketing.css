@@ -450,8 +450,56 @@
 
 /* ---------- Slider ---------- */
 .mk-slider { position: relative; overflow: hidden; }
-.mk-slider__viewport { display: flex; width: 100%; transition: transform 500ms var(--mk-ease); will-change: transform; }
-.mk-slider__slide { flex: 0 0 100%; min-width: 0; }
+/* --- crossfading slider -----------------------------------------------------
+   The old track slid horizontally: one panel, then the next, with the
+   edge of each visible mid-move. For image-and-words compositions a
+   crossfade reads as the photographs themselves changing, and it gives
+   each slide room for its own entrance. */
+
+.mk-slider__stage { position: relative; width: 100%; }
+
+.mk-slider__slide {
+  min-width: 0;
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(0.985);
+  transition:
+    opacity 720ms var(--mk-ease),
+    transform 720ms var(--mk-ease),
+    visibility 720ms step-end;
+}
+
+.mk-slider__slide.is-active {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition:
+    opacity 720ms var(--mk-ease),
+    transform 720ms var(--mk-ease),
+    visibility 0s;
+}
+
+/* The outgoing slide drifts the other way, which reads as depth rather
+   than as a swap. */
+.mk-slider__slide[data-direction="next"] { transform: translateX(2.2%) scale(1.01); }
+.mk-slider__slide[data-direction="prev"] { transform: translateX(-2.2%) scale(1.01); }
+
+/* Ken Burns: the active photograph breathes. */
+.mk-slider__slide.is-active .jr-media-slide__image,
+.mk-slider__slide.is-active .mk-photo__image,
+.mk-slider__slide.is-active img {
+  animation: mk-ken-burns 11s ease-out both;
+}
+
+@keyframes mk-ken-burns {
+  from { transform: scale(1.001); }
+  to { transform: scale(1.085); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mk-slider__slide { transition: opacity 200ms linear; transform: none; }
+  .mk-slider__slide.is-active img { animation: none; }
+}
 .mk-slider__arrow {
   position: absolute;
   top: 50%;
@@ -1230,7 +1278,7 @@
     transform: none;
     transition: none;
   }
-  .jr-media-slider .mk-slider__viewport {
+  .jr-media-slider .mk-slider__stage {
     transition: none;
   }
 }
@@ -2358,3 +2406,450 @@
       radial-gradient(120% 90% at 85% 15%, rgba(242, 163, 60, 0.12), transparent 60%);
   }
 }
+
+/* ==========================================================================
+   Motion — the site is a product, not a poster
+   Everything below is one idea: the page responds to being scrolled,
+   hovered and read. Each animation settles to a still state under
+   prefers-reduced-motion, and the reveal classes are additive so a
+   section can stack several without fighting.
+   ========================================================================== */
+
+/* --- entrance ------------------------------------------------------------- */
+
+@keyframes mk-fade-up {
+  from { opacity: 0; transform: translateY(28px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes mk-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes mk-rise {
+  from { opacity: 0; transform: translateY(48px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Staggered children — a rail or a column of facts arrives in sequence
+   rather than all at once. */
+.mk-stagger > * {
+  opacity: 0;
+  animation: mk-fade-up 620ms var(--mk-ease) both;
+}
+.mk-stagger > *:nth-child(1) { animation-delay: 40ms; }
+.mk-stagger > *:nth-child(2) { animation-delay: 120ms; }
+.mk-stagger > *:nth-child(3) { animation-delay: 200ms; }
+.mk-stagger > *:nth-child(4) { animation-delay: 280ms; }
+.mk-stagger > *:nth-child(5) { animation-delay: 360ms; }
+.mk-stagger > *:nth-child(6) { animation-delay: 440ms; }
+.mk-stagger > *:nth-child(7) { animation-delay: 520ms; }
+.mk-stagger > *:nth-child(8) { animation-delay: 600ms; }
+
+/* Scroll-driven: the observer in motion.ts adds .is-inview. */
+.mk-reveal {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 760ms var(--mk-ease), transform 760ms var(--mk-ease);
+}
+.mk-reveal.is-inview { opacity: 1; transform: none; }
+.mk-reveal--left { transform: translateX(-36px); }
+.mk-reveal--right { transform: translateX(36px); }
+.mk-reveal--scale { transform: scale(0.94); }
+.mk-reveal--scale.is-inview { transform: none; }
+
+/* --- ambient --------------------------------------------------------------- */
+
+/* A slow aurora drift behind the hero — the same idea as the product's
+   radar, and the reason the page shouldn't feel like paper. */
+@keyframes mk-aurora {
+  0%   { transform: translate3d(-4%, -2%, 0) scale(1); }
+  50%  { transform: translate3d(4%, 3%, 0) scale(1.12); }
+  100% { transform: translate3d(-4%, -2%, 0) scale(1); }
+}
+
+.mk-aurora {
+  position: absolute;
+  inset: -20%;
+  pointer-events: none;
+  background:
+    radial-gradient(38% 44% at 22% 28%, rgba(242, 163, 60, 0.22), transparent 62%),
+    radial-gradient(42% 48% at 78% 68%, rgba(109, 139, 255, 0.20), transparent 62%),
+    radial-gradient(30% 36% at 55% 12%, rgba(62, 207, 142, 0.14), transparent 60%);
+  filter: blur(28px);
+  animation: mk-aurora 24s ease-in-out infinite;
+}
+
+/* A marquee of live facts — the moving strip under a hero. */
+@keyframes mk-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.mk-marquee {
+  display: flex;
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+
+.mk-marquee__track {
+  display: flex;
+  flex-shrink: 0;
+  gap: 48px;
+  padding-right: 48px;
+  animation: mk-marquee 38s linear infinite;
+}
+
+.mk-marquee:hover .mk-marquee__track { animation-play-state: paused; }
+
+.mk-marquee__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--mk-text-muted);
+}
+
+.mk-marquee__item svg { width: 15px; height: 15px; color: var(--mk-signal); }
+
+/* --- glassmorphism ----------------------------------------------------------
+   Over imagery, a flat panel reads as a box stuck on a photograph. The
+   glass treatment is what makes copy sit *in* the scene. */
+
+.mk-glass {
+  background: linear-gradient(165deg, rgba(16, 22, 40, 0.62), rgba(10, 14, 26, 0.44));
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: var(--mk-radius-lg);
+  box-shadow: 0 24px 70px rgba(3, 6, 14, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.mk-glass--warm {
+  background: linear-gradient(165deg, rgba(242, 163, 60, 0.16), rgba(10, 14, 26, 0.52));
+  border-color: rgba(242, 163, 60, 0.24);
+}
+
+.mk-glass--verified {
+  background: linear-gradient(165deg, rgba(62, 207, 142, 0.14), rgba(10, 14, 26, 0.52));
+  border-color: rgba(62, 207, 142, 0.24);
+}
+
+/* --- rails instead of grids --------------------------------------------------
+   A grid of equal cards is the shape of a template. A rail is a sequence:
+   items scroll horizontally on small screens and sit in a measured row on
+   wide ones, with the first one deliberately wider. */
+
+.mk-rail {
+  display: flex;
+  gap: 18px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding-bottom: 8px;
+  scrollbar-width: none;
+}
+.mk-rail::-webkit-scrollbar { display: none; }
+.mk-rail > * { scroll-snap-align: start; flex: 0 0 min(84vw, 380px); }
+.mk-rail > *:first-child { flex-basis: min(88vw, 460px); }
+
+@media (min-width: 1024px) {
+  .mk-rail { overflow: visible; }
+  .mk-rail > * { flex: 1 1 0; min-width: 0; }
+  .mk-rail > *:first-child { flex: 1.35 1 0; }
+}
+
+/* --- hover life -------------------------------------------------------------- */
+
+.mk-lift {
+  transition: transform 320ms var(--mk-ease), box-shadow 320ms var(--mk-ease), border-color 320ms var(--mk-ease);
+}
+.mk-lift:hover {
+  transform: translateY(-5px);
+  border-color: var(--mk-border-strong);
+  box-shadow: 0 22px 54px rgba(3, 6, 14, 0.5);
+}
+
+.mk-glow-line {
+  position: relative;
+  overflow: hidden;
+}
+.mk-glow-line::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.09) 48%, transparent 62%);
+  transform: translateX(-120%);
+  transition: transform 900ms var(--mk-ease);
+}
+.mk-glow-line:hover::after { transform: translateX(120%); }
+
+/* --- parallax ---------------------------------------------------------------- */
+
+.mk-parallax { will-change: transform; }
+
+/* --- text motion ------------------------------------------------------------- */
+
+@keyframes mk-gradient-text {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.mk-gradient-text {
+  background: linear-gradient(100deg, var(--mk-signal), var(--mk-verified) 45%, var(--mk-accent) 80%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: mk-gradient-text 9s ease-in-out infinite;
+}
+
+/* A typewriter-free "live" underline that draws itself once in view. */
+@keyframes mk-draw {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+.mk-draw-line {
+  transform-origin: left center;
+  animation: mk-draw 900ms var(--mk-ease) both;
+}
+
+/* --- reduced motion -----------------------------------------------------------
+   Every animation above is decorative; with a preference for less motion,
+   each settles into its final state immediately. */
+
+@media (prefers-reduced-motion: reduce) {
+  .mk-aurora,
+  .mk-marquee__track,
+  .mk-gradient-text,
+  .mk-stagger > *,
+  .mk-draw-line { animation: none !important; }
+  .mk-stagger > * { opacity: 1; }
+  .mk-gradient-text { color: var(--mk-signal); -webkit-text-fill-color: var(--mk-signal); }
+  .mk-reveal,
+  .mk-reveal--left,
+  .mk-reveal--right,
+  .mk-reveal--scale { opacity: 1; transform: none; transition: none; }
+  .mk-marquee__track { transform: none; }
+}
+
+/* --- the vault of new page furniture -------------------------------------- */
+
+/* A hero with a living background: the radar loop behind a veil, with the
+   copy on glass. This is the difference between a page that sits there
+   and a page that is running. */
+.mk-video-hero {
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid var(--mk-border);
+  background: var(--mk-bg);
+}
+
+.mk-video-hero__media {
+  position: absolute;
+  inset: 0;
+}
+
+.mk-video-hero__media video,
+.mk-video-hero__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mk-video-hero__veil {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(6, 9, 17, 0.62) 0%, rgba(6, 9, 17, 0.86) 78%),
+    radial-gradient(70% 60% at 50% 0%, rgba(242, 163, 60, 0.16), transparent 70%);
+}
+
+.mk-video-hero__inner {
+  position: relative;
+  padding-block: clamp(96px, 13vw, 172px);
+}
+
+/* Full-bleed imagery with copy on glass — the magazine spread. */
+.mk-feature-hero {
+  position: relative;
+  overflow: hidden;
+  border-block: 1px solid var(--mk-border);
+}
+
+.mk-feature-hero__media { position: absolute; inset: 0; }
+.mk-feature-hero__media img { width: 100%; height: 100%; object-fit: cover; }
+.mk-feature-hero__veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(96deg, rgba(6, 9, 17, 0.97) 6%, rgba(6, 9, 17, 0.78) 44%, rgba(6, 9, 17, 0.4) 100%);
+}
+
+/* A sticky chapter marker: as the page scrolls, the chapter name stays
+   put beside its content — the reading experience of a manual, not a
+   stack of cards. */
+.mk-chapter { display: grid; gap: clamp(24px, 4vw, 64px); grid-template-columns: minmax(0, 1fr); }
+
+@media (min-width: 1024px) {
+  .mk-chapter { grid-template-columns: 260px minmax(0, 1fr); }
+  .mk-chapter__marker { position: sticky; top: 120px; align-self: start; }
+}
+
+/* Numbers as the visual — a figure that says the thing. */
+.mk-big-number {
+  font-family: var(--mk-numeral);
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(2.6rem, 6vw, 4.6rem);
+  font-weight: 800;
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+}
+
+.mk-big-number--signal { color: var(--mk-signal); }
+.mk-big-number--verified { color: var(--mk-verified); }
+.mk-big-number--insight { color: var(--mk-accent); }
+
+/* A hover-reactive row instead of a card: the row is the button, the
+   arrow moves, the rule lights. No box around every fact. */
+.mk-row-link {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 4px;
+  border-bottom: 1px solid var(--mk-border);
+  transition: padding 300ms var(--mk-ease), border-color 300ms var(--mk-ease), background 300ms var(--mk-ease);
+}
+.mk-row-link:hover {
+  padding-left: 14px;
+  border-color: var(--mk-border-strong);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04), transparent 60%);
+}
+.mk-row-link__arrow {
+  margin-left: auto;
+  color: var(--mk-text-muted);
+  transition: transform 300ms var(--mk-ease), color 300ms var(--mk-ease);
+}
+.mk-row-link:hover .mk-row-link__arrow { transform: translateX(6px); color: var(--mk-signal); }
+
+/* Floating glass chips over imagery — the product's own vocabulary. */
+.mk-float {
+  animation: mk-float 7s ease-in-out infinite;
+}
+
+@keyframes mk-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-9px); }
+}
+
+/* Tilt on hover — the panel leans towards the pointer. */
+.mk-tilt { transition: transform 380ms var(--mk-ease), box-shadow 380ms var(--mk-ease); }
+.mk-tilt:hover { transform: perspective(900px) rotateX(3deg) rotateY(-4deg) translateY(-6px); box-shadow: 0 30px 70px rgba(3, 6, 14, 0.55); }
+
+/* ==========================================================================
+   Section vocabulary — one page, several shapes
+   A page where every section is a grid of identical cards is a template.
+   These are the other shapes a marketing page can take: a horizontal
+   rail, a split editorial with offset media, a figure-and-fact pair, a
+   full-bleed caption, a floating composition.
+   ========================================================================== */
+
+/* 1. The split editorial — photograph on one side, text offset across it.
+      The text box deliberately overlaps the image edge, which is what
+      makes the composition read as designed rather than stacked. */
+.mk-split {
+  position: relative;
+  display: grid;
+  gap: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 960px) {
+  .mk-split { grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); align-items: center; }
+  .mk-split__media { min-height: 620px; }
+  .mk-split__copy { margin-left: -12%; z-index: 1; }
+  .mk-split--flip .mk-split__media { order: 2; }
+  .mk-split--flip .mk-split__copy { margin-left: 0; margin-right: -12%; }
+}
+
+.mk-split__media { position: relative; overflow: hidden; }
+.mk-split__media img { width: 100%; height: 100%; object-fit: cover; }
+
+/* 2. The figure spread — a number so large it is the visual, with the
+      facts arranged around it. Nothing boxed. */
+.mk-figure-spread { display: grid; gap: clamp(28px, 5vw, 72px); grid-template-columns: minmax(0, 1fr); }
+
+@media (min-width: 960px) {
+  .mk-figure-spread { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); align-items: center; }
+}
+
+/* 3. The floating composition — chips and figures drifting over a
+      backdrop, so a section has depth instead of a flat panel. */
+.mk-float-stage { position: relative; }
+
+.mk-float-stage__chip {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-radius: var(--mk-radius-pill);
+  font-size: 0.84rem;
+  font-weight: 650;
+  color: var(--mk-text);
+  white-space: nowrap;
+}
+
+/* 4. The full-bleed caption — a photograph with a single line of type
+      over it, edge to edge. The quietest section on the page, which is
+      why it gives the eye somewhere to rest. */
+.mk-caption-band { position: relative; overflow: hidden; min-height: 340px; display: grid; align-items: end; }
+.mk-caption-band__media { position: absolute; inset: 0; }
+.mk-caption-band__media img { width: 100%; height: 100%; object-fit: cover; }
+.mk-caption-band__veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(0deg, rgba(6, 9, 17, 0.92) 0%, rgba(6, 9, 17, 0.25) 55%, rgba(6, 9, 17, 0.1) 100%);
+}
+.mk-caption-band__text { position: relative; padding: 48px 24px; }
+
+/* 5. The vertical rhythm break — a section that is only type, set very
+      large, with nothing around it. Contrast is what stops a page from
+      reading as one repeated component. */
+.mk-statement { padding-block: clamp(72px, 11vw, 132px); }
+.mk-statement__text {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.9rem, 4.4vw, 3.6rem);
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  color: var(--mk-text);
+  max-width: 18ch;
+}
+.mk-statement__text--wide { max-width: 30ch; }
+
+/* 6. The inline chips row — facts without boxes. */
+.mk-chip-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.mk-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: var(--mk-radius-pill);
+  border: 1px solid var(--mk-border);
+  background: rgba(255, 255, 255, 0.045);
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--mk-text-soft);
+  transition: border-color var(--mk-dur) var(--mk-ease), color var(--mk-dur) var(--mk-ease), transform var(--mk-dur) var(--mk-ease);
+}
+.mk-chip:hover { border-color: var(--mk-border-strong); color: var(--mk-text); transform: translateY(-2px); }
+.mk-chip svg { width: 15px; height: 15px; }
+.mk-chip--verified { color: var(--mk-verified); border-color: rgba(62, 207, 142, 0.32); background: var(--mk-verified-soft); }
+.mk-chip--signal { color: var(--mk-signal); border-color: rgba(242, 163, 60, 0.32); background: var(--mk-signal-soft); }

@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { Reveal } from "@/components/marketing/reveal";
+import Image from "next/image";
 import { MarketingLayout } from "@/components/marketing/layout";
 import { MediaSlider, type MediaSlide } from "@/components/marketing/media-slider";
-import { PageHero, SectionHeading } from "@/components/marketing/page-hero";
-import { Bento, BentoCard } from "@/components/marketing/bento";
+import { SectionHeading } from "@/components/marketing/page-hero";
+import { InView } from "@/components/marketing/in-view";
+import { BackdropVideo } from "@/components/marketing/backdrop-video";
+import { Marquee } from "@/components/marketing/marquee";
 import {
   AppFrame,
   DocumentDraftMock,
@@ -13,24 +15,23 @@ import {
   TrackerMock,
   TrustEngineMock,
 } from "@/components/marketing/app-frame";
-import { StatBand, Callout } from "@/components/marketing/stat-band";
-import { VideoEmbed } from "@/components/marketing/video-embed";
+import { StatBand } from "@/components/marketing/stat-band";
 import { Faq, CtaBand } from "@/components/marketing/faq";
 import { useApi } from "@/lib/hooks";
 import {
-  Target,
-  FileText,
-  Mail,
-  Briefcase,
-  ShieldCheck,
-  Rocket,
-  Search,
-  Sparkles,
   ArrowRight,
   BadgeCheck,
-  WifiOff,
+  Briefcase,
+  FileText,
+  Mail,
+  Play,
+  Rocket,
   ScanEye,
-  Layers,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  Target,
+  WifiOff,
 } from "lucide-react";
 
 interface FeatureContent {
@@ -59,11 +60,6 @@ const ICON_MAP: Record<string, React.ElementType> = {
   WifiOff,
 };
 
-function IconFromName(name: string) {
-  const Comp = ICON_MAP[name] || Rocket;
-  return <Comp aria-hidden="true" />;
-}
-
 /** What the platform is doing right now, which it can stand behind. */
 const PLATFORM_STATS = [
   {
@@ -82,14 +78,12 @@ const PLATFORM_STATS = [
   },
   {
     value: 3400,
-    suffix: "",
     label: "Roles a candidate can hold",
     note: "Postings whose stated requirements a candidate in Kenya can actually meet.",
     tone: "signal" as const,
   },
   {
     value: 359,
-    suffix: "",
     label: "Postings held back",
     note: "Caught by the trust engine and kept out of the feed — this week's count.",
     tone: "plain" as const,
@@ -154,43 +148,52 @@ const FEATURE_FALLBACK = [
     icon: "Search",
     title: "Discovery that covers the ground",
     body:
-      "Company career pages and job boards are read every day — 130 employer boards across Kenya and abroad. A role posted on a company's own site is found the same day, without you opening nine tabs.",
+      "Company career pages and job boards are read every day — 130 employer boards across Kenya and abroad. A role posted on a company's own site is found the same day it appears, without opening nine tabs.",
   },
   {
     id: "eligibility",
     icon: "BadgeCheck",
     title: "Eligibility, before you apply",
     body:
-      "The posting's own requirements decide it: citizenship, residency, years of experience, licence or degree. If a candidate in Kenya cannot hold the role, it says so — you stop wasting an afternoon on it.",
+      "The posting's own requirements decide it: citizenship, residency, years of experience, degree or licence. If a candidate in Kenya cannot hold the role, it says so — you stop wasting an afternoon on it.",
   },
   {
     id: "trust",
     icon: "ShieldCheck",
     title: "A trust engine between you and the scam",
     body:
-      "Salary outliers, brand-new domains, template spam, fees asked up front. Postings it holds never reach the feed, and the reasons stay readable so you can judge the verdict yourself.",
+      "Salary outliers, brand-new domains, template spam, fees asked up front. Postings it holds never reach the feed — the decision is honoured, not displayed as decoration.",
   },
   {
     id: "matching",
     icon: "Target",
     title: "A match score that explains itself",
     body:
-      "Your skills, experience, location and work-mode preferences compared with each role, newest roles weighted — with the reasons attached. A score you can argue with is more useful than a score you cannot.",
+      "Your skills, experience, location and work-mode preferences compared with each role, newest roles weighted — with the reasons attached.",
   },
   {
     id: "documents",
     icon: "FileText",
     title: "Documents drafted for the role",
     body:
-      "CV, resume, cover letter or application email, written from your own information and shaped to that specific job. Edit it, then export to PDF or Word.",
+      "A CV, resume, cover letter or application email written from your own information and shaped to that specific job. Edit it, then export to PDF or Word.",
   },
   {
     id: "offline",
     icon: "WifiOff",
     title: "Works on the connection you have",
     body:
-      "The Android app keeps your applications and documents available offline and syncs when signal returns — because a job search in Nairobi survives a blackout, and so should your data.",
+      "The Android app keeps your applications and documents available offline and syncs when signal returns — a job search in Nairobi has to survive the power going out.",
   },
+];
+
+const MARQUEE_FACTS = [
+  "Company career pages read daily",
+  "130 employer boards",
+  "Every posting scored before it reaches you",
+  "Eligibility read from the posting's own words",
+  "Offline on Android",
+  "Documents drafted per role",
 ];
 
 export default function FeaturesPage({
@@ -208,40 +211,53 @@ export default function FeaturesPage({
 
   return (
     <MarketingLayout>
-      <PageHero
-        eyebrow="What MboQara does"
-        eyebrowTone="signal"
-        title={h?.title ?? "Find real jobs. Apply with confidence."}
-        lede={
-          h?.description ??
-          "MboQara helps students, graduates and professionals find openings worldwide, tells them which ones they can actually hold, drafts the documents for each role, and tracks every application — all in one place."
-        }
-        actions={
-          <>
-            <Link href="/signup" className="mk-btn mk-btn--signal mk-btn--lg">
-              Create my profile <ArrowRight className="mk-btn__icon" aria-hidden="true" />
-            </Link>
-            <a href="#product-reel" className="mk-btn mk-btn--ghost mk-btn--lg">
-              <ScanEye className="mk-btn__icon" aria-hidden="true" /> See the product
-            </a>
-          </>
-        }
-        media={
-          <AppFrame url="mboqara.angisoft.co.ke/opportunities" label="The MboQara opportunity feed: ranked roles with match scores and eligibility badges">
-            <OpportunityFeedMock />
-          </AppFrame>
-        }
-      />
-
-      <section className="mk-section pt-6" aria-label="Platform figures">
-        <div className="mk-container">
-          <Reveal>
-            <StatBand stats={PLATFORM_STATS} label="What the platform is doing right now" />
-          </Reveal>
+      {/* --- hero: the radar runs behind it ---------------------------------- */}
+      <section className="mk-video-hero" aria-labelledby="features-title">
+        <div className="mk-video-hero__media" aria-hidden="true">
+          <BackdropVideo src="/media/radar-loop.mp4" poster="/media/radar-poster.jpg" />
+          <span className="mk-video-hero__veil" />
+          <span className="mk-aurora" />
+        </div>
+        <div className="mk-video-hero__inner">
+          <div className="mk-container">
+            <div className="mk-stagger" style={{ display: "grid", gap: "20px", justifyItems: "start", maxWidth: "780px" }}>
+              <span className="mk-eyebrow mk-eyebrow--signal">
+                <span className="mk-eyebrow__rule" aria-hidden="true" />
+                What MboQara does
+              </span>
+              <h1 id="features-title" className="mk-display">
+                {h?.title ?? "Find real jobs. Apply with confidence."}
+              </h1>
+              <p className="mk-lede max-w-prose-wide">
+                {h?.description ??
+                  "MboQara helps students, graduates and professionals find openings worldwide, tells them which ones they can actually hold, drafts the documents for each role, and tracks every application — all in one place."}
+              </p>
+              <div className="flex flex-wrap gap-3 mt-1">
+                <Link href="/signup" className="mk-btn mk-btn--signal mk-btn--lg mk-glow-line">
+                  Create my profile <ArrowRight className="mk-btn__icon" aria-hidden="true" />
+                </Link>
+                <a href="#reel" className="mk-btn mk-btn--ghost mk-btn--lg">
+                  <Play className="mk-btn__icon" aria-hidden="true" /> See the product
+                </a>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
-      <section className="mk-section" id="product-reel" aria-labelledby="reel-heading">
+      {/* --- live facts, moving ---------------------------------------------- */}
+      <Marquee items={MARQUEE_FACTS} />
+
+      <section className="mk-section pt-6" aria-label="Platform figures">
+        <div className="mk-container">
+          <InView className="mk-reveal">
+            <StatBand stats={PLATFORM_STATS} label="What the platform is doing right now" />
+          </InView>
+        </div>
+      </section>
+
+      {/* --- the reel --------------------------------------------------------- */}
+      <section className="mk-section" id="reel" aria-labelledby="reel-heading">
         <div className="mk-container">
           <SectionHeading
             eyebrow="Inside the product"
@@ -249,151 +265,213 @@ export default function FeaturesPage({
             title={<span id="reel-heading">What each step actually looks like</span>}
             lede="Discovery, trust, documents and tracking — drawn as the screens themselves, not as stock illustrations."
           />
-          <MediaSlider
-            slides={PRODUCT_REEL}
-            label="How each MboQara feature works"
-            interval={6500}
-          />
+          <InView className="mk-reveal mk-reveal--scale">
+            <MediaSlider slides={PRODUCT_REEL} label="How each MboQara feature works" interval={6500} />
+          </InView>
         </div>
       </section>
 
-      <section className="mk-section" aria-labelledby="features-grid-heading">
+      {/* --- the six capabilities, as a chapter with a sticky marker -----------
+          Rows, not cards: each row is the fact, hovered. */}
+      <section className="mk-section" aria-labelledby="capabilities-heading">
         <div className="mk-container">
           <SectionHeading
             eyebrow="The work it does"
             eyebrowTone="signal"
-            title={<span id="features-grid-heading">Six things a candidate should not have to do by hand</span>}
+            title={<span id="capabilities-heading">Six things a candidate should not have to do by hand</span>}
             lede="Each of these replaces a morning of browser tabs, a spreadsheet, or a guess."
           />
-          {features.loading ? (
-            <Bento columns={3}>
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="mk-panel h-[220px] p-7">
-                  <span className="text-text-muted text-[0.9rem]">Loading…</span>
-                </div>
-              ))}
-            </Bento>
-          ) : (
-            <Bento columns={3}>
-              {f.map((feat, i) => (
-                <BentoCard
-                  key={feat.id}
-                  delay={i * 70}
-                  icon={IconFromName(feat.icon)}
-                  title={feat.title}
-                  body={feat.body}
-                  tone={i % 3 === 0 ? "signal" : i % 3 === 1 ? "verified" : "insight"}
-                  footer={
-                    <Link href="/signup" className="mk-btn mk-btn--ghost mk-btn--sm mt-1 w-fit">
-                      <ArrowRight className="mk-btn__icon" aria-hidden="true" /> Get started
+          <div className="mk-chapter">
+            <aside className="mk-chapter__marker">
+              <span className="mk-eyebrow mk-eyebrow--signal">Capabilities</span>
+              <p className="mt-4 mb-0 text-[0.92rem] leading-[1.7] text-text-soft">
+                Hover a row to read it. Every one of these is a decision the platform makes so the candidate
+                doesn&apos;t have to.
+              </p>
+            </aside>
+            <div className="mk-stagger">
+              {features.loading ? (
+                <div className="mk-panel p-6">Loading…</div>
+              ) : (
+                f.map((feat, i) => {
+                  const Icon = ICON_MAP[feat.icon] ?? Rocket;
+                  return (
+                    <Link key={feat.id} href="/signup" className="mk-row-link group">
+                      <span
+                        aria-hidden="true"
+                        className="grid place-items-center w-11 h-11 rounded-xl border border-hairline bg-[rgba(255,255,255,0.05)] text-signal"
+                      >
+                        <Icon />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-[1.05rem] font-bold text-text">{feat.title}</span>
+                        <span className="block mt-1 text-[0.92rem] leading-[1.6] text-text-soft">{feat.body}</span>
+                      </span>
+                      <span className="mk-numeral text-[0.8rem] text-text-muted">{String(i + 1).padStart(2, "0")}</span>
+                      <ArrowRight className="mk-row-link__arrow w-4 h-4" aria-hidden="true" />
                     </Link>
-                  }
-                />
-              ))}
-            </Bento>
-          )}
-        </div>
-      </section>
-
-      {/* The Scam Shield — the feature the platform exists for, told with the
-          numbers and with somebody else's video about the same problem. */}
-      <section className="mk-section" aria-labelledby="shield-heading">
-        <div className="mk-container">
-          <SectionHeading
-            eyebrow="The Scam Shield"
-            eyebrowTone="verified"
-            title={<span id="shield-heading">Job scams are a Kenyan problem. This is a Kenyan answer.</span>}
-            lede="A fake posting does not cost you an application — it costs you the fee you wired for “training materials”, the cheque you deposited, or the identity you attached to it. The trust engine reads every posting before you do."
-          />
-          <div className="mk-hero-split mk-hero-split--with-media gap-6 lg:gap-10 items-start">
-            <Reveal>
-              <div className="grid gap-[1.125rem]">
-                <Callout
-                  icon={<ShieldCheck size={26} aria-hidden="true" />}
-                  tone="verified"
-                  title="What it checks, in its own words"
-                  aside={<span className="mk-mock__pill mk-mock__pill--verified">Live</span>}
-                >
-                  <p className="m-0">
-                    Salary against what the same title pays elsewhere. Domain age. Posting text against known
-                    templates. A fee asked before an interview. An interview that only happens over chat. Nothing
-                    here is a secret: the pane shows the reasons, so you can disagree with the verdict.
-                  </p>
-                  <p className="m-0">
-                    A held posting never enters the feed — the decision is honoured, not displayed as decoration.
-                    Moderators review the queue; candidates simply never see it.
-                  </p>
-                </Callout>
-                <AppFrame url="mboqara.angisoft.co.ke/opportunities/held" label="The trust engine's report on a held posting">
-                  <TrustEngineMock />
-                </AppFrame>
-              </div>
-            </Reveal>
-            <Reveal delay={120}>
-              <div className="grid gap-[1.125rem]">
-                <VideoEmbed
-                  videoId="BIOiwpt1RAc"
-                  title="Job scams: how to spot the red flags"
-                  channel="Anchor News"
-                />
-                <div className="mk-panel grid gap-2.5 p-5 lg:px-5.5">
-                  <h3 className="m-0 text-[1rem] font-bold text-text">
-                    Watch for these on any posting
-                  </h3>
-                  <ul className="m-0 pl-[1.1rem] grid gap-2 text-[0.9rem] leading-[1.6] text-text-soft">
-                    <li>A fee before an interview — training, equipment, a “background check”.</li>
-                    <li>An interview that only ever happens over WhatsApp or Telegram.</li>
-                    <li>A pay figure that is out of line for the title and the country.</li>
-                    <li>A company whose own career page does not list the role.</li>
-                  </ul>
-                </div>
-              </div>
-            </Reveal>
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
       </section>
 
-      <section className="mk-section" aria-labelledby="eligibility-heading">
+      {/* --- the split editorial — photograph beside offset text -------------
+          Deliberately not a card: the copy overlaps the photograph's edge,
+          which is what makes a composition read as designed rather than
+          stacked. */}
+      <section className="mk-section" aria-labelledby="story-heading">
         <div className="mk-container">
-          <div className="mk-hero-split mk-hero-split--with-media gap-6 lg:gap-12 items-center">
-            <SectionHeading
-              eyebrow="Eligibility"
-              eyebrowTone="signal"
-              title={<span id="eligibility-heading">Know before you apply whether you can hold the role</span>}
-              lede="Most of the indexed catalogue is posted abroad, and much of it carries a residency rule. Reading the requirements takes minutes; MboQara already read them."
-            />
-            <Reveal delay={100}>
-              <div className="grid gap-2.5">
-                {[
-                  ["Citizenship or residency required", "Checked against the posting's own words"],
-                  ["Years of experience", "Matched to what your profile states"],
-                  ["Degree, licence or certification", "Named in the posting, named on you"],
-                  ["Work mode", "Onsite in Nairobi, hybrid, or remote"],
-                ].map(([label, note]) => (
-                  <div key={label} className="mk-mock__row">
-                    <BadgeCheck size={15} color="var(--mk-verified)" aria-hidden="true" />
-                    <span className="mk-mock__row-label">
-                      {label}
-                      <span className="block text-[0.68rem] text-text-muted">{note}</span>
-                    </span>
-                    <span className="mk-mock__row-value mk-mock__row-value--verified">Verified</span>
-                  </div>
-                ))}
-                <p className="mt-1.5 mb-0 text-[0.8rem] text-text-muted">
-                  Of ~28,000 indexed roles, about 3,400 state requirements a candidate in Kenya can meet.
+          <div className="mk-split">
+            <div className="mk-split__media">
+              <Image src="/media/woman-laptop.webp" alt="A candidate writing an application at a laptop" fill sizes="(max-width: 960px) 100vw, 52vw" />
+            </div>
+            <InView className="mk-split__copy mk-reveal mk-reveal--right">
+              <div className="mk-glass p-7 lg:p-10 grid gap-4">
+                <span className="mk-eyebrow mk-eyebrow--signal">How it started</span>
+                <h2 id="story-heading" className="mk-display mk-display--sm">
+                  Nine tabs, one spreadsheet, and a week gone
+                </h2>
+                <p className="m-0 text-[1rem] leading-[1.75] text-text-soft">
+                  The usual search is nine boards open, a spreadsheet of what was applied to, and a week
+                  that disappears into postings that were never really open to you. MboQara exists because
+                  the honest version of that search — knowing which roles are real, which you can hold, and
+                  which are traps — was the version nobody had built.
+                </p>
+                <div className="mk-chip-row mt-2">
+                  <span className="mk-chip"><Search aria-hidden="true" /> Read daily</span>
+                  <span className="mk-chip mk-chip--verified"><BadgeCheck aria-hidden="true" /> Eligibility answered</span>
+                  <span className="mk-chip mk-chip--signal"><ShieldCheck aria-hidden="true" /> Scams held back</span>
+                </div>
+              </div>
+            </InView>
+          </div>
+        </div>
+      </section>
+
+      {/* --- the statement — a section that is only type ---------------------- */}
+      <section className="mk-statement" aria-label="The promise">
+        <div className="mk-container">
+          <InView className="mk-reveal">
+            <p className="mk-statement__text mk-statement__text--wide">
+              A job search you can{" "}
+              <span className="mk-gradient-text">check the work of</span> — every score, every answer,
+              every held posting, with its reasons attached.
+            </p>
+          </InView>
+        </div>
+      </section>
+
+      {/* --- the scam shield, over imagery ----------------------------------- */}
+      <section className="mk-feature-hero" aria-labelledby="shield-heading">
+        <div className="mk-feature-hero__media" aria-hidden="true">
+          <Image src="/media/career-fair.webp" alt="" fill sizes="100vw" priority />
+          <span className="mk-feature-hero__veil" />
+        </div>
+        <div className="mk-container" style={{ position: "relative" }}>
+          <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] items-center py-20 lg:py-28">
+            <InView className="mk-reveal mk-reveal--left">
+              <div className="mk-glass mk-glass--verified p-7 lg:p-9 grid gap-4">
+                <span className="mk-eyebrow mk-eyebrow--verified">
+                  <ShieldCheck className="w-4 h-4" aria-hidden="true" /> The Scam Shield
+                </span>
+                <h2 id="shield-heading" className="mk-display mk-display--sm">
+                  Job scams are a Kenyan problem. This is a Kenyan answer.
+                </h2>
+                <p className="m-0 text-[0.98rem] leading-[1.7] text-text-soft">
+                  A fake posting does not cost you an application — it costs the fee you wired for
+                  &ldquo;training materials&rdquo;, the cheque you deposited, or the identity you attached to it.
+                  The trust engine reads every posting before you do, and shows its work.
+                </p>
+                <div className="mk-stagger grid gap-2.5 mt-2">
+                  {[
+                    "Salary against what the same title pays elsewhere",
+                    "Domain age, and the text against known templates",
+                    "A fee asked before an interview",
+                    "An interview that only happens over chat",
+                  ].map((fact) => (
+                    <div key={fact} className="flex items-start gap-2.5 text-[0.9rem] leading-[1.5] text-text-soft">
+                      <BadgeCheck className="w-4 h-4 mt-0.5 shrink-0 text-verified" aria-hidden="true" />
+                      {fact}
+                    </div>
+                  ))}
+                </div>
+                <p className="m-0 text-[0.85rem] leading-[1.6] text-text-muted">
+                  A held posting never enters the feed — the decision is honoured, not displayed as decoration.
                 </p>
               </div>
-            </Reveal>
+            </InView>
+            <InView className="mk-reveal mk-reveal--right" delay={140}>
+              <div className="mk-tilt">
+                <AppFrame url="mboqara.angisoft.co.ke/opportunities/held" label="The trust engine's report on a held posting">
+                  <TrustEngineMock />
+                </AppFrame>
+              </div>
+            </InView>
+          </div>
+        </div>
+      </section>
+
+      {/* --- eligibility ------------------------------------------------------ */}
+      <section className="mk-section" aria-labelledby="eligibility-heading">
+        <div className="mk-container">
+          <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] items-center">
+            <InView className="mk-reveal">
+              <SectionHeading
+                eyebrow="Eligibility"
+                eyebrowTone="signal"
+                title={<span id="eligibility-heading">Know before you apply whether you can hold the role</span>}
+                lede="Most of the indexed catalogue is posted abroad, and much of it carries a residency rule. Reading the requirements takes minutes; MboQara already read them."
+              />
+              <Link href="/signup" className="mk-btn mk-btn--signal">
+                Create my profile <ArrowRight className="mk-btn__icon" aria-hidden="true" />
+              </Link>
+            </InView>
+            <InView className="mk-reveal mk-reveal--right" delay={120}>
+              <div className="mk-glass p-7 lg:p-9 grid gap-5">
+                <span className="mk-big-number mk-big-number--signal">3,396</span>
+                <p className="m-0 text-[0.95rem] leading-[1.65] text-text-soft">
+                  Of ~28,000 indexed roles, that is how many state requirements a candidate in Kenya can
+                  actually meet. The rest are posted abroad with a residency rule nobody reads until the
+                  rejection — and the platform says so before you spend the afternoon.
+                </p>
+                <div className="mk-stagger grid gap-2">
+                  {["Citizenship or residency", "Years of experience", "Degree, licence or certification", "Work mode"].map((row) => (
+                    <div key={row} className="flex items-center gap-3 text-[0.88rem] text-text-soft">
+                      <ScanEye className="w-4 h-4 text-signal" aria-hidden="true" />
+                      {row}
+                      <span className="ml-auto text-[0.72rem] font-bold uppercase tracking-[0.08em] text-verified">Checked</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </InView>
+          </div>
+        </div>
+      </section>
+
+      {/* --- the caption band — a photograph and one line of type ------------ */}
+      <section className="mk-caption-band" aria-label="Where the roles come from">
+        <div className="mk-caption-band__media">
+          <Image src="/media/nairobi-skyline.webp" alt="The Nairobi skyline" fill sizes="100vw" />
+          <span className="mk-caption-band__veil" />
+        </div>
+        <div className="mk-caption-band__text">
+          <div className="mk-container">
+            <InView className="mk-reveal">
+              <p className="m-0 max-w-[26ch] text-[clamp(1.3rem,2.6vw,2rem)] font-extrabold leading-[1.15] tracking-[-0.02em] text-text">
+                Built in Nairobi, for the searches that start here.
+              </p>
+            </InView>
           </div>
         </div>
       </section>
 
       <section className="mk-section" aria-labelledby="features-faq-heading">
         <div className="mk-container">
-          <SectionHeading
-            eyebrow="Questions"
-            title={<span id="features-faq-heading">Asked before signing up</span>}
-          />
+          <SectionHeading eyebrow="Questions" title={<span id="features-faq-heading">Asked before signing up</span>} />
           <div className="max-w-prose-wide">
             <Faq
               label="Questions about the platform"
@@ -408,7 +486,7 @@ export default function FeaturesPage({
                 },
                 {
                   q: "Can I trust the postings?",
-                  a: "Every posting is scored before it reaches you. One the engine holds is kept out of the feed entirely — roughly 359 this week. The reasons are readable, so you can judge the verdict instead of taking it on faith.",
+                  a: "Every posting is scored before it reaches you. One the engine holds is kept out of the feed entirely — 359 this week. The reasons are readable, so you can judge the verdict instead of taking it on faith.",
                 },
                 {
                   q: "What happens to my data?",
@@ -438,7 +516,7 @@ export default function FeaturesPage({
         }
         secondary={
           <Link href="/download" className="mk-btn mk-btn--ghost mk-btn--lg">
-            <Layers className="mk-btn__icon" aria-hidden="true" /> Get the Android app
+            <Sparkles className="mk-btn__icon" aria-hidden="true" /> Get the Android app
           </Link>
         }
       />
