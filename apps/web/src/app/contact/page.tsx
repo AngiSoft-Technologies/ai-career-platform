@@ -123,8 +123,8 @@ export default function ContactPage() {
                     <div className="mk-contact-link">
                       <Clock className="mk-contact-link__icon" aria-hidden="true" />
                       <div>
-                        <div className="mk-contact-link__label">Hours</div>
-                        <div className="mk-contact-link__value">Mon–Fri, 9am–6pm EAT</div>
+                        <div className="mk-contact-link__label">Availability</div>
+                        <div className="mk-contact-link__value">Online 24/7 — write any time</div>
                       </div>
                     </div>
                   </div>
@@ -184,38 +184,6 @@ export default function ContactPage() {
                 }
               />
             </Bento>
-          </div>
-        </section>
-
-        <section className="mk-section" aria-labelledby="employers-heading">
-          <div className="mk-container">
-            <div className="mk-hero-split mk-hero-split--with-media gap-6 lg:gap-11 items-center">
-              <SectionHeading
-                eyebrow="For employers"
-                eyebrowTone="signal"
-                title={<span id="employers-heading">Hiring? There is a page for you too</span>}
-                lede="MboQara reads your careers page like a candidate would — then shows the role to people who can actually hold it. If you post roles, the employers page explains how that works and how to reach us."
-              />
-              <Reveal delay={100}>
-                <div className="mk-panel grid gap-3.5 p-6 lg:px-6.5">
-                  <h3 style={{ margin: 0, fontSize: "1.02rem", fontWeight: 750, color: "var(--mk-text)" }}>
-                    What employers ask first
-                  </h3>
-                  <FactList
-                    label="Employer quick facts"
-                    items={[
-                      { term: "Cost to be listed", detail: "Free — employers post on their own sites" },
-                      { term: "How often boards are read", detail: "Daily" },
-                      { term: "Company pages", detail: "Aggregated per employer, with role history" },
-                      { term: "Contact for hiring", detail: "Write via the employers page" },
-                    ]}
-                  />
-                  <Link href="/employers" className="mk-btn mk-btn--signal" style={{ width: "fit-content" }}>
-                    For employers <ArrowRight className="mk-btn__icon" aria-hidden="true" />
-                  </Link>
-                </div>
-              </Reveal>
-            </div>
           </div>
         </section>
 
