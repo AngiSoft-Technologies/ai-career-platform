@@ -15,7 +15,12 @@ class AppSettings extends ChangeNotifier {
     final preferences = await SharedPreferences.getInstance();
     return AppSettings._(
       baseUrl: preferences.getString(_baseUrlKey) ?? defaultBaseUrl,
-      isDemoMode: preferences.getBool(_demoModeKey) ?? true,
+      // A fresh install starts against the real service. Demo mode is
+      // something a candidate chooses on the sign-in screen ("Continue in
+      // demo mode"), not something a first-run user is handed — a shipped
+      // app that defaults to demo shows a candidate a catalogue that is
+      // not the catalogue.
+      isDemoMode: preferences.getBool(_demoModeKey) ?? false,
     );
   }
 

@@ -92,6 +92,17 @@ class ApiClient {
     } on AuthException {
       await _tokenStorage.clearAll();
       return false;
+    } on ApiException catch (error) {
+      // A refresh that answers 401 is a session that has ended, not a
+      // crash: clear it and let the request retry unauthenticated so the
+      // caller sees the ordinary "Unauthorized" for the route it asked
+      // for. Without this, an expired refresh token escapes as an
+      // unhandled exception from a request nobody was waiting on.
+      if (error.isUnauthorized) {
+        await _tokenStorage.clearAll();
+        return false;
+      }
+      return false;
     }
   }
 

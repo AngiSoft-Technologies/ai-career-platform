@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -44,6 +45,16 @@ import 'shared/widgets/splash_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Any error that escapes every try/catch still lands here, with its
+  // stack. Returning true tells the engine it has been handled, so an
+  // unguarded 401 from a background refresh cannot take a shipped app
+  // down — and the stack tells us where it came from instead of a bare
+  // "Unauthorized" with an asynchronous gap where the caller was.
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('Unhandled error: $error\n$stack');
+    return true;
+  };
 
   final settings = await AppSettings.load();
   final database = await LocalDatabase.open();
@@ -137,8 +148,19 @@ Future<void> main() async {
     syncEngine: syncEngine,
     database: database,
   );
-  await syncController.initialize();
-  await notificationController.load();
+  // A cold start on a signed-out device is the normal first-run path: the
+  // notification load and the sync initialisation both talk to the API,
+  // and both used to run unguarded here. A 401 from a device with no
+  // session escaped main() as an unhandled exception and took the app
+  // down before its first frame — a fresh install opened, hung for a few
+  // seconds, and silently returned to the launcher. Nothing that runs
+  // before runApp gets to decide whether the app lives.
+  try {
+    await syncController.initialize();
+    await notificationController.load();
+  } catch (error) {
+    debugPrint('Startup sync skipped: $error');
+  }
 
   runApp(
     MultiProvider(

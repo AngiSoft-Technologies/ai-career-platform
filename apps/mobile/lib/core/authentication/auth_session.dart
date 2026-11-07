@@ -70,9 +70,20 @@ class AuthSession extends ChangeNotifier {
       if (error.isUnauthorized) {
         await _tokenStorage.clearAll();
         _state = SessionState.signedOut;
+        return;
       }
+      // A transport failure is not a verdict on the session: drop to
+      // signed-out for this run and let the next restore try again.
+      // Escaping here would take the app down before its first frame,
+      // because this runs before runApp.
+      debugPrint('Session restore deferred: $error');
+      _state = SessionState.signedOut;
+    } catch (error) {
+      debugPrint('Session restore failed: $error');
+      _state = SessionState.signedOut;
+    } finally {
+      notifyListeners();
     }
-    notifyListeners();
   }
 
   /// Reads whether the resume-onboarding flow is already done.

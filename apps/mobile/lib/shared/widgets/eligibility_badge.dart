@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_colors.dart';
+
 /// Whether a candidate can hold this role, in one glance.
 ///
 /// The pipeline answers this for every posting — read from what the page
@@ -13,12 +15,12 @@ class EligibilityBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final colors = context.appColors;
     final color = switch (eligibility) {
-      'eligible' => scheme.primary,
-      'unlikely' => scheme.tertiary,
-      'ineligible' => scheme.error,
-      _ => scheme.onSurfaceVariant,
+      'eligible' => colors.verified,
+      'unlikely' => colors.signal,
+      'ineligible' => Theme.of(context).colorScheme.error,
+      _ => Theme.of(context).colorScheme.onSurfaceVariant,
     };
     final label = switch (eligibility) {
       'eligible' => 'You can hold this',

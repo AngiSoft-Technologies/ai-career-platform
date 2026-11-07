@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_colors.dart';
+
 class MatchScoreBadge extends StatelessWidget {
   const MatchScoreBadge({super.key, required this.score});
 
@@ -8,12 +10,12 @@ class MatchScoreBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final percentage = score.round().clamp(0, 100);
-    final scheme = Theme.of(context).colorScheme;
+    final colors = context.appColors;
     final color = percentage >= 75
-        ? scheme.primary
+        ? colors.insight
         : percentage >= 50
-        ? scheme.tertiary
-        : scheme.error;
+        ? colors.signal
+        : Theme.of(context).colorScheme.error;
     return Semantics(
       label: '$percentage percent match',
       child: Container(

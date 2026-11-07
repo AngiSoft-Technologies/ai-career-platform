@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/formatting/app_formatters.dart';
+import '../../../shared/theme/app_colors.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/eligibility_badge.dart';
 import '../../../shared/widgets/match_score_badge.dart';
@@ -443,8 +444,10 @@ class _RiskChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final color = score >= 80 ? scheme.error : scheme.tertiary;
+    final colors = context.appColors;
+    final color = score >= 80
+        ? Theme.of(context).colorScheme.error
+        : colors.signal;
     return Semantics(
       label: 'Risk score $score',
       child: Container(
