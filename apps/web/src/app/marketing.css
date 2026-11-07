@@ -456,9 +456,16 @@
    crossfade reads as the photographs themselves changing, and it gives
    each slide room for its own entrance. */
 
-.mk-slider__stage { position: relative; width: 100%; }
+/* One grid cell, every slide in it. That is the whole trick: the cell
+   sizes itself to the tallest slide, the slides overlay each other, and
+   the crossfade needs no measured height and no absolutely positioned
+   children breaking out of the flow. The column is minmax(0, 1fr) so a
+   wide slide's min-content cannot push the cell past the stage. */
+.mk-slider__stage { display: grid; grid-template-columns: minmax(0, 1fr); width: 100%; }
 
 .mk-slider__slide {
+  grid-area: 1 / 1;
+  width: 100%;
   min-width: 0;
   opacity: 0;
   visibility: hidden;
@@ -2230,7 +2237,7 @@
 /* The mock's own chrome — mirror of the app shell, at marketing scale. */
 .mk-mock { display: grid; gap: 12px; }
 
-.mk-mock__bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mk-mock__bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
 
 .mk-mock__pill {
   display: inline-flex;
