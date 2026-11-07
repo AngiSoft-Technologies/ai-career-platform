@@ -89,6 +89,11 @@ class _OpportunityListScreenState extends State<OpportunityListScreen> {
           Expanded(child: _body(context, controller)),
         ],
       ),
+      // A live strip between the results and the edge of the screen, saying
+      // what the catalogue is doing right now. The pulsing dot is the only
+      // thing here that moves, and it is the thing that tells a candidate
+      // this feed is alive rather than a snapshot.
+      bottomNavigationBar: const _LiveStrip(),
     );
   }
 
@@ -316,6 +321,81 @@ class _OpportunityListScreenState extends State<OpportunityListScreen> {
   }
 }
 
+/// The catalogue's pulse, in one line.
+///
+/// A feed with nothing moving in it looks like a snapshot of a feed. One
+/// softly pulsing dot is enough to say the catalogue is being read right
+/// now — and it is the only motion on the screen, deliberately.
+class _LiveStrip extends StatefulWidget {
+  const _LiveStrip();
+
+  @override
+  State<_LiveStrip> createState() => _LiveStripState();
+}
+
+class _LiveStripState extends State<_LiveStrip>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1800),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final count = context.select<OpportunityController, int>(
+      (controller) => controller.items.length,
+    );
+    return SafeArea(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: theme.colorScheme.outlineVariant)),
+          color: theme.colorScheme.surfaceContainerLow,
+        ),
+        child: Row(
+          children: [
+            FadeTransition(
+              opacity: Tween<double>(begin: 0.35, end: 1).animate(
+                CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+              ),
+              child: Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: context.appColors.verified,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Live — boards read daily',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              '$count roles',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _OpportunityCard extends StatelessWidget {
   const _OpportunityCard({
     required this.opportunity,
@@ -331,6 +411,17 @@ class _OpportunityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    // The card's leading edge carries the eligibility answer, so the feed
+    // says something before a word is read: green you can hold it, amber
+    // relocation likely, red not open to you, grey unstated.
+    final accent = switch (opportunity.eligibility) {
+      'eligible' => context.appColors.verified,
+      'unlikely' => context.appColors.signal,
+      'ineligible' => theme.colorScheme.error,
+      _ => theme.colorScheme.outlineVariant,
+    };
+
     return Semantics(
       button: true,
       label: '${opportunity.title} at ${opportunity.companyName}',
@@ -339,93 +430,108 @@ class _OpportunityCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        opportunity.title,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(width: 4, color: accent),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              opportunity.title,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: isSaved
+                                ? 'Remove bookmark'
+                                : 'Save opportunity',
+                            onPressed: onSave,
+                            icon: Icon(
+                              isSaved
+                                  ? Icons.bookmark_rounded
+                                  : Icons.bookmark_border_rounded,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                    IconButton(
-                      tooltip: isSaved ? 'Remove bookmark' : 'Save opportunity',
-                      onPressed: onSave,
-                      icon: Icon(
-                        isSaved
-                            ? Icons.bookmark_rounded
-                            : Icons.bookmark_border_rounded,
+                      Text(
+                        opportunity.companyName,
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                Text(
-                  opportunity.companyName,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.w600,
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 6,
+                        children: [
+                          _Metadata(
+                            icon: Icons.location_on_outlined,
+                            value: opportunity.locationLabel,
+                          ),
+                          _Metadata(
+                            icon: Icons.payments_outlined,
+                            value: AppFormatters.salary(
+                              minimum: opportunity.salaryMin,
+                              maximum: opportunity.salaryMax,
+                              currency: opportunity.currency,
+                            ),
+                          ),
+                          _Metadata(
+                            icon: Icons.schedule_rounded,
+                            value: AppFormatters.relativeDate(
+                              opportunity.postedAt,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (opportunity.skills.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 7,
+                          runSpacing: 7,
+                          children: opportunity.skills
+                              .take(4)
+                              .map((skill) => Chip(label: Text(skill)))
+                              .toList(),
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          EligibilityBadge(
+                            eligibility: opportunity.eligibility,
+                          ),
+                          if (opportunity.sourceKind != null)
+                            _SourceChip(source: opportunity.sourceKind!),
+                          if (opportunity.match != null)
+                            MatchScoreBadge(score: opportunity.match!.score),
+                          if (opportunity.riskScore != null &&
+                              opportunity.riskScore! >= 60)
+                            _RiskChip(
+                              score: opportunity.riskScore!,
+                              flags: opportunity.riskFlags,
+                            ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 6,
-                  children: [
-                    _Metadata(
-                      icon: Icons.location_on_outlined,
-                      value: opportunity.locationLabel,
-                    ),
-                    _Metadata(
-                      icon: Icons.payments_outlined,
-                      value: AppFormatters.salary(
-                        minimum: opportunity.salaryMin,
-                        maximum: opportunity.salaryMax,
-                        currency: opportunity.currency,
-                      ),
-                    ),
-                    _Metadata(
-                      icon: Icons.schedule_rounded,
-                      value: AppFormatters.relativeDate(opportunity.postedAt),
-                    ),
-                  ],
-                ),
-                if (opportunity.skills.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 7,
-                    runSpacing: 7,
-                    children: opportunity.skills
-                        .take(4)
-                        .map((skill) => Chip(label: Text(skill)))
-                        .toList(),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    EligibilityBadge(eligibility: opportunity.eligibility),
-                    if (opportunity.sourceKind != null)
-                      _SourceChip(source: opportunity.sourceKind!),
-                    if (opportunity.match != null)
-                      MatchScoreBadge(score: opportunity.match!.score),
-                    if (opportunity.riskScore != null &&
-                        opportunity.riskScore! >= 60)
-                      _RiskChip(
-                        score: opportunity.riskScore!,
-                        flags: opportunity.riskFlags,
-                      ),
-                  ],
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
