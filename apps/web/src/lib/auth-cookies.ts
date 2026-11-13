@@ -59,11 +59,27 @@ export function toUpstreamCookieHeader(
 }
 
 /**
+ * Cookies that have to survive the trip back from the provider.
+ *
+ * The browser comes back from Google on a cross-site navigation, and the
+ * challenge cookie is what makes the exchange possible. A cookie marked
+ * "Lax" is withheld on some of those navigations, which leaves the exchange
+ * with nothing to work from and the person signed out with no sign of it.
+ * "None" is sent on every request, and browsers only accept it alongside
+ * "Secure" — which this origin has.
+ */
+const CROSS_SITE_COOKIES = ["session_challeng"];
+
+function travelsCrossSite(name: string): boolean {
+  return CROSS_SITE_COOKIES.some((marker) => name.includes(marker));
+}
+
+/**
  * Rewrites a provider cookie so the browser will keep it here.
  *
  * `Domain` is dropped (the browser would refuse it otherwise), `SameSite`
- * is set to Lax so the cookie rides along on the navigation that comes back
- * from the provider, and `Secure` is added wherever the context allows it.
+ * is set so the cookie rides along on the navigation that comes back from
+ * the provider, and `Secure` is added wherever the context allows it.
  */
 export function normalizeSetCookie(
   value: string,
@@ -97,7 +113,11 @@ export function normalizeSetCookie(
   );
   if (secureContext && !alreadySecure) attributes.push("Secure");
 
-  attributes.push("SameSite=Lax");
+  attributes.push(
+    secureContext && travelsCrossSite(upstreamName)
+      ? "SameSite=None"
+      : "SameSite=Lax",
+  );
 
   const browserName = browserCookieName(upstreamName, secureContext);
   if (!browserName) return "";
