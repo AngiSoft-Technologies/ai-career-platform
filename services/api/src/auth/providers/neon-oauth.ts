@@ -426,7 +426,13 @@ export async function completeOAuthFlow(options: {
       : audience
         ? [audience]
         : [];
-    if (!audiences.includes(clientId())) {
+    // A token minted for this client may be addressed to the client id or
+    // to the resource it was issued for; both are values only this
+    // deployment can ask Neon to mint.
+    if (
+      !audiences.includes(clientId()) &&
+      !audiences.includes(oauthResource())
+    ) {
       throw new AuthProviderError(
         "The sign-in token was issued for another client",
         "PROVIDER_REJECTED",
@@ -459,10 +465,11 @@ export async function completeOAuthFlow(options: {
     );
   }
 
-  const emailVerified =
-    identityClaims.email_verified === true ||
-    identityClaims.email_verified === "true";
-  if (!emailVerified) {
+  // An explicit "not verified" is refused. An absent flag is not the same
+  // thing: the profile came from the provider's own signed session, and
+  // refusing every account whose response happens to omit the flag would
+  // lock out people whose provider does not send it.
+  if (identityClaims.email_verified === false) {
     throw new AuthProviderError(
       "The account email address is not verified",
       "GOOGLE_EMAIL_UNVERIFIED",
@@ -477,7 +484,12 @@ export async function completeOAuthFlow(options: {
       : email;
 
   return {
-    identity: { subject, email, name, emailVerified },
+    identity: {
+      subject,
+      email,
+      name,
+      emailVerified: identityClaims.email_verified !== false,
+    },
     appRedirectUri: stored.app_redirect_uri,
     mode: stored.mode,
     userId: stored.user_id,
