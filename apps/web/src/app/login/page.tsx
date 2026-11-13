@@ -10,6 +10,7 @@ import { signInWithGoogle } from "@/lib/auth";
 import {
   continueAuthorization,
   hasProviderSession,
+  OAuthRateLimitError,
   startProviderSignIn,
 } from "@/lib/oauth";
 import { ROLE_HOME } from "@/components/theme";
@@ -174,29 +175,45 @@ function LoginInner() {
     flowStarted.current = true;
 
     void (async () => {
-      // With a provider session the authorization request can be resumed.
-      if (await hasProviderSession()) {
-        // A session means the round trip worked; a previous failure count
-        // must not block the next legitimate attempt.
-        forgetAttempts(oauthQuery);
-        if (await resumeAuthorization()) return;
+      try {
+        // With a provider session the authorization request can be resumed.
+        if (await hasProviderSession()) {
+          // A session means the round trip worked; a previous failure count
+          // must not block the next legitimate attempt.
+          forgetAttempts(oauthQuery);
+          if (await resumeAuthorization()) return;
+        }
+
+        // Without one the provider has to sign the user in first. Bound the
+        // number of times the browser is sent to the provider: an unbounded
+        // bounce is the difference between a broken flow and a loop the
+        // visitor cannot escape.
+        if (attemptsFor(oauthQuery) >= 2) {
+          setOauthError(
+            "Google sign-in could not be completed. Please try again, or sign in with your email and password.",
+          );
+          return;
+        }
+        recordAttempt(oauthQuery);
+
+        if (await beginProviderSignIn()) return;
+
+        setOauthError("We could not start the sign-in. Please try again.");
+      } catch (error) {
+        // A rate limit is not a broken sign-in, and saying so would send
+        // somebody round in circles. It says how long to wait instead.
+        if (error instanceof OAuthRateLimitError) {
+          const seconds = Math.max(1, Math.round(error.retryAfterSeconds));
+          const minutes = Math.max(1, Math.round(seconds / 60));
+          setOauthError(
+            `Too many sign-in attempts. Please wait about ${minutes} minute${
+              minutes === 1 ? "" : "s"
+            } and try again.`,
+          );
+          return;
+        }
+        setOauthError("We could not start the sign-in. Please try again.");
       }
-
-      // Without one the provider has to sign the user in first. Bound the
-      // number of times the browser is sent to the provider: an unbounded
-      // bounce is the difference between a broken flow and a loop the
-      // visitor cannot escape.
-      if (attemptsFor(oauthQuery) >= 2) {
-        setOauthError(
-          "Google sign-in could not be completed. Please try again, or sign in with your email and password.",
-        );
-        return;
-      }
-      recordAttempt(oauthQuery);
-
-      if (await beginProviderSignIn()) return;
-
-      setOauthError("We could not start the sign-in. Please try again.");
     })();
   }, [
     loading,

@@ -1,4 +1,9 @@
-import { Router, type Response } from "express";
+import {
+  Router,
+  type NextFunction,
+  type Request as ExpressRequest,
+  type Response,
+} from "express";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
 import {
@@ -95,6 +100,59 @@ authRouter.use(async (request, response, next) => {
   }
 });
 
+/**
+ * Answers a rate limit with something a person can act on.
+ *
+ * The default answer is a line of plain text, which the browser sees as a
+ * failed request and cannot explain. This one says what happened and how
+ * long to wait.
+ */
+function tooManyRequests(
+  _request: ExpressRequest,
+  response: Response,
+  _next: NextFunction,
+): void {
+  const retryAfter = Number(response.getHeader("Retry-After") ?? "60");
+  noStore(response);
+  response.status(429).json({
+    error: "Too many sign-in attempts",
+    code: "RATE_LIMITED",
+    retry_after_seconds: Number.isFinite(retryAfter) ? retryAfter : 60,
+  });
+}
+
+/**
+ * The provider relay carries the calls a sign-in needs: a session check, the
+ * sign-in request, the step to the provider, and the resume. Those are four
+ * calls for one sign-in, and the session check also happens on ordinary page
+ * loads.
+ *
+ * Counting all of them against one budget of ten a quarter of an hour was a
+ * limit on the *traffic*, not on the attempts, and it answered 429 to people
+ * who had done nothing wrong. The two buckets below are separate: the relay
+ * as a whole has room, and the calls that actually start a sign-in have their
+ * own, tighter budget.
+ */
+const neonRelayLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 300,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  handler: tooManyRequests,
+  // A session check is not an attempt. It happens on every page load and on
+  // every sign-in, so counting it against a sign-in budget punishes people
+  // for using the app.
+  skip: (request) => request.path.endsWith("/get-session"),
+});
+
+const neonSignInLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  handler: tooManyRequests,
+});
+
 const signInLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 10,
@@ -114,6 +172,19 @@ const googleLimiter = rateLimit({
   limit: 10,
   standardHeaders: "draft-8",
   legacyHeaders: false,
+});
+
+/**
+ * Starting a sign-in is not an attempt to guess a credential, and on a
+ * shared mobile connection many people can share one address. It gets its
+ * own budget, generous enough that nobody meets it by trying to sign in.
+ */
+const googleStartLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  handler: tooManyRequests,
 });
 
 const refreshLimiter = rateLimit({
@@ -450,7 +521,7 @@ authRouter.post(
  * consent screen. Neither the web app nor the mobile app ever contacts Google
  * or the provider directly.
  */
-authRouter.get("/google/start", googleLimiter, async (request, response, next) => {
+authRouter.get("/google/start", googleStartLimiter, async (request, response, next) => {
   try {
     const redirectUri = z
       .string()
@@ -715,13 +786,43 @@ async function relayNeon(
   response.status(result.status).end(Buffer.from(result.body));
 }
 
-authRouter.all("/neon/*path", googleLimiter, async (request, response, next) => {
-  try {
-    await relayNeon(request, response);
-  } catch (error) {
-    next(error);
-  }
-});
+/**
+ * The provider relay.
+ *
+ * Two budgets, not one: the relay itself is roomy, and the calls that start
+ * or resume a sign-in have their own. They are counted separately so that
+ * ordinary traffic through the relay cannot exhaust the sign-in budget, and
+ * so that a sign-in cannot exhaust the relay.
+ */
+const NEON_SIGN_IN_PATHS = new Set([
+  "sign-in/social",
+  "sign-in/social/init",
+  "oauth2/continue",
+  "oauth2/consent",
+]);
+
+authRouter.all(
+  "/neon/*path",
+  neonRelayLimiter,
+  (request, response, next) => {
+    const path = new URL(request.originalUrl, "http://localhost").pathname
+      .replace(/^\/v1\/auth\/neon\/?/, "")
+      .replace(/\/+$/, "");
+    if (NEON_SIGN_IN_PATHS.has(path)) {
+      neonSignInLimiter(request, response, next);
+      return;
+    }
+    next();
+  },
+  async (request, response, next) => {
+    try {
+      await relayNeon(request, response);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 
 authRouter.get("/session", async (request, response, next) => {
   try {

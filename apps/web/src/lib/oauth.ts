@@ -41,6 +41,22 @@ function onThisOrigin(url: string): string {
   }
 }
 
+/**
+ * Raised when the sign-in was refused because too many attempts were made.
+ *
+ * The API answers with the number of seconds to wait, so the page can say
+ * when to come back rather than only that it failed.
+ */
+export class OAuthRateLimitError extends Error {
+  readonly retryAfterSeconds: number;
+
+  constructor(retryAfterSeconds: number) {
+    super("Too many sign-in attempts");
+    this.name = "OAuthRateLimitError";
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
 async function postOAuth(path: string, body: unknown): Promise<string | null> {
   const response = await fetch(`${AUTH_RELAY_URL}${path}`, {
     method: "POST",
@@ -48,6 +64,12 @@ async function postOAuth(path: string, body: unknown): Promise<string | null> {
     headers: { "Content-Type": "application/json", accept: "application/json" },
     body: JSON.stringify(body),
   });
+  if (response.status === 429) {
+    const payload = (await response.json().catch(() => null)) as {
+      retry_after_seconds?: number;
+    } | null;
+    throw new OAuthRateLimitError(payload?.retry_after_seconds ?? 60);
+  }
   if (!response.ok) return null;
   const payload = (await response.json().catch(() => null)) as OAuthResponse | null;
   return typeof payload?.url === "string" ? onThisOrigin(payload.url) : null;
