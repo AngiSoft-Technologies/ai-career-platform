@@ -670,15 +670,21 @@ async function relayNeon(
   },
   response: Response,
 ): Promise<void> {
-  const path = new URL(request.originalUrl, "http://localhost").pathname
+  const parsed = new URL(request.originalUrl, "http://localhost");
+  const pathname = parsed.pathname
     .replace(/^\/v1\/auth\/neon\/?/, "")
     .replace(/\/+$/, "");
 
-  if (!isAllowedNeonPath(path)) {
+  if (!isAllowedNeonPath(pathname)) {
     noStore(response);
     response.status(404).json({ error: "Not found", code: "NOT_FOUND" });
     return;
   }
+
+  // The query string is part of the request: the social sign-in carries its
+  // token in one, and dropping it leaves the provider answering
+  // "[query.token] Invalid input" with nothing to work from.
+  const path = `${pathname}${parsed.search}`;
 
   const headers: Record<string, string> = {};
   const cookie = request.header("cookie");
