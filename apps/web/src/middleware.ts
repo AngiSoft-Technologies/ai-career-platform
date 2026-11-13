@@ -41,21 +41,38 @@ export async function middleware(request: NextRequest) {
   // The challenge is what makes the exchange possible. Without it there is
   // nothing to exchange, and the page should say so rather than spin.
   if (!cookieHeader || !cookieHeader.includes(CHALLENGE_COOKIE)) {
+    console.warn("[oauth] the verifier arrived without its challenge cookie");
     return NextResponse.next();
   }
 
   const origin = request.nextUrl.origin;
-  const upstream = await fetch(`${API_URL}/auth/neon/get-session`, {
-    method: "GET",
-    headers: {
-      cookie: cookieHeader,
-      origin,
-      accept: "application/json",
+  // The query has to go with it. The provider's exchange reads the verifier
+  // from the query, and it is the whole point of the request — without it
+  // the provider has nothing to exchange and answers 401.
+  const upstream = await fetch(
+    `${API_URL}/auth/neon/get-session${request.nextUrl.search}`,
+    {
+      method: "GET",
+      headers: {
+        cookie: cookieHeader,
+        origin,
+        accept: "application/json",
+      },
+      cache: "no-store",
     },
-    cache: "no-store",
-  }).catch(() => null);
+  ).catch(() => null);
 
-  if (!upstream || !upstream.ok) return NextResponse.next();
+  if (!upstream) {
+    console.warn("[oauth] the verifier exchange could not reach the provider");
+    return NextResponse.next();
+  }
+
+  if (!upstream.ok) {
+    console.warn(
+      `[oauth] the verifier exchange was refused: ${upstream.status}`,
+    );
+    return NextResponse.next();
+  }
 
   const secureContext = origin.startsWith("https://");
   const url = request.nextUrl.clone();
