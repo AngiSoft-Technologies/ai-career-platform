@@ -77,6 +77,41 @@ async function getOAuth(path: string): Promise<unknown> {
   return response.json().catch(() => null);
 }
 
+/**
+ * Reads the provider's signed authorization request from a URL.
+ *
+ * The provider hands the request over in two shapes: nested in an
+ * "oauth_query" parameter, or spread across the query itself. Both are
+ * signed, and the signature covers the values rather than the encoding, so
+ * the request is handed back exactly as it arrived — re-encoded only when
+ * something has to be taken out of it.
+ *
+ * A one-time verifier can ride along on the same query. It is not part of
+ * the signed request and it is spent by the time the provider asks for
+ * consent, so it is dropped before the request is handed back.
+ */
+export function readSignedRequest(params: {
+  get(name: string): string | null;
+  toString(): string;
+}): string {
+  const explicit = params.get("oauth_query");
+  if (explicit) return explicit;
+
+  const raw = params.toString();
+  if (!raw) return "";
+
+  const signed = new URLSearchParams(raw);
+  // A request without a client and a signature is not a signed request —
+  // it is somebody's idea of one.
+  if (!signed.get("client_id") || !signed.get("sig")) return "";
+
+  if (signed.has("neon_auth_session_verifier")) {
+    signed.delete("neon_auth_session_verifier");
+    return signed.toString();
+  }
+  return raw;
+}
+
 export interface PublicClient {
   client_id?: string;
   client_name?: string;

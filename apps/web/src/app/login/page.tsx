@@ -11,6 +11,7 @@ import {
   continueAuthorization,
   hasProviderSession,
   OAuthRateLimitError,
+  readSignedRequest,
   startProviderSignIn,
 } from "@/lib/oauth";
 import { ROLE_HOME } from "@/components/theme";
@@ -129,19 +130,11 @@ function LoginInner() {
   /**
    * The signed authorization request.
    *
-   * The provider redirects the browser here with the authorization request as
-   * query parameters. The query is signed and expires, so it is handed back
-   * exactly as received.
+   * The provider redirects the browser here with the authorization request
+   * as query parameters. The query is signed and expires, so it is handed
+   * back exactly as received.
    */
-  const oauthQuery = useMemo(() => {
-    const explicit = params.get("oauth_query");
-    if (explicit) return explicit;
-    const raw = params.toString();
-    if (!raw) return "";
-    const signed = new URLSearchParams(raw);
-    if (signed.get("client_id") && signed.get("sig")) return raw;
-    return "";
-  }, [params]);
+  const oauthQuery = useMemo(() => readSignedRequest(params), [params]);
 
   const provider = useMemo(() => {
     if (!oauthQuery) return "";

@@ -9,6 +9,7 @@ import {
   hasProviderSession,
   hostOf,
   parseAuthorizationRequest,
+  readSignedRequest,
   respondToConsent,
   type PublicClient,
 } from "@/lib/oauth";
@@ -37,7 +38,14 @@ function ConsentInner() {
   const [providerReady, setProviderReady] = useState(false);
   const [checkingProvider, setCheckingProvider] = useState(true);
 
-  const oauthQuery = params.get("oauth_query") ?? "";
+  /**
+   * The signed authorization request.
+   *
+   * The provider sends the browser here with the request spread across the
+   * query. It is signed and it expires, so it is handed back exactly as it
+   * arrived.
+   */
+  const oauthQuery = readSignedRequest(params);
   const request = parseAuthorizationRequest(oauthQuery);
 
   useEffect(() => {
