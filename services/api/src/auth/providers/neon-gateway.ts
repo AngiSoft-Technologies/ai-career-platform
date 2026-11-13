@@ -23,6 +23,10 @@ import { config } from "../../config.js";
  */
 const ALLOWED_PATHS = new Set([
   "sign-in/social",
+  // The step that carries the browser from the sign-in request to Google.
+  // It has to run inside the session the sign-in created, so the browser
+  // reaches it through the relay with the flow's cookie attached.
+  "sign-in/social/init",
   "oauth2/continue",
   "oauth2/consent",
   "oauth2/public-client",
@@ -80,6 +84,11 @@ export async function relayToNeon(
   for (const cookie of response.headers.getSetCookie()) {
     outHeaders.append("set-cookie", cookie);
   }
+  // A redirect is part of the flow — the provider answers the sign-in with
+  // one, pointing at the provider's own sign-in page. Dropping it leaves
+  // the browser on a 302 with nowhere to go.
+  const location = response.headers.get("location");
+  if (location) outHeaders.set("location", location);
 
   return {
     status: response.status,

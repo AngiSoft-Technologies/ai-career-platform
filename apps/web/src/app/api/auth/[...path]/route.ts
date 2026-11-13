@@ -147,6 +147,12 @@ async function proxy(
   if (upstreamType) responseHeaders.set("content-type", upstreamType);
   responseHeaders.set("cache-control", "no-store");
 
+  // A redirect through the relay has to keep its destination, or the
+  // browser lands on a 302 with nowhere to go. The provider's own
+  // redirects (to Google, and back to this origin) are part of the flow.
+  const location = upstream.headers.get("location");
+  if (location) responseHeaders.set("location", location);
+
   return new Response(upstream.body, {
     status: upstream.status,
     headers: responseHeaders,

@@ -16,6 +16,31 @@ interface OAuthResponse {
   redirect?: boolean;
 }
 
+/**
+ * Keeps the browser on this origin.
+ *
+ * The provider answers with absolute URLs on its own host (".../neondb/auth/
+ * sign-in/social/init?token=..."). Following one of those takes the browser
+ * off this origin, and the flow's cookies — the challenge cookie that ties
+ * the sign-in to the session it creates — are left behind. The provider then
+ * cannot match the challenge and answers `state_mismatch`, and the visitor is
+ * bounced back to the sign-in page for ever.
+ *
+ * The relay path stands in for the provider's base path, so the same request
+ * is made from this origin and the cookie is sent with it.
+ */
+function onThisOrigin(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const marker = "/neondb/auth";
+    const index = parsed.pathname.indexOf(marker);
+    if (index === -1) return url;
+    return `${AUTH_RELAY_URL}${parsed.pathname.slice(index + marker.length)}${parsed.search}`;
+  } catch {
+    return url;
+  }
+}
+
 async function postOAuth(path: string, body: unknown): Promise<string | null> {
   const response = await fetch(`${AUTH_RELAY_URL}${path}`, {
     method: "POST",
@@ -25,7 +50,7 @@ async function postOAuth(path: string, body: unknown): Promise<string | null> {
   });
   if (!response.ok) return null;
   const payload = (await response.json().catch(() => null)) as OAuthResponse | null;
-  return typeof payload?.url === "string" ? payload.url : null;
+  return typeof payload?.url === "string" ? onThisOrigin(payload.url) : null;
 }
 
 async function getOAuth(path: string): Promise<unknown> {
