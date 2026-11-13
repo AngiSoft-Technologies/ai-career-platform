@@ -605,22 +605,49 @@ authRouter.get(
       noStore(response);
       response.redirect(302, `${appRedirectUri}#${fragment.toString()}`);
     } catch (error) {
-      if (sendAuthError(response, error)) {
-        await recordAuthEvent({
-          action: "auth.google",
-          outcome: "failure",
-          code:
-            error instanceof AuthProviderError || error instanceof AuthTokenError
-              ? error.code
-              : null,
-          ...requestMeta(request),
-        });
+      await recordAuthEvent({
+        action: "auth.google",
+        outcome: "failure",
+        code:
+          error instanceof AuthProviderError || error instanceof AuthTokenError
+            ? error.code
+            : null,
+        ...requestMeta(request),
+      });
+
+      // A failed sign-in must not dead-end. The browser is sent back to
+      // the app's sign-in page with a code it can explain, so a visitor
+      // who declines consent, takes longer than the state's ten minutes,
+      // or hits a provider error gets a page that says what happened and
+      // offers the button again — instead of a bare status page with no
+      // way forward, which is how a failure turns into a loop.
+      const failure = appFailureRedirect(error);
+      if (failure) {
+        response.redirect(302, failure);
         return;
       }
       next(error);
     }
   },
 );
+
+/**
+ * Where a failed Google sign-in should land the browser.
+ *
+ * The sign-in page carries the code and says what happened.
+ */
+function appFailureRedirect(error: unknown): string | null {
+  const base = (config.WEB_ORIGIN ?? "").split(",")[0]?.trim();
+  if (!base) return null;
+  const code =
+    error instanceof AuthProviderError || error instanceof AuthTokenError
+      ? error.code
+      : "SIGN_IN_FAILED";
+  const message =
+    error instanceof Error ? error.message : "The sign-in did not complete";
+  const query = new URLSearchParams({ google_error: code, reason: message });
+  return `${base}/login?${query.toString()}`;
+}
 
 /**
  * Relay to Neon Auth.

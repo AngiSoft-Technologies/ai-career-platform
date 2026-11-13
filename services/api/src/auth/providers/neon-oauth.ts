@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { config } from "../../config.js";
 import { query } from "../../db/pool.js";
+import { logger } from "../../logger.js";
 import { AuthNotConfiguredError } from "../tokens.js";
 import { AuthProviderError } from "./errors.js";
 
@@ -76,6 +77,21 @@ function clientId(): string {
 /** The API's own callback. Google/Neon always returns here first. */
 export function oauthCallbackUrl(): string {
   return `${config.API_URL.replace(/\/$/, "")}/v1/auth/google/callback`;
+}
+
+/**
+ * The protected resource this API is registered as, on Neon Auth.
+ *
+ * Neon's OAuth server links a client to one or more protected resources and
+ * binds the authorization code to the resource named on the *authorize*
+ * request. The same `resource` has to be sent again when the code is redeemed;
+ * without it the exchange is answered `invalid_grant` and the visitor is sent
+ * back to sign in — which reads as an endless loop.
+ *
+ * A single helper keeps the two requests from ever drifting apart.
+ */
+export function oauthResource(): string {
+  return config.API_URL.replace(/\/$/, "");
 }
 
 function base64url(buffer: Buffer): string {
@@ -175,6 +191,9 @@ export async function beginOAuthFlow(options: {
     code_challenge_method: "S256",
     state,
     provider: options.provider,
+    // Built-in authorization servers bind the code to the resource named
+    // here; see oauthResource(). Omitting it makes every redemption fail.
+    resource: oauthResource(),
   });
 
   return {
@@ -248,6 +267,46 @@ export interface OAuthIdentity {
 }
 
 /**
+ * Reads the signed-in account from the provider's userinfo endpoint.
+ *
+ * Neon's ID token has no `name` and no `email`; the access token is what
+ * unlocks them. A failure here is not fatal — the caller falls back to the
+ * token claims — so it returns null instead of throwing.
+ */
+async function fetchUserInfo(
+  accessToken: string,
+): Promise<Record<string, unknown> | null> {
+  try {
+    const response = await fetch(`${authBaseUrl()}/oauth2/userinfo`, {
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        accept: "application/json",
+      },
+    });
+    if (!response.ok) {
+      logger.warn(
+        { event: "oauth.userinfo.failed", status: response.status },
+        "Neon Auth userinfo request failed",
+      );
+      return null;
+    }
+    return (await response.json().catch(() => null)) as Record<
+      string,
+      unknown
+    > | null;
+  } catch (error) {
+    logger.warn(
+      {
+        event: "oauth.userinfo.error",
+        error: error instanceof Error ? error.message : String(error),
+      },
+      "Neon Auth userinfo request errored",
+    );
+    return null;
+  }
+}
+
+/**
  * Redeems the authorization code and returns the verified identity behind it.
  */
 export async function completeOAuthFlow(options: {
@@ -285,6 +344,9 @@ export async function completeOAuthFlow(options: {
     redirect_uri: oauthCallbackUrl(),
     client_id: clientId(),
     code_verifier: stored.code_verifier,
+    // Must match the resource sent to /oauth2/authorize, or the code was
+    // issued for a resource this redemption does not name and is refused.
+    resource: oauthResource(),
   });
   if (config.NEON_AUTH_OAUTH_CLIENT_SECRET) {
     const credentials = Buffer.from(
@@ -305,21 +367,37 @@ export async function completeOAuthFlow(options: {
   >;
 
   if (!response.ok) {
+    // The provider's own explanation is the only thing that makes a failed
+    // exchange debuggable; without it every rejection looks identical.
+    const description =
+      typeof payload.error_description === "string"
+        ? payload.error_description
+        : typeof payload.error === "string"
+          ? payload.error
+          : `HTTP ${response.status}`;
+    logger.warn(
+      {
+        event: "oauth.token.rejected",
+        status: response.status,
+        error: payload.error ?? null,
+        errorDescription: payload.error_description ?? null,
+        resource: oauthResource(),
+      },
+      "Neon Auth rejected the authorization code",
+    );
     throw new AuthProviderError(
-      "The sign-in could not be completed",
+      `The sign-in could not be completed (${description})`,
       "PROVIDER_REJECTED",
       401,
     );
   }
 
+  const accessToken =
+    typeof payload.access_token === "string" ? payload.access_token : null;
   const idToken =
-    typeof payload.id_token === "string"
-      ? payload.id_token
-      : typeof payload.access_token === "string"
-        ? payload.access_token
-        : null;
+    typeof payload.id_token === "string" ? payload.id_token : null;
 
-  if (!idToken) {
+  if (!accessToken && !idToken) {
     throw new AuthProviderError(
       "The sign-in did not return a token",
       "PROVIDER_REJECTED",
@@ -327,22 +405,52 @@ export async function completeOAuthFlow(options: {
     );
   }
 
-  let claims: Record<string, unknown>;
-  try {
-    const verified = await jwtVerify(idToken, getKeySet(), {
-      issuer: authBaseUrl(),
-    });
-    claims = verified.payload as Record<string, unknown>;
-  } catch {
-    throw new AuthProviderError(
-      "The sign-in token could not be verified",
-      "PROVIDER_REJECTED",
-      401,
-    );
+  let claims: Record<string, unknown> = {};
+  if (idToken) {
+    try {
+      const verified = await jwtVerify(idToken, getKeySet(), {
+        issuer: authBaseUrl(),
+      });
+      claims = verified.payload as Record<string, unknown>;
+    } catch {
+      throw new AuthProviderError(
+        "The sign-in token could not be verified",
+        "PROVIDER_REJECTED",
+        401,
+      );
+    }
+
+    const audience = claims.aud;
+    const audiences = Array.isArray(audience)
+      ? audience
+      : audience
+        ? [audience]
+        : [];
+    if (!audiences.includes(clientId())) {
+      throw new AuthProviderError(
+        "The sign-in token was issued for another client",
+        "PROVIDER_REJECTED",
+        401,
+      );
+    }
   }
 
-  const subject = typeof claims.sub === "string" ? claims.sub : "";
-  const email = typeof claims.email === "string" ? claims.email : "";
+  // Neon's ID token carries neither the name nor the email address — its
+  // userinfo endpoint is the documented source for both. Merge rather than
+  // replace, so a field the userinfo response omits is still taken from the
+  // verified token.
+  const profile = accessToken ? await fetchUserInfo(accessToken) : null;
+  const identityClaims: Record<string, unknown> = { ...claims };
+  if (profile) {
+    for (const [field, value] of Object.entries(profile)) {
+      if (value !== undefined && value !== null) identityClaims[field] = value;
+    }
+  }
+
+  const subject =
+    typeof identityClaims.sub === "string" ? identityClaims.sub : "";
+  const email =
+    typeof identityClaims.email === "string" ? identityClaims.email : "";
   if (!subject || !email) {
     throw new AuthProviderError(
       "The sign-in did not share an email address",
@@ -352,7 +460,8 @@ export async function completeOAuthFlow(options: {
   }
 
   const emailVerified =
-    claims.email_verified === true || claims.email_verified === "true";
+    identityClaims.email_verified === true ||
+    identityClaims.email_verified === "true";
   if (!emailVerified) {
     throw new AuthProviderError(
       "The account email address is not verified",
@@ -361,23 +470,10 @@ export async function completeOAuthFlow(options: {
     );
   }
 
-  const audience = claims.aud;
-  const audiences = Array.isArray(audience)
-    ? audience
-    : audience
-      ? [audience]
-      : [];
-  if (!audiences.includes(clientId())) {
-    throw new AuthProviderError(
-      "The sign-in token was issued for another client",
-      "PROVIDER_REJECTED",
-      401,
-    );
-  }
-
   const name =
-    typeof claims.name === "string" && claims.name.trim().length > 0
-      ? claims.name.trim()
+    typeof identityClaims.name === "string" &&
+    identityClaims.name.trim().length > 0
+      ? identityClaims.name.trim()
       : email;
 
   return {

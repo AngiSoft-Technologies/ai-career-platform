@@ -15,6 +15,26 @@ import {
 import { ROLE_HOME } from "@/components/theme";
 import type { RoleKey } from "@/lib/types";
 
+/**
+ * What each failure code from the Google callback means, in words a
+ * visitor can act on. The API used to answer a failed exchange with a
+ * bare 401 page; it now sends the browser back here with a code.
+ */
+const GOOGLE_ERROR_COPY: Record<string, string> = {
+  GOOGLE_EMAIL_UNVERIFIED:
+    "That Google account has no verified email address. Use another Google account, or sign in with a password.",
+  IDENTITY_ALREADY_LINKED:
+    "That Google account is already connected to a different mboqara account.",
+  INVALID_STATE:
+    "That sign-in took too long or was already used. Please start again.",
+  INVALID_REDIRECT:
+    "This sign-in started from an address we do not recognise. Please start again from this page.",
+  PROVIDER_REJECTED:
+    "Google did not confirm the sign-in. Please try again.",
+  AUTH_NOT_CONFIGURED:
+    "Google sign-in is not available right now. Please use your email and password.",
+};
+
 function GoogleMark() {
   return (
     <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true">
@@ -24,6 +44,41 @@ function GoogleMark() {
       <path fill="#EA4335" d="M12 5.96c1.47 0 2.79.51 3.83 1.5l2.87-2.87A9.64 9.64 0 0 0 12 2a10 10 0 0 0-8.94 5.49l3.35 2.59C7.2 7.72 9.4 5.96 12 5.96Z" />
     </svg>
   );
+}
+
+/**
+ * A loop guard for the signed authorization request.
+ *
+ * The provider sends the browser back to this page while it has no session;
+ * if the session never arrives, this page sends it to the provider again and
+ * the visitor is trapped in a bounce they cannot see or stop. Counting the
+ * attempts per `state` converts that into one clear message.
+ */
+const ATTEMPT_PREFIX = "mboqara.oauth.attempts:";
+
+function attemptKey(oauthQuery: string): string | null {
+  const state = new URLSearchParams(oauthQuery).get("state");
+  return state ? `${ATTEMPT_PREFIX}${state}` : null;
+}
+
+function attemptsFor(oauthQuery: string): number {
+  if (typeof window === "undefined") return 0;
+  const key = attemptKey(oauthQuery);
+  if (!key) return 0;
+  return Number(window.sessionStorage.getItem(key) ?? "0") || 0;
+}
+
+function recordAttempt(oauthQuery: string): void {
+  if (typeof window === "undefined") return;
+  const key = attemptKey(oauthQuery);
+  if (!key) return;
+  window.sessionStorage.setItem(key, String(attemptsFor(oauthQuery) + 1));
+}
+
+function forgetAttempts(oauthQuery: string): void {
+  if (typeof window === "undefined") return;
+  const key = attemptKey(oauthQuery);
+  if (key) window.sessionStorage.removeItem(key);
 }
 
 function LoginInner() {
@@ -46,7 +101,19 @@ function LoginInner() {
 
   useEffect(() => {
     if (authError) setNotice("failed");
-  }, [authError]);
+    // A Google sign-in that failed lands here with a code and a reason.
+    // The page used to ignore it and quietly show the form again, which
+    // is indistinguishable from a loop: the visitor clicks the same
+    // button and lands in the same place. Now it says what happened.
+    const googleError = params.get("google_error");
+    if (googleError) {
+      setOauthError(
+        GOOGLE_ERROR_COPY[googleError] ??
+          params.get("reason") ??
+          "The sign-in did not complete. Please try again.",
+      );
+    }
+  }, [authError, params]);
 
   const requestedNext = params.get("next") ?? "/dashboard";
   const next =
@@ -109,10 +176,24 @@ function LoginInner() {
     void (async () => {
       // With a provider session the authorization request can be resumed.
       if (await hasProviderSession()) {
+        // A session means the round trip worked; a previous failure count
+        // must not block the next legitimate attempt.
+        forgetAttempts(oauthQuery);
         if (await resumeAuthorization()) return;
       }
 
-      // Without one the provider has to sign the user in first.
+      // Without one the provider has to sign the user in first. Bound the
+      // number of times the browser is sent to the provider: an unbounded
+      // bounce is the difference between a broken flow and a loop the
+      // visitor cannot escape.
+      if (attemptsFor(oauthQuery) >= 2) {
+        setOauthError(
+          "Google sign-in could not be completed. Please try again, or sign in with your email and password.",
+        );
+        return;
+      }
+      recordAttempt(oauthQuery);
+
       if (await beginProviderSignIn()) return;
 
       setOauthError("We could not start the sign-in. Please try again.");
