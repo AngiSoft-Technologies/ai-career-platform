@@ -1,10 +1,12 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
 import { Archivo_Black, Fraunces, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme";
 import { ToastProvider } from "@/components/ui";
 import { SessionProvider } from "@/components/session";
 import { ServiceWorkerRegistrar } from "@/components/service-worker";
+import { OAuthErrorNotice } from "@/components/oauth-error-notice";
 import { JsonLd, organizationSchema, softwareApplicationSchema, websiteSchema } from "@/components/seo/json-ld";
 import { BASE_KEYWORDS, SITE, pageMetadata } from "@/lib/seo";
 
@@ -146,7 +148,12 @@ export default function RootLayout({
         <ServiceWorkerRegistrar />
         <ThemeProvider>
           <ToastProvider>
-            <SessionProvider>{children}</SessionProvider>
+            <SessionProvider>
+              <Suspense fallback={null}>
+                <OAuthErrorNotice />
+              </Suspense>
+              {children}
+            </SessionProvider>
           </ToastProvider>
         </ThemeProvider>
         <JsonLd

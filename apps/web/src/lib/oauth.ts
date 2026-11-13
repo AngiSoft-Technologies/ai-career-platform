@@ -1,4 +1,5 @@
 import { AUTH_RELAY_URL } from "./auth";
+import { PENDING_OAUTH_COOKIE } from "./auth-cookies";
 
 /**
  * Helpers for the OAuth authorization flow.
@@ -17,29 +18,18 @@ interface OAuthResponse {
 }
 
 /**
- * Keeps the browser on this origin.
+ * The provider's own steps stay on the provider's host.
  *
- * The provider answers with absolute URLs on its own host (".../neondb/auth/
- * sign-in/social/init?token=..."). Following one of those takes the browser
- * off this origin, and the flow's cookies — the challenge cookie that ties
- * the sign-in to the session it creates — are left behind. The provider then
- * cannot match the challenge and answers `state_mismatch`, and the visitor is
- * bounced back to the sign-in page for ever.
+ * The provider sets a state cookie when it hands the browser to Google, and
+ * it checks that cookie when Google returns. That step therefore has to
+ * happen where the cookie is set — on the provider's host. Running it
+ * through the relay would move the cookie to this origin, the provider
+ * would not find it, and the sign-in would end at "state_mismatch".
  *
- * The relay path stands in for the provider's base path, so the same request
- * is made from this origin and the cookie is sent with it.
+ * The flow's *challenge* cookie is a different thing: it is set when the
+ * sign-in is requested through the relay, and it is what the middleware
+ * exchanges the verifier for the session with. That one belongs here.
  */
-function onThisOrigin(url: string): string {
-  try {
-    const parsed = new URL(url);
-    const marker = "/neondb/auth";
-    const index = parsed.pathname.indexOf(marker);
-    if (index === -1) return url;
-    return `${AUTH_RELAY_URL}${parsed.pathname.slice(index + marker.length)}${parsed.search}`;
-  } catch {
-    return url;
-  }
-}
 
 /**
  * Raised when the sign-in was refused because too many attempts were made.
@@ -72,7 +62,10 @@ async function postOAuth(path: string, body: unknown): Promise<string | null> {
   }
   if (!response.ok) return null;
   const payload = (await response.json().catch(() => null)) as OAuthResponse | null;
-  return typeof payload?.url === "string" ? onThisOrigin(payload.url) : null;
+  // The provider's URL is used as it is: its own steps have to happen on
+  // its own host, where its state cookie is set and checked. See the note
+  // above.
+  return typeof payload?.url === "string" ? payload.url : null;
 }
 
 async function getOAuth(path: string): Promise<unknown> {
@@ -105,6 +98,21 @@ export function respondToConsent(
 }
 
 /**
+ * Remembers the signed authorization request.
+ *
+ * The provider sends the browser back to this origin with a one-time
+ * verifier rather than with the request itself, and the request is what the
+ * provider resumes once the session exists. The middleware cannot read the
+ * browser's storage, so the request is kept in a cookie — which is exactly
+ * the one thing that has to survive the round trip.
+ */
+export function rememberPendingRequest(oauthQuery: string): void {
+  if (typeof document === "undefined" || !oauthQuery) return;
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${PENDING_OAUTH_COOKIE}=${encodeURIComponent(oauthQuery)}; Path=/; Max-Age=600; SameSite=Lax${secure}`;
+}
+
+/**
  * Starts a provider sign-in that carries the pending authorization request.
  *
  * The provider verifies the signed query, signs the user in and resumes the
@@ -114,6 +122,7 @@ export function startProviderSignIn(
   provider: string,
   oauthQuery: string,
 ): Promise<string | null> {
+  rememberPendingRequest(oauthQuery);
   return postOAuth("/sign-in/social", {
     provider,
     oauth_query: oauthQuery,

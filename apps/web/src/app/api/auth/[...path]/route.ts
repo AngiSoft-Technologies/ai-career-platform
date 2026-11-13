@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import {
+  normalizeSetCookie,
+  toUpstreamCookieHeader,
+} from "@/lib/auth-cookies";
+
 /**
  * Same-origin relay for the identity provider.
  *
@@ -14,81 +19,6 @@ const API_URL = (
 ).replace(/\/$/, "");
 
 export const dynamic = "force-dynamic";
-
-/**
- * Cookies the upstream marks with the `__Secure-` prefix are only accepted by
- * browsers when they also carry `Secure`, which rules them out over plain
- * http. The proxy therefore renames them for insecure contexts and maps them
- * back when talking to the upstream.
- */
-const SECURE_PREFIXED_COOKIES = new Map([
-  ["__Secure-neon-auth.session_token", "neon-auth.session_token"],
-]);
-
-function browserCookieName(upstreamName: string, secureContext: boolean): string {
-  if (secureContext) return upstreamName;
-  return SECURE_PREFIXED_COOKIES.get(upstreamName) ?? upstreamName;
-}
-
-function upstreamCookieName(browserName: string, secureContext: boolean): string {
-  if (secureContext) return browserName;
-  for (const [upstream, browser] of SECURE_PREFIXED_COOKIES) {
-    if (browser === browserName) return upstream;
-  }
-  return browserName;
-}
-
-function toUpstreamCookieHeader(cookieHeader: string, secureContext: boolean): string {
-  return cookieHeader
-    .split(";")
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .map((part) => {
-      const separator = part.indexOf("=");
-      if (separator < 0) return part;
-      const name = part.slice(0, separator).trim();
-      const value = part.slice(separator + 1);
-      return `${upstreamCookieName(name, secureContext)}=${value}`;
-    })
-    .join("; ");
-}
-
-function normalizeSetCookie(value: string, secureContext: boolean): string {
-  const parts = value.split(";");
-  const rawNameValue = parts[0] ?? "";
-  const separator = rawNameValue.indexOf("=");
-  const upstreamName =
-    separator < 0 ? rawNameValue.trim() : rawNameValue.slice(0, separator).trim();
-  const cookieValue =
-    separator < 0 ? "" : rawNameValue.slice(separator + 1).trim();
-
-  const attributes = parts
-    .slice(1)
-    .map((part) => part.trim())
-    .filter((part) => {
-      const lower = part.toLowerCase();
-      if (lower.startsWith("partitioned")) return false;
-      if (lower.startsWith("samesite=")) return false;
-      // The provider cookie has to become a host-only cookie for this origin.
-      // A Domain attribute for the provider's own domain would be rejected by
-      // the browser and the session would be lost.
-      if (lower.startsWith("domain=")) return false;
-      if (lower.startsWith("secure") && !secureContext) return false;
-      return true;
-    });
-
-  const alreadySecure = attributes.some(
-    (attribute) => attribute.toLowerCase() === "secure",
-  );
-  if (secureContext && !alreadySecure) attributes.push("Secure");
-
-  attributes.push("SameSite=Lax");
-
-  const browserName = browserCookieName(upstreamName, secureContext);
-  if (!browserName) return "";
-
-  return `${browserName}=${cookieValue}; ${attributes.join("; ")}`;
-}
 
 async function proxy(
   request: NextRequest,
