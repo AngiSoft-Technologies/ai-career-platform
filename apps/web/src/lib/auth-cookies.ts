@@ -19,6 +19,8 @@
  */
 const SECURE_PREFIXED_COOKIES = new Map([
   ["__Secure-neon-auth.session_token", "neon-auth.session_token"],
+  ["__Secure-neon-auth.session_challange", "neon-auth.session_challange"],
+  ["__Secure-neon-auth.session_challenge", "neon-auth.session_challenge"],
 ]);
 
 export function browserCookieName(
@@ -61,17 +63,57 @@ export function toUpstreamCookieHeader(
 /**
  * Cookies that have to survive the trip back from the provider.
  *
- * The browser comes back from Google on a cross-site navigation, and the
- * challenge cookie is what makes the exchange possible. A cookie marked
- * "Lax" is withheld on some of those navigations, which leaves the exchange
- * with nothing to work from and the person signed out with no sign of it.
+ * The browser comes back from the provider on a cross-site navigation — the
+ * provider answers Google and redirects the browser here — and the challenge
+ * cookie is what makes the exchange possible. A cookie marked "Lax" is
+ * withheld on some of those navigations, which leaves the exchange with
+ * nothing to work from and the person signed out with no sign of it.
  * "None" is sent on every request, and browsers only accept it alongside
  * "Secure" — which this origin has.
+ *
+ * The marker is deliberately short: the provider spells this cookie two
+ * ways ("session_challenge" and "session_challange"), and a marker that
+ * matches only one of them fails silently — the cookie is present in the
+ * jar and simply never noticed.
  */
-const CROSS_SITE_COOKIES = ["session_challeng"];
+const CROSS_SITE_COOKIES = ["session_chall"];
 
 function travelsCrossSite(name: string): boolean {
   return CROSS_SITE_COOKIES.some((marker) => name.includes(marker));
+}
+
+/**
+ * The names of the cookies the provider uses for the flow's challenge.
+ *
+ * The provider is inconsistent about the spelling, and both spellings are
+ * in use. A cookie that is recognised under one spelling but not the other
+ * looks exactly like a cookie that was never sent.
+ */
+export const CHALLENGE_COOKIE_NAMES = [
+  "__Secure-neon-auth.session_challenge",
+  "__Secure-neon-auth.session_challange",
+];
+
+/**
+ * Whether the request carries one of the named cookies.
+ *
+ * The header is a list of `name=value` pairs; the names are matched exactly,
+ * so a cookie whose name merely contains another cookie's name is not
+ * mistaken for it.
+ */
+export function hasCookie(
+  cookieHeader: string | null,
+  names: readonly string[],
+): boolean {
+  if (!cookieHeader) return false;
+  for (const part of cookieHeader.split(";")) {
+    const separator = part.indexOf("=");
+    const name = (
+      separator < 0 ? part : part.slice(0, separator)
+    ).trim();
+    if (names.includes(name)) return true;
+  }
+  return false;
 }
 
 /**
@@ -80,6 +122,12 @@ function travelsCrossSite(name: string): boolean {
  * `Domain` is dropped (the browser would refuse it otherwise), `SameSite`
  * is set so the cookie rides along on the navigation that comes back from
  * the provider, and `Secure` is added wherever the context allows it.
+ *
+ * The provider's own `SameSite` is honoured where it is stricter than
+ * ours. It marks the flow's challenge cookie `None` for a reason: that
+ * cookie has to come back with the browser when it returns from the
+ * provider, and "Lax" can be withheld on that trip. Overriding that to
+ * "Lax" would break the exchange in exactly the case it exists for.
  */
 export function normalizeSetCookie(
   value: string,
@@ -93,13 +141,17 @@ export function normalizeSetCookie(
   const cookieValue =
     separator < 0 ? "" : rawNameValue.slice(separator + 1).trim();
 
+  let upstreamSameSite = "";
   const attributes = parts
     .slice(1)
     .map((part) => part.trim())
     .filter((part) => {
       const lower = part.toLowerCase();
       if (lower.startsWith("partitioned")) return false;
-      if (lower.startsWith("samesite=")) return false;
+      if (lower.startsWith("samesite=")) {
+        upstreamSameSite = part.slice("samesite=".length).trim().toLowerCase();
+        return false;
+      }
       // The provider cookie has to become a host-only cookie for this origin.
       // A Domain attribute for the provider's own domain would be rejected by
       // the browser and the session would be lost.
@@ -113,11 +165,12 @@ export function normalizeSetCookie(
   );
   if (secureContext && !alreadySecure) attributes.push("Secure");
 
-  attributes.push(
-    secureContext && travelsCrossSite(upstreamName)
-      ? "SameSite=None"
-      : "SameSite=Lax",
-  );
+  // "None" is only honoured by a browser alongside "Secure", so over plain
+  // http there is nothing to gain from asking for it.
+  const wantsCrossSite =
+    secureContext &&
+    (upstreamSameSite === "none" || travelsCrossSite(upstreamName));
+  attributes.push(wantsCrossSite ? "SameSite=None" : "SameSite=Lax");
 
   const browserName = browserCookieName(upstreamName, secureContext);
   if (!browserName) return "";

@@ -102,14 +102,19 @@ export function respondToConsent(
  *
  * The provider sends the browser back to this origin with a one-time
  * verifier rather than with the request itself, and the request is what the
- * provider resumes once the session exists. The middleware cannot read the
+ * provider resumes once the session exists. The proxy cannot read the
  * browser's storage, so the request is kept in a cookie — which is exactly
  * the one thing that has to survive the round trip.
+ *
+ * The cookie crosses sites to get here: it is set before the browser leaves
+ * for the provider and read after it comes back, and a browser withholds a
+ * "Lax" cookie from some of those trips. "None" is sent on every request
+ * and is only accepted alongside "Secure", which this origin has.
  */
 export function rememberPendingRequest(oauthQuery: string): void {
   if (typeof document === "undefined" || !oauthQuery) return;
   const secure = window.location.protocol === "https:" ? "; Secure" : "";
-  document.cookie = `${PENDING_OAUTH_COOKIE}=${encodeURIComponent(oauthQuery)}; Path=/; Max-Age=600; SameSite=Lax${secure}`;
+  document.cookie = `${PENDING_OAUTH_COOKIE}=${encodeURIComponent(oauthQuery)}; Path=/; Max-Age=600; SameSite=None${secure}`;
 }
 
 /**

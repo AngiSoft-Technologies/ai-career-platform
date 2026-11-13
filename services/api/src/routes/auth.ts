@@ -779,7 +779,15 @@ async function relayNeon(
           : JSON.stringify(request.body ?? {}),
   });
 
+  // Each cookie has to arrive separately: the provider sets more than one
+  // (the session token and the data that goes with it), and a second
+  // `setHeader` for the same name replaces the first rather than adding to
+  // it. The browser would then be left with half the session.
   for (const [name, value] of result.headers) {
+    if (name.toLowerCase() === "set-cookie") {
+      response.append(name, value);
+      continue;
+    }
     response.setHeader(name, value);
   }
   noStore(response);

@@ -32,6 +32,10 @@ const GOOGLE_ERROR_COPY: Record<string, string> = {
     "This sign-in started from an address we do not recognise. Please start again from this page.",
   PROVIDER_REJECTED:
     "Google did not confirm the sign-in. Please try again.",
+  PROVIDER_UNREACHABLE:
+    "The sign-in service could not be reached. Please try again in a moment.",
+  STATE_MISMATCH:
+    "That sign-in could not be matched to this browser. It may have been started in another tab — please try again.",
   AUTH_NOT_CONFIGURED:
     "Google sign-in is not available right now. Please use your email and password.",
 };
