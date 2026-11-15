@@ -32,6 +32,15 @@ interface ApplicationRow {
   created_at: Date;
   updated_at: Date;
   version: number;
+  /** Present on the list query, which joins the posting it refers to. */
+  opportunity_title?: string | null;
+  company_name?: string | null;
+}
+
+export interface ApplicationWithRole extends Application {
+  /** What the posting is called, so a list does not have to re-fetch the feed. */
+  opportunityTitle?: string | null;
+  companyName?: string | null;
 }
 
 function mapBlueprint(row: BlueprintRow): ApplicationBlueprint {
@@ -160,12 +169,79 @@ export async function getApplicationBlueprint(
   return ensureBlueprint(row.opportunity_id);
 }
 
-export async function listApplications(userId: string): Promise<Application[]> {
-  const result = await query<ApplicationRow>(
-    "SELECT * FROM applications WHERE user_id = $1 ORDER BY updated_at DESC",
-    [userId],
-  );
-  return result.rows.map(mapApplication);
+export interface ApplicationListFilters {
+  /** One page of the pipeline, not every row the user has ever made. */
+  limit?: number;
+  offset?: number;
+  status?: string;
+}
+
+export interface ApplicationPage {
+  items: ApplicationWithRole[];
+  /** How many applications match the filter — what the pager counts. */
+  total: number;
+  /** Every stage's count, for tabs that filter by status. */
+  statusCounts: Record<string, number>;
+}
+
+export async function listApplications(
+  userId: string,
+  filters: ApplicationListFilters = {},
+): Promise<ApplicationPage> {
+  // The posting's title and company are joined in. The web app used to map
+  // them from the first hundred roles in the feed, so an application to role
+  // number a hundred and one rendered as "Opportunity" — a list that lies
+  // about what it contains.
+  const limit = Math.min(Math.max(filters.limit ?? 25, 1), 100);
+  const offset = Math.max(filters.offset ?? 0, 0);
+
+  const clauses = ["a.user_id = $1"];
+  const values: unknown[] = [userId];
+  if (filters.status) {
+    values.push(filters.status);
+    clauses.push(`a.status = $${values.length}`);
+  }
+
+  const [items, counted, grouped] = await Promise.all([
+    query<ApplicationRow>(
+      `SELECT a.*, o.title AS opportunity_title, c.name AS company_name
+         FROM applications a
+         JOIN opportunities o ON o.id = a.opportunity_id
+         JOIN companies c ON c.id = o.company_id
+        WHERE ${clauses.join(" AND ")}
+        ORDER BY a.updated_at DESC
+        LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+      [...values, limit, offset],
+    ),
+    query<{ count: string }>(
+      `SELECT count(*)::text AS count
+         FROM applications a
+        WHERE ${clauses.join(" AND ")}`,
+      values,
+    ),
+    // The pipeline tabs count every stage, so the numbers on them are the
+    // whole pipeline rather than the page in front of the reader.
+    query<{ status: string; count: string }>(
+      `SELECT a.status, count(*)::text AS count
+         FROM applications a
+        WHERE a.user_id = $1
+        GROUP BY a.status`,
+      [userId],
+    ),
+  ]);
+
+  const statusCounts: Record<string, number> = {};
+  for (const row of grouped.rows) statusCounts[row.status] = Number(row.count);
+
+  return {
+    items: items.rows.map((row) => ({
+      ...mapApplication(row),
+      opportunityTitle: row.opportunity_title ?? null,
+      companyName: row.company_name ?? null,
+    })),
+    total: Number(counted.rows[0]?.count ?? 0),
+    statusCounts,
+  };
 }
 
 export async function createApplication(

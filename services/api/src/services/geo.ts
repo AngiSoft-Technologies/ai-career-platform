@@ -89,6 +89,61 @@ export function normaliseCountry(value: string | null | undefined): string {
   return trimmed.replace(/\s+/g, " ");
 }
 
+/**
+ * The spellings a catalogue may use for one country.
+ *
+ * A profile says "Kenya" while a scraped posting says "KE". The in-memory
+ * matcher resolves that through `sameCountry`; the database-backed ranked
+ * feed needs the equivalent values as an array so its country predicate can
+ * use the same contract.
+ */
+const COUNTRY_CODES: Record<string, string> = {
+  kenya: "ke",
+  nigeria: "ng",
+  "south africa": "za",
+  ghana: "gh",
+  tanzania: "tz",
+  uganda: "ug",
+  rwanda: "rw",
+  ethiopia: "et",
+  egypt: "eg",
+  morocco: "ma",
+  "united states": "us",
+  "united kingdom": "gb",
+  germany: "de",
+  austria: "at",
+  switzerland: "ch",
+  france: "fr",
+  spain: "es",
+  italy: "it",
+  netherlands: "nl",
+  belgium: "be",
+  ireland: "ie",
+  poland: "pl",
+  portugal: "pt",
+  sweden: "se",
+  norway: "no",
+  denmark: "dk",
+  finland: "fi",
+  canada: "ca",
+  australia: "au",
+  "new zealand": "nz",
+  india: "in",
+  bangladesh: "bd",
+  pakistan: "pk",
+  china: "cn",
+  japan: "jp",
+  brazil: "br",
+  mexico: "mx",
+};
+
+export function countryAliases(value: string | null | undefined): string[] {
+  const normalised = normaliseCountry(value);
+  if (!normalised) return [];
+  const code = COUNTRY_CODES[normalised];
+  return code ? [normalised, code] : [normalised];
+}
+
 /** True when two country spellings refer to the same country. */
 export function sameCountry(
   left: string | null | undefined,
@@ -117,7 +172,7 @@ export function samePlace(
   return a !== "" && a === b;
 }
 
-function placeKey(value: string | null | undefined): string {
+export function placeKey(value: string | null | undefined): string {
   if (!value) return "";
   // The chain has to be parenthesised: `a ?? "".replace(...)` binds the
   // `.replace` to the empty string, not to the whole expression.

@@ -8,6 +8,7 @@ import {
   Card,
   Field,
   Input,
+  PageHeader,
   SectionTitle,
   Select,
   Skeleton,
@@ -80,14 +81,14 @@ export default function ProfilePage() {
       headline: value.headline ?? "",
       summary: value.summary ?? "",
       location: value.location ?? "",
-      country: "",
+      country: value.country ?? "",
       yearsExperience: value.yearsExperience ?? 0,
       seniority: value.seniority ?? "junior",
       skills: (value.skills ?? []).join(", "),
-      desiredRoles: "",
-      preferredCountries: "",
-      preferredLocations: "",
-      remotePreferred: false,
+      desiredRoles: (value.desiredRoles ?? []).join(", "),
+      preferredCountries: (value.preferredCountries ?? []).join(", "),
+      preferredLocations: (value.preferredLocations ?? []).join(", "),
+      remotePreferred: value.remotePreferred ?? false,
     });
   }, [profile.data]);
 
@@ -169,33 +170,30 @@ export default function ProfilePage() {
   };
 
   if (profile.loading && !profile.data) {
-    return <Skeleton height={400} />;
+    return (
+      <div className="flex flex-col gap-3">
+        <Skeleton height={36} width={280} />
+        <Skeleton height={420} />
+      </div>
+    );
   }
 
   return (
-    <div className="stack gap-[1.2rem]">
-      <div className="row row-wrap justify-between items-end">
-        <div>
-          <div className="eyebrow">Your profile</div>
-          <h1 className="display mt-1" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)" }}>
-            What we know about you
-          </h1>
-          <p className="text-muted text-[0.9rem] mt-1">
-            This is the only source the AI uses. Every suggestion traces back to what you write here.
-          </p>
-        </div>
-        <Button icon={<Save size={15} />} loading={saving} onClick={() => void saveProfile()}>
-          Save profile
-        </Button>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        eyebrow="Your profile"
+        title="What we know about you"
+        description="This is the only source the AI uses. Every suggestion traces back to what you write here."
+        actions={
+          <Button icon={<Save size={15} />} loading={saving} onClick={() => void saveProfile()}>
+            Save profile
+          </Button>
+        }
+      />
 
-      <Card className="p-[1.2rem]">
-        <SectionTitle
-          eyebrow="Basics"
-          title="Identity"
-          action={<UserRound size={17} className="text-muted" />}
-        />
-        <div className="grid-2 mt-4">
+      <Card className="p-4 sm:p-5">
+        <SectionTitle eyebrow="Basics" title="Identity" action={<UserRound size={17} className="text-app-muted" />} />
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <Field label="Full name">
             <Input
               value={form.fullName}
@@ -253,12 +251,12 @@ export default function ProfilePage() {
             <Textarea
               value={form.summary}
               onChange={(event) => setForm({ ...form, summary: event.target.value })}
-              style={{ minHeight: 110 }}
+              className="min-h-[110px]"
             />
           </Field>
         </div>
 
-        <div className="grid-2 mt-4">
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <Field label="Skills" hint="Comma separated">
             <Textarea
               value={form.skills}
@@ -276,13 +274,13 @@ export default function ProfilePage() {
         </div>
       </Card>
 
-      <Card className="p-[1.2rem]">
+      <Card className="p-4 sm:p-5">
         <SectionTitle
           eyebrow="Targeting"
           title="Job preferences"
           description="Used to rank your feed. Set them broadly and we will surface more, or tightly and we will surface fewer but better."
         />
-        <div className="grid-2 mt-4">
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <Field label="Preferred countries" hint="Comma separated, any country">
             <Input
               value={prefs.preferredCountries}
@@ -333,13 +331,15 @@ export default function ProfilePage() {
           <Field label="Currency">
             <Input
               value={prefs.currency}
-              onChange={(event) => setPrefs({ ...prefs, currency: event.target.value.toUpperCase() })}
+              onChange={(event) =>
+                setPrefs({ ...prefs, currency: event.target.value.toUpperCase() })
+              }
               maxLength={3}
             />
           </Field>
         </div>
 
-        <div className="stack" style={{ marginTop: "1.1rem", gap: "0.7rem" }}>
+        <div className="mt-5 flex flex-col gap-3">
           <Switch
             checked={prefs.remoteOnly}
             onChange={(value) => setPrefs({ ...prefs, remoteOnly: value })}
@@ -357,26 +357,30 @@ export default function ProfilePage() {
           />
         </div>
 
-        <div style={{ marginTop: "1.2rem" }}>
-          <Button icon={<Save size={15} />} loading={savingPrefs} onClick={() => void savePreferences()}>
+        <div className="mt-5">
+          <Button
+            icon={<Save size={15} />}
+            loading={savingPrefs}
+            onClick={() => void savePreferences()}
+          >
             Save preferences
           </Button>
         </div>
       </Card>
 
-      <Card className="p-[1.2rem]">
+      <Card className="p-4 sm:p-5">
         <SectionTitle
           eyebrow="AI"
           title="Profile analysis"
           description="Ask the model what it thinks is missing from your profile."
         />
-        <div className="mt-[0.9rem]">
+        <div className="mt-4">
           <a href="/v1/ai/profile-analysis" target="_blank" rel="noopener noreferrer">
             <Button variant="outline" size="sm" icon={<Sparkles size={14} />}>
               Run profile analysis
             </Button>
           </a>
-          <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "0.6rem" }}>
+          <p className="mt-2 text-[0.78rem] text-app-muted">
             Analysis runs on the API and returns a gap list you can act on directly.
           </p>
         </div>

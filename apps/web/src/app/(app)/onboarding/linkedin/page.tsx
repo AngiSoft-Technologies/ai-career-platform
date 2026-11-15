@@ -11,36 +11,21 @@ import {
   Loader2,
   UserCheck,
 } from "lucide-react";
-import { Button, Card, Field, Input, useToast } from "@/components/ui";
+import { Button, Card, Field, Input, useToast, cx } from "@/components/ui";
 import { api } from "@/lib/api";
-import { useOnboarding } from "@/lib/hooks";
-
-interface ImportedProfile {
-  firstName?: string;
-  lastName?: string;
-  headline?: string;
-  positions?: unknown[];
-  skills?: unknown[];
-}
+import { rememberOnboardingPath } from "@/lib/onboarding";
 
 export default function OnboardingLinkedInPage() {
   const router = useRouter();
   const toast = useToast();
-  const { completeOnboarding } = useOnboarding();
 
-  const [stage, setStage] = useState<"idle" | "working" | "done" | "error">(
-    "idle",
-  );
+  const [stage, setStage] = useState<"idle" | "working" | "done" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
-  const [profile, setProfile] = useState<ImportedProfile | null>(null);
-  const [documentId, setDocumentId] = useState<string | null>(null);
   const [profileUrl, setProfileUrl] = useState("");
   const [showUrlFallback, setShowUrlFallback] = useState(false);
 
-  const finish = async (id: string) => {
-    setDocumentId(id);
-    setStage("done");
-    await completeOnboarding("linkedin");
+  const finish = (id: string) => {
+    rememberOnboardingPath("linkedin");
     toast.push("Profile imported. Continuing.", "success");
     router.push(`/onboarding/preferences?documentId=${id}`);
   };
@@ -49,19 +34,17 @@ export default function OnboardingLinkedInPage() {
     setStage("working");
     setError(null);
     try {
-      const { authUrl } = await api.post<{ authUrl: string }>(
-        "/auth/linkedin",
-        {},
-      );
+      const { authUrl } = await api.post<{ authUrl: string }>("/auth/linkedin", {});
       window.location.href = authUrl;
     } catch (caught) {
       setStage("error");
-      // No LinkedIn app registered yet — offer the URL route instead.
+      // Whatever went wrong, the URL route is the way forward — but the
+      // message says what actually happened instead of naming one cause.
       setShowUrlFallback(true);
       setError(
         caught instanceof Error && caught.message
-          ? "LinkedIn sign-in is unavailable right now. Paste your public profile URL below."
-          : "LinkedIn sign-in is unavailable right now.",
+          ? caught.message
+          : "LinkedIn sign-in is unavailable right now. Paste your public profile URL below.",
       );
     }
   };
@@ -94,73 +77,36 @@ export default function OnboardingLinkedInPage() {
   const working = stage === "working";
 
   return (
-    <div
-      className="stack"
-      style={{ gap: "1.5rem", maxWidth: 620, margin: "0 auto" }}
-    >
-      <div className="text-center">
+    <div className="mx-auto flex max-w-[620px] flex-col gap-6">
+      <header className="text-center">
         <Link
           href="/onboarding"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            color: "var(--text-muted)",
-            fontSize: "0.9rem",
-            marginBottom: "1rem",
-          }}
+          className="mb-4 inline-flex items-center gap-1.5 text-[0.9rem] text-app-muted transition-colors hover:text-app-text"
         >
           <Link2 size={14} /> Back to options
         </Link>
-        <div className="eyebrow justify-center">
+        <p className="text-[0.7rem] font-semibold tracking-[0.14em] text-app-accent uppercase">
           Import from LinkedIn
-        </div>
-        <h1
-          className="display"
-          style={{ fontSize: "clamp(1.6rem, 4vw, 2.2rem)", marginTop: 8 }}
-        >
+        </p>
+        <h1 className="mt-2 text-[clamp(1.6rem,4vw,2.2rem)] leading-tight font-semibold text-app-text">
           Connect your LinkedIn profile
         </h1>
-        <p className="text-muted mt-1">
-          Sign in and we convert your experience, education and skills into a
-          structured, ATS-ready resume.
+        <p className="mt-1 text-[0.92rem] leading-relaxed text-app-muted">
+          Sign in and we convert your experience, education and skills into a structured, ATS-ready
+          resume.
         </p>
-      </div>
+      </header>
 
       <Card className="p-6">
-        <div className="stack gap-4 text-center">
-          <div
-            style={{
-              width: 64,
-              height: 64,
-              borderRadius: "50%",
-              background: "#0077B520",
-              color: "#0077B5",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto",
-            }}
-          >
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="grid size-16 place-items-center rounded-full bg-[#0077B5]/15 text-[#0077B5]">
             <UserCheck size={26} />
           </div>
-          <h3 style={{ marginBottom: 0 }}>What we will import</h3>
-          <div
-            className="grid-2"
-            style={{ marginTop: "0.5rem", textAlign: "left", gap: "0.6rem" }}
-          >
-            {[
-              "Profile & headline",
-              "Work experience",
-              "Education",
-              "Skills",
-            ].map((item) => (
-              <div
-                key={item}
-                className="row"
-                style={{ gap: "0.45rem", alignItems: "center", fontSize: "0.85rem" }}
-              >
-                <CheckCircle size={15} style={{ color: "var(--success)" }} />
+          <h2 className="text-[1rem] font-semibold text-app-text">What we will import</h2>
+          <div className="grid w-full gap-2.5 text-left sm:grid-cols-2">
+            {["Profile & headline", "Work experience", "Education", "Skills"].map((item) => (
+              <div key={item} className="flex items-center gap-2 text-[0.85rem] text-app-soft">
+                <CheckCircle size={15} className="shrink-0 text-app-success" />
                 {item}
               </div>
             ))}
@@ -168,39 +114,21 @@ export default function OnboardingLinkedInPage() {
         </div>
       </Card>
 
-      <Card
-        style={{
-          padding: "1rem",
-          background: "var(--info-soft)",
-          borderColor: "var(--info)",
-        }}
-      >
-        <div
-          className="row"
-          style={{ gap: "0.5rem", alignItems: "flex-start", fontSize: "0.85rem" }}
-        >
-          <AlertCircle
-            size={16}
-            style={{ color: "var(--info)", flexShrink: 0, marginTop: 2 }}
-          />
-          <span style={{ color: "var(--info)" }}>
-            We only read what you authorise, we never post on your behalf, and
-            you can revoke access at any time from LinkedIn.
+      <Card className="border-app-info/40 bg-app-info/10 p-4">
+        <div className="flex items-start gap-2 text-[0.85rem] leading-relaxed text-app-info">
+          <AlertCircle size={16} className="mt-0.5 shrink-0" />
+          <span>
+            We only read what you authorise, we never post on your behalf, and you can revoke access
+            at any time from LinkedIn.
           </span>
         </div>
       </Card>
 
       {error ? (
-        <Card
-          style={{
-            padding: "1rem",
-            borderColor: "var(--danger)",
-            background: "var(--danger-soft)",
-          }}
-        >
-          <div className="row" style={{ gap: "0.5rem", color: "var(--danger)" }}>
-            <AlertCircle size={16} />
-            <span className="text-[0.88rem]">{error}</span>
+        <Card className="border-app-danger/40 bg-app-danger/10 p-4">
+          <div className="flex items-start gap-2 text-app-danger">
+            <AlertCircle size={16} className="mt-0.5 shrink-0" />
+            <span className="text-[0.88rem] leading-relaxed">{error}</span>
           </div>
         </Card>
       ) : null}
@@ -208,25 +136,25 @@ export default function OnboardingLinkedInPage() {
       <Button
         size="lg"
         loading={working}
-        onClick={startOAuth}
+        onClick={() => void startOAuth()}
         disabled={working}
-        style={{ background: "#0077B5", borderColor: "#0077B5", color: "white" }}
+        className={cx(
+          "justify-center border-[#0077B5] bg-[#0077B5] text-white hover:border-[#00669c] hover:bg-[#00669c]",
+        )}
       >
         {working ? <Loader2 size={16} /> : null}
         Continue with LinkedIn
       </Button>
 
       {showUrlFallback ? (
-        <Card style={{ padding: "1.25rem" }}>
-          <div className="stack gap-3">
-            <h3 style={{ fontSize: "0.98rem", margin: 0 }}>
+        <Card className="p-5">
+          <div className="flex flex-col gap-3">
+            <h2 className="text-[0.98rem] font-semibold text-app-text">
               Paste your public profile URL
-            </h3>
-            <p
-              className="m-0 text-[0.82rem] text-muted"
-            >
-              We read the public page and convert it. LinkedIn may block
-              automated reads — if so, upload a PDF instead.
+            </h2>
+            <p className="text-[0.82rem] leading-relaxed text-app-muted">
+              We read the public page and convert it. LinkedIn may block automated reads — if so,
+              upload a PDF instead.
             </p>
             <Field label="Profile URL">
               <Input
@@ -236,47 +164,29 @@ export default function OnboardingLinkedInPage() {
                 inputMode="url"
               />
             </Field>
-            <Button
-              variant="outline"
-              loading={working}
-              icon={<ArrowRight size={14} />}
-              onClick={importByUrl}
-            >
-              Import profile
-            </Button>
+            <div>
+              <Button
+                variant="outline"
+                loading={working}
+                icon={<ArrowRight size={14} />}
+                onClick={() => void importByUrl()}
+              >
+                Import profile
+              </Button>
+            </div>
           </div>
         </Card>
       ) : (
         <div className="text-center">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowUrlFallback(true)}
-          >
+          <Button variant="ghost" size="sm" onClick={() => setShowUrlFallback(true)}>
             Trouble signing in? Use my profile URL
           </Button>
         </div>
       )}
 
-      {profile ? (
-        <Card className="p-4">
-          <div className="stack" style={{ gap: "0.3rem", fontSize: "0.85rem" }}>
-            <div className="font-semibold">
-              {profile.firstName} {profile.lastName}
-            </div>
-            <div className="text-muted">{profile.headline}</div>
-          </div>
-        </Card>
-      ) : null}
-
       <Link
         href="/onboarding/manual"
-        style={{
-          textAlign: "center",
-          display: "block",
-          color: "var(--accent)",
-          fontSize: "0.9rem",
-        }}
+        className="text-center text-[0.9rem] text-app-accent transition-opacity hover:opacity-80"
       >
         Rather type it yourself? Build it manually →
       </Link>

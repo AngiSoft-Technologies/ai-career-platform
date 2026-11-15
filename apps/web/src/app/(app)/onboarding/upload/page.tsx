@@ -12,9 +12,9 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { Button, Card, Meter, useToast } from "@/components/ui";
+import { Button, Card, Meter, useToast, cx } from "@/components/ui";
 import { api } from "@/lib/api";
-import { useOnboarding } from "@/lib/hooks";
+import { rememberOnboardingPath } from "@/lib/onboarding";
 
 const ACCEPTED_TYPES = [
   "application/pdf",
@@ -31,7 +31,7 @@ type Stage = "idle" | "uploading" | "extracting" | "done" | "error";
 const STAGE_LABEL: Record<Stage, string> = {
   idle: "",
   uploading: "Uploading your file",
-  extracting: "Reading and building your resume",
+  extracting: "Extracting your experience and rebuilding the document",
   done: "Done",
   error: "",
 };
@@ -39,12 +39,12 @@ const STAGE_LABEL: Record<Stage, string> = {
 export default function OnboardingUploadPage() {
   const router = useRouter();
   const toast = useToast();
-  const { completeOnboarding } = useOnboarding();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [file, setFile] = useState<File | null>(null);
   const [stage, setStage] = useState<Stage>("idle");
   const [atsScore, setAtsScore] = useState<number | null>(null);
+  const [documentId, setDocumentId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const busy = stage === "uploading" || stage === "extracting";
@@ -87,12 +87,20 @@ export default function OnboardingUploadPage() {
 
       setStage("uploading");
 
-      // 2. Put the raw file in storage.
-      await fetch(target.url, {
+      // 2. Put the raw file in storage. The response is checked: a
+      // rejected PUT (an expired signed URL, a CORS refusal) used to fall
+      // through to the import step and surface as a confusing "could not
+      // read that file".
+      const uploaded = await fetch(target.url, {
         method: "PUT",
         headers: { "Content-Type": file.type },
         body: file,
       });
+      if (!uploaded.ok) {
+        throw new Error(
+          `The upload was rejected (${uploaded.status}). Try the file again, or build the resume manually.`,
+        );
+      }
 
       setStage("extracting");
 
@@ -106,11 +114,13 @@ export default function OnboardingUploadPage() {
         contentType: file.type,
       });
 
+      setDocumentId(document.id);
       setAtsScore(ats?.score ?? null);
       setStage("done");
-      await completeOnboarding("upload");
+      rememberOnboardingPath("upload");
       toast.push("Resume built and ATS-checked.", "success");
-      router.push(`/onboarding/preferences?documentId=${document.id}`);
+      // The success screen is shown, not skipped: pushing in the same tick
+      // as setStage left the panel (and its Continue button) unreachable.
     } catch (caught) {
       setStage("error");
       setError(
@@ -124,55 +134,34 @@ export default function OnboardingUploadPage() {
 
   if (stage === "done") {
     return (
-      <div
-        className="stack"
-        style={{
-          gap: "1.25rem",
-          maxWidth: 520,
-          margin: "0 auto",
-          textAlign: "center",
-          paddingTop: "3rem",
-        }}
-      >
-        <div
-          style={{
-            width: 72,
-            height: 72,
-            borderRadius: "50%",
-            background: "var(--success-soft)",
-            color: "var(--success)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            margin: "0 auto",
-          }}
-        >
+      <div className="mx-auto flex max-w-[520px] flex-col items-center gap-5 pt-12 text-center">
+        <div className="grid size-[72px] place-items-center rounded-full bg-app-success/15 text-app-success">
           <ShieldCheck size={30} />
         </div>
-        <h1 className="display" style={{ fontSize: "1.8rem" }}>
-          Your resume is ready
-        </h1>
+        <h1 className="text-[1.8rem] font-semibold text-app-text">Your resume is ready</h1>
         {atsScore !== null ? (
-          <Card className="p-4">
-            <div className="stack gap-2.5">
-              <div
-                className="row justify-between text-[0.85rem]"
-              >
+          <Card className="w-full p-4">
+            <div className="flex flex-col gap-2.5">
+              <div className="flex items-baseline justify-between text-[0.85rem] text-app-soft">
                 <span>ATS readiness</span>
-                <span className="font-semibold">{atsScore}/100</span>
+                <span className="font-semibold tabular-nums text-app-text">{atsScore}/100</span>
               </div>
               <Meter value={atsScore} />
             </div>
           </Card>
         ) : null}
-        <p className="text-muted m-0">
-          We extracted your details, rebuilt the document and ran an ATS check.
-          Next, tell us how you want to be matched to roles.
+        <p className="text-[0.9rem] leading-relaxed text-app-muted">
+          We extracted your details, rebuilt the document and ran an ATS check. Next, tell us how
+          you want to be matched to roles.
         </p>
         <Button
           size="lg"
           icon={<ArrowRight size={16} />}
-          onClick={() => router.push("/onboarding/preferences")}
+          onClick={() =>
+            router.push(
+              documentId ? `/onboarding/preferences?documentId=${documentId}` : "/onboarding/preferences",
+            )
+          }
         >
           Continue
         </Button>
@@ -181,70 +170,33 @@ export default function OnboardingUploadPage() {
   }
 
   return (
-    <div
-      className="stack"
-      style={{ gap: "1.5rem", maxWidth: 620, margin: "0 auto" }}
-    >
-      <div className="text-center">
+    <div className="mx-auto flex max-w-[620px] flex-col gap-6">
+      <header className="text-center">
         <Link
           href="/onboarding"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            color: "var(--text-muted)",
-            fontSize: "0.9rem",
-            marginBottom: "1rem",
-          }}
+          className="mb-4 inline-flex items-center gap-1.5 text-[0.9rem] text-app-muted transition-colors hover:text-app-text"
         >
           <X size={14} /> Back to options
         </Link>
-        <div className="eyebrow justify-center">
+        <p className="flex items-center justify-center gap-1.5 text-[0.7rem] font-semibold tracking-[0.14em] text-app-accent uppercase">
           <Upload size={16} /> Upload resume
-        </div>
-        <h1
-          className="display"
-          style={{ fontSize: "clamp(1.6rem, 4vw, 2.2rem)", marginTop: 8 }}
-        >
+        </p>
+        <h1 className="mt-2 text-[clamp(1.6rem,4vw,2.2rem)] leading-tight font-semibold text-app-text">
           Upload your existing resume
         </h1>
-        <p className="text-muted mt-1">
-          PDF, DOCX, or an image. Maximum 10MB.
-        </p>
-      </div>
+        <p className="mt-1 text-[0.92rem] text-app-muted">PDF, DOCX, or an image. Maximum 10MB.</p>
+      </header>
 
-      <Card
-        style={{ padding: "1.75rem" }}
-        onDragOver={(event) => event.preventDefault()}
-        onDrop={handleDrop}
-      >
+      <Card className="p-7" onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
         {file ? (
-          <div className="stack gap-4">
-            <div
-              className="row"
-              style={{
-                alignItems: "center",
-                gap: "0.9rem",
-                padding: "1rem",
-                background: "var(--surface)",
-                borderRadius: "var(--radius-md)",
-              }}
-            >
-              <FileText size={24} className="text-accent" />
-              <div className="flex-1 min-w-0">
-                <div
-                  style={{
-                    fontWeight: 600,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {file.name}
-                </div>
-                <div className="text-[0.8rem] text-muted">
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-3.5 rounded-app-md bg-app-surface-2/60 p-4">
+              <FileText size={24} className="shrink-0 text-app-accent" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[0.92rem] font-semibold text-app-text">{file.name}</p>
+                <p className="text-[0.8rem] text-app-muted">
                   {(file.size / 1024 / 1024).toFixed(1)} MB
-                </div>
+                </p>
               </div>
               <Button
                 variant="ghost"
@@ -252,15 +204,19 @@ export default function OnboardingUploadPage() {
                 onClick={() => {
                   setFile(null);
                   setError(null);
+                  // The input keeps its value after a removal, so choosing
+                  // the same file again would fire no change event.
+                  if (inputRef.current) inputRef.current.value = "";
                 }}
                 disabled={busy}
+                aria-label="Remove file"
               >
                 <X size={14} />
               </Button>
             </div>
-            <Button size="lg" loading={busy} onClick={runImport} className="w-full">
+            <Button size="lg" loading={busy} onClick={() => void runImport()} className="w-full justify-center">
               {busy ? <Loader2 size={16} /> : null}
-              {busy ? "Working..." : "Extract & build resume"}
+              {busy ? "Working…" : "Extract & build resume"}
             </Button>
           </div>
         ) : (
@@ -268,24 +224,16 @@ export default function OnboardingUploadPage() {
             <button
               type="button"
               onClick={() => inputRef.current?.click()}
-              style={{
-                width: "100%",
-                border: "2px dashed var(--border)",
-                borderRadius: "var(--radius-lg)",
-                padding: "2.75rem 1.5rem",
-                cursor: "pointer",
-                background: "transparent",
-                color: "inherit",
-              }}
+              className={cx(
+                "w-full cursor-pointer rounded-app-lg border-2 border-dashed border-app-border px-6 py-11",
+                "text-app-soft transition-colors duration-150 hover:border-app-accent hover:bg-app-accent-soft/30",
+              )}
             >
-              <Upload
-                size={40}
-                style={{ color: "var(--text-muted)", marginBottom: "0.75rem" }}
-              />
-              <div style={{ fontSize: "1.05rem", fontWeight: 500 }}>
-                Drag & drop or click to select
+              <Upload size={40} className="mx-auto mb-3 text-app-muted" />
+              <div className="text-[1.05rem] font-medium text-app-text">
+                Drag &amp; drop or click to select
               </div>
-              <div className="text-[0.85rem] text-muted">
+              <div className="mt-1 text-[0.85rem] text-app-muted">
                 PDF, DOCX, PNG, JPG, WebP · Maximum 10MB
               </div>
             </button>
@@ -293,18 +241,10 @@ export default function OnboardingUploadPage() {
               ref={inputRef}
               type="file"
               accept={ACCEPTED_TYPES.join(",")}
-              style={{ display: "none" }}
+              className="hidden"
               onChange={(event) => accept(event.target.files?.[0] ?? null)}
             />
-            <p
-              style={{
-                textAlign: "center",
-                marginTop: "1rem",
-                marginBottom: 0,
-                fontSize: "0.8rem",
-                color: "var(--text-muted)",
-              }}
-            >
+            <p className="mt-4 text-center text-[0.8rem] text-app-muted">
               A scanned or photographed resume works too — we read images.
             </p>
           </div>
@@ -312,42 +252,29 @@ export default function OnboardingUploadPage() {
       </Card>
 
       {busy ? (
-        <Card style={{ padding: "1.25rem" }}>
-          <div className="stack gap-2.5">
-            <div
-              className="row justify-between text-[0.85rem]"
-            >
+        <Card className="p-5">
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-baseline justify-between text-[0.85rem] text-app-soft">
               <span>{STAGE_LABEL[stage]}</span>
-              <span>{stage === "uploading" ? "40%" : "80%"}</span>
+              <span className="text-[0.78rem] text-app-muted">{STAGE_LABEL[stage]}</span>
             </div>
-            <Meter value={stage === "uploading" ? 40 : 80} />
+            <Meter value={stage === "uploading" ? 45 : 90} />
           </div>
         </Card>
       ) : null}
 
       {error ? (
-        <Card
-          style={{
-            padding: "1rem",
-            borderColor: "var(--danger)",
-            background: "var(--danger-soft)",
-          }}
-        >
-          <div className="row" style={{ gap: "0.5rem", color: "var(--danger)" }}>
-            <AlertCircle size={16} />
-            <span className="text-[0.88rem]">{error}</span>
+        <Card className="border-app-danger/40 bg-app-danger/10 p-4">
+          <div className="flex items-start gap-2 text-app-danger">
+            <AlertCircle size={16} className="mt-0.5 shrink-0" />
+            <span className="text-[0.88rem] leading-relaxed">{error}</span>
           </div>
         </Card>
       ) : null}
 
       <Link
         href="/onboarding/manual"
-        style={{
-          textAlign: "center",
-          display: "block",
-          color: "var(--accent)",
-          fontSize: "0.9rem",
-        }}
+        className="text-center text-[0.9rem] text-app-accent transition-opacity hover:opacity-80"
       >
         Rather type it yourself? Build it manually →
       </Link>

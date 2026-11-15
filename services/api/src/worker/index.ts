@@ -122,12 +122,30 @@ async function handleEmbeddings(): Promise<{
   return refreshOpportunityEmbeddings();
 }
 
+/**
+ * Expires listings that no longer advertise a vacancy.
+ *
+ * This is the expensive sweep: it reads the description of every active
+ * opportunity and matches it against a regular expression, which is why it
+ * runs on the maintenance cadence and not on the thirty-second ingestion
+ * tick. Running it on the ingestion tick made it the single largest consumer
+ * of the database's time, and the queries the app runs for a signed-in user
+ * queued behind it.
+ */
 async function handleExpireOpportunities(): Promise<{ expired: number }> {
   const result = await query(
     `UPDATE opportunities
         SET status = 'expired'
       WHERE status = 'active'
-        AND posted_at < now() - interval '60 days'`,
+        AND (
+          posted_at < now() - interval '60 days'
+          OR (
+            description IS NOT NULL
+            AND length(description) > 200
+            AND description !~* '(apply|hiring|vacanc|responsibilit|qualification|requirement)'
+            AND updated_at < now() - interval '14 days'
+          )
+        )`,
   );
   return { expired: result.rowCount ?? 0 };
 }

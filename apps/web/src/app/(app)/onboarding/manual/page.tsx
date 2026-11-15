@@ -21,12 +21,14 @@ import {
   Card,
   Field,
   Input,
+  Meter,
   Select,
   Textarea,
+  cx,
   useToast,
 } from "@/components/ui";
 import { api } from "@/lib/api";
-import { useOnboarding } from "@/lib/hooks";
+import { rememberOnboardingPath } from "@/lib/onboarding";
 
 const SENIORITIES = ["intern", "junior", "mid", "senior", "lead"] as const;
 
@@ -68,6 +70,14 @@ interface ProjectEntry {
   url: string;
 }
 
+/** Clamped once, not on every keystroke: an empty box must stay empty. */
+function clampYears(value: string): string {
+  if (value.trim() === "") return "0";
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return "0";
+  return String(Math.max(0, Math.min(60, Math.trunc(parsed))));
+}
+
 function newId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
@@ -78,7 +88,6 @@ function newId(): string {
 export default function OnboardingManualPage() {
   const router = useRouter();
   const toast = useToast();
-  const { completeOnboarding } = useOnboarding();
 
   const [stepIndex, setStepIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -102,6 +111,10 @@ export default function OnboardingManualPage() {
   const [experiences, setExperiences] = useState<ExperienceEntry[]>([]);
   const [education, setEducation] = useState<EducationEntry[]>([]);
   const [projects, setProjects] = useState<ProjectEntry[]>([]);
+
+  // The years field is text while it is being typed and a number once it is
+  // not, so clearing the box does not snap back to zero mid-keystroke.
+  const [yearsInput, setYearsInput] = useState("0");
 
   const currentStep = STEPS[stepIndex].key as StepKey;
   const StepIcon = STEPS[stepIndex].icon;
@@ -151,7 +164,7 @@ export default function OnboardingManualPage() {
         phone: form.phone.trim(),
         linkedin: form.linkedin.trim(),
         portfolio: form.portfolio.trim(),
-        yearsExperience: form.yearsExperience,
+        yearsExperience: Number(clampYears(yearsInput)),
         seniority: form.seniority,
         skills: splitList(form.skills),
         desiredRoles: splitList(form.desiredRoles),
@@ -190,7 +203,7 @@ export default function OnboardingManualPage() {
         payload,
       );
 
-      await completeOnboarding("manual");
+      rememberOnboardingPath("manual");
       toast.push("Resume created. Let's set your matching preferences.", "success");
       router.push(`/onboarding/preferences?documentId=${document.id}`);
     } catch (caught) {
@@ -216,62 +229,40 @@ export default function OnboardingManualPage() {
     }
   };
 
+  const progress = (stepIndex / (STEPS.length - 1)) * 100;
+
   return (
-    <div
-      className="stack"
-      style={{ gap: "1.5rem", maxWidth: 720, margin: "0 auto" }}
-    >
-      <Card style={{ padding: "1rem 1.5rem" }}>
-        <div
-          className="row"
-          style={{ gap: "0.5rem", overflowX: "auto", paddingBottom: "0.5rem" }}
-        >
+    <div className="mx-auto flex max-w-[720px] flex-col gap-6">
+      <Card className="p-4 sm:p-5">
+        <div className="flex gap-1 overflow-x-auto pb-2.5">
           {STEPS.map((step, index) => {
             const Icon = step.icon;
             const isCurrent = index === stepIndex;
             const isDone = index < stepIndex;
+            const reachable = index <= stepIndex;
             return (
               <button
                 key={step.key}
                 type="button"
                 onClick={() => setStepIndex(index)}
-                style={{
-                  display: "inline-flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: "0.35rem",
-                  padding: "0.5rem 0.75rem",
-                  border: "none",
-                  borderRadius: "var(--radius-md)",
-                  cursor: "pointer",
-                  color:
-                    index <= stepIndex ? "var(--accent)" : "var(--text-muted)",
-                  background:
-                    index <= stepIndex ? "var(--accent-soft)" : "transparent",
-                  fontSize: "0.75rem",
-                  fontWeight: index <= stepIndex ? 600 : 400,
-                  whiteSpace: "nowrap",
-                }}
+                aria-current={isCurrent || undefined}
+                className={cx(
+                  "inline-flex cursor-pointer flex-col items-center gap-1.5 rounded-app-md px-3 py-2 text-[0.75rem] whitespace-nowrap",
+                  "transition-colors duration-150",
+                  reachable
+                    ? "bg-app-accent-soft font-semibold text-app-accent"
+                    : "text-app-muted hover:bg-app-surface-2/60",
+                )}
               >
                 <span
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: 24,
-                    height: 24,
-                    borderRadius: "50%",
-                    background: isDone
-                      ? "var(--accent)"
+                  className={cx(
+                    "grid size-6 place-items-center rounded-full",
+                    isDone
+                      ? "bg-app-accent text-app-accent-contrast"
                       : isCurrent
-                        ? "var(--accent-soft)"
-                        : "var(--border)",
-                    color: isDone
-                      ? "white"
-                      : isCurrent
-                        ? "var(--accent)"
-                        : "var(--text-muted)",
-                  }}
+                        ? "bg-app-accent-soft text-app-accent"
+                        : "bg-app-border text-app-muted",
+                  )}
                 >
                   {isDone ? <Check size={12} /> : <Icon size={12} />}
                 </span>
@@ -280,56 +271,26 @@ export default function OnboardingManualPage() {
             );
           })}
         </div>
-        <div
-          style={{
-            height: 4,
-            background: "var(--border)",
-            borderRadius: 2,
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              width: `${(stepIndex / (STEPS.length - 1)) * 100}%`,
-              height: "100%",
-              background: "var(--accent)",
-              transition: "width 0.3s",
-            }}
-          />
-        </div>
+        <Meter value={progress} />
       </Card>
 
-      <Card className="p-6">
-        <div
-          className="row"
-          style={{ gap: "0.6rem", alignItems: "center", marginBottom: "1.5rem" }}
-        >
-          <span
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: 34,
-              height: 34,
-              borderRadius: "50%",
-              background: "var(--accent-soft)",
-              color: "var(--accent)",
-            }}
-          >
+      <Card className="p-5 sm:p-7">
+        <div className="mb-6 flex items-center gap-3">
+          <span className="grid size-[34px] shrink-0 place-items-center rounded-full bg-app-accent-soft text-app-accent">
             <StepIcon size={16} />
           </span>
           <div>
-            <div className="eyebrow">
+            <p className="text-[0.7rem] font-semibold tracking-[0.14em] text-app-accent uppercase">
               Step {stepIndex + 1} of {STEPS.length}
-            </div>
-            <h2 style={{ fontSize: "1.3rem" }}>
+            </p>
+            <h2 className="mt-0.5 text-[1.3rem] font-semibold text-app-text">
               {STEPS[stepIndex].label}
             </h2>
           </div>
         </div>
 
         {currentStep === "basics" ? (
-          <div className="stack gap-4">
+          <div className="flex flex-col gap-4">
             <Field label="Full name">
               <Input
                 value={form.fullName}
@@ -347,7 +308,7 @@ export default function OnboardingManualPage() {
                 placeholder="Backend Engineer · Payments · 5 years"
               />
             </Field>
-            <div className="grid-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Location">
                 <Input
                   value={form.location}
@@ -363,7 +324,7 @@ export default function OnboardingManualPage() {
                 />
               </Field>
             </div>
-            <div className="grid-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Email">
                 <Input
                   type="email"
@@ -380,7 +341,7 @@ export default function OnboardingManualPage() {
                 />
               </Field>
             </div>
-            <div className="grid-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field label="LinkedIn URL">
                 <Input
                   value={form.linkedin}
@@ -407,21 +368,19 @@ export default function OnboardingManualPage() {
                 placeholder="Backend engineer specialising in payment systems..."
               />
             </Field>
-            <div className="grid-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Years of experience">
+                {/* The value is kept as text while it is being typed:
+                    clamping on every keystroke turned an empty box back
+                    into "0" and fought the caret. It is clamped once, on
+                    blur and on submit. */}
                 <Input
                   type="number"
                   min={0}
                   max={60}
-                  value={form.yearsExperience}
-                  onChange={(event) =>
-                    setField({
-                      yearsExperience: Math.max(
-                        0,
-                        Math.min(60, Number(event.target.value) || 0),
-                      ),
-                    })
-                  }
+                  value={yearsInput}
+                  onChange={(event) => setYearsInput(event.target.value)}
+                  onBlur={() => setYearsInput(clampYears(yearsInput))}
                 />
               </Field>
               <Field label="Seniority level">
@@ -441,19 +400,9 @@ export default function OnboardingManualPage() {
         ) : null}
 
         {currentStep === "experience" ? (
-          <div className="stack gap-4">
-            <div
-              className="row"
-              style={{
-                justifyContent: "space-between",
-                alignItems: "center",
-                gap: "0.75rem",
-                flexWrap: "wrap",
-              }}
-            >
-              <p
-                className="text-[0.85rem] text-muted m-0"
-              >
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-[0.85rem] leading-relaxed text-app-muted">
                 Add each role separately. Most recent first.
               </p>
               <Button
@@ -483,23 +432,20 @@ export default function OnboardingManualPage() {
             ) : (
               experiences.map((entry, index) => (
                 <Card key={entry.id} className="p-4">
-                  <div
-                    className="row justify-between mb-4"
-                  >
+                  <div className="mb-4 flex items-center justify-between gap-2">
                     <Badge tone="accent">Role {index + 1}</Badge>
                     <Button
                       variant="ghost"
                       size="sm"
+                      aria-label="Remove role"
                       onClick={() =>
-                        setExperiences(
-                          experiences.filter((_, i) => i !== index),
-                        )
+                        setExperiences(experiences.filter((_, i) => i !== index))
                       }
                     >
                       <X size={14} />
                     </Button>
                   </div>
-                  <div className="grid-2 gap-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
                     <Field label="Job title">
                       <Input
                         value={entry.title}
@@ -529,7 +475,7 @@ export default function OnboardingManualPage() {
                         placeholder="Nairobi, Kenya"
                       />
                     </Field>
-                    <div className="grid-2">
+                    <div className="grid gap-3 sm:grid-cols-2">
                       <Field label="Start date">
                         <Input
                           type="month"
@@ -554,32 +500,23 @@ export default function OnboardingManualPage() {
                         />
                       </Field>
                     </div>
-                    <div className="" style={{ gridColumn: "1 / -1" }}>
-                      <label
-                        className="row"
-                        style={{
-                          gap: "0.5rem",
-                          alignItems: "center",
-                          fontSize: "0.9rem",
-                          cursor: "pointer",
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={entry.current}
-                          onChange={(event) =>
-                            updateExperience(index, {
-                              current: event.target.checked,
-                              endDate: event.target.checked
-                                ? ""
-                                : entry.endDate,
-                            })
-                          }
-                        />
-                        Currently working here
-                      </label>
-                    </div>
-                    <div className="" style={{ gridColumn: "1 / -1" }}>
+                    <label className="col-span-full flex cursor-pointer items-center gap-2.5 text-[0.9rem] text-app-soft">
+                      <input
+                        type="checkbox"
+                        className="accent-[var(--accent)]"
+                        checked={entry.current}
+                        onChange={(event) =>
+                          updateExperience(index, {
+                            current: event.target.checked,
+                            endDate: event.target.checked
+                              ? ""
+                              : entry.endDate,
+                          })
+                        }
+                      />
+                      Currently working here
+                    </label>
+                    <div className="col-span-full">
                       <Field
                         label="Description"
                         hint="Use action verbs and measurable results. One bullet per line."
@@ -606,19 +543,9 @@ export default function OnboardingManualPage() {
         ) : null}
 
         {currentStep === "education" ? (
-          <div className="stack gap-4">
-            <div
-              className="row"
-              style={{
-                justifyContent: "space-between",
-                alignItems: "center",
-                gap: "0.75rem",
-                flexWrap: "wrap",
-              }}
-            >
-              <p
-                className="text-[0.85rem] text-muted m-0"
-              >
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-[0.85rem] leading-relaxed text-app-muted">
                 Degrees, certifications, and bootcamps.
               </p>
               <Button
@@ -646,13 +573,12 @@ export default function OnboardingManualPage() {
             ) : (
               education.map((entry, index) => (
                 <Card key={entry.id} className="p-4">
-                  <div
-                    className="row justify-between mb-4"
-                  >
+                  <div className="mb-4 flex items-center justify-between gap-2">
                     <Badge tone="neutral">Entry {index + 1}</Badge>
                     <Button
                       variant="ghost"
                       size="sm"
+                      aria-label="Remove entry"
                       onClick={() =>
                         setEducation(education.filter((_, i) => i !== index))
                       }
@@ -660,7 +586,7 @@ export default function OnboardingManualPage() {
                       <X size={14} />
                     </Button>
                   </div>
-                  <div className="grid-2 gap-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
                     <Field label="Degree / certification">
                       <Input
                         value={entry.degree}
@@ -720,7 +646,7 @@ export default function OnboardingManualPage() {
         ) : null}
 
         {currentStep === "skills" ? (
-          <div className="stack gap-4">
+          <div className="flex flex-col gap-4">
             <Field
               label="Technical skills"
               hint="Comma or line separated. Group by category if helpful."
@@ -734,15 +660,10 @@ export default function OnboardingManualPage() {
                 }
               />
             </Field>
-            <Field
-              label="Desired roles"
-              hint="Comma separated roles you are targeting"
-            >
+            <Field label="Desired roles" hint="Comma separated roles you are targeting">
               <Input
                 value={form.desiredRoles}
-                onChange={(event) =>
-                  setField({ desiredRoles: event.target.value })
-                }
+                onChange={(event) => setField({ desiredRoles: event.target.value })}
                 placeholder="Backend Engineer, Platform Engineer, DevOps Engineer"
               />
             </Field>
@@ -750,19 +671,9 @@ export default function OnboardingManualPage() {
         ) : null}
 
         {currentStep === "projects" ? (
-          <div className="stack gap-4">
-            <div
-              className="row"
-              style={{
-                justifyContent: "space-between",
-                alignItems: "center",
-                gap: "0.75rem",
-                flexWrap: "wrap",
-              }}
-            >
-              <p
-                className="text-[0.85rem] text-muted m-0"
-              >
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-[0.85rem] leading-relaxed text-app-muted">
                 Side projects, open source, publications, awards.
               </p>
               <Button
@@ -789,13 +700,12 @@ export default function OnboardingManualPage() {
             ) : (
               projects.map((entry, index) => (
                 <Card key={entry.id} className="p-4">
-                  <div
-                    className="row justify-between mb-4"
-                  >
+                  <div className="mb-4 flex items-center justify-between gap-2">
                     <Badge tone="neutral">Project {index + 1}</Badge>
                     <Button
                       variant="ghost"
                       size="sm"
+                      aria-label="Remove project"
                       onClick={() =>
                         setProjects(projects.filter((_, i) => i !== index))
                       }
@@ -803,7 +713,7 @@ export default function OnboardingManualPage() {
                       <X size={14} />
                     </Button>
                   </div>
-                  <div className="grid-2 gap-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
                     <Field label="Project name">
                       <Input
                         value={entry.name}
@@ -833,7 +743,7 @@ export default function OnboardingManualPage() {
                         placeholder="github.com/user/project"
                       />
                     </Field>
-                    <div className="" style={{ gridColumn: "1 / -1" }}>
+                    <div className="sm:col-span-2">
                       <Field label="Description">
                         <Textarea
                           rows={3}
@@ -854,15 +764,7 @@ export default function OnboardingManualPage() {
           </div>
         ) : null}
 
-        <div
-          className="row"
-          style={{
-            justifyContent: "space-between",
-            marginTop: "1.5rem",
-            paddingTop: "1rem",
-            borderTop: "1px solid var(--border)",
-          }}
-        >
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-app-border pt-4">
           <Button
             variant="ghost"
             icon={<ArrowLeft size={14} />}
@@ -876,7 +778,7 @@ export default function OnboardingManualPage() {
               size="lg"
               icon={<Sparkles size={14} />}
               loading={submitting}
-              onClick={handleSubmit}
+              onClick={() => void handleSubmit()}
               disabled={!canProceed()}
             >
               Create resume
@@ -896,12 +798,7 @@ export default function OnboardingManualPage() {
 
       <Link
         href="/onboarding"
-        style={{
-          textAlign: "center",
-          display: "block",
-          color: "var(--accent)",
-          fontSize: "0.9rem",
-        }}
+        className="text-center text-[0.9rem] text-app-accent transition-opacity hover:opacity-80"
       >
         ← Choose a different method
       </Link>
@@ -911,15 +808,6 @@ export default function OnboardingManualPage() {
 
 function EmptyHint({ text }: { text: string }) {
   return (
-    <div
-      style={{
-        textAlign: "center",
-        padding: "2rem",
-        color: "var(--text-muted)",
-        fontSize: "0.88rem",
-      }}
-    >
-      {text}
-    </div>
+    <div className="py-8 text-center text-[0.88rem] leading-relaxed text-app-muted">{text}</div>
   );
 }

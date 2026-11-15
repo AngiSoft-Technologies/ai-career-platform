@@ -62,7 +62,13 @@ export interface Profile {
   summary?: string;
   phone?: string;
   location?: string;
+  country?: string;
   skills: string[];
+  desiredRoles?: string[];
+  preferredCountries?: string[];
+  preferredLocations?: string[];
+  employmentTypes?: string[];
+  remotePreferred?: boolean;
   yearsExperience?: number;
   seniority?: string;
   links?: string[];
@@ -89,6 +95,9 @@ export interface Application {
   createdAt: string;
   updatedAt: string;
   version: number;
+  /** Joined by the API: what the posting is called and who is hiring. */
+  opportunityTitle?: string | null;
+  companyName?: string | null;
 }
 
 export interface JobDocument {

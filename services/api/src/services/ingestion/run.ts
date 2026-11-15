@@ -105,30 +105,19 @@ export async function runIngestion(): Promise<{
     );
   }
 
-  // 5. Freshness: expire listings that no longer advertise a vacancy.
-  let expiredCount = 0;
-  try {
-    const expired = await query(
-      `UPDATE opportunities
-          SET status = 'expired'
-        WHERE status = 'active'
-          AND (
-            posted_at < now() - interval '60 days'
-            OR (
-              description IS NOT NULL
-              AND length(description) > 200
-              AND description !~* '(apply|hiring|vacanc|responsibilit|qualification|requirement)'
-              AND updated_at < now() - interval '14 days'
-            )
-          )`,
-    );
-    expiredCount = expired.rowCount ?? 0;
-  } catch (error) {
-    logger.warn(
-      { error: error instanceof Error ? error.message : String(error) },
-      "Stale opportunity expiry failed this cycle",
-    );
-  }
+  // 5. Freshness is handled by the maintenance job, not here.
+  //
+  //    Expiring stale listings means reading the description of every active
+  //    opportunity and matching it against a regular expression, which is the
+  //    single most expensive statement the system runs. It used to run on
+  //    every ingestion cycle — every thirty seconds — and it accounted for
+  //    most of the database's total execution time, which starved the
+  //    queries the app makes on behalf of a signed-in user.
+  //
+  //    Listing freshness does not need thirty-second resolution: a listing
+  //    that is sixty days old is still old in five minutes. The sweep now
+  //    runs on the maintenance cadence, where it belongs.
+  const expiredCount = 0;
 
   // 6. Flip sources that stopped producing anything to a backoff state rather
   //    than re-crawling a dead board every cycle.

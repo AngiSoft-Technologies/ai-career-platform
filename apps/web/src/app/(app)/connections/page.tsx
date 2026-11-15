@@ -7,6 +7,7 @@ import {
   Button,
   Card,
   EmptyState,
+  PageHeader,
   SectionTitle,
   Skeleton,
   useToast,
@@ -84,58 +85,45 @@ export default function ConnectionsPage() {
   const providers = connections.data?.providers ?? [];
 
   return (
-    <div className="stack gap-[1.2rem]">
-      <div>
-        <div className="eyebrow">Channels</div>
-        <h1 className="display mt-1" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)" }}>
-          Connected accounts
-        </h1>
-        <p className="text-muted text-[0.9rem] mt-1">
-          Connect the channels you already use. We read them to find roles. We never post as you.
-        </p>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        eyebrow="Channels"
+        title="Connected accounts"
+        description="Connect the channels you already use. We read them to find roles. We never post as you."
+      />
 
-      <Card className="p-[1.2rem]">
+      <Card className="p-4 sm:p-5">
         <SectionTitle eyebrow="Available" title="Add a channel" />
-        <div className="grid-2 mt-4">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {connections.loading && providers.length === 0 ? (
-            <Skeleton height={120} />
+            <>
+              <Skeleton height={128} />
+              <Skeleton height={128} />
+            </>
           ) : null}
           {providers.map((provider) => {
             const Icon = ICONS[provider.key] ?? Link2;
             return (
               <div
                 key={provider.key}
-                className="surface"
-                style={{ padding: "1rem", display: "flex", gap: "0.85rem", alignItems: "flex-start" }}
+                className="flex items-start gap-3 rounded-app-md border border-app-border bg-app-surface-2/40 p-4"
               >
-                <span
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 9,
-                    display: "grid",
-                    placeItems: "center",
-                    background: "var(--accent-soft)",
-                    color: "var(--accent)",
-                    flexShrink: 0,
-                  }}
-                >
+                <span className="grid size-9 shrink-0 place-items-center rounded-app-md bg-app-accent-soft text-app-accent">
                   <Icon size={17} />
                 </span>
-                <div className="flex-1">
-                  <div className="row row-wrap gap-1.5">
-                    <strong className="text-[0.92rem]">{provider.label}</strong>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <strong className="text-[0.92rem] text-app-text">{provider.label}</strong>
                     {provider.configured ? (
                       <Badge tone="success">ready</Badge>
                     ) : (
                       <Badge tone="warning">not configured</Badge>
                     )}
                   </div>
-                  <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: 3 }}>
+                  <p className="mt-0.5 text-[0.77rem] text-app-muted">
                     {(provider.features ?? []).join(" · ")}
                   </p>
-                  <div style={{ marginTop: "0.7rem" }}>
+                  <div className="mt-2.5">
                     <Button
                       size="sm"
                       variant={provider.configured ? "primary" : "outline"}
@@ -153,9 +141,9 @@ export default function ConnectionsPage() {
         </div>
       </Card>
 
-      <Card className="p-[1.2rem]">
+      <Card className="p-4 sm:p-5">
         <SectionTitle eyebrow="Active" title="Your connections" />
-        <div className="mt-[0.9rem]">
+        <div className="mt-4">
           {connections.loading && items.length === 0 ? (
             <Skeleton height={120} />
           ) : items.length === 0 ? (
@@ -165,40 +153,28 @@ export default function ConnectionsPage() {
               description="Connect an email account so we can find the roles you already saved."
             />
           ) : (
-            <div className="stack gap-2">
+            <ul className="flex flex-col gap-2">
               {items.map((connection) => {
                 const Icon = ICONS[connection.provider] ?? Link2;
                 return (
-                  <div
+                  <li
                     key={connection.id}
-                    className="row row-wrap"
-                    style={{
-                      gap: "0.8rem",
-                      padding: "0.75rem 0.85rem",
-                      border: "1px solid var(--border)",
-                      borderRadius: "var(--radius-md)",
-                    }}
+                    className="flex flex-wrap items-center gap-3 rounded-app-md border border-app-border px-3 py-2.5"
                   >
-                    <Icon size={16} className="text-accent" />
-                    <div className="flex-1" style={{ minWidth: 200 }}>
-                      <div className="font-semibold text-[0.88rem]">
+                    <Icon size={16} className="shrink-0 text-app-accent" />
+                    <div className="min-w-[200px] flex-1">
+                      <p className="text-[0.87rem] font-semibold text-app-text">
                         {connection.displayName ?? titleCase(connection.provider)}
-                      </div>
-                      <div className="text-[0.76rem] text-muted">
+                      </p>
+                      <p className="text-[0.74rem] text-app-muted">
                         {connection.accountEmail ?? "—"} · connected{" "}
                         {formatDateTime(connection.createdAt)}
-                      </div>
-                      <div className="row row-wrap" style={{ gap: "0.3rem", marginTop: "0.4rem" }}>
+                      </p>
+                      <div className="mt-1 flex flex-wrap gap-1">
                         {connection.scopes.map((scope) => (
                           <span
                             key={scope}
-                            className="mono"
-                            style={{
-                              fontSize: "0.68rem",
-                              padding: "0.1rem 0.35rem",
-                              borderRadius: 4,
-                              background: "var(--surface-2)",
-                            }}
+                            className="rounded bg-app-surface-2 px-1 py-0.5 font-mono text-[0.66rem] text-app-soft"
                           >
                             {scope}
                           </span>
@@ -217,10 +193,10 @@ export default function ConnectionsPage() {
                     >
                       Revoke
                     </Button>
-                  </div>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
           )}
         </div>
       </Card>

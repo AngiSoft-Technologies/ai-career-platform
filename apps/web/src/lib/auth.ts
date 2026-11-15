@@ -379,8 +379,11 @@ export async function linkGoogle(next = "/settings"): Promise<boolean> {
 /**
  * Stores the session the API handed back through the callback fragment.
  *
- * The tokens travel in the fragment so they are never sent to a server, never
- * logged and never stored in browser history.
+ * This is the legacy shape: the tokens themselves in the fragment. The API
+ * no longer sends it — it sends a single-use code instead — but the branch
+ * is kept so a web build can be deployed before the API build without
+ * breaking sign-in for anyone in between. Remove it once the API that
+ * speaks handoff codes is the only one deployed.
  */
 export function storeSessionFromFragment(fragment: string): boolean {
   const params = new URLSearchParams(fragment.replace(/^#/, ""));
@@ -398,6 +401,49 @@ export function storeSessionFromFragment(fragment: string): boolean {
     if (!Number.isNaN(expiry)) writeLocal(TOKEN_TTL_KEY, String(expiry));
   }
   return true;
+}
+
+/**
+ * Trades the one-time code from the callback for a session.
+ *
+ * The code is what the API puts in the callback fragment now. It carries no
+ * privilege on its own: it is redeemed once, at this endpoint, which is
+ * where the tokens are actually minted. A code that was already spent, or
+ * one that has expired, is refused.
+ */
+export async function exchangeHandoffCode(code: string): Promise<boolean> {
+  try {
+    const payload = await post<AuthSessionResponse>("/auth/exchange", { code });
+    if (!payload?.token) return false;
+    storeAuthSession(payload);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Completes a social sign-in from the callback fragment.
+ *
+ * Three shapes are accepted:
+ *
+ *   * `code=<handoff>` — the current one: a single-use code that is
+ *     exchanged for the session;
+ *   * `linked=1` — a provider identity was linked to an existing account,
+ *     so the session is already there and there is nothing to exchange;
+ *   * `access_token=…` — the legacy shape, for an API that has not been
+ *     redeployed yet.
+ */
+export async function completeSignInFromFragment(
+  fragment: string,
+): Promise<boolean> {
+  const params = new URLSearchParams(fragment.replace(/^#/, ""));
+  if (params.get("linked") === "1") return true;
+
+  const code = params.get("code");
+  if (code) return exchangeHandoffCode(code);
+
+  return storeSessionFromFragment(fragment);
 }
 
 /**

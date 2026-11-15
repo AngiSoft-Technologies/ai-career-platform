@@ -4,10 +4,11 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowDown,
   ArrowLeft,
+  ArrowUp,
   Download,
   FileText,
-  GripVertical,
   Plus,
   Save,
   Trash2,
@@ -18,11 +19,16 @@ import {
   Button,
   Card,
   EmptyState,
+  Field,
+  Input,
   Meter,
   Modal,
   SectionTitle,
+  Select,
   Skeleton,
   Tabs,
+  Textarea,
+  cx,
   useToast,
 } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -44,6 +50,35 @@ import { ATSSidebar } from "@/components/documents/ATSSidebar";
 
 interface DocumentsResponse {
   documents: JobDocument[];
+  total: number;
+}
+
+/**
+ * The sheet the document prints on.
+ *
+ * A document preview is a page of paper, not an app surface: it keeps its
+ * own print colours whatever theme is active, and each template sets its
+ * own type. The rules that used to live in `.paper` in globals.css are
+ * expressed here as Tailwind arbitrary variants (`[&_h2]:…`) so the preview
+ * reads the same design system as the rest of the app.
+ */
+function paperSurface(template: string): string {
+  return cx(
+    "rounded-app-md bg-white p-9 text-[0.86rem] leading-relaxed text-[#16181d] shadow-app-lg",
+    "[&_h1]:mb-1 [&_h1]:text-2xl [&_h1]:font-semibold",
+    "[&_h2]:mt-6 [&_h2]:mb-2 [&_h2]:border-b [&_h2]:pb-1 [&_h2]:text-[0.74rem]",
+    "[&_h2]:tracking-[0.16em] [&_h2]:uppercase [&_h2]:text-[#5b6472]",
+    "[&_ul]:my-2 [&_ul]:pl-5 [&_li]:mb-1",
+    // The dark themes read the sheet with the app's own surface rather
+    // than a white page: the selector is the html element that carries
+    // data-theme, not this element.
+    "[html[data-theme=terminal]_&]:bg-app-surface-solid [html[data-theme=terminal]_&]:text-app-text",
+    "[html[data-theme=atlas]_&]:bg-app-surface-solid [html[data-theme=atlas]_&]:text-app-text",
+    template === "ats-modern" &&
+      "[&_h1]:border-l-4 [&_h1]:border-[#14b8a6] [&_h1]:pl-3 [&_h1]:text-[#0f766e] [&_h2]:text-[#115e59]",
+    template === "ats-minimal" &&
+      "p-11 font-serif [&_h1]:text-[1.8rem] [&_h1]:tracking-[-0.03em] [&_h2]:text-[0.8rem] [&_h2]:tracking-[0.04em] [&_h2]:text-[#374151] [&_h2]:border-0",
+  );
 }
 
 interface TailoringProposal {
@@ -57,7 +92,7 @@ interface TailoringProposal {
   uncoveredRequirements: string[];
 }
 
-export default function DocumentEditorPage() {
+function DocumentEditorInner() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const toast = useToast();
@@ -81,7 +116,13 @@ export default function DocumentEditorPage() {
   const [tailoringOpportunityId, setTailoringOpportunityId] = useState("");
 
   const { data, loading } = useApi<JobDocument>(`/documents/${params.id}`);
-  const list = useApi<DocumentsResponse>("/documents");
+  // The library is asked for without its bodies: every paragraph of every
+  // draft used to arrive whole to answer a question about titles and
+  // versions. One page is enough to resolve a parent and list its versions.
+  const list = useApi<DocumentsResponse>("/documents", {
+    limit: 100,
+    content: "false",
+  });
   const opportunities = useApi<{ items: Opportunity[] }>("/opportunities", { limit: 100 });
   const documentItems = list.data?.documents ?? [];
   const baseDocument = data?.parentDocumentId
@@ -124,15 +165,26 @@ export default function DocumentEditorPage() {
   useEffect(() => {
     if (!dirty || !data) return;
     const snapshot = { title, content };
+    // The id this draft belongs to. The App Router keeps the editor mounted
+    // when the route moves to another document, and a timer that captured
+    // the previous id would write the previous document's body onto the
+    // next one — so the write carries its own id and refuses to move.
+    const documentId = params.id;
     const timer = window.setTimeout(() => {
       setSaving(true);
-      void api.patch(`/documents/${params.id}`, snapshot)
+      void api
+        .patch(`/documents/${documentId}`, snapshot)
         .then(() => {
-          if (latestDraft.current.title === snapshot.title && latestDraft.current.content === snapshot.content) {
+          if (
+            latestDraft.current.title === snapshot.title &&
+            latestDraft.current.content === snapshot.content
+          ) {
             setDirty(false);
           }
         })
-        .catch((caught) => toast.push(caught instanceof Error ? caught.message : "Autosave failed", "danger"))
+        .catch((caught) =>
+          toast.push(caught instanceof Error ? caught.message : "Autosave failed", "danger"),
+        )
         .finally(() => setSaving(false));
     }, 1000);
     return () => window.clearTimeout(timer);
@@ -298,9 +350,9 @@ export default function DocumentEditorPage() {
 
   if (loading && !data) {
     return (
-      <div className="stack">
+      <div className="flex flex-col gap-3">
         <Skeleton height={32} width={240} />
-        <div className="editor-pane">
+        <div className="grid gap-4 lg:grid-cols-2">
           <Skeleton height={420} />
           <Skeleton height={420} />
         </div>
@@ -323,30 +375,54 @@ export default function DocumentEditorPage() {
   }
 
   return (
-    <div className="stack" style={{ gap: "1.1rem" }}>
-      <div className="row row-wrap justify-between">
-        <div className="row gap-2.5">
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <Button variant="ghost" size="sm" icon={<ArrowLeft size={14} />} onClick={() => router.back()}>
             Back
           </Button>
-          <div>
-            <div className="eyebrow">{titleCase(data.type)} editor</div>
-            <h1 className="display " style={{ fontSize: "clamp(1.3rem, 3vw, 1.9rem)" }}>
+          <div className="min-w-0">
+            <p className="text-[0.7rem] font-semibold tracking-[0.14em] text-app-accent uppercase">
+              {titleCase(data.type)} editor
+            </p>
+            <h1 className="mt-0.5 truncate text-[clamp(1.3rem,3vw,1.9rem)] leading-tight font-semibold text-app-text">
               {title}
             </h1>
           </div>
         </div>
-        <div className="row row-wrap gap-1.5">
-          <Badge tone={dirty ? "warning" : "success"}>{saving ? "Saving…" : dirty ? "Unsaved changes" : "All changes saved"}</Badge>
-          <Button variant="outline" size="sm" icon={<Wand2 size={14} />} loading={validating} onClick={() => void validate()}>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tone={dirty ? "warning" : "success"}>
+            {saving ? "Saving…" : dirty ? "Unsaved changes" : "All changes saved"}
+          </Badge>
+          <Button
+            variant="outline"
+            size="sm"
+            icon={<Wand2 size={14} />}
+            loading={validating}
+            onClick={() => void validate()}
+          >
             ATS check
           </Button>
           {data.type === "cv" || data.type === "cover_letter" ? (
-            <Button variant="outline" size="sm" icon={<Wand2 size={14} />} onClick={() => { setTailoringProposal(null); setTailorOpen(true); }}>
+            <Button
+              variant="outline"
+              size="sm"
+              icon={<Wand2 size={14} />}
+              onClick={() => {
+                setTailoringProposal(null);
+                setTailorOpen(true);
+              }}
+            >
               Tailor for a job
             </Button>
           ) : null}
-          <Button variant="outline" size="sm" icon={<FileText size={14} />} loading={creatingVersion} onClick={() => void createVersion()}>
+          <Button
+            variant="outline"
+            size="sm"
+            icon={<FileText size={14} />}
+            loading={creatingVersion}
+            onClick={() => void createVersion()}
+          >
             Duplicate document
           </Button>
           <Button size="sm" icon={<Save size={14} />} loading={saving} onClick={() => void save()}>
@@ -355,9 +431,10 @@ export default function DocumentEditorPage() {
         </div>
       </div>
 
-      <div className="row row-wrap gap-1.5">
+      <div className="flex flex-wrap items-center gap-2">
         <TemplateGallery
           selectedTemplate={template}
+          documentType={data.type === "cover_letter" ? "cover_letter" : "cv"}
           onSelect={(key) => {
             setTemplate(key);
             void api
@@ -369,42 +446,62 @@ export default function DocumentEditorPage() {
                 ),
               );
           }}
-          className="flex-1" style={{ minWidth: 280 }}
+          className="min-w-[280px] flex-1"
         />
-        <span className="eyebrow">Export</span>
-        {(["pdf", "docx", "pptx", "png"] as const).map((format) => (
-          <Button
-            key={format}
-            variant="ghost"
-            size="sm"
-            icon={<Download size={13} />}
-            onClick={() => void exportDocument(format)}
-          >
-            {format.toUpperCase()}
-          </Button>
-        ))}
-        <span className="spacer" />
-        <span className="text-[0.74rem] text-muted">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[0.68rem] font-semibold tracking-[0.14em] text-app-muted uppercase">
+            Export
+          </span>
+          {(["pdf", "docx", "pptx", "png"] as const).map((format) => (
+            <Button
+              key={format}
+              variant="ghost"
+              size="sm"
+              icon={<Download size={13} />}
+              onClick={() => void exportDocument(format)}
+            >
+              {format.toUpperCase()}
+            </Button>
+          ))}
+        </div>
+        <span className="ml-auto text-[0.74rem] text-app-muted">
           Last saved {formatDateTime(data.createdAt)}
         </span>
       </div>
 
       {data.parentDocumentId && baseDocument ? (
-        <Card style={{ padding: "0.8rem 1rem" }}>
-          <span className="eyebrow">Job-specific version</span>
-          <span style={{ marginLeft: "0.5rem", fontSize: "0.84rem" }}>Based on <Link href={`/documents/${baseDocument.id}`} className="text-accent">{baseDocument.title}</Link></span>
+        <Card className="px-4 py-3">
+          <p className="text-[0.7rem] font-semibold tracking-[0.14em] text-app-muted uppercase">
+            Job-specific version
+          </p>
+          <p className="mt-1 text-[0.84rem] text-app-soft">
+            Based on{" "}
+            <Link href={`/documents/${baseDocument.id}`} className="text-app-accent hover:underline">
+              {baseDocument.title}
+            </Link>
+          </p>
           {jobVersions.length > 0 ? (
-            <div className="row row-wrap" style={{ gap: "0.45rem", marginTop: "0.6rem" }}>
-              {jobVersions.map((version) => <Link key={version.id} href={`/documents/${version.id}`}><Badge tone={version.id === data.id ? "accent" : "neutral"}>{version.title}</Badge></Link>)}
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
+              {jobVersions.map((version) => (
+                <Link key={version.id} href={`/documents/${version.id}`}>
+                  <Badge tone={version.id === data.id ? "accent" : "neutral"}>{version.title}</Badge>
+                </Link>
+              ))}
             </div>
           ) : null}
         </Card>
       ) : null}
       {!data.parentDocumentId && jobVersions.length > 0 ? (
-        <Card style={{ padding: "0.8rem 1rem" }}>
-          <div className="eyebrow">Job-specific versions · {jobVersions.length}</div>
-          <div className="row row-wrap" style={{ gap: "0.45rem", marginTop: "0.6rem" }}>
-            {jobVersions.map((version) => <Link key={version.id} href={`/documents/${version.id}`}><Badge tone="accent">{version.title}</Badge></Link>)}
+        <Card className="px-4 py-3">
+          <p className="text-[0.7rem] font-semibold tracking-[0.14em] text-app-muted uppercase">
+            Job-specific versions · {jobVersions.length}
+          </p>
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            {jobVersions.map((version) => (
+              <Link key={version.id} href={`/documents/${version.id}`}>
+                <Badge tone="accent">{version.title}</Badge>
+              </Link>
+            ))}
           </div>
         </Card>
       ) : null}
@@ -421,27 +518,31 @@ export default function DocumentEditorPage() {
       />
 
       {tab === "edit" ? (
-        <div className="editor-pane">
-          <div className="stack gap-2.5">
-            <Card style={{ padding: "0.85rem" }}>
-              <div className="field">
-                <span className="label">Document title</span>
-                <input
-                  className="input"
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="flex min-w-0 flex-col gap-2.5">
+            <Card className="p-3.5">
+              <Field label="Document title">
+                <Input
                   value={title}
                   onChange={(event) => {
                     setTitle(event.target.value);
                     setDirty(true);
                   }}
                 />
-              </div>
+              </Field>
             </Card>
 
             {sections.map((section, index) => (
-              <div key={section.id} className="editor-block">
-                <div className="editor-block-head">
+              <div
+                key={section.id}
+                className={cx(
+                  "overflow-hidden rounded-app-md border border-app-border bg-app-surface",
+                  "transition-[border-color,box-shadow] duration-150 focus-within:border-app-accent focus-within:ring-2 focus-within:ring-app-accent/20",
+                )}
+              >
+                <div className="flex items-center gap-2 border-b border-app-border bg-app-surface-2/60 px-3 py-2">
                   <span
-                    className="drag-handle"
+                    className="cursor-grab text-[0.7rem] tracking-[-0.1em] text-app-muted select-none"
                     draggable
                     onDragStart={() => setDragging(section.id)}
                     onDragOver={(event) => event.preventDefault()}
@@ -459,6 +560,7 @@ export default function DocumentEditorPage() {
                       setDirty(true);
                       setDragging(null);
                     }}
+                    aria-label="Drag to reorder section"
                   >
                     ⠿
                   </span>
@@ -466,85 +568,86 @@ export default function DocumentEditorPage() {
                     value={section.heading}
                     onChange={(event) => updateSection(section.id, { heading: event.target.value })}
                     aria-label="Section heading"
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      outline: "none",
-                      color: "var(--text)",
-                      fontWeight: 700,
-                      fontSize: "0.86rem",
-                      flex: 1,
-                      fontFamily: "var(--font-body)",
-                    }}
+                    className="min-w-0 flex-1 border-none bg-transparent text-[0.86rem] font-bold text-app-text outline-none"
                   />
-                  <span className="mono" style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>
-                    {index + 1}
-                  </span>
-                  <Button variant="ghost" size="sm" onClick={() => moveSection(section.id, -1)}>
-                    ↑
+                  <span className="font-mono text-[0.7rem] text-app-muted">{index + 1}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Move section up"
+                    onClick={() => moveSection(section.id, -1)}
+                  >
+                    <ArrowUp size={13} />
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => moveSection(section.id, 1)}>
-                    ↓
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Move section down"
+                    onClick={() => moveSection(section.id, 1)}
+                  >
+                    <ArrowDown size={13} />
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => removeSection(section.id)}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Remove section"
+                    onClick={() => removeSection(section.id)}
+                  >
                     <Trash2 size={13} />
                   </Button>
                 </div>
-                <div className="editor-block-body">
+                <div className="p-3">
                   <textarea
-                    className="textarea"
                     value={section.body}
                     onChange={(event) => updateSection(section.id, { body: event.target.value })}
                     placeholder="Write with action verbs and measurable results."
-                    style={{ minHeight: 120, background: "transparent" }}
+                    className="min-h-[120px] w-full resize-y border-none bg-transparent text-[0.88rem] leading-relaxed text-app-text outline-none placeholder:text-app-muted"
                   />
                 </div>
               </div>
             ))}
 
-            <Button variant="outline" icon={<Plus size={15} />} onClick={addSection}>
-              Add section
-            </Button>
+            <div>
+              <Button variant="outline" icon={<Plus size={15} />} onClick={addSection}>
+                Add section
+              </Button>
+            </div>
           </div>
 
-          <div style={{ position: "sticky", top: "5.5rem" }}>
-            <div className="stack gap-3">
-              <ATSSidebar documentId={params.id} content={content} opportunityId={tailoringOpportunityId || data.opportunityId} />
-              <Card style={{ padding: "0" }}>
-                <div style={{ padding: "0.8rem 1rem", borderBottom: "1px solid var(--border)" }}>
-                  <SectionTitle eyebrow="Live preview" title="How it prints" />
+          <div className="flex flex-col gap-3 lg:sticky lg:top-20">
+            <ATSSidebar
+              documentId={params.id}
+              content={content}
+              opportunityId={tailoringOpportunityId || data.opportunityId}
+            />
+            <Card className="overflow-hidden p-0">
+              <div className="border-b border-app-border px-4 py-3">
+                <SectionTitle eyebrow="Live preview" title="How it prints" />
+              </div>
+              <div className="bg-app-surface-2/50 p-4">
+                <div className={paperSurface(template)}>
+                  <h1>{title}</h1>
+                  <div
+                    className="mb-1 border-b border-[#e3e6eb] pb-2.5 text-[0.8rem] text-[#5b6472]"
+                    dangerouslySetInnerHTML={{
+                      __html: buildPreviewHtml(title, sections.slice(0, 1)),
+                    }}
+                  />
+                  <div
+                    dangerouslySetInnerHTML={{
+                      __html: buildPreviewHtml(title, sections.slice(1)),
+                    }}
+                  />
                 </div>
-                <div style={{ padding: "1rem", background: "var(--surface)" }}>
-                  <div className={`paper paper-${template}`}>
-                    <h1>{title}</h1>
-                    <div
-                      style={{
-                        fontSize: "0.8rem",
-                        color: "#5b6472",
-                        borderBottom: "1px solid #e3e6eb",
-                        paddingBottom: "0.6rem",
-                        marginBottom: "0.4rem",
-                      }}
-                      dangerouslySetInnerHTML={{
-                        __html: buildPreviewHtml(title, sections.slice(0, 1)),
-                      }}
-                    />
-                    <div
-                      dangerouslySetInnerHTML={{
-                        __html: buildPreviewHtml(title, sections.slice(1)),
-                      }}
-                    />
-                  </div>
-                </div>
-              </Card>
-            </div>
+              </div>
+            </Card>
           </div>
         </div>
       ) : null}
 
       {tab === "preview" ? (
         <Card className="p-6">
-          <div className={`paper paper-${template}`} style={{ maxWidth: 780, margin: "0 auto" }}>
+          <div className={cx("mx-auto max-w-[780px]", paperSurface(template))}>
             <h1>{title}</h1>
             <div dangerouslySetInnerHTML={{ __html: buildPreviewHtml(title, sections) }} />
           </div>
@@ -552,26 +655,24 @@ export default function DocumentEditorPage() {
       ) : null}
 
       {tab === "ats" ? (
-        <div className="grid-rail grid-rail--flip">
-          <Card className="p-[1.2rem]">
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)]">
+          <Card className="p-4 sm:p-5">
             <SectionTitle eyebrow="ATS readiness" title="Parser simulation" />
             {report ? (
               <div className="mt-4">
-                <div className="row" style={{ justifyContent: "space-between", marginBottom: 6 }}>
-                  <span className="text-[0.86rem]">Overall score</span>
-                  <span className="display" style={{ fontSize: "1.6rem" }}>
+                <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                  <span className="text-[0.86rem] text-app-soft">Overall score</span>
+                  <span className="text-[1.6rem] leading-none font-bold tabular-nums text-app-text">
                     {report.score}
                   </span>
                 </div>
                 <Meter value={report.score} />
-                <div className="row gap-1.5 mt-[0.8rem]">
-                  <Badge tone={report.passed ? "success" : "danger"}>
-                    {report.grade}
-                  </Badge>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  <Badge tone={report.passed ? "success" : "danger"}>{report.grade}</Badge>
                   <Badge tone="neutral">{report.issues.length} issues</Badge>
                 </div>
 
-                <div className="grid-2" style={{ marginTop: "1.2rem", gap: "0.7rem" }}>
+                <div className="mt-5 grid grid-cols-2 gap-2.5">
                   <Metric label="Words" value={report.metrics.wordCount} />
                   <Metric label="Bullets" value={report.metrics.bulletCount} />
                   <Metric
@@ -581,7 +682,7 @@ export default function DocumentEditorPage() {
                   <Metric label="Avg bullet" value={`${report.metrics.averageBulletLength}w`} />
                 </div>
 
-                <div className="stack" style={{ marginTop: "1.1rem", gap: "0.3rem" }}>
+                <div className="mt-4 flex flex-col gap-0.5">
                   {(
                     [
                       ["Contact", report.metrics.hasContactSection],
@@ -590,8 +691,11 @@ export default function DocumentEditorPage() {
                       ["Skills", report.metrics.hasSkillsSection],
                     ] as const
                   ).map(([label, present]) => (
-                    <div key={label} className="row justify-between">
-                      <span className="text-[0.84rem]">{label}</span>
+                    <div
+                      key={label}
+                      className="flex items-center justify-between border-b border-app-border/60 py-1.5 last:border-b-0"
+                    >
+                      <span className="text-[0.84rem] text-app-soft">{label}</span>
                       <Badge tone={present ? "success" : "warning"}>
                         {present ? "found" : "missing"}
                       </Badge>
@@ -600,56 +704,45 @@ export default function DocumentEditorPage() {
                 </div>
               </div>
             ) : (
-              <EmptyState
-                icon={<FileText size={26} />}
-                title="Not checked yet"
-                description="Run an ATS check to simulate how a recruiter's parser and keyword filters will read this document."
-                action={
-                  <Button size="sm" loading={validating} onClick={() => void validate()}>
-                    Run ATS check
-                  </Button>
-                }
-              />
+              <div className="mt-4">
+                <EmptyState
+                  icon={<FileText size={26} />}
+                  title="Not checked yet"
+                  description="Run an ATS check to simulate how a recruiter's parser and keyword filters will read this document."
+                  action={
+                    <Button size="sm" loading={validating} onClick={() => void validate()}>
+                      Run ATS check
+                    </Button>
+                  }
+                />
+              </div>
             )}
           </Card>
 
-          <Card className="p-[1.2rem]">
+          <Card className="p-4 sm:p-5">
             <SectionTitle eyebrow="Findings" title="What to fix" />
-            <div className="stack mt-[0.9rem] gap-2">
+            <div className="mt-4 flex flex-col gap-2">
               {!report ? (
-                <p className="text-[0.86rem] text-muted">
-                  No findings yet.
-                </p>
+                <p className="text-[0.86rem] text-app-muted">No findings yet.</p>
               ) : report.issues.length === 0 ? (
-                <div
-                  style={{
-                    padding: "0.9rem",
-                    borderRadius: "var(--radius-md)",
-                    background: "var(--success-soft)",
-                    fontSize: "0.86rem",
-                  }}
-                >
+                <div className="rounded-app-md bg-app-success/10 px-3.5 py-3 text-[0.86rem] leading-relaxed text-app-soft">
                   Nothing to fix. This document should pass a standard applicant tracking system.
                 </div>
               ) : (
                 report.issues.map((issue, index) => (
                   <div
                     key={`${issue.code}-${index}`}
-                    style={{
-                      padding: "0.7rem 0.8rem",
-                      borderRadius: "var(--radius-sm)",
-                      border: "1px solid var(--border)",
-                      borderLeft: `3px solid ${
-                        issue.severity === "error"
-                          ? "var(--danger)"
-                          : issue.severity === "warning"
-                            ? "var(--warning)"
-                            : "var(--info)"
-                      }`,
-                    }}
+                    className={cx(
+                      "rounded-app-sm border border-app-border px-3 py-2.5",
+                      issue.severity === "error"
+                        ? "border-l-[3px] border-l-app-danger"
+                        : issue.severity === "warning"
+                          ? "border-l-[3px] border-l-app-warning"
+                          : "border-l-[3px] border-l-app-info",
+                    )}
                   >
-                    <div className="row justify-between gap-2">
-                      <strong className="text-[0.86rem]">{issue.message}</strong>
+                    <div className="flex items-start justify-between gap-2">
+                      <strong className="text-[0.86rem] text-app-text">{issue.message}</strong>
                       <Badge
                         tone={
                           issue.severity === "error"
@@ -663,9 +756,7 @@ export default function DocumentEditorPage() {
                       </Badge>
                     </div>
                     {issue.hint ? (
-                      <p className="text-[0.8rem] text-muted mt-1">
-                        {issue.hint}
-                      </p>
+                      <p className="mt-1 text-[0.8rem] leading-relaxed text-app-muted">{issue.hint}</p>
                     ) : null}
                   </div>
                 ))
@@ -673,21 +764,15 @@ export default function DocumentEditorPage() {
             </div>
 
             {report && report.metrics.missingKeywords.length > 0 ? (
-              <div style={{ marginTop: "1.1rem" }}>
-                <div className="eyebrow mb-1.5">
+              <div className="mt-4">
+                <p className="mb-1.5 text-[0.68rem] font-semibold tracking-[0.14em] text-app-muted uppercase">
                   Missing keywords
-                </div>
-                <div className="row row-wrap gap-1.5">
+                </p>
+                <div className="flex flex-wrap gap-1.5">
                   {report.metrics.missingKeywords.slice(0, 20).map((keyword) => (
                     <span
                       key={keyword}
-                      style={{
-                        fontSize: "0.74rem",
-                        padding: "0.16rem 0.5rem",
-                        borderRadius: 6,
-                        background: "var(--warning-soft)",
-                        color: "var(--warning)",
-                      }}
+                      className="rounded-[6px] bg-app-warning/15 px-2 py-0.5 text-[0.74rem] text-app-warning"
                     >
                       {keyword}
                     </span>
@@ -700,20 +785,22 @@ export default function DocumentEditorPage() {
       ) : null}
 
       {tab === "library" ? (
-        <div className="stack gap-2">
-          {(list.data?.documents ?? []).map((document) => (
+        <div className="flex flex-col gap-2">
+          {documentItems.map((document) => (
             <Link
               key={document.id}
               href={`/documents/${document.id}`}
-              className="surface surface-hover"
-              style={{ padding: "0.75rem 0.9rem", display: "flex", gap: "0.8rem", alignItems: "center" }}
+              className={cx(
+                "flex items-center gap-3 rounded-app-md border border-app-border bg-app-surface px-3.5 py-3",
+                "transition-colors duration-150 hover:border-app-border-strong hover:bg-app-surface-2/50",
+              )}
             >
-              <FileText size={16} className="text-muted" />
-              <div className="flex-1 min-w-0">
-                <div className="text-[0.9rem] font-semibold">{document.title}</div>
-                <div className="text-[0.74rem] text-muted">
+              <FileText size={16} className="shrink-0 text-app-muted" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[0.9rem] font-semibold text-app-text">{document.title}</p>
+                <p className="text-[0.74rem] text-app-muted">
                   {titleCase(document.type)} · {formatDateTime(document.createdAt)}
-                </div>
+                </p>
               </div>
               {document.id === params.id ? <Badge tone="accent">open</Badge> : null}
             </Link>
@@ -728,10 +815,16 @@ export default function DocumentEditorPage() {
         width={820}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setTailorOpen(false)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => setTailorOpen(false)}>
+              Cancel
+            </Button>
             {tailoringProposal ? (
               <>
-                <Button variant="outline" loading={tailorBusy} onClick={() => void prepareTailoredVersion()}>
+                <Button
+                  variant="outline"
+                  loading={tailorBusy}
+                  onClick={() => void prepareTailoredVersion()}
+                >
                   Regenerate proposal
                 </Button>
                 <Button loading={tailorBusy} onClick={() => void saveTailoredVersion()}>
@@ -746,53 +839,93 @@ export default function DocumentEditorPage() {
           </>
         }
       >
-        <div className="stack" style={{ gap: "0.9rem" }}>
-          <p className="text-muted text-[0.86rem]">
-            MboQara analyses this document against the role title, posting, requirements and responsibilities. It creates a separate draft, keeps the original intact, and leaves the final review to you.
+        <div className="flex flex-col gap-3.5">
+          <p className="text-[0.86rem] leading-relaxed text-app-muted">
+            MboQara analyses this document against the role title, posting, requirements and
+            responsibilities. It creates a separate draft, keeps the original intact, and leaves the
+            final review to you.
           </p>
-          <label className="field">
-            <span className="label">Target job</span>
-            <select className="select" value={tailoringOpportunityId} onChange={(event) => setTailoringOpportunityId(event.target.value)}>
+          <Field label="Target job">
+            <Select
+              value={tailoringOpportunityId}
+              onChange={(event) => setTailoringOpportunityId(event.target.value)}
+            >
               <option value="">Choose a job…</option>
               {(opportunities.data?.items ?? []).map((item) => (
-                <option key={item.id} value={item.id}>{item.title} — {item.companyName}</option>
+                <option key={item.id} value={item.id}>
+                  {item.title} — {item.companyName}
+                </option>
               ))}
-            </select>
-          </label>
+            </Select>
+          </Field>
           {tailorBusy && !tailoringProposal ? (
-            <div className="surface p-4">The document agents are comparing your evidence with the role and preparing a reviewable draft…</div>
+            <div className="rounded-app-md border border-app-border bg-app-surface-2/50 p-4 text-[0.84rem] text-app-soft">
+              The document agents are comparing your evidence with the role and preparing a
+              reviewable draft…
+            </div>
           ) : null}
           {tailoringProposal ? (
             <>
-              <div className="grid-2 gap-[0.8rem]">
-                <Card style={{ padding: "0.9rem" }}>
-                  <div className="eyebrow">What changed</div>
-                  <ul style={{ paddingLeft: "1.1rem", marginTop: "0.5rem", fontSize: "0.82rem" }}>
-                    {tailoringProposal.changes.map((change, index) => <li key={`${index}-${change}`}>{change}</li>)}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Card className="p-3.5">
+                  <p className="text-[0.68rem] font-semibold tracking-[0.14em] text-app-muted uppercase">
+                    What changed
+                  </p>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-[0.82rem] text-app-soft">
+                    {tailoringProposal.changes.map((change, index) => (
+                      <li key={`${index}-${change}`}>{change}</li>
+                    ))}
                   </ul>
-                  <div className="eyebrow mt-[0.8rem]">Supported requirements</div>
-                  <ul style={{ paddingLeft: "1.1rem", marginTop: "0.5rem", fontSize: "0.82rem" }}>
-                    {tailoringProposal.matchedRequirements.map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}
+                  <p className="mt-3 text-[0.68rem] font-semibold tracking-[0.14em] text-app-muted uppercase">
+                    Supported requirements
+                  </p>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-[0.82rem] text-app-soft">
+                    {tailoringProposal.matchedRequirements.map((item, index) => (
+                      <li key={`${index}-${item}`}>{item}</li>
+                    ))}
                   </ul>
                 </Card>
-                <Card style={{ padding: "0.9rem" }}>
-                  <div className="eyebrow">Gaps to review honestly</div>
+                <Card className="p-3.5">
+                  <p className="text-[0.68rem] font-semibold tracking-[0.14em] text-app-muted uppercase">
+                    Gaps to review honestly
+                  </p>
                   {tailoringProposal.uncoveredRequirements.length ? (
-                    <ul style={{ paddingLeft: "1.1rem", marginTop: "0.5rem", fontSize: "0.82rem" }}>
-                      {tailoringProposal.uncoveredRequirements.map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-[0.82rem] text-app-soft">
+                      {tailoringProposal.uncoveredRequirements.map((item, index) => (
+                        <li key={`${index}-${item}`}>{item}</li>
+                      ))}
                     </ul>
-                  ) : <p style={{ fontSize: "0.82rem", marginTop: "0.5rem" }}>No uncovered requirements were identified from the provided job posting.</p>}
-                  <p style={{ color: "var(--text-muted)", fontSize: "0.76rem", marginTop: "0.7rem" }}>A gap is not a suggestion to add a skill or experience you do not have.</p>
+                  ) : (
+                    <p className="mt-2 text-[0.82rem] text-app-soft">
+                      No uncovered requirements were identified from the provided job posting.
+                    </p>
+                  )}
+                  <p className="mt-2.5 text-[0.76rem] text-app-muted">
+                    A gap is not a suggestion to add a skill or experience you do not have.
+                  </p>
                 </Card>
               </div>
-              <label className="field">
-                <span className="label">Version name</span>
-                <input className="input" value={tailoringProposal.title} onChange={(event) => setTailoringProposal((current) => current ? { ...current, title: event.target.value } : current)} />
-              </label>
-              <label className="field">
-                <span className="label">Review and edit the proposed document</span>
-                <textarea className="textarea" style={{ minHeight: 320 }} value={tailoringProposal.content} onChange={(event) => setTailoringProposal((current) => current ? { ...current, content: event.target.value } : current)} />
-              </label>
+              <Field label="Version name">
+                <Input
+                  value={tailoringProposal.title}
+                  onChange={(event) =>
+                    setTailoringProposal((current) =>
+                      current ? { ...current, title: event.target.value } : current,
+                    )
+                  }
+                />
+              </Field>
+              <Field label="Review and edit the proposed document">
+                <Textarea
+                  className="min-h-[320px]"
+                  value={tailoringProposal.content}
+                  onChange={(event) =>
+                    setTailoringProposal((current) =>
+                      current ? { ...current, content: event.target.value } : current,
+                    )
+                  }
+                />
+              </Field>
             </>
           ) : null}
         </div>
@@ -801,19 +934,23 @@ export default function DocumentEditorPage() {
   );
 }
 
+export default function DocumentEditorPage() {
+  const params = useParams<{ id: string }>();
+  // Keyed by id: the editor holds the draft in its own state and autosaves
+  // it, so keeping one instance mounted across a route change would show
+  // the previous document's body under the next document's title.
+  return <DocumentEditorInner key={params.id} />;
+}
+
 function Metric({ label, value }: { label: string; value: string | number }) {
   return (
-    <div
-      style={{
-        padding: "0.6rem 0.7rem",
-        border: "1px solid var(--border)",
-        borderRadius: "var(--radius-sm)",
-      }}
-    >
-      <div className="eyebrow">{label}</div>
-      <div className="tabular" style={{ fontSize: "1.05rem", fontWeight: 700, marginTop: 2 }}>
+    <div className="rounded-app-sm border border-app-border px-3 py-2.5">
+      <p className="text-[0.64rem] font-semibold tracking-[0.12em] text-app-muted uppercase">
+        {label}
+      </p>
+      <p className="mt-0.5 text-[1.05rem] leading-none font-bold tabular-nums text-app-text">
         {value}
-      </div>
+      </p>
     </div>
   );
 }

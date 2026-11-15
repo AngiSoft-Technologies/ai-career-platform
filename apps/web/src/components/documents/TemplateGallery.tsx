@@ -11,7 +11,7 @@ import {
   FALLBACK_COVER_LETTER_TEMPLATES,
   FALLBACK_RESUME_TEMPLATES,
 } from "@angisoft/mboqara-contracts";
-import { Badge, Button, Card, Input, SectionTitle, Skeleton } from "@/components/ui";
+import { Button, Card, Input, SectionTitle, Skeleton, cx } from "@/components/ui";
 import { useApi } from "@/lib/hooks";
 
 interface TemplateResponse extends TemplateCatalogue {}
@@ -37,7 +37,6 @@ interface TemplateGalleryProps {
   onSelect: (key: string) => void;
   documentType?: "cv" | "cover_letter";
   className?: string;
-  style?: React.CSSProperties;
 }
 
 export function TemplateGallery({
@@ -45,7 +44,6 @@ export function TemplateGallery({
   onSelect,
   documentType = "cv",
   className,
-  style,
 }: TemplateGalleryProps) {
   const { data, loading } = useApi<TemplateResponse>("/documents/templates");
   const [category, setCategory] = useState("all");
@@ -71,8 +69,7 @@ export function TemplateGallery({
   const filteredResume = useMemo(() => {
     const term = search.trim().toLowerCase();
     return resumeTemplates.filter((template) => {
-      const matchesCategory =
-        category === "all" || template.category === category;
+      const matchesCategory = category === "all" || template.category === category;
       const matchesSearch =
         term.length === 0 ||
         template.label.toLowerCase().includes(term) ||
@@ -92,8 +89,10 @@ export function TemplateGallery({
     );
   }, [coverTemplates, search]);
 
+  const visible = isCoverLetter ? filteredCover : filteredResume;
+
   return (
-    <Card className={className} style={{ padding: "1rem", ...style }}>
+    <Card className={cx("p-4", className)}>
       <SectionTitle
         eyebrow={isCoverLetter ? "Cover letters" : "Templates"}
         title={isCoverLetter ? "Choose a letter style" : "Choose your layout"}
@@ -104,28 +103,22 @@ export function TemplateGallery({
         }
       />
 
-      <div className="stack" style={{ gap: "0.75rem", marginTop: "1rem" }}>
-        <div style={{ position: "relative" }}>
+      <div className="mt-4 flex flex-col gap-3">
+        <div className="relative">
           <Search
             size={14}
-            style={{
-              position: "absolute",
-              left: "0.75rem",
-              top: "50%",
-              transform: "translateY(-50%)",
-              color: "var(--text-muted)",
-            }}
+            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-app-muted"
           />
           <Input
             placeholder="Search templates"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            style={{ paddingLeft: "2.1rem" }}
+            className="pl-9"
           />
         </div>
 
         {!isCoverLetter && categories.length > 0 ? (
-          <div className="row row-wrap" style={{ gap: "0.35rem" }}>
+          <div className="flex flex-wrap gap-1.5">
             <Button
               variant={category === "all" ? "primary" : "ghost"}
               size="sm"
@@ -148,22 +141,12 @@ export function TemplateGallery({
       </div>
 
       {loading && !data ? (
-        <div style={{ display: "grid", gap: "0.6rem", marginTop: "1rem" }}>
+        <div className="mt-4 flex flex-col gap-2.5">
           <Skeleton height={64} />
           <Skeleton height={64} />
         </div>
       ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))",
-            gap: "0.6rem",
-            marginTop: "1rem",
-            maxHeight: 360,
-            overflowY: "auto",
-            paddingRight: "0.25rem",
-          }}
-        >
+        <div className="mt-4 grid max-h-[360px] grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-2.5 overflow-y-auto pr-1">
           {isCoverLetter
             ? filteredCover.map((template) => (
                 <TemplateCard
@@ -191,15 +174,8 @@ export function TemplateGallery({
         </div>
       )}
 
-      {(isCoverLetter ? filteredCover : filteredResume).length === 0 ? (
-        <p
-          style={{
-            textAlign: "center",
-            padding: "1.5rem",
-            color: "var(--text-muted)",
-            fontSize: "0.85rem",
-          }}
-        >
+      {visible.length === 0 ? (
+        <p className="px-4 py-6 text-center text-[0.85rem] text-app-muted">
           No templates match that search.
         </p>
       ) : null}
@@ -228,68 +204,35 @@ function TemplateCard({
     <button
       type="button"
       onClick={onSelect}
-      style={{
-        border: selected
-          ? "2px solid var(--accent)"
-          : "1px solid var(--border)",
-        borderRadius: "var(--radius-md)",
-        padding: "0.7rem",
-        background: selected ? "var(--accent-soft)" : "var(--surface)",
-        cursor: "pointer",
-        textAlign: "left",
-        display: "flex",
-        flexDirection: "column",
-        gap: "0.35rem",
-      }}
+      aria-pressed={selected}
+      className={cx(
+        "flex cursor-pointer flex-col gap-1.5 rounded-app-md p-2.5 text-left transition-colors duration-150",
+        selected
+          ? "border-2 border-app-accent bg-app-accent-soft"
+          : "border border-app-border bg-app-surface hover:border-app-border-strong",
+      )}
     >
-      <span
-        className="row"
-        style={{ justifyContent: "space-between", gap: "0.4rem" }}
-      >
-        <span style={{ fontWeight: 600, fontSize: "0.82rem" }}>{label}</span>
+      <span className="flex items-center justify-between gap-2">
+        <span className="text-[0.82rem] font-semibold text-app-text">{label}</span>
         {selected ? (
-          <Check size={15} style={{ color: "var(--accent)", flexShrink: 0 }} />
+          <Check size={15} className="shrink-0 text-app-accent" />
         ) : (
           <span
             aria-hidden
-            style={{
-              width: 10,
-              height: 10,
-              borderRadius: 999,
-              background: accent,
-              flexShrink: 0,
-            }}
+            className="size-2.5 shrink-0 rounded-full"
+            style={{ background: accent }}
           />
         )}
       </span>
-      <span
-        style={{
-          fontSize: "0.72rem",
-          color: "var(--text-muted)",
-          lineHeight: 1.35,
-        }}
-      >
-        {description}
-      </span>
-      <span className="row" style={{ gap: "0.3rem", flexWrap: "wrap" }}>
-        <span
-          style={{
-            fontSize: "0.62rem",
-            textTransform: "uppercase",
-            letterSpacing: "0.04em",
-            color: "var(--text-muted)",
-          }}
-        >
-          {meta}
-        </span>
+      <span className="text-[0.72rem] leading-[1.35] text-app-muted">{description}</span>
+      <span className="flex flex-wrap items-center gap-1.5">
+        <span className="text-[0.62rem] tracking-[0.04em] text-app-muted uppercase">{meta}</span>
         {atsSafe === undefined ? null : (
           <span
-            className="row"
-            style={{
-              gap: "0.2rem",
-              fontSize: "0.62rem",
-              color: atsSafe ? "var(--success)" : "var(--warning)",
-            }}
+            className={cx(
+              "inline-flex items-center gap-0.5 text-[0.62rem]",
+              atsSafe ? "text-app-success" : "text-app-warning",
+            )}
           >
             {atsSafe ? <ShieldCheck size={10} /> : <Sparkles size={10} />}
             {atsSafe ? "ATS-safe" : "Creative"}

@@ -82,14 +82,29 @@ export function clearOutbox(): void {
   writeOutbox([]);
 }
 
-function cacheKey(path: string): string {
-  return `${CACHE_PREFIX}${namespace()}:${path}`;
+function cacheKey(path: string, query?: RequestOptions["query"]): string {
+  const base = `${CACHE_PREFIX}${namespace()}:${path}`;
+  if (!query) return base;
+
+  // Two feeds with the same path are not the same feed: page nine of
+  // "remote backend roles" must not be served as page one of "nursing".
+  const params = new URLSearchParams();
+  for (const key of Object.keys(query).sort()) {
+    const value = query[key];
+    if (value === undefined || value === null || value === "") continue;
+    params.set(key, String(value));
+  }
+  const qs = params.toString();
+  return qs ? `${base}?${qs}` : base;
 }
 
-export function readCache<T>(path: string): { data: T; at: number } | null {
+export function readCache<T>(
+  path: string,
+  query?: RequestOptions["query"],
+): { data: T; at: number } | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(cacheKey(path));
+    const raw = window.localStorage.getItem(cacheKey(path, query));
     if (!raw) return null;
     return JSON.parse(raw) as { data: T; at: number };
   } catch {
@@ -97,11 +112,15 @@ export function readCache<T>(path: string): { data: T; at: number } | null {
   }
 }
 
-export function writeCache(path: string, data: unknown): void {
+export function writeCache(
+  path: string,
+  data: unknown,
+  query?: RequestOptions["query"],
+): void {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(
-      cacheKey(path),
+      cacheKey(path, query),
       JSON.stringify({ data, at: Date.now() }),
     );
   } catch {
@@ -186,7 +205,7 @@ export async function request<T>(
     });
   } catch (error) {
     if (method === "GET" && options.cache !== false) {
-      const cached = readCache<T>(path);
+      const cached = readCache<T>(path, options.query);
       if (cached && Date.now() - cached.at <= MAX_CACHE_AGE_MS) {
         return cached.data;
       }
@@ -220,7 +239,7 @@ export async function request<T>(
           const contentType = retried.headers.get("content-type") ?? "";
           if (!contentType.includes("application/json")) return undefined as T;
           const data = (await retried.json()) as T;
-          if (method === "GET" && options.cache !== false) writeCache(path, data);
+          if (method === "GET" && options.cache !== false) writeCache(path, data, options.query);
           return data;
         }
         response = retried;
@@ -250,7 +269,7 @@ export async function request<T>(
   }
 
   const data = (await response.json()) as T;
-  if (method === "GET" && options.cache !== false) writeCache(path, data);
+  if (method === "GET" && options.cache !== false) writeCache(path, data, options.query);
   return data;
 }
 

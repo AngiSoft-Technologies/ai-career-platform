@@ -16,19 +16,26 @@ matchesRouter.get("/", async (request, response, next) => {
         seniority: z.string().max(40).optional(),
         semantic: z.enum(["true", "false"]).optional(),
         limit: z.coerce.number().int().min(1).max(100).default(25),
+        offset: z.coerce.number().int().min(0).max(20_000).default(0),
       })
       .parse(request.query);
 
-    const items = await rankedOpportunities(userId, {
+    const page = await rankedOpportunities(userId, {
       q: query_.q,
       country: query_.country,
       workMode: query_.workMode,
       seniority: query_.seniority,
       semantic: query_.semantic === "true",
       limit: query_.limit,
+      offset: query_.offset,
     });
 
-    response.json({ items, total: items.length });
+    response.json({
+      items: page.items,
+      total: page.total,
+      offset: query_.offset,
+      limit: query_.limit,
+    });
   } catch (error) {
     next(error);
   }
@@ -64,6 +71,7 @@ companiesRouter.get("/", async (request, response, next) => {
       .object({
         q: z.string().max(200).optional(),
         limit: z.coerce.number().int().min(1).max(100).default(50),
+        offset: z.coerce.number().int().min(0).max(20_000).default(0),
       })
       .parse(request.query);
 
@@ -76,11 +84,25 @@ companiesRouter.get("/", async (request, response, next) => {
         WHERE ($1::text IS NULL OR c.name ILIKE '%' || $1 || '%')
         GROUP BY c.id
         ORDER BY open_roles DESC, c.name ASC
-        LIMIT $2`,
-      [query_.q ?? null, query_.limit],
+        LIMIT $2 OFFSET $3`,
+      [query_.q ?? null, query_.limit, query_.offset],
     );
 
-    response.json({ items: result.rows, total: result.rowCount });
+    // The pager needs the number of companies that match, not the size of
+    // the page it is looking at.
+    const counted = await query<{ count: string }>(
+      `SELECT count(*)::text AS count
+         FROM companies c
+        WHERE ($1::text IS NULL OR c.name ILIKE '%' || $1 || '%')`,
+      [query_.q ?? null],
+    );
+
+    response.json({
+      items: result.rows,
+      total: Number(counted.rows[0]?.count ?? 0),
+      offset: query_.offset,
+      limit: query_.limit,
+    });
   } catch (error) {
     next(error);
   }

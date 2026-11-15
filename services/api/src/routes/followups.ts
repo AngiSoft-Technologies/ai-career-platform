@@ -21,22 +21,41 @@ const updateSchema = z.object({
 followupsRouter.get("/", async (request, response, next) => {
   try {
     const userId = response.locals.userId as string;
-    const status = typeof request.query.status === "string" ? request.query.status : undefined;
+    const filters = z
+      .object({
+        status: z.string().max(40).optional(),
+        limit: z.coerce.number().int().min(1).max(100).default(25),
+        offset: z.coerce.number().int().min(0).max(1_000_000).default(0),
+      })
+      .parse(request.query);
+    const status = filters.status ?? null;
 
-    const result = await query(
-      `SELECT f.id, f.application_id, f.due_at, f.status, f.channel, f.note,
-              f.completed_at, f.created_at,
-              o.title AS opportunity_title, c.name AS company_name
-         FROM followups f
-         JOIN applications a ON a.id = f.application_id
-         JOIN opportunities o ON o.id = a.opportunity_id
-         JOIN companies c ON c.id = o.company_id
-        WHERE f.user_id = $1
-          AND ($2::text IS NULL OR f.status = $2)
-        ORDER BY f.due_at ASC
-        LIMIT 300`,
-      [userId, status ?? null],
-    );
+    // One page and the real number of rows that match. The old route capped
+    // the list at 300 and called the capped length the total, so the pager
+    // counted a truncated page as the whole queue.
+    const [result, counted] = await Promise.all([
+      query(
+        `SELECT f.id, f.application_id, f.due_at, f.status, f.channel, f.note,
+                f.completed_at, f.created_at,
+                o.title AS opportunity_title, c.name AS company_name
+           FROM followups f
+           JOIN applications a ON a.id = f.application_id
+           JOIN opportunities o ON o.id = a.opportunity_id
+           JOIN companies c ON c.id = o.company_id
+          WHERE f.user_id = $1
+            AND ($2::text IS NULL OR f.status = $2)
+          ORDER BY f.due_at ASC
+          LIMIT $3 OFFSET $4`,
+        [userId, status, filters.limit, filters.offset],
+      ),
+      query<{ count: string }>(
+        `SELECT count(*)::text AS count
+           FROM followups f
+          WHERE f.user_id = $1
+            AND ($2::text IS NULL OR f.status = $2)`,
+        [userId, status],
+      ),
+    ]);
 
     const items = result.rows.map((row) => ({
       id: row.id,
@@ -51,7 +70,7 @@ followupsRouter.get("/", async (request, response, next) => {
       createdAt: row.created_at,
     }));
 
-    response.json({ items, total: items.length });
+    response.json({ items, total: Number(counted.rows[0]?.count ?? 0) });
   } catch (error) {
     next(error);
   }

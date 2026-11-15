@@ -57,6 +57,49 @@ html {
 }
 
 /* ==========================================================================
+   App surface tokens
+   The authenticated app reads its palette as Tailwind utilities
+   (`bg-app-surface`, `text-app-muted`, `border-app-border`) instead of
+   hand-written style objects. The five themes swap the runtime values; the
+   utility names never change, so a component written once works in all of
+   them.
+
+   The names are prefixed `app-` because the marketing site already owns the
+   unprefixed ones (`--mk-*`), and the two surfaces are deliberately
+   different: the marketing page is a document, the app is an instrument.
+   ========================================================================== */
+
+@theme inline {
+  --color-app-bg: var(--bg);
+  --color-app-elevated: var(--bg-elevated);
+  --color-app-surface: var(--surface);
+  --color-app-surface-2: var(--surface-2);
+  --color-app-surface-solid: var(--surface-solid);
+  --color-app-border: var(--border);
+  --color-app-border-strong: var(--border-strong);
+  --color-app-text: var(--text);
+  --color-app-soft: var(--text-soft);
+  --color-app-muted: var(--text-muted);
+  --color-app-accent: var(--accent);
+  --color-app-accent-2: var(--accent-2);
+  --color-app-accent-soft: var(--accent-soft);
+  --color-app-accent-contrast: var(--accent-contrast);
+  --color-app-success: var(--success);
+  --color-app-warning: var(--warning);
+  --color-app-danger: var(--danger);
+  --color-app-info: var(--info);
+
+  --radius-app-sm: var(--radius-sm);
+  --radius-app-md: var(--radius-md);
+  --radius-app-lg: var(--radius-lg);
+  --radius-app-xl: var(--radius-xl);
+
+  --shadow-app-sm: var(--shadow-sm);
+  --shadow-app-md: var(--shadow-md);
+  --shadow-app-lg: var(--shadow-lg);
+}
+
+/* ==========================================================================
    mboqara design tokens
    Five themes share one semantic token contract. A theme swaps the token
    values and its shell component, so every component works everywhere.
@@ -1307,11 +1350,26 @@ h1, h2, h3, h4, h5, h6, [id] {
 .application-guide__confirm p { margin: 0 0 .35rem; font-size: .84rem; line-height: 1.5; }
 .application-guide__submitted { display: flex; align-items: center; gap: .45rem; margin: 0; color: var(--success); font-size: .84rem; }
 
+/* ==========================================================================
+   App motion
+   One keyframe for the one thing that moves on its own: a toast arriving.
+   ========================================================================== */
+
+@keyframes app-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (max-width: 900px) {
   .application-guide__layout { grid-template-columns: 1fr; }
   .application-guide__rail { position: static; }
-}
-@media (max-width: 640px) {
+}@media (max-width: 640px) {
   .application-guide__intro, .application-guide__employer-heading { align-items: stretch; flex-direction: column; }
   .application-guide__progress { align-self: flex-start; }
   .application-guide__copy-row { align-items: stretch; flex-direction: column; }

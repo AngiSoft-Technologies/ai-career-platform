@@ -1,16 +1,14 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  ArrowRight,
   Check,
   FilePen,
   Linkedin,
   Sparkles,
   Upload,
 } from "lucide-react";
-import { Card, SectionTitle } from "@/components/ui";
+import { Button, Card, SectionTitle, cx } from "@/components/ui";
 import { useOnboarding } from "@/lib/hooks";
 
 interface StartPath {
@@ -58,165 +56,86 @@ export default function OnboardingPage() {
    * Skips the whole resume step. The caller still lands in the app with a
    * usable account; they can build a resume later from Documents.
    */
-  const skip = () => {
-    void (async () => {
-      await completeOnboarding();
-      router.push("/dashboard");
-    })();
+  const skip = async () => {
+    await completeOnboarding();
+    router.push("/dashboard");
   };
 
   return (
-    <div
-      className="stack"
-      style={{ gap: "1.5rem", maxWidth: 720, margin: "0 auto" }}
-    >
-      <div style={{ textAlign: "center", paddingTop: "2rem" }}>
-        <div className="eyebrow justify-center">
+    <div className="mx-auto flex max-w-[820px] flex-col gap-7">
+      <header className="pt-8 text-center">
+        <p className="inline-flex items-center gap-1.5 text-[0.7rem] font-semibold tracking-[0.14em] text-app-accent uppercase">
           <Sparkles size={16} /> Welcome to MboQara
-        </div>
-        <h1
-          className="display"
-          style={{ fontSize: "clamp(1.8rem, 5vw, 2.8rem)", marginTop: 8 }}
-        >
+        </p>
+        <h1 className="mt-2 text-[clamp(1.8rem,5vw,2.8rem)] leading-[1.08] font-semibold tracking-[-0.03em] text-app-text">
           Build your professional resume in minutes
         </h1>
-        <p
-          style={{
-            color: "var(--text-muted)",
-            fontSize: "1.05rem",
-            marginTop: 8,
-            maxWidth: 520,
-            marginLeft: "auto",
-            marginRight: "auto",
-          }}
-        >
-          Choose how you want to get started. We extract, structure, and check
-          your resume for ATS compatibility automatically.
+        <p className="mx-auto mt-3 max-w-[540px] text-[1.05rem] leading-relaxed text-app-muted">
+          Choose how you want to get started. We extract, structure, and check your resume for ATS
+          compatibility automatically.
         </p>
-      </div>
+      </header>
 
-      <div className="grid-3 gap-4">
+      <div className="grid gap-4 md:grid-cols-3">
         {PATHS.map((path) => {
           const Icon = path.icon;
           return (
-            <Card
+            <button
               key={path.href}
-              hover
+              type="button"
               onClick={() => router.push(path.href)}
-              style={{
-                padding: "1.5rem",
-                cursor: "pointer",
-                textAlign: "center",
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.35rem",
-              }}
+              className={cx(
+                "group flex cursor-pointer flex-col gap-1 rounded-app-lg border bg-app-surface p-6 text-center",
+                "transition-[border-color,transform,box-shadow] duration-200",
+                "hover:-translate-y-0.5 hover:border-app-border-strong hover:shadow-app-md",
+                path.primary ? "border-app-accent/60" : "border-app-border",
+              )}
             >
-              <div
-                style={{
-                  width: 64,
-                  height: 64,
-                  borderRadius: "50%",
-                  background: path.primary
-                    ? "var(--accent)"
-                    : "var(--accent-soft)",
-                  color: path.primary ? "white" : "var(--accent)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  margin: "0 auto 0.75rem",
-                }}
+              <span
+                className={cx(
+                  "mx-auto mb-2 grid size-16 place-items-center rounded-full",
+                  path.primary
+                    ? "bg-app-accent text-app-accent-contrast"
+                    : "bg-app-accent-soft text-app-accent",
+                )}
               >
                 <Icon size={26} />
-              </div>
-              <h3 style={{ marginBottom: 4 }}>{path.title}</h3>
-              <p
-                style={{
-                  color: "var(--text-muted)",
-                  fontSize: "0.88rem",
-                  flex: 1,
-                }}
-              >
+              </span>
+              <span className="text-[1.05rem] font-semibold text-app-text">{path.title}</span>
+              <span className="mt-1 flex-1 text-[0.88rem] leading-relaxed text-app-muted">
                 {path.description}
-              </p>
-              <div
-                className="row"
-                style={{
-                  gap: "0.35rem",
-                  justifyContent: "center",
-                  flexWrap: "wrap",
-                  fontSize: "0.72rem",
-                  color: "var(--accent)",
-                  marginTop: "0.5rem",
-                }}
-              >
+              </span>
+              <span className="mt-3 flex flex-wrap justify-center gap-x-3 gap-y-1 text-[0.72rem] text-app-accent">
                 {path.highlights.map((highlight) => (
-                  <span key={highlight} className="row" style={{ gap: 2 }}>
+                  <span key={highlight} className="inline-flex items-center gap-1">
                     <Check size={12} /> {highlight}
                   </span>
                 ))}
-              </div>
-            </Card>
+              </span>
+            </button>
           );
         })}
       </div>
 
-      <div className="text-center">
-        <button
-          type="button"
-          onClick={skip}
-          style={{
-            background: "none",
-            border: "none",
-            color: "var(--text-muted)",
-            fontSize: "0.9rem",
-            cursor: "pointer",
-            padding: "0.5rem 0.75rem",
-            borderRadius: 8,
-          }}
-        >
-          Skip for now — I'll build my resume later
-        </button>
+      <div className="flex justify-center">
+        <Button variant="ghost" onClick={() => void skip()} className="text-app-muted">
+          Skip for now — I&apos;ll build my resume later
+        </Button>
       </div>
 
-      <SectionTitle
-        eyebrow="What happens next"
-        title="One resume, used everywhere"
-        description="After your resume is ready we ask a few matching questions — remote-only, relocation, and notifications — then start showing you roles that fit."
-      />
-
-      <Card style={{ padding: "1rem 1.25rem" }}>
-        <ol
-          style={{
-            margin: 0,
-            paddingLeft: "1.25rem",
-            fontSize: "0.88rem",
-            color: "var(--text-muted)",
-            display: "grid",
-            gap: "0.45rem",
-          }}
-        >
+      <Card className="p-4 sm:p-5">
+        <SectionTitle
+          eyebrow="What happens next"
+          title="One resume, used everywhere"
+          description="After your resume is ready we ask a few matching questions — remote-only, relocation, and notifications — then start showing you roles that fit."
+        />
+        <ol className="mt-4 grid list-decimal gap-2 pl-5 text-[0.88rem] leading-relaxed text-app-soft">
           <li>Your resume is parsed and stored as a clean document.</li>
           <li>The ATS verifier scores it and suggests concrete fixes.</li>
           <li>You set location and matching preferences.</li>
           <li>We start matching you to roles — location first.</li>
         </ol>
       </Card>
-
-      <div className="row justify-center">
-        <Link
-          href="/dashboard"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 4,
-            color: "var(--text-muted)",
-            fontSize: "0.9rem",
-          }}
-        >
-          Skip for now <ArrowRight size={13} />
-        </Link>
-      </div>
     </div>
   );
 }

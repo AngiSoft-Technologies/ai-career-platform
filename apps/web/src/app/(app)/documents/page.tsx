@@ -2,9 +2,21 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useMemo, useState , Suspense } from "react";
+import { Suspense, useState } from "react";
 import { FilePlus2, FileText, Sparkles } from "lucide-react";
-import { Badge, Button, Card, EmptyState, SectionTitle, Skeleton, useToast } from "@/components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Field,
+  PageHeader,
+  Pagination,
+  SectionTitle,
+  Select,
+  Skeleton,
+  useToast,
+} from "@/components/ui";
 import { useApi } from "@/lib/hooks";
 import { api } from "@/lib/api";
 import { formatDateTime, titleCase } from "@/lib/format";
@@ -13,7 +25,10 @@ import type { JobDocument, Opportunity } from "@/lib/types";
 interface DocumentsResponse {
   items: JobDocument[];
   documents: JobDocument[];
+  total: number;
 }
+
+const PAGE_SIZE = 24;
 
 function DocumentsPageInner() {
   const params = useSearchParams();
@@ -21,11 +36,16 @@ function DocumentsPageInner() {
   const [generating, setGenerating] = useState(false);
   const [opportunityId, setOpportunityId] = useState(params.get("opportunityId") ?? "");
   const [type, setType] = useState("cv");
+  const [page, setPage] = useState(1);
 
-  const documents = useApi<DocumentsResponse>("/documents");
-  const opportunities = useApi<{ items: Opportunity[] }>("/opportunities", { limit: 30 });
+  const documents = useApi<DocumentsResponse>("/documents", {
+    limit: PAGE_SIZE,
+    offset: (page - 1) * PAGE_SIZE,
+  });
+  const opportunities = useApi<{ items: Opportunity[] }>("/opportunities", { limit: 100 });
 
   const items = documents.data?.items ?? documents.data?.documents ?? [];
+  const total = documents.data?.total ?? 0;
 
   const generate = async () => {
     if (!opportunityId) {
@@ -51,28 +71,29 @@ function DocumentsPageInner() {
   };
 
   return (
-    <div className="stack gap-[1.2rem]">
-      <div>
-        <div className="eyebrow">Documents</div>
-        <h1 className="display mt-1" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)" }}>
-          Your application kit
-        </h1>
-        <p className="text-muted text-[0.9rem] mt-1">
-          Keep a source resume, create job-specific copies, and prepare matching cover letters. Review edits and gaps before exporting.
-        </p>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        eyebrow="Documents"
+        title="Your application kit"
+        description="Keep a source resume, create job-specific copies, and prepare matching cover letters. Review edits and gaps before exporting."
+        actions={
+          <Link href="/opportunities">
+            <Button variant="outline" size="sm" icon={<FilePlus2 size={14} />}>
+              Find a role
+            </Button>
+          </Link>
+        }
+      />
 
-      <Card className="p-[1.1rem]">
+      <Card className="p-4 sm:p-5">
         <SectionTitle
           eyebrow="Generate"
           title="Create a new document"
           description="Generated from your real profile and the live job description. Nothing is invented."
         />
-        <div className="row row-wrap gap-2.5 mt-[0.9rem] items-end">
-          <label className="field flex-1" style={{ minWidth: 240 }}>
-            <span className="label">Opportunity</span>
-            <select
-              className="select"
+        <div className="mt-4 flex flex-wrap items-end gap-3">
+          <Field label="Opportunity" className="min-w-[240px] flex-1">
+            <Select
               value={opportunityId}
               onChange={(event) => setOpportunityId(event.target.value)}
             >
@@ -82,31 +103,46 @@ function DocumentsPageInner() {
                   {item.title} — {item.companyName}
                 </option>
               ))}
-            </select>
-          </label>
-          <label className="field" style={{ width: 190 }}>
-            <span className="label">Type</span>
-            <select className="select" value={type} onChange={(event) => setType(event.target.value)}>
+            </Select>
+          </Field>
+          <Field label="Type" className="w-[200px]">
+            <Select value={type} onChange={(event) => setType(event.target.value)}>
               <option value="cv">Resume / CV</option>
               <option value="cover_letter">Cover letter</option>
               <option value="application_email">Application email</option>
               <option value="answer">Application answers</option>
-            </select>
-          </label>
-          <Button icon={<Sparkles size={15} />} loading={generating} onClick={() => void generate()}>
+            </Select>
+          </Field>
+          <Button
+            icon={<Sparkles size={15} />}
+            loading={generating}
+            onClick={() => void generate()}
+          >
             Generate
           </Button>
         </div>
       </Card>
 
-      {documents.loading ? (
-        <div className="stack">
-          <Skeleton height={80} />
-          <Skeleton height={80} />
+      {documents.error && items.length === 0 ? (
+        <EmptyState
+          icon={<FileText size={26} />}
+          title="Could not load your documents"
+          description={documents.error}
+          action={
+            <Button variant="outline" onClick={() => documents.refresh()}>
+              Try again
+            </Button>
+          }
+        />
+      ) : documents.loading && items.length === 0 ? (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <Skeleton height={120} />
+          <Skeleton height={120} />
+          <Skeleton height={120} />
         </div>
       ) : items.length === 0 ? (
         <EmptyState
-          icon={<FileText size={28} />}
+          icon={<FileText size={26} />}
           title="No documents yet"
           description="Generate your first document from a role you are interested in."
           action={
@@ -118,33 +154,51 @@ function DocumentsPageInner() {
           }
         />
       ) : (
-        <div className="grid-2">
+        <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {items.map((document) => (
-            <Link
-              key={document.id}
-              href={`/documents/${document.id}`}
-              className="surface surface-hover"
-              style={{ padding: "1rem 1.1rem" }}
-            >
-              <div className="row justify-between gap-2.5">
-                <FileText size={18} className="text-muted" />
-                <Badge tone="accent">{document.parentDocumentId ? "Job version" : titleCase(document.type)}</Badge>
-              </div>
-              <h3 style={{ fontSize: "1rem", marginTop: "0.7rem" }}>{document.title}</h3>
-              <p className="text-[0.76rem] text-muted mt-1">
-                Created {formatDateTime(document.createdAt)}
-              </p>
-            </Link>
+            <li key={document.id}>
+              <Link
+                href={`/documents/${document.id}`}
+                className="group flex h-full flex-col rounded-app-lg border border-app-border bg-app-surface p-4 transition-[border-color,transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-app-border-strong hover:shadow-app-md"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <span className="grid size-9 place-items-center rounded-app-md bg-app-surface-2 text-app-muted">
+                    <FileText size={17} />
+                  </span>
+                  <Badge tone="accent">
+                    {document.parentDocumentId ? "Job version" : titleCase(document.type)}
+                  </Badge>
+                </div>
+                <h3 className="mt-3 text-[0.98rem] leading-snug font-semibold text-app-text">
+                  {document.title}
+                </h3>
+                <p className="mt-auto pt-2 text-[0.74rem] text-app-muted">
+                  Created {formatDateTime(document.createdAt)}
+                </p>
+              </Link>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
+
+      {items.length > 0 ? (
+        <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
+      ) : null}
     </div>
   );
 }
 
 export default function DocumentsPage() {
   return (
-    <Suspense fallback={<div className="stack gap-2.5"><div className="surface p-4" /><div className="surface p-4" /></div>}>
+    <Suspense
+      fallback={
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <Skeleton height={120} />
+          <Skeleton height={120} />
+          <Skeleton height={120} />
+        </div>
+      }
+    >
       <DocumentsPageInner />
     </Suspense>
   );

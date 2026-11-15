@@ -10,6 +10,53 @@ const alive = new WeakMap<WebSocket, boolean>();
 const socketUsers = new WeakMap<WebSocket, string>();
 const WEBSOCKET_PATHS = new Set(["/ws", "/v1/ws"]);
 
+/**
+ * How a browser proves who it is on a WebSocket.
+ *
+ * A browser cannot set a request header on a WebSocket — the constructor
+ * takes a URL and a list of subprotocols, nothing else. The token used to
+ * travel in the query string instead, which is the one place a credential is
+ * guaranteed to end up: in the proxy's access log, in the load balancer's
+ * log, in the URL of any error report.
+ *
+ * So the token goes in a subprotocol instead:
+ *
+ *     new WebSocket(url, [`authorization.bearer.${token}`])
+ *
+ * The server has to name the protocol it accepted in its response, and the
+ * browser checks that it matches one of the ones it offered. The token is
+ * therefore visible in the handshake response too, which is not a new
+ * exposure: the browser already had it.
+ *
+ * A native client can and does send the `Authorization` header, and that
+ * path is kept for it.
+ */
+const WS_TOKEN_PROTOCOL_PREFIX = "authorization.bearer.";
+
+function protocolToken(protocols: string[]): string | undefined {
+  for (const protocol of protocols) {
+    if (protocol.startsWith(WS_TOKEN_PROTOCOL_PREFIX)) {
+      return protocol.slice(WS_TOKEN_PROTOCOL_PREFIX.length).trim() || undefined;
+    }
+  }
+  return undefined;
+}
+
+function offeredProtocols(request: { headers: Record<string, unknown> }): string[] {
+  const raw = request.headers["sec-websocket-protocol"];
+  if (typeof raw === "string") {
+    return raw.split(",").map((value) => value.trim()).filter(Boolean);
+  }
+  if (Array.isArray(raw)) {
+    return raw.flatMap((value) =>
+      typeof value === "string"
+        ? value.split(",").map((entry) => entry.trim()).filter(Boolean)
+        : [],
+    );
+  }
+  return [];
+}
+
 function send(socket: WebSocket, payload: unknown): void {
   if (socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify(payload));
@@ -17,7 +64,17 @@ function send(socket: WebSocket, payload: unknown): void {
 }
 
 export function attachRealtime(server: Server): void {
-  wss = new WebSocketServer({ noServer: true });
+  wss = new WebSocketServer({
+    noServer: true,
+    // The handshake has to answer with the protocol the client offered, or
+    // the browser refuses the connection.
+    handleProtocols: (protocols) => {
+      for (const protocol of protocols) {
+        if (protocol.startsWith(WS_TOKEN_PROTOCOL_PREFIX)) return protocol;
+      }
+      return false;
+    },
+  });
 
   server.on("upgrade", (request, socket, head) => {
     const path = new URL(
@@ -36,14 +93,16 @@ export function attachRealtime(server: Server): void {
   });
 
   wss.on("connection", (socket, request) => {
-    const url = new URL(request.url ?? "/ws", "http://localhost");
-    const token = url.searchParams.get("token") ?? undefined;
     const authorization = request.headers.authorization;
-    const headerUserId = url.searchParams.get("userId");
+    const headerToken = authorization?.startsWith("Bearer ")
+      ? authorization.slice("Bearer ".length).trim()
+      : undefined;
+    const subprotocolToken = protocolToken(offeredProtocols(request));
+    const token = headerToken ?? subprotocolToken;
 
     void resolveIdentity({
-      authorization: token ? `Bearer ${token}` : authorization,
-      headerUserId,
+      authorization: token ? `Bearer ${token}` : undefined,
+      headerUserId: undefined,
     })
       .then((identity) => {
         socketUsers.set(socket, identity.userId);

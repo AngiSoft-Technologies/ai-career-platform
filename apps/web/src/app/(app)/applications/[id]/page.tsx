@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   CalendarClock,
@@ -12,17 +12,23 @@ import {
   FileText,
   Mail,
   Radar,
-  Send,
   ShieldCheck,
 } from "lucide-react";
 import {
   Badge,
   Button,
   Card,
+  DataTable,
   EmptyState,
+  Field,
+  Input,
   SectionTitle,
   Skeleton,
   Tabs,
+  Td,
+  Textarea,
+  Th,
+  cx,
   useToast,
 } from "@/components/ui";
 import { useApi } from "@/lib/hooks";
@@ -47,7 +53,7 @@ interface ApplicationsResponse {
 function safeEmployerUrl(value: string): string | null {
   try {
     const url = new URL(value);
-    if (!(["https:", "http:"].includes(url.protocol)) || !url.hostname) return null;
+    if (!["https:", "http:"].includes(url.protocol) || !url.hostname) return null;
     if (typeof window !== "undefined" && url.origin === window.location.origin) return null;
     return url.toString();
   } catch {
@@ -55,7 +61,7 @@ function safeEmployerUrl(value: string): string | null {
   }
 }
 
-export default function ApplicationWorkspacePage() {
+function ApplicationWorkspaceInner() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const toast = useToast();
@@ -81,25 +87,40 @@ export default function ApplicationWorkspacePage() {
   });
 
   const applications = useApi<ApplicationsResponse>("/applications");
-  const application = applicationOverride ?? applications.data?.items?.find((item) => item.id === params.id);
-  const opportunities = useApi<{ items: Opportunity[] }>("/opportunities", { limit: 100 });
-  const opportunity = opportunities.data?.items?.find(
-    (item) => item.id === application?.opportunityId,
+  const application =
+    applicationOverride ?? applications.data?.items?.find((item) => item.id === params.id);
+  // The posting is fetched by id. The workspace used to scan the first page of
+  // the feed for it, so an application to a role outside that page rendered
+  // without its title or employer.
+  const opportunityQuery = useApi<Opportunity>(
+    application ? `/opportunities/${application.opportunityId}` : null,
+    undefined,
   );
+  const opportunity = opportunityQuery.data;
   const employerUrl = analysis ? safeEmployerUrl(analysis.analysisUrl) : null;
 
   useEffect(() => {
     try {
-      const saved = window.localStorage.getItem(`jr.application-guide:${params.id}`);
+      const saved = window.localStorage.getItem(`mboqara.application-guide:${params.id}`);
       if (saved) {
         const parsed = JSON.parse(saved) as Record<string, unknown>;
         if ("checks" in parsed && parsed.checks && typeof parsed.checks === "object") {
           setGuideChecks(parsed.checks as Record<string, boolean>);
-          setQuestionAnswers(parsed.questionAnswers && typeof parsed.questionAnswers === "object" ? parsed.questionAnswers as Record<string, string> : {});
+          setQuestionAnswers(
+            parsed.questionAnswers && typeof parsed.questionAnswers === "object"
+              ? (parsed.questionAnswers as Record<string, string>)
+              : {},
+          );
           setEmailSubject(typeof parsed.emailSubject === "string" ? parsed.emailSubject : "");
           setEmailBody(typeof parsed.emailBody === "string" ? parsed.emailBody : "");
         } else {
-          setGuideChecks(Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, boolean] => typeof entry[1] === "boolean")));
+          setGuideChecks(
+            Object.fromEntries(
+              Object.entries(parsed).filter(
+                (entry): entry is [string, boolean] => typeof entry[1] === "boolean",
+              ),
+            ),
+          );
         }
       }
     } catch {
@@ -110,7 +131,10 @@ export default function ApplicationWorkspacePage() {
 
   useEffect(() => {
     if (progressLoaded) {
-      window.localStorage.setItem(`jr.application-guide:${params.id}`, JSON.stringify({ checks: guideChecks, questionAnswers, emailSubject, emailBody }));
+      window.localStorage.setItem(
+        `mboqara.application-guide:${params.id}`,
+        JSON.stringify({ checks: guideChecks, questionAnswers, emailSubject, emailBody }),
+      );
     }
   }, [emailBody, emailSubject, guideChecks, params.id, progressLoaded, questionAnswers]);
 
@@ -122,9 +146,27 @@ export default function ApplicationWorkspacePage() {
         `/applications/${application.id}/analyze`,
       );
       setAnalysis(response.analysis);
-      setQuestionAnswers((current) => Object.keys(current).length ? current : Object.fromEntries(response.analysis.questions.map((item) => [item.question, item.answer ?? ""])));
-      setEmailSubject((current) => current || response.analysis.emailSubject || `Application for ${opportunity?.title ?? "this role"}`);
-      setEmailBody((current) => current || response.analysis.emailBody || `Hello,\n\nI am applying for the ${opportunity?.title ?? "role"} position${opportunity?.companyName ? ` at ${opportunity.companyName}` : ""}. I have attached my application documents for your review.\n\nKind regards`);
+      setQuestionAnswers((current) =>
+        Object.keys(current).length
+          ? current
+          : Object.fromEntries(
+              response.analysis.questions.map((item) => [item.question, item.answer ?? ""]),
+            ),
+      );
+      setEmailSubject(
+        (current) =>
+          current ||
+          response.analysis.emailSubject ||
+          `Application for ${opportunity?.title ?? "this role"}`,
+      );
+      setEmailBody(
+        (current) =>
+          current ||
+          response.analysis.emailBody ||
+          `Hello,\n\nI am applying for the ${opportunity?.title ?? "role"} position${
+            opportunity?.companyName ? ` at ${opportunity.companyName}` : ""
+          }. I have attached my application documents for your review.\n\nKind regards`,
+      );
       toast.push(`Application instructions ready for ${response.analysis.platform}`, "success");
       return response.analysis;
     } catch (caught) {
@@ -149,7 +191,10 @@ export default function ApplicationWorkspacePage() {
       applications.refresh();
       return response.application;
     } catch (caught) {
-      toast.push(caught instanceof Error ? caught.message : "Could not update application progress", "danger");
+      toast.push(
+        caught instanceof Error ? caught.message : "Could not update application progress",
+        "danger",
+      );
       return null;
     } finally {
       setUpdatingStatus(false);
@@ -160,7 +205,7 @@ export default function ApplicationWorkspacePage() {
     if (!application) return;
     setStartingGuide(true);
     try {
-      const result = analysis ?? await analyse();
+      const result = analysis ?? (await analyse());
       if (!result) return;
       let current = applicationOverride ?? application;
       if (current.status === "SHORTLISTED") {
@@ -233,6 +278,29 @@ export default function ApplicationWorkspacePage() {
     }
   };
 
+  // A failed request is not an empty one. The page used to answer both
+  // with "Application not found", so a 500 or an expired session looked
+  // like a deleted application.
+  if (applications.error && !application) {
+    return (
+      <EmptyState
+        icon={<ShieldCheck size={26} />}
+        title="Could not load this application"
+        description={applications.error}
+        action={
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => applications.refresh()}>
+              Try again
+            </Button>
+            <Link href="/applications">
+              <Button variant="ghost">Back to applications</Button>
+            </Link>
+          </div>
+        }
+      />
+    );
+  }
+
   if (applications.loading && !application) {
     return <Skeleton height={320} />;
   }
@@ -251,29 +319,50 @@ export default function ApplicationWorkspacePage() {
     );
   }
 
+  const checklist = [
+    ["details", "I checked the role and employer details"],
+    [
+      "documents",
+      `I prepared ${
+        analysis?.requiredDocuments.map(titleCase).join(" and ") || "the requested documents"
+      }`,
+    ],
+    ["answers", "I reviewed my answers and corrected anything that was wrong"],
+    [
+      "final",
+      analysis?.method === "email"
+        ? "I checked the recipient and attachments before sending"
+        : "I reviewed the completed form on the employer’s page",
+    ],
+  ] as const;
+
+  const allChecked = checklist.every(([key]) => guideChecks[key]);
+
   return (
-    <div className="stack" style={{ gap: "1.1rem" }}>
-      <div className="row row-wrap justify-between">
-        <div className="row gap-2.5">
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <Link href="/applications">
             <Button variant="ghost" size="sm" icon={<ArrowLeft size={14} />}>
               Back
             </Button>
           </Link>
-          <div>
-            <div className="eyebrow">Application workspace</div>
-            <h1 className="display " style={{ fontSize: "clamp(1.3rem, 3vw, 1.9rem)" }}>
+          <div className="min-w-0">
+            <p className="text-[0.7rem] font-semibold tracking-[0.14em] text-app-accent uppercase">
+              Application workspace
+            </p>
+            <h1 className="mt-0.5 truncate text-[clamp(1.3rem,3vw,1.9rem)] leading-tight font-semibold text-app-text">
               {opportunity?.title ?? "Application"}
             </h1>
           </div>
         </div>
-        <div className="row row-wrap gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
           <Badge tone="accent">{titleCase(application.status)}</Badge>
           <Button
             variant="outline"
             size="sm"
             icon={<Radar size={14} />}
-            loading={analysing}
+            loading={analysing || startingGuide}
             onClick={() => void startGuidedApplication()}
           >
             {analysis ? "Continue application" : "Start guided application"}
@@ -293,10 +382,10 @@ export default function ApplicationWorkspacePage() {
       />
 
       {tab === "overview" ? (
-        <div className="grid-2">
-          <Card className="p-[1.2rem]">
+        <div className="grid items-start gap-4 lg:grid-cols-2">
+          <Card className="p-4 sm:p-5">
             <SectionTitle eyebrow="Record" title="Application details" />
-            <div className="stack mt-[0.9rem] gap-2.5">
+            <div className="mt-4 flex flex-col gap-2.5">
               <Detail label="Status" value={titleCase(application.status)} />
               <Detail label="Created" value={formatDateTime(application.createdAt)} />
               <Detail label="Last updated" value={formatDateTime(application.updatedAt)} />
@@ -305,265 +394,441 @@ export default function ApplicationWorkspacePage() {
               <Detail label="Role" value={opportunity?.title ?? "—"} />
             </div>
           </Card>
-          <Card className="p-[1.2rem]">
+          <Card className="p-4 sm:p-5">
             <SectionTitle eyebrow="Promise" title="How this works" />
-            <ul style={{ paddingLeft: "1.1rem", marginTop: "0.9rem", lineHeight: 1.9, fontSize: "0.88rem" }}>
+            <ul className="mt-4 list-disc space-y-1.5 pl-5 text-[0.88rem] leading-relaxed text-app-soft">
               <li>MboQara prepares the documents and the field answers.</li>
               <li>You review every suggestion and correct anything.</li>
               <li>You approve, then submit on the employer&apos;s own page.</li>
               <li>We track the outcome and remind you to follow up.</li>
             </ul>
-            <div
-              style={{
-                marginTop: "1rem",
-                padding: "0.8rem",
-                borderRadius: "var(--radius-md)",
-                background: "var(--success-soft)",
-                fontSize: "0.83rem",
-              }}
-            >
-              <ShieldCheck size={14} className="align-[-2px]" /> No application is ever sent
-              without your explicit action.
+            <div className="mt-4 flex items-start gap-2 rounded-app-md bg-app-success/10 px-3 py-2.5 text-[0.83rem] leading-relaxed text-app-soft">
+              <ShieldCheck size={14} className="mt-0.5 shrink-0 text-app-success" /> No application
+              is ever sent without your explicit action.
             </div>
           </Card>
         </div>
       ) : null}
 
       {tab === "apply" ? (
-        <div className="application-guide">
-          <Card className="application-guide__intro p-[1.2rem]">
-            <div className="application-guide__intro-copy">
-              <div className="eyebrow">Your application, step by step</div>
-              <h2>{application.status === "APPLIED" ? "Submission recorded" : opportunity?.applicationMethod === "email" ? "Prepare and send your email" : "Complete the employer’s application"}</h2>
-              <p>{application.status === "APPLIED" ? `You marked this application as submitted${application.appliedAt ? ` on ${formatDateTime(application.appliedAt)}` : ""}.` : opportunity?.applicationMethod === "email" ? "We'll prepare the details and documents. You review everything, then send it from your email app." : "Keep these instructions beside the employer's form. MboQara will never submit the form for you."}</p>
-            </div>
-            <div className="application-guide__progress" aria-label={`Application status: ${titleCase(application.status)}`}>
-              <CheckCircle2 size={18} />
-              <span>{titleCase(application.status)}</span>
+        <div className="flex flex-col gap-4">
+          <Card className="p-4 sm:p-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="min-w-[240px] flex-1">
+                <p className="text-[0.7rem] font-semibold tracking-[0.14em] text-app-accent uppercase">
+                  Your application, step by step
+                </p>
+                <h2 className="mt-1.5 text-[1.2rem] leading-snug font-semibold text-app-text">
+                  {application.status === "APPLIED"
+                    ? "Submission recorded"
+                    : opportunity?.applicationMethod === "email"
+                      ? "Prepare and send your email"
+                      : "Complete the employer’s application"}
+                </h2>
+                <p className="mt-1.5 max-w-2xl text-[0.85rem] leading-relaxed text-app-muted">
+                  {application.status === "APPLIED"
+                    ? `You marked this application as submitted${
+                        application.appliedAt ? ` on ${formatDateTime(application.appliedAt)}` : ""
+                      }.`
+                    : opportunity?.applicationMethod === "email"
+                      ? "We'll prepare the details and documents. You review everything, then send it from your email app."
+                      : "Keep these instructions beside the employer's form. MboQara will never submit the form for you."}
+                </p>
+              </div>
+              <Badge tone="success">
+                <CheckCircle2 size={12} /> {titleCase(application.status)}
+              </Badge>
             </div>
           </Card>
 
           {analysis ? (
-            <>
-              <Card className="p-[1.2rem]">
-          <SectionTitle
-            eyebrow="Employer instructions"
-            title={analysis.method === "email" ? "Email application" : `${titleCase(analysis.platform)} application`}
-            description={analysis.rawTitle ? `Instructions prepared from ${analysis.rawTitle}.` : "Review the requirements, prepare your materials, and follow the employer’s steps."}
-            action={
-              <Button size="sm" variant="outline" loading={analysing} onClick={() => void analyse()}>
-                Re-analyse
-              </Button>
-            }
-          />
-            <div className="application-guide__layout">
-              <div className="stack gap-4">
-              <div className="row row-wrap gap-1.5">
-                <Badge tone="accent">{titleCase(analysis.platform)}</Badge>
-                <Badge tone="neutral">{titleCase(analysis.method)}</Badge>
-                {analysis.emailRecipient ? (
-                  <Badge tone="info">
-                    <Mail size={11} /> {analysis.emailRecipient}
-                  </Badge>
-                ) : null}
-              </div>
+            <Card className="p-4 sm:p-5">
+              <SectionTitle
+                eyebrow="Employer instructions"
+                title={
+                  analysis.method === "email"
+                    ? "Email application"
+                    : `${titleCase(analysis.platform)} application`
+                }
+                description={
+                  analysis.rawTitle
+                    ? `Instructions prepared from ${analysis.rawTitle}.`
+                    : "Review the requirements, prepare your materials, and follow the employer’s steps."
+                }
+                action={
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    loading={analysing}
+                    onClick={() => void analyse()}
+                  >
+                    Re-analyse
+                  </Button>
+                }
+              />
 
-              {analysis.method === "email" ? (
-                <section className="application-guide__email" aria-labelledby="email-draft-heading">
-                  <h3 id="email-draft-heading">Review your email</h3>
-                  <label className="field">
-                    <span className="label">To</span>
-                    <div className="application-guide__copy-row">
-                      <input className="input" readOnly value={analysis.emailRecipient ?? "Recipient not found — check the employer instructions"} aria-label="Email recipient" />
-                      {analysis.emailRecipient ? <Button type="button" size="sm" variant="outline" icon={<Clipboard size={14} />} onClick={() => void copyEmail(analysis.emailRecipient!, "Recipient")}>Copy</Button> : null}
-                    </div>
-                  </label>
-                  <label className="field">
-                    <span className="label">Subject</span>
-                    <input className="input" value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} />
-                  </label>
-                  <label className="field">
-                    <span className="label">Message</span>
-                    <textarea className="input" rows={8} value={emailBody} onChange={(event) => setEmailBody(event.target.value)} />
-                  </label>
-                  <div className="application-guide__attachments">
-                    <strong>Before sending, attach your documents</strong>
-                    <p>{analysis.requiredDocuments.map(titleCase).join(" and ") || "CV and cover letter"} are expected. Generate or review them in your document editor.</p>
-                    <Link href={`/documents?opportunityId=${application.opportunityId}`} className="btn btn-outline btn-sm"><FileText size={14} /> Open my documents</Link>
+              <div className="mt-5 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
+                <div className="flex min-w-0 flex-col gap-5">
+                  <div className="flex flex-wrap gap-1.5">
+                    <Badge tone="accent">{titleCase(analysis.platform)}</Badge>
+                    <Badge tone="neutral">{titleCase(analysis.method)}</Badge>
+                    {analysis.emailRecipient ? (
+                      <Badge tone="info">
+                        <Mail size={11} /> {analysis.emailRecipient}
+                      </Badge>
+                    ) : null}
                   </div>
-                  {analysis.emailRecipient ? (
-                    <a className="btn btn-primary" href={`mailto:${encodeURIComponent(analysis.emailRecipient)}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`}>
-                      Open email app <Mail size={14} />
-                    </a>
-                  ) : null}
-                </section>
-              ) : (
-                <section className="application-guide__employer" aria-label="Employer application page">
-                  <div className="application-guide__employer-heading">
-                    <div>
-                      <h3>Employer’s application page</h3>
-                      <p>Complete each form step there. Return here whenever you need your checklist or prepared documents.</p>
-                    </div>
-                    <div className="row row-wrap">
-                      <Button type="button" size="sm" variant="outline" onClick={() => setEmployerPageOpen((open) => !open)}>
-                        {employerPageOpen ? "Hide employer page" : "Open inside MboQara"}
-                      </Button>
-                      {employerUrl ? <a className="btn btn-ghost btn-sm" href={employerUrl} target="_blank" rel="noopener noreferrer">New tab <ExternalLink size={13} /></a> : null}
-                    </div>
-                  </div>
-                  {employerPageOpen && employerUrl ? (
-                    <iframe
-                      className="application-guide__frame"
-                      title={`Employer application for ${opportunity?.title ?? "this role"}`}
-                      src={employerUrl}
-                      referrerPolicy="no-referrer"
-                      sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-downloads"
-                    />
-                  ) : (
-                    <div className="application-guide__frame-placeholder">
-                      <ExternalLink size={22} />
-                      <p>{employerUrl ? "Open the employer’s site here to follow its application steps." : "This link cannot be embedded safely. Use the employer’s website address from the job listing."}</p>
-                    </div>
-                  )}
-                  <p className="application-guide__embed-note">Some employers block embedded pages. If the page stays blank, use “New tab”; this checklist will remain open here.</p>
-                </section>
-              )}
 
-              {analysis.questions.length > 0 ? (
-                <section className="application-guide__questions" aria-labelledby="application-questions-heading">
-                  <h3 id="application-questions-heading">Questions to prepare</h3>
-                  <p>These were found in the employer’s page. Draft and review your answers before entering them there.</p>
-                  {analysis.questions.map((item) => (
-                    <label className="field" key={item.question}>
-                      <span className="label">{item.question}</span>
-                      <textarea className="input" rows={4} value={questionAnswers[item.question] ?? ""} onChange={(event) => setQuestionAnswers((current) => ({ ...current, [item.question]: event.target.value }))} placeholder="Write a truthful answer in your own words" />
-                    </label>
-                  ))}
-                </section>
-              ) : null}
+                  {analysis.method === "email" ? (
+                    <section className="flex flex-col gap-3">
+                      <h3 className="text-[0.98rem] font-semibold text-app-text">Review your email</h3>
+                      <Field label="To">
+                        <div className="flex gap-2">
+                          {/* No aria-label here: the visible label already
+                              names the field, and the two together read as
+                              two different questions. */}
+                          <Input
+                            readOnly
+                            value={
+                              analysis.emailRecipient ??
+                              "Recipient not found — check the employer instructions"
+                            }
+                          />
+                          {analysis.emailRecipient ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              icon={<Clipboard size={14} />}
+                              onClick={() => void copyEmail(analysis.emailRecipient!, "Recipient")}
+                            >
+                              Copy
+                            </Button>
+                          ) : null}
+                        </div>
+                      </Field>
+                      <Field label="Subject">
+                        <Input
+                          value={emailSubject}
+                          onChange={(event) => setEmailSubject(event.target.value)}
+                        />
+                      </Field>
+                      <Field label="Message">
+                        <Textarea
+                          rows={8}
+                          value={emailBody}
+                          onChange={(event) => setEmailBody(event.target.value)}
+                        />
+                      </Field>
 
-              {analysis.fields.length > 0 ? (
-                <details className="application-guide__details">
-                  <summary>Detected fields and profile suggestions ({analysis.fields.length})</summary>
-                <div className="table-scroll mt-[0.8rem]">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Field</th>
-                        <th>Type</th>
-                        <th>Required</th>
-                        <th>Suggested</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {analysis.fields.map((field) => (
-                        <tr key={field.key}>
-                          <td>
-                            <strong>{field.label}</strong>
-                          </td>
-                          <td className="mono">{field.type}</td>
-                          <td>{field.required ? "Yes" : "No"}</td>
-                          <td style={{ maxWidth: 280 }}>
-                            {field.suggestedValue ? (
-                              <span className="text-[0.8rem]">{field.suggestedValue}</span>
-                            ) : (
-                              <Badge tone="warning">you provide</Badge>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                </details>
-              ) : (
-                <p className="text-[0.88rem] text-muted">
-                  No structured form was detected. This employer likely uses a bespoke page.
-                </p>
-              )}
-
-              {analysis.instructions.length > 0 ? (
-                <div className="application-guide__instructions">
-                  <h3>What the employer asks you to do</h3>
-                  {analysis.instructions.map((instruction, index) => (
-                    <label key={index} className="application-guide__check">
-                      <input type="checkbox" checked={Boolean(guideChecks[`instruction-${index}`])} onChange={(event) => setGuideCheck(`instruction-${index}`, event.target.checked)} />
-                      <span>{instruction}</span>
-                    </label>
-                  ))}
-                </div>
-              ) : null}
-              </div>
-
-              <aside className="application-guide__rail" aria-label="Application checklist">
-                <h3>Before you submit</h3>
-                <p>Use these checks as you move through the employer’s process.</p>
-                {[
-                  ["details", "I checked the role and employer details"],
-                  ["documents", `I prepared ${analysis.requiredDocuments.map(titleCase).join(" and ") || "the requested documents"}`],
-                  ["answers", "I reviewed my answers and corrected anything that was wrong"],
-                  ["final", analysis.method === "email" ? "I checked the recipient and attachments before sending" : "I reviewed the completed form on the employer’s page"],
-                ].map(([key, label]) => (
-                  <label key={key} className="application-guide__check">
-                    <input type="checkbox" checked={Boolean(guideChecks[key])} onChange={(event) => setGuideCheck(key, event.target.checked)} />
-                    <span>{label}</span>
-                  </label>
-                ))}
-                <Button type="button" className="application-guide__ready" loading={updatingStatus} disabled={application.status !== "APPLICATION_PREPARATION" || !["details", "documents", "answers", "final"].every((key) => guideChecks[key])} onClick={() => void markReadyToApply()}>
-                  {application.status === "READY_TO_APPLY" ? "Ready to continue" : "I’m ready to submit"}
-                </Button>
-                {application.status === "READY_TO_APPLY" ? (
-                  <div className="application-guide__confirm">
-                    {!confirmingSubmission ? (
-                      <Button type="button" variant="outline" onClick={() => setConfirmingSubmission(true)}>{analysis.method === "email" ? "I sent the email" : "I submitted on the employer’s site"}</Button>
-                    ) : (
-                      <div role="group" aria-label="Confirm application submission">
-                        <p>Did you complete and submit the application with the employer?</p>
-                        <Button type="button" loading={updatingStatus} onClick={() => void confirmSubmitted()}>Yes, mark as applied</Button>
-                        <Button type="button" variant="ghost" onClick={() => setConfirmingSubmission(false)}>Not yet</Button>
+                      <div className="rounded-app-md border border-app-border bg-app-surface-2/40 p-3.5">
+                        <strong className="text-[0.86rem] text-app-text">
+                          Before sending, attach your documents
+                        </strong>
+                        <p className="mt-1 text-[0.82rem] leading-relaxed text-app-muted">
+                          {analysis.requiredDocuments.map(titleCase).join(" and ") ||
+                            "CV and cover letter"}{" "}
+                          are expected. Generate or review them in your document editor.
+                        </p>
+                        <Link
+                          href={`/documents?opportunityId=${application.opportunityId}`}
+                          className="mt-2 inline-block"
+                        >
+                          <Button size="sm" variant="outline" icon={<FileText size={14} />}>
+                            Open my documents
+                          </Button>
+                        </Link>
                       </div>
-                    )}
+
+                      {analysis.emailRecipient ? (
+                        <a
+                          className="inline-flex"
+                          href={`mailto:${encodeURIComponent(analysis.emailRecipient)}?subject=${encodeURIComponent(
+                            emailSubject,
+                          )}&body=${encodeURIComponent(emailBody)}`}
+                        >
+                          <Button icon={<Mail size={14} />}>Open email app</Button>
+                        </a>
+                      ) : null}
+                    </section>
+                  ) : (
+                    <section aria-label="Employer application page">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-[200px] flex-1">
+                          <h3 className="text-[0.98rem] font-semibold text-app-text">
+                            Employer’s application page
+                          </h3>
+                          <p className="mt-1 text-[0.82rem] leading-relaxed text-app-muted">
+                            Complete each form step there. Return here whenever you need your
+                            checklist or prepared documents.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setEmployerPageOpen((open) => !open)}
+                          >
+                            {employerPageOpen ? "Hide employer page" : "Open inside MboQara"}
+                          </Button>
+                          {employerUrl ? (
+                            <a href={employerUrl} target="_blank" rel="noopener noreferrer">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                icon={<ExternalLink size={13} />}
+                              >
+                                New tab
+                              </Button>
+                            </a>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      {employerPageOpen && employerUrl ? (
+                        <iframe
+                          className="mt-3 h-[480px] w-full rounded-app-md border border-app-border bg-app-surface-2"
+                          title={`Employer application for ${opportunity?.title ?? "this role"}`}
+                          src={employerUrl}
+                          referrerPolicy="no-referrer"
+                          // The employer's page runs sandboxed without allow-same-origin: with it,
+                          // a framed page keeps its origin's privileges and the
+                          // sandbox isolates nothing.
+                          sandbox="allow-forms allow-scripts allow-popups allow-popups-to-escape-sandbox allow-downloads"
+                        />
+                      ) : (
+                        <div className="mt-3 flex flex-col items-center gap-2 rounded-app-md border border-dashed border-app-border px-4 py-10 text-center">
+                          <ExternalLink size={22} className="text-app-muted" />
+                          <p className="max-w-md text-[0.84rem] leading-relaxed text-app-muted">
+                            {employerUrl
+                              ? "Open the employer’s site here to follow its application steps."
+                              : "This link cannot be embedded safely. Use the employer’s website address from the job listing."}
+                          </p>
+                        </div>
+                      )}
+                      <p className="mt-2 text-[0.74rem] text-app-muted">
+                        Some employers block embedded pages. If the page stays blank, use “New
+                        tab”; this checklist will remain open here.
+                      </p>
+                    </section>
+                  )}
+
+                  {analysis.questions.length > 0 ? (
+                    <section>
+                      <h3 className="text-[0.98rem] font-semibold text-app-text">
+                        Questions to prepare
+                      </h3>
+                      <p className="mt-1 text-[0.82rem] leading-relaxed text-app-muted">
+                        These were found in the employer’s page. Draft and review your answers
+                        before entering them there.
+                      </p>
+                      <div className="mt-3 flex flex-col gap-3">
+                        {analysis.questions.map((item) => (
+                          <Field key={item.question} label={item.question}>
+                            <Textarea
+                              rows={4}
+                              value={questionAnswers[item.question] ?? ""}
+                              onChange={(event) =>
+                                setQuestionAnswers((current) => ({
+                                  ...current,
+                                  [item.question]: event.target.value,
+                                }))
+                              }
+                              placeholder="Write a truthful answer in your own words"
+                            />
+                          </Field>
+                        ))}
+                      </div>
+                    </section>
+                  ) : null}
+
+                  {analysis.fields.length > 0 ? (
+                    <details className="rounded-app-md border border-app-border">
+                      <summary className="cursor-pointer px-3 py-2.5 text-[0.85rem] font-semibold text-app-text">
+                        Detected fields and profile suggestions ({analysis.fields.length})
+                      </summary>
+                      <div className="p-3 pt-0">
+                        <DataTable>
+                          <thead>
+                            <tr>
+                              <Th>Field</Th>
+                              <Th>Type</Th>
+                              <Th>Required</Th>
+                              <Th>Suggested</Th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {analysis.fields.map((field) => (
+                              <tr key={field.key}>
+                                <Td className="font-semibold text-app-text">{field.label}</Td>
+                                <Td className="font-mono text-[0.76rem]">{field.type}</Td>
+                                <Td className="text-[0.8rem]">{field.required ? "Yes" : "No"}</Td>
+                                <Td className="max-w-[280px] text-[0.8rem]">
+                                  {field.suggestedValue ? (
+                                    field.suggestedValue
+                                  ) : (
+                                    <Badge tone="warning">you provide</Badge>
+                                  )}
+                                </Td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </DataTable>
+                      </div>
+                    </details>
+                  ) : (
+                    <p className="text-[0.88rem] text-app-muted">
+                      No structured form was detected. This employer likely uses a bespoke page.
+                    </p>
+                  )}
+
+                  {analysis.instructions.length > 0 ? (
+                    <section>
+                      <h3 className="text-[0.98rem] font-semibold text-app-text">
+                        What the employer asks you to do
+                      </h3>
+                      <div className="mt-2.5 flex flex-col gap-1.5">
+                        {analysis.instructions.map((instruction, index) => (
+                          <label
+                            key={index}
+                            className="flex cursor-pointer items-start gap-2.5 rounded-app-sm px-2 py-1.5 text-[0.85rem] leading-relaxed text-app-soft transition-colors hover:bg-app-surface-2/50"
+                          >
+                            <input
+                              type="checkbox"
+                              className="mt-0.5 accent-[var(--accent)]"
+                              checked={Boolean(guideChecks[`instruction-${index}`])}
+                              onChange={(event) =>
+                                setGuideCheck(`instruction-${index}`, event.target.checked)
+                              }
+                            />
+                            <span>{instruction}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </section>
+                  ) : null}
+                </div>
+
+                <aside className="flex flex-col gap-2 rounded-app-md border border-app-border bg-app-surface-2/40 p-4 lg:sticky lg:top-20">
+                  <h3 className="text-[0.98rem] font-semibold text-app-text">Before you submit</h3>
+                  <p className="text-[0.8rem] leading-relaxed text-app-muted">
+                    Use these checks as you move through the employer’s process.
+                  </p>
+                  {checklist.map(([key, label]) => (
+                    <label
+                      key={key}
+                      className="flex cursor-pointer items-start gap-2.5 text-[0.83rem] leading-relaxed text-app-soft"
+                    >
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 accent-[var(--accent)]"
+                        checked={Boolean(guideChecks[key])}
+                        onChange={(event) => setGuideCheck(key, event.target.checked)}
+                      />
+                      <span>{label}</span>
+                    </label>
+                  ))}
+                  <div className="mt-2">
+                    <Button
+                      type="button"
+                      className="w-full justify-center"
+                      loading={updatingStatus}
+                      disabled={
+                        application.status !== "APPLICATION_PREPARATION" || !allChecked
+                      }
+                      onClick={() => void markReadyToApply()}
+                    >
+                      {application.status === "READY_TO_APPLY"
+                        ? "Ready to continue"
+                        : "I’m ready to submit"}
+                    </Button>
                   </div>
-                ) : null}
-                {application.status === "APPLIED" ? <p className="application-guide__submitted"><CheckCircle2 size={16} /> Submission recorded in your applications.</p> : null}
-              </aside>
-            </div>
-              </Card>
-            </>
+                  {application.status === "READY_TO_APPLY" ? (
+                    <div className="mt-1 flex flex-col gap-2">
+                      {!confirmingSubmission ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full justify-center"
+                          onClick={() => setConfirmingSubmission(true)}
+                        >
+                          {analysis.method === "email"
+                            ? "I sent the email"
+                            : "I submitted on the employer’s site"}
+                        </Button>
+                      ) : (
+                        <div
+                          role="group"
+                          aria-label="Confirm application submission"
+                          className="flex flex-col gap-2 rounded-app-sm border border-app-border bg-app-surface p-2.5"
+                        >
+                          <p className="text-[0.81rem] leading-relaxed text-app-soft">
+                            Did you complete and submit the application with the employer?
+                          </p>
+                          <Button
+                            type="button"
+                            loading={updatingStatus}
+                            onClick={() => void confirmSubmitted()}
+                          >
+                            Yes, mark as applied
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() => setConfirmingSubmission(false)}
+                          >
+                            Not yet
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+                  {application.status === "APPLIED" ? (
+                    <p className="mt-1 flex items-center gap-1.5 text-[0.8rem] text-app-success">
+                      <CheckCircle2 size={16} /> Submission recorded in your applications.
+                    </p>
+                  ) : null}
+                </aside>
+              </div>
+            </Card>
           ) : (
-            <Card className="p-[1.2rem]">
-            <EmptyState
-              icon={<Radar size={26} />}
-              title="Not analysed yet"
-              description="Analyse the employer's page to extract the form fields and screen questions."
-              action={
-                <Button size="sm" loading={analysing || startingGuide} onClick={() => void startGuidedApplication()}>
-                  Prepare my application
-                </Button>
-              }
-            />
+            <Card className="p-4 sm:p-5">
+              <EmptyState
+                icon={<Radar size={26} />}
+                title="Not analysed yet"
+                description="Analyse the employer's page to extract the form fields and screen questions."
+                action={
+                  <Button
+                    size="sm"
+                    loading={analysing || startingGuide}
+                    onClick={() => void startGuidedApplication()}
+                  >
+                    Prepare my application
+                  </Button>
+                }
+              />
             </Card>
           )}
         </div>
       ) : null}
 
       {tab === "followup" ? (
-        <Card className="p-[1.2rem]">
+        <Card className="p-4 sm:p-5">
           <SectionTitle
             eyebrow="Nudge"
             title="Schedule a follow-up"
             description="We will remind you. We never contact the employer without you."
           />
-          <div className="row row-wrap gap-2.5 mt-4 items-end">
-            <label className="field">
-              <span className="label">Due date</span>
-              <input
+          <div className="mt-4 flex flex-wrap items-end gap-3">
+            <Field label="Due date" className="w-[190px]">
+              <Input
                 type="date"
-                className="input"
                 value={followupDate}
                 onChange={(event) => setFollowupDate(event.target.value)}
               />
-            </label>
+            </Field>
             <Button
               icon={<CalendarClock size={15} />}
               loading={savingFollowup}
@@ -576,14 +841,13 @@ export default function ApplicationWorkspacePage() {
       ) : null}
 
       {tab === "documents" ? (
-        <Card className="p-[1.2rem]">
+        <Card className="p-4 sm:p-5">
           <SectionTitle eyebrow="Kit" title="Documents for this role" />
-          <div className="stack mt-[0.9rem] gap-2">
-            <Link
-              href={`/documents?opportunityId=${application.opportunityId}`}
-              className="btn btn-outline w-full"
-            >
-              <FileText size={15} /> Open document editor
+          <div className="mt-4 flex max-w-md flex-col gap-2">
+            <Link href={`/documents?opportunityId=${application.opportunityId}`}>
+              <Button variant="outline" className="w-full" icon={<FileText size={15} />}>
+                Open document editor
+              </Button>
             </Link>
             <Link href={`/opportunities/${application.opportunityId}`}>
               <Button variant="ghost" className="w-full">
@@ -599,9 +863,22 @@ export default function ApplicationWorkspacePage() {
 
 function Detail({ label, value }: { label: string; value: string }) {
   return (
-    <div className="row justify-between gap-4">
-      <span className="text-[0.82rem] text-muted">{label}</span>
-      <span style={{ fontSize: "0.86rem", fontWeight: 600, textAlign: "right" }}>{value}</span>
+    <div className="flex items-start justify-between gap-4">
+      <span className="text-[0.82rem] text-app-muted">{label}</span>
+      <span className="text-right text-[0.86rem] font-semibold text-app-text">{value}</span>
     </div>
+  );
+}
+
+export default function ApplicationWorkspacePage() {
+  const params = useParams<{ id: string }>();
+  // The workspace is keyed by the application id: the App Router keeps this
+  // route mounted when only the id changes, and without the key the analysis,
+  // the guide progress and the tab of the previous application stayed on
+  // screen under the new one's heading.
+  return (
+    <Suspense fallback={<Skeleton height={320} />}>
+      <ApplicationWorkspaceInner key={params.id} />
+    </Suspense>
   );
 }

@@ -239,27 +239,66 @@ export async function prepareDocumentTailoring(input: {
   };
 }
 
+export interface DocumentListFilters {
+  opportunityId?: string;
+  limit?: number;
+  offset?: number;
+  /**
+   * The body of every document, or just the metadata. A library of fifty
+   * documents used to arrive whole — every paragraph of every draft — to
+   * answer a question about titles and versions, so the editor asks for the
+   * metadata and fetches one body when it opens a document.
+   */
+  includeContent?: boolean;
+}
+
+export interface DocumentPage {
+  items: DocumentDraft[];
+  total: number;
+}
+
 export async function listDocuments(
   userId: string,
-  opportunityId?: string,
-): Promise<DocumentDraft[]> {
-  const result = await query<DocumentRow>(
-    `SELECT id, application_id, opportunity_id, parent_document_id, type, title, content
-     FROM documents
-     WHERE user_id = $1 AND ($2::uuid IS NULL OR opportunity_id = $2)
-     ORDER BY created_at DESC`,
-    [userId, opportunityId ?? null],
-  );
+  filters: DocumentListFilters = {},
+): Promise<DocumentPage> {
+  const opportunityId = filters.opportunityId;
+  const limit = Math.min(Math.max(filters.limit ?? 25, 1), 100);
+  const offset = Math.max(filters.offset ?? 0, 0);
+  const includeContent = filters.includeContent ?? true;
 
-  return result.rows.map((row) => ({
-    id: row.id,
-    applicationId: row.application_id ?? undefined,
-    opportunityId: row.opportunity_id ?? "",
-    parentDocumentId: row.parent_document_id ?? undefined,
-    type: row.type,
-    title: row.title,
-    content: row.content,
-  }));
+  const clauses = ["user_id = $1", "($2::uuid IS NULL OR opportunity_id = $2)"];
+  const values: unknown[] = [userId, opportunityId ?? null];
+
+  const [items, counted] = await Promise.all([
+    query<DocumentRow>(
+      `SELECT id, application_id, opportunity_id, parent_document_id, type, title${
+        includeContent ? ", content" : ", ''::text AS content"
+      }
+       FROM documents
+       WHERE ${clauses.join(" AND ")}
+       ORDER BY created_at DESC
+       LIMIT $3 OFFSET $4`,
+      [...values, limit, offset],
+    ),
+    query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM documents
+        WHERE ${clauses.join(" AND ")}`,
+      values,
+    ),
+  ]);
+
+  return {
+    items: items.rows.map((row) => ({
+      id: row.id,
+      applicationId: row.application_id ?? undefined,
+      opportunityId: row.opportunity_id ?? "",
+      parentDocumentId: row.parent_document_id ?? undefined,
+      type: row.type,
+      title: row.title,
+      content: row.content,
+    })),
+    total: Number(counted.rows[0]?.count ?? 0),
+  };
 }
 
 export async function generateDocumentFromProfile(input: {

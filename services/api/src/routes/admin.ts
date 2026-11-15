@@ -20,7 +20,11 @@ import {
 
 export const adminRouter = Router();
 
-adminRouter.get("/stats", requirePermission("users:read"), async (_request, response, next) => {
+// Platform totals are an analytics question, not a user-directory one.
+// Gating them on `users:read` left every role that reasons about
+// throughput — automation above all — reading zeros, and handed the same
+// numbers to a plain job seeker, who has no use for them.
+adminRouter.get("/stats", requirePermission("analytics:read"), async (_request, response, next) => {
   try {
     const [users, opportunities, applications, sources, docs, aiTasks, events] = await Promise.all([
       query<{ count: string }>("SELECT count(*)::text AS count FROM users"),
@@ -129,23 +133,41 @@ adminRouter.delete("/roles/:userId/:role", requirePermission("roles:write"), asy
 
 adminRouter.get("/users", requirePermission("users:read"), async (request, response, next) => {
   try {
-    const search = typeof request.query.q === "string" ? request.query.q : null;
-    const result = await query(
-      `SELECT u.id, u.email, u.display_name AS name, u.created_at,
-              COALESCE(
-                array_agg(r.name::text) FILTER (WHERE r.name IS NOT NULL),
-                ARRAY[]::text[]
-              ) AS roles
-         FROM users u
-         LEFT JOIN user_roles ur ON ur.user_id = u.id AND ur.is_active = true
-         LEFT JOIN roles r ON r.id = ur.role_id
-        WHERE ($1::text IS NULL OR u.email ILIKE '%' || $1 || '%')
-        GROUP BY u.id
-        ORDER BY u.created_at DESC
-        LIMIT 200`,
-      [search],
-    );
-    response.json({ items: result.rows, total: result.rowCount });
+    const filters = z
+      .object({
+        q: z.string().max(200).optional(),
+        // The directory is paged: a directory of ten thousand accounts is
+        // navigated by page, and the count on the screen is the number of
+        // accounts that match rather than the size of this page.
+        limit: z.coerce.number().int().min(1).max(100).default(25),
+        offset: z.coerce.number().int().min(0).max(1_000_000).default(0),
+      })
+      .parse(request.query);
+    const search = filters.q ?? null;
+
+    const [result, counted] = await Promise.all([
+      query(
+        `SELECT u.id, u.email, u.display_name AS name, u.created_at,
+                COALESCE(
+                  array_agg(r.name::text) FILTER (WHERE r.name IS NOT NULL),
+                  ARRAY[]::text[]
+                ) AS roles
+           FROM users u
+           LEFT JOIN user_roles ur ON ur.user_id = u.id AND ur.is_active = true
+           LEFT JOIN roles r ON r.id = ur.role_id
+          WHERE ($1::text IS NULL OR u.email ILIKE '%' || $1 || '%')
+          GROUP BY u.id
+          ORDER BY u.created_at DESC
+          LIMIT $2 OFFSET $3`,
+        [search, filters.limit, filters.offset],
+      ),
+      query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM users u
+          WHERE ($1::text IS NULL OR u.email ILIKE '%' || $1 || '%')`,
+        [search],
+      ),
+    ]);
+    response.json({ items: result.rows, total: Number(counted.rows[0]?.count ?? 0) });
   } catch (error) {
     next(error);
   }

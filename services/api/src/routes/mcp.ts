@@ -118,7 +118,7 @@ async function callTool(
   switch (name) {
     case "search_jobs": {
       const limit = Number(args.limit ?? 20);
-      const items = await rankedOpportunities(userId, {
+      const page = await rankedOpportunities(userId, {
         q: typeof args.q === "string" ? args.q : undefined,
         country: typeof args.country === "string" ? args.country : undefined,
         workMode:
@@ -128,8 +128,8 @@ async function callTool(
         limit: Math.min(Math.max(limit, 1), 50),
       });
       return textResult({
-        count: items.length,
-        items: items.map((item) => ({
+        count: page.items.length,
+        items: page.items.map((item) => ({
           id: item.id,
           title: item.title,
           company: item.companyName,

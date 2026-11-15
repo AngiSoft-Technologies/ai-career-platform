@@ -4,64 +4,65 @@ import { useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { ShieldCheck } from "lucide-react";
 import {
-  storeSessionFromFragment,
+  completeSignInFromFragment,
   takeNextPath,
 } from "@/lib/auth";
 
 /**
  * Landing page for a completed social sign-in.
  *
- * The API hands the session back in the URL fragment, so the tokens are never
- * sent to a server, never logged and never stored in browser history.
+ * The API hands back a single-use code in the URL fragment, and the client
+ * exchanges it for the session. The tokens are never in the address bar,
+ * never in browser history and never in a shared link.
  */
 function AuthCallbackInner() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fragment = window.location.hash.replace(/^#/, "");
-    if (!fragment) {
-      setError("That sign-in link is incomplete. Please try again.");
-      return;
-    }
+    let cancelled = false;
 
-    if (!storeSessionFromFragment(fragment)) {
-      setError("That sign-in did not return a session. Please try again.");
-      return;
-    }
+    const finish = async () => {
+      const fragment = window.location.hash.replace(/^#/, "");
+      if (!fragment) {
+        setError("That sign-in link is incomplete. Please try again.");
+        return;
+      }
 
-    // The fragment must not stay in the address bar.
-    window.history.replaceState(null, "", window.location.pathname);
+      const completed = await completeSignInFromFragment(fragment);
+      if (cancelled) return;
 
-    router.replace(takeNextPath());
-    router.refresh();
+      if (!completed) {
+        setError("That sign-in did not return a session. Please try again.");
+        return;
+      }
+
+      // The fragment must not stay in the address bar.
+      window.history.replaceState(null, "", window.location.pathname);
+
+      router.replace(takeNextPath());
+      router.refresh();
+    };
+
+    void finish();
+
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   return (
-    <main className="landing min-h-dvh">
-      <div
-        className="surface"
-        style={{
-          maxWidth: 460,
-          margin: "12vh auto",
-          padding: "1.6rem",
-          textAlign: "center",
-        }}
-      >
+    <main className="landing flex min-h-dvh items-center justify-center px-4">
+      <div className="w-full max-w-[460px] rounded-app-lg border border-app-border bg-app-surface p-7 text-center">
         {error ? (
           <>
-            <h1 className="display" style={{ fontSize: "1.4rem" }}>
-              Sign-in failed
-            </h1>
-            <p
-              role="alert"
-              style={{ color: "var(--text-muted)", marginTop: "0.6rem" }}
-            >
+            <h1 className="text-[1.4rem] font-semibold text-app-text">Sign-in failed</h1>
+            <p role="alert" className="mt-2.5 text-[0.9rem] leading-relaxed text-app-muted">
               {error}
             </p>
             <button
               type="button"
-              className="btn btn-primary mt-4"
+              className="mt-4 inline-flex h-10 cursor-pointer items-center justify-center rounded-app-md border border-app-accent bg-app-accent px-4 text-[0.875rem] font-semibold text-app-accent-contrast transition-opacity duration-150 hover:opacity-90"
               onClick={() => router.replace("/login")}
             >
               Back to sign in
@@ -69,11 +70,9 @@ function AuthCallbackInner() {
           </>
         ) : (
           <>
-            <ShieldCheck size={28} className="text-accent" />
-            <h1 className="display" style={{ fontSize: "1.4rem", marginTop: "0.8rem" }}>
-              You are signed in
-            </h1>
-            <p style={{ color: "var(--text-muted)", marginTop: "0.6rem" }}>
+            <ShieldCheck size={28} className="mx-auto text-app-accent" />
+            <h1 className="mt-3 text-[1.4rem] font-semibold text-app-text">You are signed in</h1>
+            <p className="mt-2.5 text-[0.9rem] leading-relaxed text-app-muted">
               Taking you to your dashboard…
             </p>
           </>

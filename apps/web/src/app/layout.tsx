@@ -39,7 +39,7 @@ const display = Archivo_Black({
   preload: false,
 });
 
-const themeBoot = `(function(){try{var t=localStorage.getItem("mboqara.theme");if(t&&/^[a-z]+$/.test(t)){document.documentElement.setAttribute("data-theme",t);}}catch(e){}})();`;
+const themeBoot = `(function(){try{var t=localStorage.getItem("jr.theme");if(t&&/^[a-z]+$/.test(t)){document.documentElement.setAttribute("data-theme",t);}}catch(e){}})();`;
 
 /** Root metadata: canonical site-wide defaults inherited by every route. */
 export const metadata: Metadata = {

@@ -42,11 +42,23 @@ documentsRouter.get("/", async (request, response) => {
     typeof request.query.opportunityId === "string"
       ? request.query.opportunityId
       : undefined;
-  const documents = await listDocuments(
-    response.locals.userId as string,
+  const filters = z
+    .object({
+      limit: z.coerce.number().int().min(1).max(100).default(25),
+      offset: z.coerce.number().int().min(0).max(1_000_000).default(0),
+      // The library's bodies are fetched one document at a time by its own
+      // route; a list of titles does not need every paragraph.
+      content: z.enum(["true", "false"]).optional(),
+    })
+    .parse(request.query);
+
+  const page = await listDocuments(response.locals.userId as string, {
     opportunityId,
-  );
-  response.json({ items: documents, documents });
+    limit: filters.limit,
+    offset: filters.offset,
+    includeContent: filters.content !== "false",
+  });
+  response.json({ items: page.items, documents: page.items, total: page.total });
 });
 
 // The catalogue lives in the database; these shared fallbacks only cover a

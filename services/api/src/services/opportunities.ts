@@ -1,5 +1,9 @@
 import type { Eligibility, Opportunity } from "@angisoft/mboqara-contracts";
 import { query } from "../db/pool.js";
+import {
+  canonicalEmploymentType,
+  canonicalEmploymentTypeSql,
+} from "./employment.js";
 
 export interface OpportunityFilters {
   country?: string;
@@ -9,9 +13,11 @@ export interface OpportunityFilters {
   seniority?: string;
   eligibility?: Eligibility;
   limit?: number;
+  /** How many rows to skip. Pagination for a catalogue of a thousand roles. */
+  offset?: number;
 }
 
-interface OpportunityRow {
+export interface OpportunityRow {
   id: string;
   company_id: string;
   company_name: string;
@@ -84,7 +90,7 @@ function sourceKindOf(platform: string): string {
   }
 }
 
-function mapOpportunity(row: OpportunityRow): Opportunity {
+export function mapOpportunity(row: OpportunityRow): Opportunity {
   return {
     id: row.id,
     companyId: row.company_id,
@@ -97,7 +103,9 @@ function mapOpportunity(row: OpportunityRow): Opportunity {
     city: row.city,
     workMode: row.work_mode as Opportunity["workMode"],
     seniority: row.seniority as Opportunity["seniority"],
-    employmentType: row.employment_type,
+    // Boards spell an arrangement a dozen ways. A candidate sees the
+    // product's own word; the raw value stays in the database.
+    employmentType: canonicalEmploymentType(row.employment_type),
     salaryMin: row.salary_min ?? undefined,
     salaryMax: row.salary_max ?? undefined,
     currency: row.currency ?? undefined,
@@ -131,7 +139,7 @@ function mapOpportunity(row: OpportunityRow): Opportunity {
   };
 }
 
-const baseSelect = `
+export const opportunitySelect = `
   SELECT o.id, o.company_id, c.name AS company_name, c.slug AS company_slug,
     c.website AS company_website, o.title, o.description, o.country, o.city,
     o.work_mode, o.seniority, o.employment_type, o.salary_min, o.salary_max,
@@ -144,9 +152,17 @@ const baseSelect = `
   LEFT JOIN opportunity_skills os ON os.opportunity_id = o.id
 `;
 
-export async function listOpportunities(
-  filters: OpportunityFilters,
-): Promise<Opportunity[]> {
+/**
+ * The WHERE clause for the feed, shared by the list and the count.
+ *
+ * The count has to agree with the list — a pager that says "1,284 roles"
+ * and then stops at row 40 is worse than no pager — so both are built from
+ * one set of clauses rather than two that can drift.
+ */
+export function opportunityFeedClauses(filters: OpportunityFilters): {
+  clauses: string[];
+  values: unknown[];
+} {
   // A posting the trust engine held is not a posting a candidate sees.
   //
   // The engine scores every posting and writes what it decided — 359 of
@@ -182,22 +198,57 @@ export async function listOpportunities(
   }
   if (filters.employmentType) {
     values.push(filters.employmentType);
-    clauses.push(`o.employment_type = $${values.length}`);
+    clauses.push(
+      `${canonicalEmploymentTypeSql("o.employment_type")} = $${values.length}`,
+    );
   }
   if (filters.eligibility) {
     values.push(filters.eligibility);
     clauses.push(`o.eligibility = $${values.length}`);
   }
 
+  return { clauses, values };
+}
+
+/**
+ * How many roles match the filters.
+ *
+ * This is what the pager counts, and it is a separate statement because
+ * `count(*)` over a grouped feed is a different plan from the feed's own
+ * query.
+ */
+export async function countOpportunities(
+  filters: OpportunityFilters,
+): Promise<number> {
+  const { clauses, values } = opportunityFeedClauses(filters);
+  const result = await query<{ count: string }>(
+    `SELECT count(*)::text AS count
+       FROM opportunities o
+       JOIN companies c ON c.id = o.company_id
+      WHERE ${clauses.join(" AND ")}`,
+    values,
+  );
+  return Number(result.rows[0]?.count ?? 0);
+}
+
+export async function listOpportunities(
+  filters: OpportunityFilters,
+): Promise<Opportunity[]> {
+  const { clauses, values } = opportunityFeedClauses(filters);
+
+  // The feed is a page, not a window: the count and the rows ask the same
+  // question, so a caller can page through the whole catalogue.
   const limit = Math.min(Math.max(filters.limit ?? 30, 1), 100);
   values.push(limit);
+  const offset = Math.max(filters.offset ?? 0, 0);
+  values.push(offset);
 
   const result = await query<OpportunityRow>(
-    `${baseSelect}
+    `${opportunitySelect}
      WHERE ${clauses.join(" AND ")}
      GROUP BY o.id, c.id
      ORDER BY o.posted_at DESC
-     LIMIT $${values.length}`,
+     LIMIT $${values.length - 1} OFFSET $${values.length}`,
     values,
   );
 
@@ -238,7 +289,7 @@ export async function listHeldOpportunities(
   values.push(limit);
 
   const result = await query<OpportunityRow>(
-    `${baseSelect}
+    `${opportunitySelect}
      WHERE ${clauses.join(" AND ")}
      GROUP BY o.id, c.id
      ORDER BY o.risk_scored_at DESC NULLS LAST, o.posted_at DESC
@@ -253,7 +304,7 @@ export async function getOpportunity(
   id: string,
 ): Promise<Opportunity | null> {
   const result = await query<OpportunityRow>(
-    `${baseSelect}
+    `${opportunitySelect}
      WHERE o.id = $1
      GROUP BY o.id, c.id`,
     [id],

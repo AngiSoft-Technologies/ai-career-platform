@@ -49,7 +49,7 @@ export function useApi<T>(
     controllerRef.current?.abort();
     controllerRef.current = controller;
 
-    const cached = readCache<T>(path);
+    const cached = readCache<T>(path, JSON.parse(queryKey) as Record<string, string>);
     if (cached && isOffline()) {
       setData(cached.data);
       setStale(true);
@@ -71,7 +71,10 @@ export function useApi<T>(
       })
       .catch((caught) => {
         if (cancelled || controller.signal.aborted) return;
-        const fallback = readCache<T>(path);
+        const fallback = readCache<T>(
+          path,
+          JSON.parse(queryKey) as Record<string, string>,
+        );
         if (fallback) {
           setData(fallback.data);
           setStale(true);
@@ -119,16 +122,17 @@ export function useOnlineStatus(): boolean {
 }
 
 interface OnboardingState {
-  step: "welcome" | "upload" | "manual" | "linkedin" | "complete";
-  setStep: (step: "welcome" | "upload" | "manual" | "linkedin" | "complete") => void;
+  /**
+   * Records that the whole onboarding flow is finished. Call this only at the
+   * end (preferences saved or skipped, or the candidate skips onboarding
+   * entirely) — the resume steps hand their path forward instead, so a
+   * half-finished flow is not marked complete.
+   */
   completeOnboarding: (path?: "upload" | "linkedin" | "manual") => Promise<void>;
 }
 
 export function useOnboarding(): OnboardingState {
-  const [step, setStep] = useState<OnboardingState["step"]>("welcome");
-
   const completeOnboarding = async (path?: "upload" | "linkedin" | "manual") => {
-    setStep("complete");
     try {
       await api.post("/profile/onboarding-complete", path ? { path } : {});
     } catch {
@@ -136,5 +140,5 @@ export function useOnboarding(): OnboardingState {
     }
   };
 
-  return { step, setStep, completeOnboarding };
+  return { completeOnboarding };
 }

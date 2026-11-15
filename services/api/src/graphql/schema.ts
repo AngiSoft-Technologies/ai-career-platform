@@ -65,8 +65,8 @@ async function getDocument(
 }
 
 async function getApplicationById(userId: string, id: string) {
-  const applications = await listApplications(userId);
-  return applications.find((application) => application.id === id) ?? null;
+  const page = await listApplications(userId);
+  return page.items.find((application) => application.id === id) ?? null;
 }
 
 export const schema = createSchema<GraphQLContext>({
@@ -74,7 +74,7 @@ export const schema = createSchema<GraphQLContext>({
   resolvers: {
     Query: {
       profile: (_parent, _args, context) => getProfile(context.userId),
-      opportunities: (
+      opportunities: async (
         _parent,
         args: {
           country?: string;
@@ -85,31 +85,42 @@ export const schema = createSchema<GraphQLContext>({
           limit?: number;
         },
         context,
-      ) =>
-        rankedOpportunities(context.userId, {
+      ) => {
+        const page = await rankedOpportunities(context.userId, {
           country: args.country,
           q: args.q,
           workMode: args.workMode,
           seniority: args.seniority,
           semantic: args.semantic ?? false,
           limit: args.limit ?? 25,
-        }),
+          offset: 0,
+        });
+        // GraphQL fields are lists; the ranked query is a page. Returning
+        // the page object made the client receive one record instead of
+        // its rows.
+        return page.items;
+      },
       opportunity: (_parent, args: { id: string }, context) =>
         getOpportunityWithMatch(context.userId, args.id),
-      matches: (_parent, args: { limit?: number }, context) =>
-        rankedOpportunities(context.userId, {
+      matches: async (_parent, args: { limit?: number }, context) => {
+        const page = await rankedOpportunities(context.userId, {
           semantic: false,
           limit: args.limit ?? 25,
-        }),
+          offset: 0,
+        });
+        return page.items;
+      },
       applicationWorkspace: (_parent, args: { id: string }, context) =>
         getApplicationBlueprint(context.userId, args.id),
-      applications: (_parent, _args, context) => listApplications(context.userId),
+      applications: async (_parent, _args, context) =>
+        (await listApplications(context.userId)).items,
       application: (_parent, args: { id: string }, context) =>
         getApplicationById(context.userId, args.id),
       followups: (_parent, args: { status?: string }, context) =>
         listFollowUps(context.userId, args.status),
-      documents: (_parent, args: { opportunityId?: string }, context) =>
-        listDocuments(context.userId, args.opportunityId),
+      documents: async (_parent, args: { opportunityId?: string }, context) =>
+        (await listDocuments(context.userId, { opportunityId: args.opportunityId }))
+          .items,
       document: (_parent, args: { id: string }, context) =>
         getDocument(context.userId, args.id),
       companies: (_parent, args: { q?: string; limit?: number }) =>

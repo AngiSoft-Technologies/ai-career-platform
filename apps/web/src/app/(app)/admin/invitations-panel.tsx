@@ -11,6 +11,7 @@ import {
   Input,
   SectionTitle,
   Select,
+  Skeleton,
   useToast,
 } from "@/components/ui";
 import { useApi } from "@/lib/hooks";
@@ -135,29 +136,19 @@ export function InvitationsPanel() {
     }
   };
 
+  const items = invitations.data?.items ?? [];
+
   return (
-    <div className="stack gap-4">
-      <Card className="p-[1.1rem]">
+    <div className="flex flex-col gap-4">
+      <Card className="p-4 sm:p-5">
         <SectionTitle
           eyebrow="People"
           title="Invite someone to MboQara"
-          action={<UserPlus size={15} className="text-accent" />}
+          description="They receive an email with a link to set their own password, and join with the role you choose here."
+          action={<UserPlus size={15} className="text-app-accent" />}
         />
-        <p
-          style={{
-            color: "var(--text-muted)",
-            fontSize: "0.84rem",
-            marginTop: 6,
-          }}
-        >
-          They receive an email with a link to set their own password, and join with
-          the role you choose here.
-        </p>
 
-        <div
-          className="row row-wrap"
-          style={{ gap: "0.7rem", marginTop: "1rem", alignItems: "flex-end" }}
-        >
+        <div className="mt-4 grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.4fr)_auto]">
           <Field label="Email">
             <Input
               type="email"
@@ -186,105 +177,77 @@ export function InvitationsPanel() {
             loading={busy}
             disabled={!email.trim()}
             onClick={() => void invite()}
-            className="justify-center"
+            icon={<Mail size={14} />}
           >
-            <Mail size={14} /> Send invite
+            Send invite
           </Button>
         </div>
 
         {lastLink ? (
-          <div
-            className="row"
-            style={{
-              gap: "0.6rem",
-              marginTop: "0.9rem",
-              padding: "0.7rem 0.8rem",
-              borderRadius: "var(--radius-sm)",
-              background: "var(--accent-soft)",
-              fontSize: "0.8rem",
-            }}
-          >
-            <Link2 size={14} style={{ color: "var(--accent)", flexShrink: 0 }} />
-            <span style={{ wordBreak: "break-all", flex: 1 }}>{lastLink}</span>
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={() => void copy(lastLink)}
-            >
-              <Copy size={13} /> Copy
-            </button>
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-app-md bg-app-accent-soft px-3 py-2.5 text-[0.8rem] text-app-soft">
+            <Link2 size={14} className="shrink-0 text-app-accent" />
+            <span className="min-w-0 flex-1 [word-break:break-all]">{lastLink}</span>
+            <Button variant="ghost" size="sm" icon={<Copy size={13} />} onClick={() => void copy(lastLink)}>
+              Copy
+            </Button>
           </div>
         ) : null}
       </Card>
 
-      <Card className="p-[1.1rem]">
-        <SectionTitle eyebrow="History" title="Invitations" />
-        <div className="mt-[0.8rem]">
-          {(invitations.data?.items ?? []).length === 0 ? (
+      <Card className="p-4 sm:p-5">
+        <SectionTitle eyebrow="History" title={`${items.length} invitations`} />
+        <div className="mt-4">
+          {invitations.loading && items.length === 0 ? (
+            <Skeleton height={180} />
+          ) : items.length === 0 ? (
             <EmptyState
               title="No invitations yet"
               description="Invite someone above and it will show up here."
               icon={<UserPlus size={18} />}
             />
           ) : (
-            <div className="stack gap-[0.55rem]">
-              {(invitations.data?.items ?? []).map((item) => (
-                <div
+            <ul className="flex flex-col gap-2">
+              {items.map((item) => (
+                <li
                   key={item.id}
-                  className="row row-wrap"
-                  style={{
-                    justifyContent: "space-between",
-                    gap: "0.6rem",
-                    padding: "0.65rem 0.75rem",
-                    borderRadius: "var(--radius-sm)",
-                    border: "1px solid var(--border)",
-                  }}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-app-md border border-app-border px-3 py-2.5"
                 >
-                  <div>
-                    <div className="text-[0.88rem] font-semibold">
-                      {item.email}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "0.74rem",
-                        color: "var(--text-muted)",
-                        marginTop: 2,
-                      }}
-                    >
-                      {titleCase(item.role)} - invited{" "}
-                      {formatDateTime(item.createdAt)}
+                  <div className="min-w-[220px]">
+                    <p className="text-[0.88rem] font-semibold text-app-text">{item.email}</p>
+                    <p className="mt-0.5 text-[0.74rem] text-app-muted">
+                      {titleCase(item.role)} - invited {formatDateTime(item.createdAt)}
                       {item.invitedByEmail ? ` by ${item.invitedByEmail}` : ""}
                       {item.status === "pending"
                         ? ` - expires ${formatDateTime(item.expiresAt)}`
                         : ""}
-                    </div>
+                    </p>
                   </div>
-                  <div className="row" style={{ gap: "0.45rem" }}>
+                  <div className="flex flex-wrap items-center gap-2">
                     <Badge tone={statusTone(item.status)}>{item.status}</Badge>
                     {item.status === "pending" ? (
                       <>
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-sm"
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           disabled={busy}
                           onClick={() => void resend(item.id)}
                         >
                           Resend
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-sm"
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           disabled={busy}
                           onClick={() => void revoke(item.id)}
                         >
                           Cancel
-                        </button>
+                        </Button>
                       </>
                     ) : null}
                   </div>
-                </div>
+                </li>
               ))}
-            </div>
+            </ul>
           )}
         </div>
       </Card>

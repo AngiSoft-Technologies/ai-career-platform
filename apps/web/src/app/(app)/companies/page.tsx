@@ -1,17 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { Building2, ExternalLink, Search } from "lucide-react";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Building2, ExternalLink } from "lucide-react";
 import {
   Badge,
+  Button,
   Card,
   EmptyState,
-  Input,
+  PageHeader,
+  Pagination,
+  SearchInput,
   Skeleton,
   StatTile,
+  cx,
 } from "@/components/ui";
-import { useApi } from "@/lib/hooks";
+import { useApi, useDebounced } from "@/lib/hooks";
 import { formatSalary, titleCase } from "@/lib/format";
 
 interface CompanyRow {
@@ -31,77 +36,118 @@ interface CompaniesResponse {
   total: number;
 }
 
-export default function CompaniesPage() {
-  const [search, setSearch] = useState("");
-  const companies = useApi<CompaniesResponse>("/companies", { limit: 60 });
-  const items = companies.data?.items ?? [];
+const PAGE_SIZE = 24;
 
-  const filtered = items.filter((company) =>
-    company.name.toLowerCase().includes(search.trim().toLowerCase()),
-  );
+function CompaniesPageInner() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const [search, setSearch] = useState(params.get("q") ?? "");
+  const [page, setPage] = useState(Number(params.get("page") ?? 1) || 1);
+  const debounced = useDebounced(search, 320);
+
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (debounced) next.set("q", debounced);
+    if (page > 1) next.set("page", String(page));
+    const suffix = next.toString();
+    router.replace(suffix ? `/companies?${suffix}` : "/companies", { scroll: false });
+  }, [debounced, page, router]);
+
+  // The search runs on the API. Filtering the page in the browser made the
+  // filter a lie: it could only find names that happened to be on the page.
+  const { data, loading } = useApi<CompaniesResponse>("/companies", {
+    q: debounced || undefined,
+    limit: PAGE_SIZE,
+    offset: (page - 1) * PAGE_SIZE,
+  });
+
+  const items = data?.items ?? [];
+  const total = data?.total ?? 0;
 
   return (
-    <div className="stack gap-[1.2rem]">
-      <div className="row row-wrap justify-between items-end">
-        <div>
-          <div className="eyebrow">Employers</div>
-          <h1 className="display mt-1" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)" }}>
-            Companies hiring now
-          </h1>
-          <p className="text-muted text-[0.9rem] mt-1">
-            Every company we have verified a live role for.
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        eyebrow="Employers"
+        title="Companies hiring now"
+        description="Every company we have verified a live role for, ordered by how much they are hiring."
+        meta={
+          <p className="text-[0.84rem] text-app-muted">
+            {loading && items.length === 0
+              ? "Loading the register…"
+              : `${total.toLocaleString()} compan${total === 1 ? "y" : "ies"} · page ${page}`}
           </p>
-        </div>
-        <div style={{ position: "relative", minWidth: 240 }}>
-          <Search
-            size={14}
-            style={{ position: "absolute", left: 10, top: 11, color: "var(--text-muted)" }}
-          />
-          <Input
+        }
+        actions={
+          <SearchInput
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(value) => {
+              setSearch(value);
+              setPage(1);
+            }}
             placeholder="Filter by name"
-            style={{ paddingLeft: 30 }}
+            className="w-[260px]"
           />
-        </div>
-      </div>
+        }
+      />
 
-      {companies.loading && items.length === 0 ? (
-        <div className="grid-3">
-          <Skeleton height={130} />
-          <Skeleton height={130} />
-          <Skeleton height={130} />
+      {loading && items.length === 0 ? (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <Skeleton height={150} />
+          <Skeleton height={150} />
+          <Skeleton height={150} />
+          <Skeleton height={150} />
+          <Skeleton height={150} />
+          <Skeleton height={150} />
         </div>
-      ) : filtered.length === 0 ? (
-        <EmptyState icon={<Building2 size={28} />} title="No companies found" />
+      ) : items.length === 0 ? (
+        <EmptyState
+          icon={<Building2 size={26} />}
+          title="No companies found"
+          description={debounced ? `Nothing matches “${debounced}”.` : undefined}
+        />
       ) : (
-        <div className="grid-3">
-          {filtered.map((company) => (
-            <Link
-              key={company.id}
-              href={`/companies/${company.slug}`}
-              className="surface surface-hover"
-              style={{ padding: "1.05rem", display: "block" }}
-            >
-              <div className="row row-wrap justify-between gap-2">
-                <strong className="text-[1rem]">{company.name}</strong>
-                {company.new_this_week > 0 ? (
-                  <Badge tone="success">+{company.new_this_week} this week</Badge>
-                ) : null}
-              </div>
-              <div
-                className="text-[0.78rem] text-muted mt-1"
-              >
-                {[company.industry, company.country].filter(Boolean).join(" · ") || "—"}
-              </div>
-              <div className="mt-[0.8rem]">
-                <StatTile label="Open roles" value={String(company.open_roles)} />
-              </div>
-            </Link>
-          ))}
-        </div>
+        <>
+          <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {items.map((company) => (
+              <li key={company.id}>
+                <Link
+                  href={`/companies/${company.slug}`}
+                  className="group flex h-full flex-col rounded-app-lg border border-app-border bg-app-surface p-4 transition-[border-color,transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-app-border-strong hover:shadow-app-md"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <strong className="text-[1rem] text-app-text">{company.name}</strong>
+                    {company.new_this_week > 0 ? (
+                      <Badge tone="success">+{company.new_this_week} this week</Badge>
+                    ) : null}
+                  </div>
+                  <p className="mt-1 text-[0.77rem] text-app-muted">
+                    {[company.industry, company.country].filter(Boolean).join(" · ") || "—"}
+                  </p>
+                  <div className="mt-auto pt-3">
+                    <StatTile label="Open roles" value={String(company.open_roles)} />
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+
+          <Pagination
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={total}
+            onPageChange={setPage}
+          />
+        </>
       )}
     </div>
+  );
+}
+
+export default function CompaniesPage() {
+  return (
+    <Suspense fallback={<Skeleton height={240} />}>
+      <CompaniesPageInner />
+    </Suspense>
   );
 }
 
@@ -136,63 +182,63 @@ export function CompanyDetail({ slug }: { slug: string }) {
   if (!company) return <EmptyState title="Company not found" />;
 
   return (
-    <div className="stack gap-[1.2rem]">
-      <div className="row row-wrap justify-between">
-        <div>
-          <div className="eyebrow">Employer</div>
-          <h1 className="display mt-1" style={{ fontSize: "clamp(1.6rem, 4vw, 2.3rem)" }}>
-            {company.name}
-          </h1>
-          <p className="text-muted text-[0.88rem] mt-1">
-            {[company.industry, company.country].filter(Boolean).join(" · ")}
-          </p>
-        </div>
-        {company.careers_url ? (
-          <a
-            href={company.careers_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn btn-outline btn-sm"
-          >
-            Careers site <ExternalLink size={13} />
-          </a>
-        ) : null}
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        eyebrow="Employer"
+        title={company.name}
+        description={[company.industry, company.country].filter(Boolean).join(" · ")}
+        actions={
+          company.careers_url ? (
+            <a href={company.careers_url} target="_blank" rel="noopener noreferrer">
+              <Button variant="outline" size="sm" icon={<ExternalLink size={13} />}>
+                Careers site
+              </Button>
+            </a>
+          ) : null
+        }
+      />
 
       {stats ? (
-        <div className="grid-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <StatTile label="Total roles" value={String(stats.total)} />
           <StatTile label="Last 7 days" value={String(stats.last_7_days)} />
           <StatTile label="Last 30 days" value={String(stats.last_30_days)} />
           <StatTile
             label="Avg salary"
-            value={stats.avg_salary ? formatSalary(stats.avg_salary, stats.avg_salary, "USD") : "—"}
+            value={
+              stats.avg_salary
+                ? formatSalary(stats.avg_salary, stats.avg_salary, "USD")
+                : "—"
+            }
           />
         </div>
       ) : null}
 
-      <Card className="p-[1.1rem]">
-        <h2 style={{ fontSize: "1rem", marginBottom: "0.8rem" }}>Open roles</h2>
-        <div className="stack" style={{ gap: "0.45rem" }}>
-          {detail.data?.roles?.map((role) => (
-            <Link
-              key={role.id}
-              href={`/opportunities/${role.id}`}
-              className="row row-wrap surface surface-hover"
-              style={{ padding: "0.7rem 0.85rem", gap: "0.8rem" }}
-            >
-              <div className="flex-1" style={{ minWidth: 200 }}>
-                <div className="font-semibold text-[0.9rem]">{role.title}</div>
-                <div className="text-[0.76rem] text-muted">
-                  {role.country ?? "—"} · {titleCase(role.work_mode ?? "unknown")} ·{" "}
-                  {titleCase(role.seniority ?? "unspecified")} ·{" "}
-                  {formatSalary(role.salary_min ?? null, role.salary_max ?? null, role.currency ?? null)}
+      <Card className="p-4 sm:p-5">
+        <h2 className="text-[1rem] font-semibold text-app-text">Open roles</h2>
+        <ul className="mt-3 flex flex-col gap-2">
+          {(detail.data?.roles ?? []).map((role) => (
+            <li key={role.id}>
+              <Link
+                href={`/opportunities/${role.id}`}
+                className={cx(
+                  "flex flex-wrap items-center gap-3 rounded-app-md border border-app-border px-3 py-2.5",
+                  "transition-colors duration-150 hover:border-app-border-strong hover:bg-app-surface-2/50",
+                )}
+              >
+                <div className="min-w-[200px] flex-1">
+                  <p className="text-[0.89rem] font-semibold text-app-text">{role.title}</p>
+                  <p className="text-[0.75rem] text-app-muted">
+                    {role.country ?? "—"} · {titleCase(role.work_mode ?? "unknown")} ·{" "}
+                    {titleCase(role.seniority ?? "unspecified")} ·{" "}
+                    {formatSalary(role.salary_min ?? null, role.salary_max ?? null, role.currency ?? null)}
+                  </p>
                 </div>
-              </div>
-              {role.apply_url ? <ExternalLink size={13} className="text-muted" /> : null}
-            </Link>
+                {role.apply_url ? <ExternalLink size={13} className="text-app-muted" /> : null}
+              </Link>
+            </li>
           ))}
-        </div>
+        </ul>
       </Card>
     </div>
   );

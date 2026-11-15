@@ -85,7 +85,13 @@ export async function getProfile(
     country: row.country,
     yearsExperience: row.years_experience,
     seniority: row.seniority as CandidateProfile["seniority"],
-    desiredRoles: row.desired_roles,
+    // Preferences hold the role the candidate is targeting right now and
+    // win over the older profile column, or a search for "Backend engineer"
+    // would rank the role they left on their resume above the role they
+    // asked for in preferences.
+    desiredRoles: preferences?.preferred_roles?.length
+      ? preferences.preferred_roles
+      : row.desired_roles,
     skills: row.skills,
     preferredCountries:
       preferences?.preferred_countries?.length

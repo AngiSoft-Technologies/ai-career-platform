@@ -21,6 +21,7 @@ import {
   resetPassword,
 } from "../auth/password-reset.js";
 import { AuthNotConfiguredError, AuthTokenError } from "../auth/tokens.js";
+import { claimHandoffCode, createHandoffCode } from "../auth/handoff.js";
 import {
   issueRefreshToken,
   revokeRefreshToken,
@@ -194,6 +195,20 @@ const refreshLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+/**
+ * Redeeming a handoff code is the last step of a sign-in, so it gets its own
+ * budget rather than sharing the refresh limiter's: a failed redemption means
+ * a broken client or somebody replaying a code they already spent, and both
+ * should be cheap to refuse.
+ */
+const exchangeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  handler: tooManyRequests,
+});
+
 const credentialsSchema = z.object({
   email: z.string().trim().email().max(254),
   password: z.string().min(8).max(200),
@@ -214,6 +229,10 @@ const refreshSchema = z.object({
 
 const signOutSchema = z.object({
   refreshToken: z.string().min(20).max(512).optional(),
+});
+
+const handoffSchema = z.object({
+  code: z.string().min(20).max(512),
 });
 
 const resetRequestSchema = z.object({
@@ -440,6 +459,60 @@ authRouter.post("/refresh", refreshLimiter, async (request, response, next) => {
   }
 });
 
+/**
+ * Redeems a handoff code for a session.
+ *
+ * This is where a social sign-in actually becomes a session: the callback
+ * proved who the user is and left a single-use code behind, and the client
+ * trades that code for tokens. The tokens are minted here rather than at the
+ * callback, so a sign-in that is never completed leaves no refresh token
+ * behind at all.
+ */
+authRouter.post(
+  "/exchange",
+  exchangeLimiter,
+  async (request, response, next) => {
+    try {
+      const input = handoffSchema.parse(request.body ?? {});
+      const claimed = await claimHandoffCode(input.code);
+
+      if (!claimed) {
+        noStore(response);
+        response.status(400).json({
+          error: "That sign-in link has expired. Please try again.",
+          code: "HANDOFF_EXPIRED",
+        });
+        return;
+      }
+
+      const user = await getAuthUser(claimed.userId);
+      if (!user) {
+        await revokeUserSessions(claimed.userId);
+        noStore(response);
+        response
+          .status(401)
+          .json({ error: "Account is no longer active", code: "ACCOUNT_DISABLED" });
+        return;
+      }
+
+      const refresh = await issueRefreshToken(claimed.userId, requestMeta(request));
+
+      await recordAuthEvent({
+        userId: claimed.userId,
+        action: "auth.exchange",
+        outcome: "success",
+        ...requestMeta(request),
+      });
+
+      noStore(response);
+      response.json(await sessionPayload(claimed.userId, refresh));
+    } catch (error) {
+      if (sendAuthError(response, error)) return;
+      next(error);
+    }
+  },
+);
+
 authRouter.post("/sign-out", async (request, response, next) => {
   try {
     const input = signOutSchema.parse(request.body ?? {});
@@ -616,10 +689,17 @@ authRouter.get(
 );
 
 /**
- * Completes the Google sign-in flow and hands the tokens back to the app.
+ * Completes the Google sign-in flow and hands the session back to the app.
  *
- * The tokens travel in the URL fragment so they are never sent to a server,
- * logged, or stored in browser history.
+ * The browser is sent back with a *handoff code* rather than with the
+ * tokens. The code is single use, lives for two minutes and carries no
+ * privilege on its own; the app exchanges it for the session at
+ * `POST /v1/auth/exchange`. A token in the URL fragment was never sent to a
+ * server, but it did sit in the address bar for as long as the page was
+ * open, and a refresh token lives for thirty days.
+ *
+ * The code still travels in the fragment rather than the query string, so
+ * it is not in the server access log of the app either.
  */
 authRouter.get(
   "/google/callback",
@@ -656,8 +736,6 @@ authRouter.get(
       }
 
       const userId = await resolveGoogleUser(identity);
-      const refresh = await issueRefreshToken(userId, requestMeta(request));
-      const access = await signAccessToken(userId);
 
       await recordAuthEvent({
         userId,
@@ -666,12 +744,8 @@ authRouter.get(
         ...requestMeta(request),
       });
 
-      const fragment = new URLSearchParams({
-        access_token: access.token,
-        refresh_token: refresh.token,
-        expires_at: access.expiresAt.toISOString(),
-        refresh_expires_at: refresh.expiresAt.toISOString(),
-      });
+      const handoff = await createHandoffCode(userId, GOOGLE_PROVIDER);
+      const fragment = new URLSearchParams({ code: handoff });
 
       noStore(response);
       response.redirect(302, `${appRedirectUri}#${fragment.toString()}`);

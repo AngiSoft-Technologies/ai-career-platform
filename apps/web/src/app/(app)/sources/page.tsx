@@ -1,18 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { Globe, Link2, Radar, ShieldCheck, X } from "lucide-react";
+import { Globe, Link2, Radar, ShieldCheck } from "lucide-react";
 import {
   Badge,
   Button,
   Card,
+  DataTable,
   EmptyState,
   Field,
   Input,
+  PageHeader,
+  Pagination,
   SectionTitle,
   Skeleton,
   Tabs,
+  Td,
   Textarea,
+  Th,
   useToast,
 } from "@/components/ui";
 import { useApi } from "@/lib/hooks";
@@ -52,8 +57,21 @@ export default function SourcesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [verifying, setVerifying] = useState<string | null>(null);
 
-  const sources = useApi<SourcesResponse>("/sources");
-  const queue = useApi<SourcesResponse>("/sources/queue");
+  // Both lists are pages of a register, with the register's size as the
+  // total: the tab counts are the whole estate, not the page in front of
+  // the reader.
+  const [sourcePage, setSourcePage] = useState(1);
+  const [queuePage, setQueuePage] = useState(1);
+  const SOURCE_PAGE_SIZE = 25;
+
+  const sources = useApi<SourcesResponse>("/sources", {
+    limit: SOURCE_PAGE_SIZE,
+    offset: (sourcePage - 1) * SOURCE_PAGE_SIZE,
+  });
+  const queue = useApi<SourcesResponse>("/sources/queue", {
+    limit: SOURCE_PAGE_SIZE,
+    offset: (queuePage - 1) * SOURCE_PAGE_SIZE,
+  });
   const catalog = useApi<CatalogResponse>("/sources/catalog");
 
   const submit = async () => {
@@ -100,21 +118,17 @@ export default function SourcesPage() {
   const items = sources.data?.items ?? [];
 
   return (
-    <div className="stack gap-[1.2rem]">
-      <div>
-        <div className="eyebrow">Coverage</div>
-        <h1 className="display mt-1" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)" }}>
-          Where jobs come from
-        </h1>
-        <p className="text-muted text-[0.9rem] mt-1">
-          We monitor hundreds of boards. If one is missing, tell us and our curators verify it.
-        </p>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        eyebrow="Coverage"
+        title="Where jobs come from"
+        description="We monitor hundreds of boards. If one is missing, tell us and our curators verify it."
+      />
 
       <Tabs
         tabs={[
-          { key: "registered", label: "Registered", count: items.length },
-          { key: "queue", label: "Review queue", count: queue.data?.items?.length },
+          { key: "registered", label: "Registered", count: sources.data?.total ?? 0 },
+          { key: "queue", label: "Review queue", count: queue.data?.total ?? 0 },
           { key: "catalog", label: "Adapter catalog", count: catalog.data?.total },
           { key: "submit", label: "Submit source" },
         ]}
@@ -123,83 +137,118 @@ export default function SourcesPage() {
       />
 
       {tab === "registered" ? (
-        sources.loading ? (
-          <Skeleton height={260} />
+        sources.error ? (
+          <EmptyState
+            icon={<Globe size={26} />}
+            title="Could not load the register"
+            description={sources.error}
+            action={
+              <Button variant="outline" onClick={() => sources.refresh()}>
+                Try again
+              </Button>
+            }
+          />
+        ) : sources.loading && items.length === 0 ? (
+          <Skeleton height={280} />
         ) : items.length === 0 ? (
-          <EmptyState icon={<Globe size={28} />} title="No sources yet" />
+          <EmptyState icon={<Globe size={26} />} title="No sources yet" />
         ) : (
-          <div className="table-scroll">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Source</th>
-                  <th>Type</th>
-                  <th>Status</th>
-                  <th>Health</th>
-                  <th>Last checked</th>
+          <>
+          <DataTable>
+            <thead>
+              <tr>
+                <Th>Source</Th>
+                <Th>Type</Th>
+                <Th>Status</Th>
+                <Th>Health</Th>
+                <Th>Last checked</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((source) => (
+                <tr key={source.id} className="transition-colors hover:bg-app-surface-2/40">
+                  <Td>
+                    <p className="font-semibold text-app-text">{source.name}</p>
+                    <a
+                      href={source.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block max-w-[380px] truncate text-[0.74rem] text-app-muted hover:text-app-accent"
+                    >
+                      {source.url}
+                    </a>
+                  </Td>
+                  <Td>
+                    <Badge tone="neutral">{source.kind ?? source.type}</Badge>
+                  </Td>
+                  <Td>
+                    <Badge
+                      tone={
+                        source.status === "active"
+                          ? "success"
+                          : source.status === "pending_review"
+                            ? "warning"
+                            : "neutral"
+                      }
+                    >
+                      {source.status.replace(/_/g, " ")}
+                    </Badge>
+                  </Td>
+                  <Td>
+                    <Badge tone={source.health === "healthy" ? "success" : "danger"}>
+                      {source.health ?? "unknown"}
+                    </Badge>
+                  </Td>
+                  <Td className="text-[0.76rem]">
+                    {source.last_checked_at ? formatDateTime(source.last_checked_at) : "never"}
+                  </Td>
                 </tr>
-              </thead>
-              <tbody>
-                {items.map((source) => (
-                  <tr key={source.id}>
-                    <td>
-                      <div className="font-semibold">{source.name}</div>
-                      <a
-                        href={source.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ fontSize: "0.75rem" }}
-                      >
-                        {source.url}
-                      </a>
-                    </td>
-                    <td>
-                      <Badge tone="neutral">{source.kind ?? source.type}</Badge>
-                    </td>
-                    <td>
-                      <Badge
-                        tone={
-                          source.status === "active"
-                            ? "success"
-                            : source.status === "pending_review"
-                              ? "warning"
-                              : "neutral"
-                        }
-                      >
-                        {source.status.replace(/_/g, " ")}
-                      </Badge>
-                    </td>
-                    <td>
-                      <Badge tone={source.health === "healthy" ? "success" : "danger"}>
-                        {source.health ?? "unknown"}
-                      </Badge>
-                    </td>
-                    <td className="text-[0.78rem]">
-                      {source.last_checked_at ? formatDateTime(source.last_checked_at) : "never"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </DataTable>
+          <Pagination
+            page={sourcePage}
+            pageSize={SOURCE_PAGE_SIZE}
+            total={sources.data?.total ?? 0}
+            onPageChange={setSourcePage}
+          />
+          </>
         )
       ) : null}
 
       {tab === "queue" ? (
-        queue.loading ? (
+        queue.error ? (
+          <EmptyState
+            icon={<ShieldCheck size={26} />}
+            title="The review queue is not available to this account"
+            description={
+              /403|permission/i.test(queue.error)
+                ? "Reviewing sources is a curator permission. Ask an administrator for the source curator role."
+                : queue.error
+            }
+            action={
+              <Button variant="outline" onClick={() => queue.refresh()}>
+                Try again
+              </Button>
+            }
+          />
+        ) : queue.loading && !queue.data ? (
           <Skeleton height={200} />
         ) : (queue.data?.items?.length ?? 0) === 0 ? (
-          <EmptyState icon={<ShieldCheck size={28} />} title="Queue is clear" description="No sources awaiting review." />
+          <EmptyState
+            icon={<ShieldCheck size={26} />}
+            title="Queue is clear"
+            description="No sources awaiting review."
+          />
         ) : (
-          <div className="stack gap-2">
+          <>
+          <ul className="flex flex-col gap-2">
             {queue.data?.items?.map((source) => (
-              <Card key={source.id} style={{ padding: "0.85rem 1rem" }}>
-                <div className="row row-wrap gap-4">
-                  <div className="flex-1" style={{ minWidth: 220 }}>
-                    <div className="font-semibold">{source.name}</div>
-                    <div className="text-[0.78rem] text-muted">
-                      {source.url}
-                    </div>
+              <li key={source.id}>
+                <Card className="flex flex-wrap items-center gap-4 p-4">
+                  <div className="min-w-[220px] flex-1">
+                    <p className="text-[0.9rem] font-semibold text-app-text">{source.name}</p>
+                    <p className="truncate text-[0.76rem] text-app-muted">{source.url}</p>
                   </div>
                   <Button
                     size="sm"
@@ -208,47 +257,52 @@ export default function SourcesPage() {
                     loading={verifying === source.id}
                     onClick={() => void verify(source.id)}
                   >
-                    Verify & classify
+                    Verify &amp; classify
                   </Button>
-                </div>
-              </Card>
+                </Card>
+              </li>
             ))}
-          </div>
+          </ul>
+          <Pagination
+            page={queuePage}
+            pageSize={SOURCE_PAGE_SIZE}
+            total={queue.data?.total ?? 0}
+            onPageChange={setQueuePage}
+          />
+          </>
         )
       ) : null}
 
       {tab === "catalog" ? (
-        <div className="stack" style={{ gap: "0.7rem" }}>
-          <p className="text-[0.85rem] text-muted">
-            {catalog.data?.note}
-          </p>
-          <div className="grid-3">
+        <div className="flex flex-col gap-3">
+          <p className="text-[0.85rem] leading-relaxed text-app-muted">{catalog.data?.note}</p>
+          <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {catalog.data?.adapters?.map((adapter) => (
-              <Card key={adapter.name} className="p-4">
-                <div className="row" style={{ gap: "0.5rem", marginBottom: "0.5rem" }}>
-                  <Link2 size={15} className="text-accent" />
-                  <strong className="text-[0.92rem]">{adapter.name}</strong>
-                </div>
-                <p className="text-[0.78rem] text-muted">
-                  {adapter.exampleUrl}
-                </p>
-                <div className="row row-wrap" style={{ gap: "0.3rem", marginTop: "0.6rem" }}>
-                  <Badge tone="accent">{adapter.kind}</Badge>
-                </div>
-              </Card>
+              <li key={adapter.name}>
+                <Card className="h-full p-4">
+                  <div className="mb-1.5 flex items-center gap-2">
+                    <Link2 size={15} className="text-app-accent" />
+                    <strong className="text-[0.92rem] text-app-text">{adapter.name}</strong>
+                  </div>
+                  <p className="truncate text-[0.77rem] text-app-muted">{adapter.exampleUrl}</p>
+                  <div className="mt-2.5">
+                    <Badge tone="accent">{adapter.kind}</Badge>
+                  </div>
+                </Card>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
       ) : null}
 
       {tab === "submit" ? (
-        <Card className="p-[1.2rem]">
+        <Card className="p-4 sm:p-5">
           <SectionTitle
             eyebrow="Contribution"
             title="Submit a job board"
             description="We fetch it safely from our own servers, classify the layout and add it to the rotation."
           />
-          <div className="stack mt-4 gap-[0.8rem]">
+          <div className="mt-4 flex max-w-2xl flex-col gap-3">
             <Field label="Board URL">
               <Input
                 value={url}

@@ -1,16 +1,20 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
+import { useState } from "react";
 import { Bot, Cpu, RefreshCw, Workflow } from "lucide-react";
 import {
   Badge,
   Button,
   Card,
+  DataTable,
   EmptyState,
+  PageHeader,
   SectionTitle,
   Skeleton,
   StatTile,
+  Td,
+  Th,
   useToast,
 } from "@/components/ui";
 import { useApi } from "@/lib/hooks";
@@ -88,59 +92,57 @@ export default function AutomationPage() {
   };
 
   return (
-    <div className="stack gap-[1.2rem]">
-      <div className="row row-wrap justify-between items-end">
-        <div>
-          <div className="eyebrow">Automation</div>
-          <h1 className="display mt-1" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)" }}>
-            The machine behind the search
-          </h1>
-          <p className="text-muted text-[0.9rem] mt-1">
-            Five pipelines run continuously. You can see what is configured and trigger a check.
-          </p>
-        </div>
-        <Badge tone={ai.data?.configured ? "success" : "warning"}>
-          <Cpu size={11} /> AI {ai.data?.configured ? "online" : "not configured"}
-        </Badge>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        eyebrow="Automation"
+        title="The machine behind the search"
+        description="Five pipelines run continuously. You can see what is configured and trigger a check."
+        actions={
+          <Badge tone={ai.data?.configured ? "success" : "warning"}>
+            <Cpu size={11} /> AI {ai.data?.configured ? "online" : "not configured"}
+          </Badge>
+        }
+      />
 
-      <div className="grid-4">
-        <StatTile label="AI tasks" value={String(stats.data?.totals.aiTasks ?? 0)} icon={<Bot size={15} />} />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatTile
+          label="AI tasks"
+          value={String(stats.data?.totals.aiTasks ?? 0)}
+          icon={<Bot size={15} />}
+        />
         <StatTile label="Sources" value={String(stats.data?.totals.sources ?? 0)} />
-        <StatTile label="Live opportunities" value={String(stats.data?.totals.activeOpportunities ?? 0)} />
+        <StatTile
+          label="Live opportunities"
+          value={String(stats.data?.totals.activeOpportunities ?? 0)}
+        />
         <StatTile label="Events / 24h" value={String(stats.data?.totals.events24h ?? 0)} />
       </div>
 
-      <Card className="p-[1.1rem]">
+      <Card className="p-4 sm:p-5">
         <SectionTitle
           eyebrow="Pipelines"
           title="What runs automatically"
-          action={<Workflow size={16} className="text-muted" />}
+          action={<Workflow size={16} className="text-app-muted" />}
         />
-        <div className="stack mt-[0.9rem] gap-2">
+        <ul className="mt-3 flex flex-col gap-2">
           {PIPELINES.map((pipeline) => (
-            <div
+            <li
               key={pipeline.name}
-              className="row row-wrap"
-              style={{
-                justifyContent: "space-between",
-                gap: "0.8rem",
-                padding: "0.7rem 0.85rem",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--radius-md)",
-              }}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-app-md border border-app-border px-3 py-2.5"
             >
-              <div className="flex-1" style={{ minWidth: 240 }}>
-                <strong className="text-[0.9rem]">{pipeline.name}</strong>
-                <p className="text-[0.8rem] text-muted">{pipeline.detail}</p>
+              <div className="min-w-[240px] flex-1">
+                <strong className="text-[0.89rem] text-app-text">{pipeline.name}</strong>
+                <p className="mt-0.5 text-[0.79rem] leading-relaxed text-app-muted">
+                  {pipeline.detail}
+                </p>
               </div>
               <Badge tone="neutral">{pipeline.cadence}</Badge>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       </Card>
 
-      <Card className="p-[1.1rem]">
+      <Card className="p-4 sm:p-5">
         <SectionTitle
           eyebrow="Connectors"
           title="Registered sources"
@@ -161,44 +163,48 @@ export default function AutomationPage() {
           }
         />
         {sources.loading && !sources.data ? (
-          <Skeleton height={160} />
+          <div className="mt-4">
+            <Skeleton height={160} />
+          </div>
         ) : (sources.data?.items?.length ?? 0) === 0 ? (
-          <EmptyState title="No connectors registered" />
+          <div className="mt-4">
+            <EmptyState title="No connectors registered" />
+          </div>
         ) : (
-          <div className="table-scroll mt-[0.8rem]">
-            <table className="data-table">
+          <div className="mt-4">
+            <DataTable>
               <thead>
                 <tr>
-                  <th>Connector</th>
-                  <th>Status</th>
-                  <th>Health</th>
-                  <th>Last checked</th>
-                  <th />
+                  <Th>Connector</Th>
+                  <Th>Status</Th>
+                  <Th>Health</Th>
+                  <Th>Last checked</Th>
+                  <Th className="text-right">Action</Th>
                 </tr>
               </thead>
               <tbody>
                 {sources.data?.items?.map((source) => (
-                  <tr key={source.id}>
-                    <td>
-                      <div className="font-semibold">{source.name}</div>
-                      <div className="text-[0.72rem] text-muted">
+                  <tr key={source.id} className="transition-colors hover:bg-app-surface-2/40">
+                    <Td>
+                      <p className="font-semibold text-app-text">{source.name}</p>
+                      <p className="max-w-[360px] truncate text-[0.71rem] text-app-muted">
                         {source.url}
-                      </div>
-                    </td>
-                    <td>
+                      </p>
+                    </Td>
+                    <Td>
                       <Badge tone={source.status === "active" ? "success" : "warning"}>
                         {source.status.replace(/_/g, " ")}
                       </Badge>
-                    </td>
-                    <td>
+                    </Td>
+                    <Td>
                       <Badge tone={source.health === "healthy" ? "success" : "danger"}>
                         {source.health}
                       </Badge>
-                    </td>
-                    <td className="text-[0.76rem]">
+                    </Td>
+                    <Td className="text-[0.75rem]">
                       {source.last_checked_at ? formatDateTime(source.last_checked_at) : "never"}
-                    </td>
-                    <td>
+                    </Td>
+                    <Td className="text-right">
                       <Button
                         size="sm"
                         variant="ghost"
@@ -207,31 +213,31 @@ export default function AutomationPage() {
                       >
                         Check
                       </Button>
-                    </td>
+                    </Td>
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </DataTable>
           </div>
         )}
       </Card>
 
-      <Card className="p-[1.1rem]">
+      <Card className="p-4 sm:p-5">
         <SectionTitle eyebrow="AI gateway" title="Provider status" />
-        <div className="mt-[0.8rem]">
-          <p className="text-[0.86rem] text-muted">
+        <div className="mt-3">
+          <p className="max-w-3xl text-[0.85rem] leading-relaxed text-app-muted">
             The gateway tries NVIDIA first, then Neon, then OpenAI, then your custom endpoint. It
             degrades to deterministic fallbacks so no feature ever hard-fails because a key is
             missing.
           </p>
-          <div className="row row-wrap gap-1.5 mt-[0.8rem]">
+          <div className="mt-3 flex flex-wrap gap-1.5">
             <Badge tone={ai.data?.configured ? "success" : "neutral"}>NVIDIA</Badge>
             <Badge tone={ai.data?.configured ? "success" : "neutral"}>Neon</Badge>
             <Badge tone={ai.data?.configured ? "success" : "neutral"}>OpenAI</Badge>
             <Badge tone="neutral">custom</Badge>
             <Badge tone="accent">mode: {ai.data?.mode ?? "auto"}</Badge>
           </div>
-          <div className="mt-[0.9rem]">
+          <div className="mt-4">
             <Link href="/settings">
               <Button variant="outline" size="sm">
                 Gateway settings

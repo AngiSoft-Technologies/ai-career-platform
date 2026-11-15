@@ -9,7 +9,7 @@ import {
   Sparkles,
   Wand2,
 } from "lucide-react";
-import { Badge, Button, Card, Meter, SectionTitle } from "@/components/ui";
+import { Badge, Button, Card, Meter, SectionTitle, cx } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { AtsReport } from "@/lib/types";
 
@@ -66,7 +66,6 @@ interface AtsSidebarProps {
   opportunityId?: string;
   autoCheck?: boolean;
   className?: string;
-  style?: React.CSSProperties;
 }
 
 const EMPTY_METRICS: ReportMetrics = {
@@ -85,9 +84,7 @@ const EMPTY_METRICS: ReportMetrics = {
 function normaliseStored(report: StoredReport | null): DisplayReport | null {
   if (!report) return null;
   const metrics = report.metrics ?? {};
-  const sections = new Set(
-    metrics.sections ?? report.sections?.sections ?? [],
-  );
+  const sections = new Set(metrics.sections ?? report.sections?.sections ?? []);
   return {
     score: Number(report.score) || 0,
     grade: report.grade ?? "poor",
@@ -98,18 +95,13 @@ function normaliseStored(report: StoredReport | null): DisplayReport | null {
       ...EMPTY_METRICS,
       wordCount: Number(metrics.wordCount) || 0,
       bulletCount: Number(metrics.bulletCount) || 0,
-      keywordCoverage: Number(
-        metrics.keywordCoverage ?? report.keywordCoverage ?? 0,
-      ),
+      keywordCoverage: Number(metrics.keywordCoverage ?? report.keywordCoverage ?? 0),
       averageBulletLength: Number(metrics.averageBulletLength) || 0,
       matchedKeywords: metrics.matchedKeywords ?? report.matchedKeywords ?? [],
       missingKeywords: metrics.missingKeywords ?? report.missingKeywords ?? [],
-      hasContactSection:
-        metrics.hasContactSection ?? sections.has("contact"),
-      hasExperienceSection:
-        metrics.hasExperienceSection ?? sections.has("experience"),
-      hasEducationSection:
-        metrics.hasEducationSection ?? sections.has("education"),
+      hasContactSection: metrics.hasContactSection ?? sections.has("contact"),
+      hasExperienceSection: metrics.hasExperienceSection ?? sections.has("experience"),
+      hasEducationSection: metrics.hasEducationSection ?? sections.has("education"),
       hasSkillsSection: metrics.hasSkillsSection ?? sections.has("skills"),
     },
     suggestions: metrics.suggestions ?? [],
@@ -136,7 +128,6 @@ export function ATSSidebar({
   opportunityId,
   autoCheck = true,
   className,
-  style,
 }: AtsSidebarProps) {
   const [report, setReport] = useState<DisplayReport | null>(null);
   const [loading, setLoading] = useState(false);
@@ -184,25 +175,10 @@ export function ATSSidebar({
   }, [auto, content, runCheck]);
 
   const score = report?.score ?? 0;
-  const scoreColor =
-    score >= 80
-      ? "var(--success)"
-      : score >= 55
-        ? "var(--warning)"
-        : "var(--danger)";
+  const scoreTone = score >= 80 ? "text-app-success" : score >= 55 ? "text-app-warning" : "text-app-danger";
 
   return (
-    <Card
-      className={className}
-      style={{
-        padding: "1rem",
-        position: "sticky",
-        top: "5.5rem",
-        display: "grid",
-        gap: "0.85rem",
-        ...style,
-      }}
-    >
+    <Card className={cx("flex flex-col gap-3.5 p-4", className)}>
       <SectionTitle
         eyebrow="ATS verifier"
         title={report ? `Score ${score}/100` : "Not checked yet"}
@@ -213,6 +189,7 @@ export function ATSSidebar({
             loading={loading}
             onClick={() => void runCheck()}
             disabled={!content.trim()}
+            aria-label="Re-run ATS check"
           >
             <RefreshCw size={13} />
           </Button>
@@ -223,45 +200,23 @@ export function ATSSidebar({
         <>
           <div>
             <Meter value={score} />
-            <div
-              className="row"
-              style={{
-                justifyContent: "space-between",
-                marginTop: "0.5rem",
-                fontSize: "0.78rem",
-                color: "var(--text-muted)",
-              }}
-            >
-              <span style={{ color: scoreColor, fontWeight: 600 }}>
-                {report.grade}
-              </span>
-              <span>
-                {report.passed ? "Passes core checks" : "Needs attention"}
-              </span>
+            <div className="mt-2 flex items-baseline justify-between gap-2 text-[0.78rem] text-app-muted">
+              <span className={cx("font-semibold", scoreTone)}>{report.grade}</span>
+              <span>{report.passed ? "Passes core checks" : "Needs attention"}</span>
             </div>
           </div>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-              gap: "0.5rem",
-            }}
-          >
+          <div className="grid grid-cols-2 gap-2">
             <Metric label="Words" value={report.metrics.wordCount} />
             <Metric label="Bullets" value={report.metrics.bulletCount} />
-            <Metric
-              label="Keywords"
-              value={`${Math.round(report.metrics.keywordCoverage * 100)}%`}
-            />
-            <Metric
-              label="Avg bullet"
-              value={`${report.metrics.averageBulletLength}w`}
-            />
+            <Metric label="Keywords" value={`${Math.round(report.metrics.keywordCoverage * 100)}%`} />
+            <Metric label="Avg bullet" value={`${report.metrics.averageBulletLength}w`} />
           </div>
 
-          <div style={{ display: "grid", gap: "0.3rem" }}>
-            <span className="eyebrow">Required sections</span>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[0.68rem] font-semibold tracking-[0.14em] text-app-muted uppercase">
+              Required sections
+            </span>
             {(
               [
                 ["Contact", report.metrics.hasContactSection],
@@ -272,16 +227,10 @@ export function ATSSidebar({
             ).map(([label, present]) => (
               <div
                 key={label}
-                className="row"
-                style={{
-                  justifyContent: "space-between",
-                  fontSize: "0.78rem",
-                  padding: "0.28rem 0",
-                  borderBottom: "1px solid var(--border)",
-                }}
+                className="flex items-center justify-between border-b border-app-border/60 py-1 text-[0.78rem] text-app-soft last:border-b-0"
               >
                 <span>{label}</span>
-                <span style={{ color: present ? "var(--success)" : "var(--warning)" }}>
+                <span className={present ? "text-app-success" : "text-app-warning"}>
                   {present ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
                 </span>
               </div>
@@ -289,22 +238,16 @@ export function ATSSidebar({
           </div>
 
           {report.suggestions.length > 0 ? (
-            <div style={{ display: "grid", gap: "0.4rem" }}>
-              <span className="eyebrow">Agent suggestions</span>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[0.68rem] font-semibold tracking-[0.14em] text-app-muted uppercase">
+                Agent suggestions
+              </span>
               {report.suggestions.map((suggestion) => (
                 <div
                   key={suggestion}
-                  className="row"
-                  style={{
-                    gap: "0.45rem",
-                    alignItems: "flex-start",
-                    fontSize: "0.78rem",
-                    padding: "0.5rem",
-                    borderRadius: "var(--radius-sm)",
-                    background: "var(--accent-soft)",
-                  }}
+                  className="flex items-start gap-2 rounded-app-sm bg-app-accent-soft p-2 text-[0.78rem] leading-relaxed text-app-soft"
                 >
-                  <Wand2 size={13} style={{ color: "var(--accent)", flexShrink: 0, marginTop: 2 }} />
+                  <Wand2 size={13} className="mt-0.5 shrink-0 text-app-accent" />
                   <span>{suggestion}</span>
                 </div>
               ))}
@@ -313,21 +256,14 @@ export function ATSSidebar({
 
           {report.metrics.missingKeywords.length > 0 ? (
             <div>
-              <span className="eyebrow">Missing keywords</span>
-              <div
-                className="row"
-                style={{ flexWrap: "wrap", gap: "0.25rem", marginTop: "0.4rem" }}
-              >
+              <span className="text-[0.68rem] font-semibold tracking-[0.14em] text-app-muted uppercase">
+                Missing keywords
+              </span>
+              <div className="mt-1.5 flex flex-wrap gap-1">
                 {report.metrics.missingKeywords.slice(0, 12).map((keyword) => (
                   <span
                     key={keyword}
-                    style={{
-                      fontSize: "0.68rem",
-                      padding: "0.1rem 0.35rem",
-                      borderRadius: 4,
-                      background: "var(--warning-soft)",
-                      color: "var(--warning)",
-                    }}
+                    className="rounded bg-app-warning/15 px-1.5 py-0.5 text-[0.68rem] text-app-warning"
                   >
                     {keyword}
                   </span>
@@ -337,31 +273,24 @@ export function ATSSidebar({
           ) : null}
 
           {report.issues.length > 0 ? (
-            <div style={{ display: "grid", gap: "0.4rem" }}>
-              <span className="eyebrow">Issues</span>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[0.68rem] font-semibold tracking-[0.14em] text-app-muted uppercase">
+                Issues
+              </span>
               {report.issues.slice(0, 4).map((issue, index) => (
                 <div
                   key={`${issue.code}-${index}`}
-                  style={{
-                    padding: "0.5rem",
-                    borderRadius: "var(--radius-sm)",
-                    border: "1px solid var(--border)",
-                    borderLeft: `3px solid ${
-                      issue.severity === "error"
-                        ? "var(--danger)"
-                        : issue.severity === "warning"
-                          ? "var(--warning)"
-                          : "var(--info)"
-                    }`,
-                  }}
+                  className={cx(
+                    "rounded-app-sm border border-app-border p-2",
+                    issue.severity === "error"
+                      ? "border-l-[3px] border-l-app-danger"
+                      : issue.severity === "warning"
+                        ? "border-l-[3px] border-l-app-warning"
+                        : "border-l-[3px] border-l-app-info",
+                  )}
                 >
-                  <div
-                    className="row"
-                    style={{ justifyContent: "space-between", gap: "0.4rem" }}
-                  >
-                    <strong style={{ fontSize: "0.76rem" }}>
-                      {issue.message}
-                    </strong>
+                  <div className="flex items-start justify-between gap-2">
+                    <strong className="text-[0.76rem] text-app-text">{issue.message}</strong>
                     <Badge
                       tone={
                         issue.severity === "error"
@@ -375,15 +304,7 @@ export function ATSSidebar({
                     </Badge>
                   </div>
                   {issue.hint ? (
-                    <p
-                      style={{
-                        margin: "0.25rem 0 0",
-                        fontSize: "0.72rem",
-                        color: "var(--text-muted)",
-                      }}
-                    >
-                      {issue.hint}
-                    </p>
+                    <p className="mt-1 text-[0.72rem] leading-relaxed text-app-muted">{issue.hint}</p>
                   ) : null}
                 </div>
               ))}
@@ -391,10 +312,10 @@ export function ATSSidebar({
           ) : null}
         </>
       ) : (
-        <div style={{ display: "grid", gap: "0.6rem" }}>
-          <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", margin: 0 }}>
-            The verifier runs automatically after you import, create or save a
-            resume. You can also run it now.
+        <div className="flex flex-col gap-2.5">
+          <p className="text-[0.82rem] leading-relaxed text-app-muted">
+            The verifier runs automatically after you import, create or save a resume. You can also
+            run it now.
           </p>
           <Button
             size="sm"
@@ -408,12 +329,10 @@ export function ATSSidebar({
         </div>
       )}
 
-      <label
-        className="row"
-        style={{ gap: "0.45rem", fontSize: "0.78rem", cursor: "pointer" }}
-      >
+      <label className="flex cursor-pointer items-center gap-2 text-[0.78rem] text-app-soft">
         <input
           type="checkbox"
+          className="accent-[var(--accent)]"
           checked={auto}
           onChange={(event) => setAuto(event.target.checked)}
         />
@@ -425,18 +344,13 @@ export function ATSSidebar({
 
 function Metric({ label, value }: { label: string; value: number | string }) {
   return (
-    <div
-      style={{
-        padding: "0.45rem 0.55rem",
-        background: "var(--surface)",
-        borderRadius: "var(--radius-sm)",
-        border: "1px solid var(--border)",
-      }}
-    >
-      <div className="eyebrow">{label}</div>
-      <div className="tabular" style={{ fontSize: "1rem", fontWeight: 600 }}>
+    <div className="rounded-app-sm border border-app-border bg-app-surface px-2.5 py-2">
+      <p className="text-[0.64rem] font-semibold tracking-[0.12em] text-app-muted uppercase">
+        {label}
+      </p>
+      <p className="mt-0.5 text-[1rem] leading-none font-semibold tabular-nums text-app-text">
         {value}
-      </div>
+      </p>
     </div>
   );
 }

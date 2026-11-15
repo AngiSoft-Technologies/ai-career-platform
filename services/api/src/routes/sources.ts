@@ -5,6 +5,7 @@ import { config } from "../config.js";
 import { assertPublicUrl } from "../services/sources/http.js";
 import { reserveDailyQuota } from "../services/engine/quota.js";
 import { connectorCatalog, connectors } from "../services/sources/connectors/index.js";
+import { requirePermission } from "../middleware/rbac.js";
 
 const submitSchema = z.object({
   url: z.string().url(),
@@ -79,36 +80,74 @@ sourcesRouter.post("/", async (request, response, next) => {
   }
 });
 
-sourcesRouter.get("/", async (_request, response, next) => {
+sourcesRouter.get("/", async (request, response, next) => {
   try {
-    const result = await query(
-      `SELECT id, type, name, url, kind, adapter, status, health,
-              reliability, discovered_count, check_frequency_minutes,
-              next_check_at, last_checked_at, created_at
-         FROM job_sources
-        ORDER BY created_at DESC
-        LIMIT 100`,
-    );
-    response.json({ items: result.rows, total: result.rowCount });
+    // A page of registers, and the number of registers that exist: a
+    // hundred-plus source estate is navigated by page rather than
+    // truncated at a hundred rows with the truncated count called total.
+    const filters = z
+      .object({
+        limit: z.coerce.number().int().min(1).max(100).default(25),
+        offset: z.coerce.number().int().min(0).max(1_000_000).default(0),
+      })
+      .parse(request.query);
+
+    const [result, counted] = await Promise.all([
+      query(
+        `SELECT id, type, name, url, kind, adapter, status, health,
+                reliability, discovered_count, check_frequency_minutes,
+                next_check_at, last_checked_at, created_at
+           FROM job_sources
+          ORDER BY created_at DESC
+          LIMIT $1 OFFSET $2`,
+        [filters.limit, filters.offset],
+      ),
+      query<{ count: string }>(
+        "SELECT count(*)::text AS count FROM job_sources",
+      ),
+    ]);
+    response.json({ items: result.rows, total: Number(counted.rows[0]?.count ?? 0) });
   } catch (error) {
     next(error);
   }
 });
 
-sourcesRouter.get("/queue", async (_request, response, next) => {
-  try {
-    const result = await query(
-      `SELECT id, name, url, status, health, verification, submitted_by, created_at
-         FROM job_sources
-        WHERE status = 'pending_review' OR health IN ('unverified','error')
-        ORDER BY created_at ASC
-        LIMIT 100`,
-    );
-    response.json({ items: result.rows, total: result.rowCount });
-  } catch (error) {
-    next(error);
-  }
-});
+// The review queue is an internal desk, not a public feed: it used to
+// answer any signed-in account. Verifying a source is the permission that
+// decides who reviews one.
+sourcesRouter.get(
+  "/queue",
+  requirePermission("sources:verify"),
+  async (request, response, next) => {
+    try {
+      const filters = z
+        .object({
+          limit: z.coerce.number().int().min(1).max(100).default(25),
+          offset: z.coerce.number().int().min(0).max(1_000_000).default(0),
+        })
+        .parse(request.query);
+
+      const where =
+        "status = 'pending_review' OR health IN ('unverified','error')";
+      const [result, counted] = await Promise.all([
+        query(
+          `SELECT id, name, url, status, health, verification, submitted_by, created_at
+             FROM job_sources
+            WHERE ${where}
+            ORDER BY created_at ASC
+            LIMIT $1 OFFSET $2`,
+          [filters.limit, filters.offset],
+        ),
+        query<{ count: string }>(
+          `SELECT count(*)::text AS count FROM job_sources WHERE ${where}`,
+        ),
+      ]);
+      response.json({ items: result.rows, total: Number(counted.rows[0]?.count ?? 0) });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 sourcesRouter.post("/:id/verify", async (request, response, next) => {
   try {

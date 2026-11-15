@@ -7,7 +7,9 @@ import {
   Button,
   Card,
   EmptyState,
+  PageHeader,
   Skeleton,
+  cx,
   useToast,
 } from "@/components/ui";
 import { useApi } from "@/lib/hooks";
@@ -58,38 +60,40 @@ export default function NotificationsPage() {
   };
 
   return (
-    <div className="stack gap-[1.2rem]">
-      <div className="row row-wrap" style={{ gap: "1rem", alignItems: "flex-start" }}>
-        <div className="flex-1" style={{ minWidth: 240 }}>
-          <div className="eyebrow">Notifications</div>
-          <h1 className="display mt-1" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)" }}>
-            What changed
-          </h1>
-          <p className="text-muted text-[0.9rem] mt-1">
-            Application moves, generated documents and scheduled follow-ups. Read on one device,
-            read everywhere.
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          icon={<CheckCheck size={14} />}
-          onClick={() => void markAllRead()}
-          disabled={unread === 0}
-        >
-          Mark all read
-        </Button>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        eyebrow="Notifications"
+        title="What changed"
+        description="Application moves, generated documents and scheduled follow-ups. Read on one device, read everywhere."
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            icon={<CheckCheck size={14} />}
+            onClick={() => void markAllRead()}
+            disabled={unread === 0}
+          >
+            Mark all read
+          </Button>
+        }
+        meta={
+          unread > 0 ? (
+            <Badge tone="accent">
+              {unread} unread
+            </Badge>
+          ) : null
+        }
+      />
 
-      {notifications.loading ? (
-        <div className="stack">
-          <Skeleton height={76} />
-          <Skeleton height={76} />
-          <Skeleton height={76} />
+      {notifications.loading && items.length === 0 ? (
+        <div className="flex flex-col gap-2.5">
+          <Skeleton height={80} />
+          <Skeleton height={80} />
+          <Skeleton height={80} />
         </div>
       ) : items.length === 0 ? (
         <EmptyState
-          icon={<Bell size={28} />}
+          icon={<Bell size={26} />}
           title="Nothing yet"
           description="Track an application or generate a document and the update will show up here."
           action={
@@ -99,42 +103,40 @@ export default function NotificationsPage() {
           }
         />
       ) : (
-        <div className="stack gap-[0.55rem]">
+        <ul className="flex flex-col gap-2">
           {items.map((item) => (
-            <Link
-              key={item.id}
-              href={TYPE_ROUTE[item.type] ?? "/dashboard"}
-              style={{ color: "inherit", textDecoration: "none" }}
-            >
-              <Card
-                style={{
-                  padding: "0.85rem 1rem",
-                  opacity: item.isRead ? 0.72 : 1,
-                  borderLeft: item.isRead
-                    ? "3px solid transparent"
-                    : "3px solid var(--accent)",
-                }}
+            <li key={item.id}>
+              <Link
+                href={TYPE_ROUTE[item.type] ?? "/dashboard"}
+                className={cx(
+                  "block rounded-app-lg border bg-app-surface p-4 transition-[border-color,background] duration-150",
+                  item.isRead
+                    ? "border-app-border opacity-75 hover:opacity-100"
+                    : "border-app-accent/40 bg-app-accent-soft/20 hover:border-app-accent/70",
+                )}
               >
-                <div className="row row-wrap gap-3">
-                  <div className="flex-1" style={{ minWidth: 220 }}>
-                    <div className="row row-wrap" style={{ gap: "0.4rem", marginBottom: 4 }}>
+                <div className="flex flex-wrap items-start gap-3">
+                  <div className="min-w-[220px] flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Badge tone={item.isRead ? "neutral" : "accent"}>{item.type}</Badge>
-                      <span className="text-[0.74rem] text-muted">
+                      <span className="text-[0.73rem] text-app-muted">
                         {relativeTime(item.createdAt)}
                       </span>
                     </div>
-                    <div className="text-[0.92rem] font-semibold">{item.title}</div>
+                    <p className="mt-1.5 text-[0.92rem] font-semibold text-app-text">
+                      {item.title}
+                    </p>
                     {item.body ? (
-                      <div className="text-[0.82rem] text-muted">
+                      <p className="mt-0.5 text-[0.81rem] leading-relaxed text-app-muted">
                         {item.body}
-                      </div>
+                      </p>
                     ) : null}
                   </div>
                 </div>
-              </Card>
-            </Link>
+              </Link>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </div>
   );

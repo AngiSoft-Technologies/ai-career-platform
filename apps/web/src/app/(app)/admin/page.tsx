@@ -11,17 +11,23 @@ import {
 } from "lucide-react";
 import {
   Badge,
+  BarList,
   Button,
   Card,
+  DataTable,
   EmptyState,
   Field,
   Input,
+  PageHeader,
   SectionTitle,
   Select,
   Skeleton,
   StatTile,
   Tabs,
+  Td,
+  Th,
   useToast,
+  cx,
 } from "@/components/ui";
 import { useApi } from "@/lib/hooks";
 import { api } from "@/lib/api";
@@ -154,23 +160,19 @@ export default function AdminPage() {
   const totals = stats.data?.totals;
 
   return (
-    <div className="stack gap-[1.2rem]">
-      <div className="row row-wrap justify-between items-end">
-        <div>
-          <div className="eyebrow">Operations</div>
-          <h1 className="display mt-1" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)" }}>
-            Control room
-          </h1>
-          <p className="text-muted text-[0.9rem] mt-1">
-            Platform health, people and the knowledge that makes matching work.
-          </p>
-        </div>
-        {totals ? (
-          <Badge tone={totals.events24h > 0 ? "success" : "neutral"}>
-            <Activity size={11} /> {totals.events24h} events / 24h
-          </Badge>
-        ) : null}
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        eyebrow="Operations"
+        title="Control room"
+        description="Platform health, people and the knowledge that makes matching work."
+        actions={
+          totals ? (
+            <Badge tone={totals.events24h > 0 ? "success" : "neutral"}>
+              <Activity size={11} /> {totals.events24h} events / 24h
+            </Badge>
+          ) : null
+        }
+      />
 
       <Tabs
         tabs={[
@@ -188,7 +190,7 @@ export default function AdminPage() {
 
       {tab === "overview" ? (
         <>
-          <div className="grid-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <StatTile label="Users" value={String(totals?.users ?? 0)} icon={<Users size={15} />} />
             <StatTile
               label="Live opportunities"
@@ -199,29 +201,31 @@ export default function AdminPage() {
             <StatTile label="Sources" value={String(totals?.sources ?? 0)} />
           </div>
 
-          <div className="grid-2">
-            <Card className="p-[1.1rem]">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card className="p-4 sm:p-5">
               <SectionTitle eyebrow="Coverage" title="Opportunities by country" />
-              <div className="stack" style={{ marginTop: "0.8rem", gap: "0.35rem" }}>
-                {(stats.data?.opportunitiesByCountry ?? []).slice(0, 12).map((row) => (
-                  <div key={row.country} className="row justify-between">
-                    <span className="text-[0.85rem]">{row.country}</span>
-                    <span className="mono text-[0.8rem]">
-                      {row.count}
-                    </span>
-                  </div>
-                ))}
+              <div className="mt-4">
+                <BarList
+                  items={(stats.data?.opportunitiesByCountry ?? []).slice(0, 12).map((row) => ({
+                    label: row.country,
+                    value: row.count,
+                    hint: String(row.count),
+                  }))}
+                />
               </div>
             </Card>
-            <Card className="p-[1.1rem]">
+            <Card className="p-4 sm:p-5">
               <SectionTitle
                 eyebrow="Trust"
                 title="Risk distribution"
-                action={<ShieldAlert size={16} className="text-muted" />}
+                action={<ShieldAlert size={16} className="text-app-muted" />}
               />
-              <div className="stack" style={{ marginTop: "0.8rem", gap: "0.35rem" }}>
+              <div className="mt-4 flex flex-col gap-2">
                 {(stats.data?.riskDistribution ?? []).map((row) => (
-                  <div key={row.risk_action} className="row justify-between">
+                  <div
+                    key={row.risk_action}
+                    className="flex items-center justify-between gap-3 rounded-app-sm border border-app-border px-3 py-2"
+                  >
                     <Badge
                       tone={
                         row.risk_action === "block"
@@ -233,26 +237,30 @@ export default function AdminPage() {
                     >
                       {row.risk_action}
                     </Badge>
-                    <span className="mono text-[0.8rem]">
+                    <span className="font-mono text-[0.78rem] tabular-nums text-app-muted">
                       {row.count}
                     </span>
                   </div>
                 ))}
+                {(stats.data?.riskDistribution ?? []).length === 0 ? (
+                  <p className="text-[0.83rem] text-app-muted">No scored postings yet.</p>
+                ) : null}
               </div>
             </Card>
           </div>
 
-          <Card className="p-[1.1rem]">
+          <Card className="p-4 sm:p-5">
             <SectionTitle eyebrow="Flow" title="Application pipeline" />
-            <div className="row row-wrap gap-2 mt-[0.8rem]">
+            <div className="mt-4 flex flex-wrap gap-2">
               {(stats.data?.pipeline ?? []).map((row) => (
-                <div key={row.status} className="surface" style={{ padding: "0.6rem 0.8rem" }}>
-                  <div className="mono" style={{ fontSize: "1.2rem", fontWeight: 700 }}>
+                <div
+                  key={row.status}
+                  className="min-w-[110px] rounded-app-md border border-app-border bg-app-surface-2/40 px-3 py-2"
+                >
+                  <p className="font-mono text-[1.2rem] leading-none font-bold tabular-nums text-app-text">
                     {row.count}
-                  </div>
-                  <div className="text-[0.72rem] text-muted">
-                    {titleCase(row.status)}
-                  </div>
+                  </p>
+                  <p className="mt-1 text-[0.72rem] text-app-muted">{titleCase(row.status)}</p>
                 </div>
               ))}
             </div>
@@ -261,60 +269,63 @@ export default function AdminPage() {
       ) : null}
 
       {tab === "users" ? (
-        <Card className="p-[1.1rem]">
+        <Card className="p-4 sm:p-5">
           <SectionTitle
             eyebrow="People"
             title="Registered users"
-            action={<Users size={16} className="text-muted" />}
+            description={`${users.data?.total ?? 0} accounts`}
+            action={<Users size={16} className="text-app-muted" />}
           />
-          <div className="table-scroll mt-[0.8rem]">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Email</th>
-                  <th>Name</th>
-                  <th>Roles</th>
-                  <th>Joined</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(users.data?.items ?? []).map((user) => (
-                  <tr key={user.id}>
-                    <td className="mono">{user.email}</td>
-                    <td>{user.name ?? "—"}</td>
-                    <td>
-                      <div className="row row-wrap" style={{ gap: "0.25rem" }}>
-                        {!(Array.isArray(user.roles) ? user.roles : []).length ? (
-                          <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                            no roles
-                          </span>
-                        ) : (
-                          (Array.isArray(user.roles) ? user.roles : []).map((role) => (
-                            <Badge key={role} tone="accent">
-                              {titleCase(role)}
-                            </Badge>
-                          ))
-                        )}
-                      </div>
-                    </td>
-                    <td className="text-[0.78rem]">{formatDateTime(user.created_at)}</td>
+          <div className="mt-4">
+            {users.loading && !users.data ? (
+              <Skeleton height={220} />
+            ) : (
+              <DataTable>
+                <thead>
+                  <tr>
+                    <Th>Email</Th>
+                    <Th>Name</Th>
+                    <Th>Roles</Th>
+                    <Th>Joined</Th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {(users.data?.items ?? []).map((user) => (
+                    <tr key={user.id} className="transition-colors hover:bg-app-surface-2/40">
+                      <Td className="font-mono text-[0.8rem]">{user.email}</Td>
+                      <Td>{user.name ?? "—"}</Td>
+                      <Td>
+                        <div className="flex flex-wrap gap-1">
+                          {!(Array.isArray(user.roles) ? user.roles : []).length ? (
+                            <span className="text-[0.75rem] text-app-muted">no roles</span>
+                          ) : (
+                            (Array.isArray(user.roles) ? user.roles : []).map((role) => (
+                              <Badge key={role} tone="accent">
+                                {titleCase(role)}
+                              </Badge>
+                            ))
+                          )}
+                        </div>
+                      </Td>
+                      <Td className="text-[0.78rem]">{formatDateTime(user.created_at)}</Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </DataTable>
+            )}
           </div>
         </Card>
       ) : null}
 
       {tab === "roles" ? (
-        <div className="grid-2">
-          <Card className="p-[1.1rem]">
+        <div className="grid items-start gap-4 lg:grid-cols-2">
+          <Card className="p-4 sm:p-5">
             <SectionTitle
               eyebrow="Access control"
               title="Assign a role"
-              action={<UserCog size={16} className="text-muted" />}
+              action={<UserCog size={16} className="text-app-muted" />}
             />
-            <div className="stack" style={{ marginTop: "0.9rem", gap: "0.7rem" }}>
+            <div className="mt-4 flex flex-col gap-3">
               <Field label="User id">
                 <Input
                   value={assignUser}
@@ -332,25 +343,24 @@ export default function AdminPage() {
                   ))}
                 </Select>
               </Field>
-              <Button loading={busy} disabled={!assignUser || !assignRole} onClick={() => void assign()}>
-                Assign role
-              </Button>
+              <div>
+                <Button loading={busy} disabled={!assignUser || !assignRole} onClick={() => void assign()}>
+                  Assign role
+                </Button>
+              </div>
             </div>
           </Card>
 
-          <Card className="p-[1.1rem]">
-            <SectionTitle eyebrow="Catalogue" title={`${roles.data?.permissions?.length ?? 0} permissions`} />
-            <div className="row row-wrap" style={{ gap: "0.3rem", marginTop: "0.8rem" }}>
+          <Card className="p-4 sm:p-5">
+            <SectionTitle
+              eyebrow="Catalogue"
+              title={`${roles.data?.permissions?.length ?? 0} permissions`}
+            />
+            <div className="mt-4 flex flex-wrap gap-1">
               {(roles.data?.permissions ?? []).map((permission) => (
                 <span
                   key={permission.name}
-                  className="mono"
-                  style={{
-                    fontSize: "0.7rem",
-                    padding: "0.14rem 0.42rem",
-                    borderRadius: 5,
-                    background: "var(--surface-2)",
-                  }}
+                  className="rounded bg-app-surface-2 px-1.5 py-0.5 font-mono text-[0.7rem] text-app-soft"
                 >
                   {permission.name}
                 </span>
@@ -361,15 +371,15 @@ export default function AdminPage() {
       ) : null}
 
       {tab === "taxonomy" ? (
-        <div className="stack gap-4">
-          <Card className="p-[1.1rem]">
+        <div className="flex flex-col gap-4">
+          <Card className="p-4 sm:p-5">
             <SectionTitle
               eyebrow="Knowledge"
               title="Add a profession"
               description="Every profession gets a path, aliases and a salary median."
-              action={<Tags size={16} className="text-muted" />}
+              action={<Tags size={16} className="text-app-muted" />}
             />
-            <div className="grid-2 mt-[0.9rem]">
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <Field label="Name">
                 <Input value={newName} onChange={(event) => setNewName(event.target.value)} />
               </Field>
@@ -383,141 +393,138 @@ export default function AdminPage() {
                 <Input value={newDomain} onChange={(event) => setNewDomain(event.target.value)} />
               </Field>
             </div>
-            <div className="mt-[0.9rem]">
+            <div className="mt-4">
               <Button loading={busy} disabled={!newSlug || !newName} onClick={() => void addProfession()}>
                 Add profession
               </Button>
             </div>
           </Card>
 
-          <Card className="p-[1.1rem]">
+          <Card className="p-4 sm:p-5">
             <SectionTitle
               eyebrow="Catalogue"
               title={`${taxonomy.data?.professions?.length ?? 0} professions · ${
                 taxonomy.data?.opportunityLinks?.length ?? 0
               } linked to live roles`}
             />
-            <div className="table-scroll mt-[0.8rem]">
-              <table className="data-table">
+            <div className="mt-4">
+              <DataTable>
                 <thead>
                   <tr>
-                    <th>Name</th>
-                    <th>Slug</th>
-                    <th>Depth</th>
-                    <th>Domain</th>
-                    <th>Median</th>
+                    <Th>Name</Th>
+                    <Th>Slug</Th>
+                    <Th>Depth</Th>
+                    <Th>Domain</Th>
+                    <Th>Median</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {(taxonomy.data?.professions ?? []).slice(0, 120).map((profession) => (
-                    <tr key={profession.id}>
-                      <td className="font-semibold">
+                    <tr key={profession.id} className="transition-colors hover:bg-app-surface-2/40">
+                      <Td className="font-semibold text-app-text">
                         {profession.depth > 0 ? "· ".repeat(profession.depth) : ""}
                         {profession.name}
-                      </td>
-                      <td className="mono">{profession.slug}</td>
-                      <td>{profession.depth}</td>
-                      <td>{profession.domain ?? "—"}</td>
-                      <td className="mono">
+                      </Td>
+                      <Td className="font-mono text-[0.78rem]">{profession.slug}</Td>
+                      <Td className="font-mono text-[0.78rem]">{profession.depth}</Td>
+                      <Td>{profession.domain ?? "—"}</Td>
+                      <Td className="font-mono text-[0.78rem]">
                         {profession.median_salary
                           ? `${profession.median_salary.toLocaleString()} ${profession.currency ?? ""}`
                           : "—"}
-                      </td>
+                      </Td>
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </DataTable>
             </div>
           </Card>
         </div>
       ) : null}
 
       {tab === "scam" ? (
-        <Card className="p-[1.1rem]">
+        <Card className="p-4 sm:p-5">
           <SectionTitle
             eyebrow="Trust and safety"
             title={`${scam.data?.total ?? 0} known scam fingerprints`}
             description="Every posting is fingerprinted and compared against this corpus."
-            action={<Fingerprint size={16} className="text-muted" />}
+            action={<Fingerprint size={16} className="text-app-muted" />}
           />
-          {scam.loading ? (
-            <Skeleton height={160} />
-          ) : (scam.data?.items?.length ?? 0) === 0 ? (
-            <EmptyState title="Corpus is empty" />
-          ) : (
-            <div className="table-scroll mt-[0.8rem]">
-              <table className="data-table">
+          <div className="mt-4">
+            {scam.loading && !scam.data ? (
+              <Skeleton height={180} />
+            ) : (scam.data?.items?.length ?? 0) === 0 ? (
+              <EmptyState title="Corpus is empty" />
+            ) : (
+              <DataTable>
                 <thead>
                   <tr>
-                    <th>Label</th>
-                    <th>Simhash</th>
-                    <th>Sample</th>
-                    <th>Added</th>
+                    <Th>Label</Th>
+                    <Th>Simhash</Th>
+                    <Th>Sample</Th>
+                    <Th>Added</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {scam.data?.items?.map((signature) => (
-                    <tr key={signature.id}>
-                      <td>
+                    <tr key={signature.id} className="transition-colors hover:bg-app-surface-2/40">
+                      <Td>
                         <Badge tone="danger">{signature.label}</Badge>
-                      </td>
-                      <td className="mono text-[0.72rem]">
-                        {signature.simhash}
-                      </td>
-                      <td className="text-[0.76rem]">
+                      </Td>
+                      <Td className="font-mono text-[0.72rem]">{signature.simhash}</Td>
+                      <Td className="text-[0.76rem]">
                         {signature.sample_url ? (
-                          <a href={signature.sample_url} target="_blank" rel="noopener noreferrer">
+                          <a
+                            href={signature.sample_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-app-accent hover:underline"
+                          >
                             open
                           </a>
                         ) : (
                           "—"
                         )}
-                      </td>
-                      <td className="text-[0.76rem]">
-                        {formatDateTime(signature.created_at)}
-                      </td>
+                      </Td>
+                      <Td className="text-[0.76rem]">{formatDateTime(signature.created_at)}</Td>
                     </tr>
                   ))}
                 </tbody>
-              </table>
-            </div>
-          )}
+              </DataTable>
+            )}
+          </div>
         </Card>
       ) : null}
 
       {tab === "invitations" ? <InvitationsPanel /> : null}
 
       {tab === "events" ? (
-        <Card className="p-[1.1rem]">
+        <Card className="p-4 sm:p-5">
           <SectionTitle eyebrow="Audit" title="Recent platform events" />
-          {events.loading ? (
-            <Skeleton height={200} />
-          ) : (events.data?.items?.length ?? 0) === 0 ? (
-            <EmptyState title="No events yet" />
-          ) : (
-            <div className="stack" style={{ marginTop: "0.8rem", gap: "0.35rem" }}>
-              {events.data?.items?.map((event) => (
-                <div
-                  key={event.id}
-                  className="row row-wrap"
-                  style={{
-                    justifyContent: "space-between",
-                    gap: "0.8rem",
-                    padding: "0.5rem 0.65rem",
-                    border: "1px solid var(--border)",
-                    borderRadius: "var(--radius-sm)",
-                  }}
-                >
-                  <span className="mono text-[0.78rem]">
-                    {event.type}
-                  </span>
-                  <span className="text-[0.74rem] text-muted">
-                    {event.aggregate_type ?? "—"} · {formatDateTime(event.occurred_at)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+          <div className="mt-4">
+            {events.loading && !events.data ? (
+              <Skeleton height={220} />
+            ) : (events.data?.items?.length ?? 0) === 0 ? (
+              <EmptyState title="No events yet" />
+            ) : (
+              <ul className="flex flex-col gap-1.5">
+                {events.data?.items?.map((event) => (
+                  <li
+                    key={event.id}
+                    className={cx(
+                      "flex flex-wrap items-center justify-between gap-3 rounded-app-sm border border-app-border px-3 py-2",
+                      "transition-colors duration-150 hover:bg-app-surface-2/40",
+                    )}
+                  >
+                    <span className="font-mono text-[0.78rem] text-app-text">{event.type}</span>
+                    <span className="text-[0.74rem] text-app-muted">
+                      {event.aggregate_type ?? "—"} · {formatDateTime(event.occurred_at)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </Card>
       ) : null}
     </div>

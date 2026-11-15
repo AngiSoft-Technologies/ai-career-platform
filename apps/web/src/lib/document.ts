@@ -126,11 +126,19 @@ export function sectionKeywords(section: DocSection): string[] {
 }
 
 export function buildPreviewHtml(title: string, sections: DocSection[]): string {
+  // The preview is assembled as HTML and injected with
+  // dangerouslySetInnerHTML, and the text in it is written by the person
+  // (or imported from a resume). This used to be a no-op — each character
+  // replaced by itself — so a document body could carry markup into the
+  // editor's origin. Escape for real: ampersand first, or the entities it
+  // produces would be escaped a second time.
   const escape = (value: string) =>
     value
-      .replace(/&/g, "&")
-      .replace(/</g, "<")
-      .replace(/>/g, ">");
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
 
   const renderBody = (body: string) =>
     body

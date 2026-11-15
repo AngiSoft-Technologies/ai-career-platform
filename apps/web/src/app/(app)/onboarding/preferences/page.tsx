@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import {
   ArrowRight,
   Bell,
@@ -13,16 +13,19 @@ import {
   Wifi,
 } from "lucide-react";
 import {
+  Badge,
   Button,
   Card,
   Field,
   Input,
   Select,
+  Skeleton,
   Switch,
   useToast,
 } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useOnboarding } from "@/lib/hooks";
+import { takeOnboardingPath } from "@/lib/onboarding";
 
 const EMPLOYMENT_TYPES = [
   { key: "full_time", label: "Full time" },
@@ -44,7 +47,7 @@ interface Preferences {
   notificationsEnabled: boolean;
 }
 
-export default function OnboardingPreferencesPage() {
+function OnboardingPreferencesInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const toast = useToast();
@@ -65,9 +68,11 @@ export default function OnboardingPreferencesPage() {
   const [rolesInput, setRolesInput] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const [loadFailed, setLoadFailed] = useState(false);
+
   useEffect(() => {
     api
-      .get<{ preferences: Partial<Preferences> }>("/preferences")
+      .get<{ preferences: Partial<Preferences> }>("/profile/preferences")
       .then((response) => {
         const saved = response.preferences;
         if (!saved) return;
@@ -82,7 +87,11 @@ export default function OnboardingPreferencesPage() {
         setLocationsInput((saved.preferredLocations ?? []).join(", "));
         setRolesInput((saved.preferredRoles ?? []).join(", "));
       })
-      .catch(() => undefined);
+      .catch(() => {
+        // An empty form that looks "saved" is how preferences get wiped:
+        // say so, and let the person type them again rather than pretend.
+        setLoadFailed(true);
+      });
   }, []);
 
   const split = (value: string) =>
@@ -90,6 +99,11 @@ export default function OnboardingPreferencesPage() {
       .split(/[\n,]/)
       .map((item) => item.trim())
       .filter(Boolean);
+
+  const finish = async (path?: "upload" | "linkedin" | "manual") => {
+    await completeOnboarding(path);
+    router.push(documentId ? `/documents/${documentId}` : "/documents");
+  };
 
   const save = async () => {
     setSaving(true);
@@ -103,12 +117,9 @@ export default function OnboardingPreferencesPage() {
         willingToRelocate: preferences.willingToRelocate,
         notificationsEnabled: preferences.notificationsEnabled,
       };
-      await api.put("/preferences", payload);
-      await completeOnboarding();
+      await api.put("/profile/preferences", payload);
       toast.push("Preferences saved. Now pick your template.", "success");
-      router.push(
-        documentId ? `/documents/${documentId}` : "/documents",
-      );
+      await finish(takeOnboardingPath());
     } catch (caught) {
       toast.push(
         caught instanceof Error ? caught.message : "Failed to save preferences",
@@ -119,40 +130,49 @@ export default function OnboardingPreferencesPage() {
     }
   };
 
+  // Skipping still finishes onboarding. Leaving it unfinished sent the
+  // candidate back here on their next navigation, which looked like a loop.
+  const skip = async () => {
+    setSaving(true);
+    try {
+      await finish(takeOnboardingPath());
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <div
-      className="stack"
-      style={{ gap: "1.5rem", maxWidth: 720, margin: "0 auto" }}
-    >
-      <div style={{ textAlign: "center", paddingTop: "2rem" }}>
-        <div className="eyebrow justify-center">
+    <div className="mx-auto flex max-w-[760px] flex-col gap-6">
+      <header className="pt-6 text-center">
+        <p className="inline-flex items-center gap-1.5 text-[0.7rem] font-semibold tracking-[0.14em] text-app-accent uppercase">
           <MapPin size={16} /> Almost there
-        </div>
-        <h1
-          className="display"
-          style={{ fontSize: "clamp(1.8rem, 5vw, 2.6rem)", marginTop: 8 }}
-        >
+        </p>
+        <h1 className="mt-2 text-[clamp(1.8rem,5vw,2.6rem)] leading-[1.1] font-semibold tracking-[-0.02em] text-app-text">
           How should we match you?
         </h1>
-        <p
-          style={{
-            color: "var(--text-muted)",
-            fontSize: "1.02rem",
-            marginTop: 8,
-            maxWidth: 520,
-            marginLeft: "auto",
-            marginRight: "auto",
-          }}
-        >
-          This decides the order roles appear in — nearby first, then same
-          country, then continent, then remote.
+        <p className="mx-auto mt-2 max-w-[520px] text-[1.02rem] leading-relaxed text-app-muted">
+          This decides the order roles appear in — nearby first, then same country, then continent,
+          then remote.
         </p>
-      </div>
+      </header>
 
-      <Card className="p-6">
-        <div className="stack" style={{ gap: "1.25rem" }}>
+      {loadFailed ? (
+        <div
+          role="status"
+          className="flex items-start gap-2.5 rounded-app-md border border-app-warning/40 bg-app-warning/10 px-4 py-3 text-[0.85rem] leading-relaxed text-app-soft"
+        >
+          <Bell size={15} className="mt-0.5 shrink-0 text-app-warning" />
+          <span>
+            We could not read your saved preferences, so the form starts empty. Fill it in again —
+            saving now will store what you type here.
+          </span>
+        </div>
+      ) : null}
+
+      <Card className="p-5 sm:p-6">
+        <div className="flex flex-col gap-5">
           <ToggleRow
-            icon={<Wifi size={18} className="text-accent" />}
+            icon={<Wifi size={18} className="text-app-accent" />}
             title="Remote roles only"
             description="Hide onsite and hybrid roles. You will only ever be shown remote work."
             checked={preferences.remoteOnly}
@@ -161,42 +181,33 @@ export default function OnboardingPreferencesPage() {
             }
           />
           <ToggleRow
-            icon={<Plane size={18} className="text-accent" />}
+            icon={<Plane size={18} className="text-app-accent" />}
             title="I am willing to relocate"
             description="Let us surface roles in other cities and countries, not just where you are now."
             checked={preferences.willingToRelocate}
             onChange={(checked) =>
-              setPreferences((previous) => ({
-                ...previous,
-                willingToRelocate: checked,
-              }))
+              setPreferences((previous) => ({ ...previous, willingToRelocate: checked }))
             }
           />
           <ToggleRow
-            icon={<Bell size={18} className="text-accent" />}
+            icon={<Bell size={18} className="text-app-accent" />}
             title="Job alerts"
             description="Get notified when a role that matches your profile is discovered."
             checked={preferences.notificationsEnabled}
             onChange={(checked) =>
-              setPreferences((previous) => ({
-                ...previous,
-                notificationsEnabled: checked,
-              }))
+              setPreferences((previous) => ({ ...previous, notificationsEnabled: checked }))
             }
           />
         </div>
       </Card>
 
-      <Card className="p-6">
-        <div className="stack gap-4">
-          <div className="row gap-2 items-center">
-            <Globe size={18} className="text-accent" />
-            <h3 className="text-[1rem] m-0">Where do you want to work?</h3>
+      <Card className="p-5 sm:p-6">
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <Globe size={18} className="text-app-accent" />
+            <h2 className="text-[1rem] font-semibold text-app-text">Where do you want to work?</h2>
           </div>
-          <Field
-            label="Preferred countries"
-            hint="Comma separated. Used for the same-country tier."
-          >
+          <Field label="Preferred countries" hint="Comma separated. Used for the same-country tier.">
             <Input
               value={countriesInput}
               onChange={(event) => setCountriesInput(event.target.value)}
@@ -220,81 +231,65 @@ export default function OnboardingPreferencesPage() {
               placeholder="Backend Engineer, Software Engineer"
             />
           </Field>
-          <div className="grid-2">
-            <Field label="Seniority">
-              <Select
-                value={preferences.desiredSeniority}
-                onChange={(event) =>
-                  setPreferences((previous) => ({
-                    ...previous,
-                    desiredSeniority: event.target.value,
-                  }))
-                }
-              >
-                {["intern", "junior", "mid", "senior", "lead", "executive"].map(
-                  (level) => (
-                    <option key={level} value={level}>
-                      {level}
-                    </option>
-                  ),
-                )}
-              </Select>
-            </Field>
-          </div>
+          <Field label="Seniority" className="sm:max-w-[220px]">
+            <Select
+              value={preferences.desiredSeniority}
+              onChange={(event) =>
+                setPreferences((previous) => ({
+                  ...previous,
+                  desiredSeniority: event.target.value,
+                }))
+              }
+            >
+              {["intern", "junior", "mid", "senior", "lead", "executive"].map((level) => (
+                <option key={level} value={level}>
+                  {level}
+                </option>
+              ))}
+            </Select>
+          </Field>
         </div>
       </Card>
 
-      <Card style={{ padding: "1.25rem" }}>
-        <div className="row" style={{ gap: "0.5rem", alignItems: "center", marginBottom: "0.75rem" }}>
-          <Briefcase size={18} className="text-accent" />
-          <h3 className="text-[1rem] m-0">Employment types we cover</h3>
+      <Card className="p-5">
+        <div className="flex items-center gap-2">
+          <Briefcase size={18} className="text-app-accent" />
+          <h2 className="text-[1rem] font-semibold text-app-text">Employment types we cover</h2>
         </div>
-        <div className="row" style={{ gap: "0.4rem", flexWrap: "wrap" }}>
+        <div className="mt-3 flex flex-wrap gap-1.5">
           {EMPLOYMENT_TYPES.map((type) => (
-            <span
-              key={type.key}
-              style={{
-                fontSize: "0.75rem",
-                padding: "0.25rem 0.6rem",
-                borderRadius: 999,
-                border: "1px solid var(--border)",
-                background: "var(--surface)",
-                color: "var(--text-muted)",
-              }}
-            >
+            <Badge key={type.key} tone="neutral">
               {type.label}
-            </span>
+            </Badge>
           ))}
         </div>
-        <p
-          style={{
-            fontSize: "0.8rem",
-            color: "var(--text-muted)",
-            marginTop: "0.6rem",
-            marginBottom: 0,
-          }}
-        >
-          All of these are matched automatically based on your profile — there is
-          nothing to configure here.
+        <p className="mt-2.5 text-[0.8rem] leading-relaxed text-app-muted">
+          All of these are matched automatically based on your profile — there is nothing to
+          configure here.
         </p>
       </Card>
 
-      <div className="row justify-between">
-        <Link
-          href={documentId ? `/documents/${documentId}` : "/documents"}
-          className="text-muted text-[0.9rem]"
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Button
+          variant="ghost"
+          onClick={() => void skip()}
+          disabled={saving}
+          className="text-app-muted"
         >
           ← Skip, choose a template
-        </Link>
-        <Button
-          size="lg"
-          icon={<ArrowRight size={14} />}
-          loading={saving}
-          onClick={save}
-        >
+        </Button>
+        <Button size="lg" icon={<ArrowRight size={14} />} loading={saving} onClick={() => void save()}>
           Continue to templates
         </Button>
       </div>
+
+      <p className="pb-4 text-center text-[0.76rem] text-app-muted">
+        You can change all of this later in{" "}
+        <Link href="/profile" className="text-app-accent hover:underline">
+          your profile
+        </Link>
+        .
+      </p>
     </div>
   );
 }
@@ -313,24 +308,28 @@ function ToggleRow({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <div
-      className="row"
-      style={{ gap: "0.75rem", alignItems: "flex-start", flexWrap: "wrap" }}
-    >
-      <span style={{ flexShrink: 0, marginTop: 2 }}>{icon}</span>
-      <div className="flex-1" style={{ minWidth: 200 }}>
-        <div className="font-semibold text-[0.92rem]">{title}</div>
-        <p
-          style={{
-            margin: "0.25rem 0 0",
-            fontSize: "0.82rem",
-            color: "var(--text-muted)",
-          }}
-        >
-          {description}
-        </p>
+    <div className="flex flex-wrap items-start gap-3">
+      <span className="mt-0.5 shrink-0">{icon}</span>
+      <div className="min-w-[200px] flex-1">
+        <p className="text-[0.92rem] font-semibold text-app-text">{title}</p>
+        <p className="mt-1 text-[0.82rem] leading-relaxed text-app-muted">{description}</p>
       </div>
-      <Switch checked={checked} onChange={onChange} />
+      <Switch checked={checked} onChange={onChange} label={title} />
     </div>
+  );
+}
+
+export default function OnboardingPreferencesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto flex max-w-[760px] flex-col gap-4">
+          <Skeleton height={40} width={320} />
+          <Skeleton height={280} />
+        </div>
+      }
+    >
+      <OnboardingPreferencesInner />
+    </Suspense>
   );
 }

@@ -165,7 +165,7 @@ export function ThemePicker({ compact = false }: { compact?: boolean }) {
   if (compact) {
     return (
       <select
-        className="select"
+        className="h-10 w-full cursor-pointer rounded-app-md border border-app-border bg-app-surface-2/60 px-3 pr-8 text-[0.875rem] text-app-text focus:border-app-accent focus:outline-none"
         value={theme}
         onChange={(event) => setTheme(event.target.value as ThemeKey)}
         aria-label="Theme"
@@ -181,59 +181,45 @@ export function ThemePicker({ compact = false }: { compact?: boolean }) {
   }
 
   return (
-    <div className="grid-2" style={{ gap: "0.7rem" }}>
+    <div className="grid gap-3 sm:grid-cols-2">
       {THEMES.map((entry) => {
         const active = entry.key === theme;
         return (
           <button
             key={entry.key}
+            type="button"
             onClick={() => setTheme(entry.key)}
-            style={{
-              textAlign: "left",
-              cursor: "pointer",
-              padding: "0.85rem",
-              borderRadius: "var(--radius-md)",
-              border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
-              background: active ? "var(--accent-soft)" : "var(--surface)",
-              color: "inherit",
-            }}
+            aria-pressed={active}
+            className={
+              active
+                ? "cursor-pointer rounded-app-md border border-app-accent bg-app-accent-soft p-3.5 text-left"
+                : "cursor-pointer rounded-app-md border border-app-border bg-app-surface-2/40 p-3.5 text-left transition-colors duration-150 hover:border-app-border-strong"
+            }
           >
-            <div className="row" style={{ gap: "0.45rem", marginBottom: 8 }}>
+            <div className="mb-2 flex items-center gap-2">
               {entry.swatch.map((color) => (
                 <span
                   key={color}
-                  style={{
-                    width: 14,
-                    height: 14,
-                    borderRadius: 4,
-                    background: color,
-                    display: "inline-block",
-                  }}
+                  className="inline-block size-3.5 rounded-[4px]"
+                  style={{ background: color }}
                 />
               ))}
-              <span style={{ fontWeight: 700, fontSize: "0.9rem" }}>{entry.label}</span>
-              {active ? <BadgeActive /> : null}
+              <span className="text-[0.9rem] font-bold text-app-text">{entry.label}</span>
+              {active ? (
+                <span className="ml-auto inline-flex items-center rounded-full border border-app-accent/30 bg-app-accent-soft px-2 py-0.5 text-[0.68rem] font-semibold text-app-accent">
+                  Active
+                </span>
+              ) : null}
             </div>
-            <div className="eyebrow" style={{ marginBottom: 4 }}>
+            <div className="mb-1 text-[0.68rem] font-semibold tracking-[0.12em] text-app-muted uppercase">
               {entry.tagline}
             </div>
-            <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", lineHeight: 1.5 }}>
+            <p className="text-[0.77rem] leading-relaxed text-app-muted">
               {entry.description}
             </p>
           </button>
         );
       })}
     </div>
-  );
-}
-
-function BadgeActive() {
-  return (
-    <span
-      className="badge badge-accent"
-      style={{ marginLeft: "auto" }}
-    >
-      Active
-    </span>
   );
 }

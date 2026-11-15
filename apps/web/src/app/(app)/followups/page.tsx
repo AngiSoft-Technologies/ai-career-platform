@@ -8,7 +8,8 @@ import {
   Button,
   Card,
   EmptyState,
-  SectionTitle,
+  PageHeader,
+  Pagination,
   Skeleton,
   Tabs,
   useToast,
@@ -20,15 +21,49 @@ import type { FollowUp } from "@/lib/types";
 
 interface FollowUpsResponse {
   items: FollowUp[];
+  total: number;
 }
+
+const PAGE_SIZE = 20;
+
+const STATUSES = ["PENDING", "COMPLETED", "CANCELLED"] as const;
 
 export default function FollowUpsPage() {
   const toast = useToast();
   const [tab, setTab] = useState("PENDING");
-  const followups = useApi<FollowUpsResponse>("/followups");
+  const [page, setPage] = useState(1);
+
+  // The stage is filtered by the database, and the page number rides with
+  // it. The tabs' counts come from the same filter asked for one row at a
+  // time — the total is the answer, not the page — so a queue past the old
+  // 300-row cap still counts correctly.
+  const status = tab === "all" ? undefined : tab;
+  const followups = useApi<FollowUpsResponse>("/followups", {
+    status,
+    limit: PAGE_SIZE,
+    offset: (page - 1) * PAGE_SIZE,
+  });
+  const pendingCount = useApi<FollowUpsResponse>("/followups", {
+    status: "PENDING",
+    limit: 1,
+  });
+  const completedCount = useApi<FollowUpsResponse>("/followups", {
+    status: "COMPLETED",
+    limit: 1,
+  });
+  const cancelledCount = useApi<FollowUpsResponse>("/followups", {
+    status: "CANCELLED",
+    limit: 1,
+  });
+  const allCount = useApi<FollowUpsResponse>("/followups", { limit: 1 });
 
   const items = followups.data?.items ?? [];
-  const visible = tab === "all" ? items : items.filter((item) => item.status === tab);
+  const total = followups.data?.total ?? 0;
+
+  // The count a tab shows: the active tab's own page total (the request
+  // that made the list), and the one-row total for every other stage.
+  const count = (query: { data: FollowUpsResponse | null }, status: string): number =>
+    status === tab ? total : (query.data?.total ?? 0);
 
   const update = async (followup: FollowUp, status: string) => {
     try {
@@ -44,34 +79,65 @@ export default function FollowUpsPage() {
   };
 
   const tabs = [
-    { key: "PENDING", label: "Pending", count: items.filter((i) => i.status === "PENDING").length },
-    { key: "COMPLETED", label: "Completed", count: items.filter((i) => i.status === "COMPLETED").length },
-    { key: "CANCELLED", label: "Cancelled", count: items.filter((i) => i.status === "CANCELLED").length },
-    { key: "all", label: "All", count: items.length },
+    {
+      key: "PENDING",
+      label: "Pending",
+      count: count(pendingCount, "PENDING"),
+    },
+    {
+      key: "COMPLETED",
+      label: "Completed",
+      count: count(completedCount, "COMPLETED"),
+    },
+    {
+      key: "CANCELLED",
+      label: "Cancelled",
+      count: count(cancelledCount, "CANCELLED"),
+    },
+    { key: "all", label: "All", count: count(allCount, "all") },
   ];
 
+  const changeTab = (next: string) => {
+    setTab(next);
+    setPage(1);
+  };
+
   return (
-    <div className="stack gap-[1.2rem]">
-      <div>
-        <div className="eyebrow">Follow-ups</div>
-        <h1 className="display mt-1" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)" }}>
-          Never chase twice
-        </h1>
-        <p className="text-muted text-[0.9rem] mt-1">
-          We remind you when an application needs chasing. You decide whether and how to reply.
-        </p>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        eyebrow="Follow-ups"
+        title="Never chase twice"
+        description="We remind you when an application needs chasing. You decide whether and how to reply."
+        actions={
+          <Link href="/applications">
+            <Button variant="outline" size="sm" icon={<CalendarClock size={14} />}>
+              Open applications
+            </Button>
+          </Link>
+        }
+      />
 
-      <Tabs tabs={tabs} active={tab} onChange={setTab} />
+      <Tabs tabs={tabs} active={tab} onChange={changeTab} />
 
-      {followups.loading ? (
-        <div className="stack">
-          <Skeleton height={72} />
-          <Skeleton height={72} />
-        </div>
-      ) : visible.length === 0 ? (
+      {followups.error && items.length === 0 ? (
         <EmptyState
-          icon={<ListChecks size={28} />}
+          icon={<ListChecks size={26} />}
+          title="Could not load your follow-ups"
+          description={followups.error}
+          action={
+            <Button variant="outline" onClick={() => followups.refresh()}>
+              Try again
+            </Button>
+          }
+        />
+      ) : followups.loading && items.length === 0 ? (
+        <div className="flex flex-col gap-2.5">
+          <Skeleton height={76} />
+          <Skeleton height={76} />
+        </div>
+      ) : items.length === 0 ? (
+        <EmptyState
+          icon={<ListChecks size={26} />}
           title="Nothing to chase"
           description="Schedule a follow-up from any application workspace and it will appear here."
           action={
@@ -83,53 +149,71 @@ export default function FollowUpsPage() {
           }
         />
       ) : (
-        <div className="stack gap-[0.55rem]">
-          {visible.map((item) => (
-            <Card key={item.id} style={{ padding: "0.85rem 1rem" }}>
-              <div className="row row-wrap gap-4">
-                <div className="flex-1" style={{ minWidth: 220 }}>
-                  <div className="row row-wrap" style={{ gap: "0.4rem", marginBottom: 4 }}>
-                    <Badge
-                      tone={
-                        item.status === "COMPLETED"
-                          ? "success"
-                          : item.status === "PENDING"
-                            ? "warning"
-                            : "neutral"
-                      }
-                    >
-                      {titleCase(item.status)}
-                    </Badge>
-                    <Badge tone="neutral">{titleCase(item.channel)}</Badge>
-                    <span className="text-[0.74rem] text-muted">
-                      due {relativeTime(item.dueAt)}
-                    </span>
+        <>
+          <ul className="flex flex-col gap-2">
+            {items.map((item) => (
+              <li key={item.id}>
+                <Card className="p-4">
+                  <div className="flex flex-wrap items-center gap-4">
+                    <div className="min-w-[220px] flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge
+                          tone={
+                            item.status === "COMPLETED"
+                              ? "success"
+                              : item.status === "PENDING"
+                                ? "warning"
+                                : "neutral"
+                          }
+                        >
+                          {titleCase(item.status)}
+                        </Badge>
+                        <Badge tone="neutral">{titleCase(item.channel)}</Badge>
+                        <span className="text-[0.73rem] text-app-muted">
+                          due {relativeTime(item.dueAt)}
+                        </span>
+                      </div>
+                      <h3 className="mt-1.5 text-[0.94rem] font-semibold text-app-text">
+                        <Link
+                          href={`/applications/${item.applicationId}`}
+                          className="hover:text-app-accent"
+                        >
+                          {item.opportunityTitle}
+                        </Link>
+                      </h3>
+                      <p className="text-[0.8rem] text-app-muted">
+                        {item.companyName}
+                        {item.note ? ` · ${item.note}` : ""}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono text-[0.73rem] text-app-muted">
+                        {formatDateTime(item.dueAt)}
+                      </span>
+                      {item.status !== "COMPLETED" ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          icon={<CheckCircle2 size={13} />}
+                          onClick={() => void update(item, "COMPLETED")}
+                        >
+                          Done
+                        </Button>
+                      ) : null}
+                    </div>
                   </div>
-                  <div className="text-[0.92rem] font-semibold">{item.opportunityTitle}</div>
-                  <div className="text-[0.8rem] text-muted">
-                    {item.companyName}
-                    {item.note ? ` · ${item.note}` : ""}
-                  </div>
-                </div>
-                <div className="row gap-1.5">
-                  <span className="mono text-[0.74rem] text-muted">
-                    {formatDateTime(item.dueAt)}
-                  </span>
-                  {item.status !== "COMPLETED" ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      icon={<CheckCircle2 size={13} />}
-                      onClick={() => void update(item, "COMPLETED")}
-                    >
-                      Done
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+                </Card>
+              </li>
+            ))}
+          </ul>
+
+          <Pagination
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={total}
+            onPageChange={setPage}
+          />
+        </>
       )}
     </div>
   );

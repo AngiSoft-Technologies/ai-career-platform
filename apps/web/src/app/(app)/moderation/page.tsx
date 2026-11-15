@@ -1,16 +1,20 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
-import { Fingerprint, ShieldAlert, ShieldCheck, TriangleAlert } from "lucide-react";
+import { useState } from "react";
+import { ArrowUpRight, Fingerprint, ShieldAlert, ShieldCheck, TriangleAlert } from "lucide-react";
 import {
   Badge,
   Button,
   Card,
+  DataTable,
   EmptyState,
+  PageHeader,
   SectionTitle,
   Skeleton,
   StatTile,
+  Td,
+  Th,
   useToast,
 } from "@/components/ui";
 import { useApi } from "@/lib/hooks";
@@ -37,7 +41,6 @@ interface StatsResponse {
 
 export default function ModerationPage() {
   const toast = useToast();
-  const [tab, setTab] = useState("corpus");
   const [busy, setBusy] = useState<string | null>(null);
 
   const scam = useApi<ScamResponse>("/admin/scam-corpus");
@@ -64,44 +67,47 @@ export default function ModerationPage() {
   };
 
   return (
-    <div className="stack gap-[1.2rem]">
-      <div className="row row-wrap justify-between items-end">
-        <div>
-          <div className="eyebrow">Trust and safety</div>
-          <h1 className="display mt-1" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)" }}>
-            Keep the floor clean
-          </h1>
-          <p className="text-muted text-[0.9rem] mt-1">
-            Every posting is fingerprinted. This is where the corpus and the review queue live.
-          </p>
-        </div>
-        <Badge tone={flagged.length > 0 ? "warning" : "success"}>
-          {flagged.length > 0 ? (
-            <TriangleAlert size={11} />
-          ) : (
-            <ShieldCheck size={11} />
-          )}
-          {flagged.length > 0 ? `${flagged.length} need attention` : "nothing flagged"}
-        </Badge>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        eyebrow="Trust and safety"
+        title="Keep the floor clean"
+        description="Every posting is fingerprinted. This is where the corpus and the review queue live."
+        actions={
+          <Badge tone={flagged.length > 0 ? "warning" : "success"}>
+            {flagged.length > 0 ? (
+              <TriangleAlert size={11} />
+            ) : (
+              <ShieldCheck size={11} />
+            )}
+            {flagged.length > 0 ? `${flagged.length} need attention` : "nothing flagged"}
+          </Badge>
+        }
+      />
 
-      <div className="grid-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile label="Sources monitored" value={String(stats.data?.totals.sources ?? 0)} />
-        <StatTile label="Live opportunities" value={String(stats.data?.totals.activeOpportunities ?? 0)} />
-        <StatTile label="Fingerprints" value={String(scam.data?.total ?? 0)} icon={<Fingerprint size={15} />} />
+        <StatTile
+          label="Live opportunities"
+          value={String(stats.data?.totals.activeOpportunities ?? 0)}
+        />
+        <StatTile
+          label="Fingerprints"
+          value={String(scam.data?.total ?? 0)}
+          icon={<Fingerprint size={15} />}
+        />
         <StatTile label="Awaiting review" value={String(queue.data?.total ?? 0)} />
       </div>
 
-      <div className="grid-2">
-        <Card className="p-[1.1rem]">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="p-4 sm:p-5">
           <SectionTitle
             eyebrow="Distribution"
             title="How postings are scored"
-            action={<ShieldAlert size={16} className="text-muted" />}
+            action={<ShieldAlert size={16} className="text-app-muted" />}
           />
-          <div className="stack mt-[0.8rem] gap-1.5">
+          <div className="mt-3 flex flex-col gap-2">
             {risk.map((row) => (
-              <div key={row.risk_action} className="row justify-between">
+              <div key={row.risk_action} className="flex items-center justify-between gap-3">
                 <Badge
                   tone={
                     row.risk_action === "block"
@@ -113,39 +119,30 @@ export default function ModerationPage() {
                 >
                   {row.risk_action}
                 </Badge>
-                <span className="mono text-[0.8rem]">
+                <span className="font-mono text-[0.78rem] tabular-nums text-app-muted">
                   {row.count}
                 </span>
               </div>
             ))}
             {risk.length === 0 ? (
-              <p className="text-[0.84rem] text-muted">
-                No scored postings yet.
-              </p>
+              <p className="text-[0.83rem] text-app-muted">No scored postings yet.</p>
             ) : null}
           </div>
         </Card>
 
-        <Card className="p-[1.1rem]">
+        <Card className="p-4 sm:p-5">
           <SectionTitle eyebrow="Queue" title="Sources awaiting classification" />
-          <div className="stack mt-[0.8rem] gap-1.5">
+          <div className="mt-3 flex flex-col gap-2">
             {(queue.data?.items ?? []).map((source) => (
               <div
                 key={source.id}
-                className="row row-wrap"
-                style={{
-                  justifyContent: "space-between",
-                  gap: "0.6rem",
-                  padding: "0.55rem 0.7rem",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--radius-sm)",
-                }}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-app-sm border border-app-border px-2.5 py-2"
               >
-                <div className="" style={{ minWidth: 180 }}>
-                  <div className="text-[0.86rem] font-semibold">{source.name}</div>
-                  <div className="text-[0.72rem] text-muted">
+                <div className="min-w-[180px]">
+                  <p className="text-[0.85rem] font-semibold text-app-text">{source.name}</p>
+                  <p className="max-w-[240px] truncate text-[0.71rem] text-app-muted">
                     {source.url}
-                  </div>
+                  </p>
                 </div>
                 <Button
                   size="sm"
@@ -158,73 +155,76 @@ export default function ModerationPage() {
               </div>
             ))}
             {(queue.data?.items?.length ?? 0) === 0 ? (
-              <p className="text-[0.84rem] text-muted">
-                The queue is clear.
-              </p>
+              <p className="text-[0.83rem] text-app-muted">The queue is clear.</p>
             ) : null}
           </div>
         </Card>
       </div>
 
-      <Card className="p-[1.1rem]">
+      <Card className="p-4 sm:p-5">
         <SectionTitle
           eyebrow="Corpus"
           title={`${scam.data?.total ?? 0} scam fingerprints`}
           description="SimHash fingerprints of known fraudulent templates."
         />
-        {scam.loading ? (
-          <Skeleton height={180} />
+        {scam.loading && !scam.data ? (
+          <div className="mt-4">
+            <Skeleton height={180} />
+          </div>
         ) : (scam.data?.items?.length ?? 0) === 0 ? (
-          <EmptyState title="Corpus is empty" />
+          <div className="mt-4">
+            <EmptyState title="Corpus is empty" />
+          </div>
         ) : (
-          <div className="table-scroll mt-[0.8rem]">
-            <table className="data-table">
+          <div className="mt-4">
+            <DataTable>
               <thead>
                 <tr>
-                  <th>Label</th>
-                  <th>Fingerprint</th>
-                  <th>Sample</th>
-                  <th>Added</th>
+                  <Th>Label</Th>
+                  <Th>Fingerprint</Th>
+                  <Th>Sample</Th>
+                  <Th>Added</Th>
                 </tr>
               </thead>
               <tbody>
                 {scam.data?.items?.map((signature) => (
-                  <tr key={signature.id}>
-                    <td>
+                  <tr key={signature.id} className="transition-colors hover:bg-app-surface-2/40">
+                    <Td>
                       <Badge tone="danger">{signature.label}</Badge>
-                    </td>
-                    <td className="mono" style={{ fontSize: "0.7rem" }}>
-                      {signature.simhash}
-                    </td>
-                    <td style={{ fontSize: "0.75rem" }}>
+                    </Td>
+                    <Td className="font-mono text-[0.7rem]">{signature.simhash}</Td>
+                    <Td className="text-[0.75rem]">
                       {signature.sample_url ? (
-                        <a href={signature.sample_url} target="_blank" rel="noopener noreferrer">
-                          open
+                        <a
+                          href={signature.sample_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-app-accent hover:underline"
+                        >
+                          open <ArrowUpRight size={11} />
                         </a>
                       ) : (
                         "—"
                       )}
-                    </td>
-                    <td style={{ fontSize: "0.75rem" }}>
-                      {formatDateTime(signature.created_at)}
-                    </td>
+                    </Td>
+                    <Td className="text-[0.75rem]">{formatDateTime(signature.created_at)}</Td>
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </DataTable>
           </div>
         )}
       </Card>
 
-      <Card className="p-[1.1rem]">
+      <Card className="p-4 sm:p-5">
         <SectionTitle eyebrow="Policy" title="What we remove" />
-        <ul style={{ paddingLeft: "1.1rem", marginTop: "0.8rem", lineHeight: 1.9, fontSize: "0.88rem" }}>
+        <ul className="mt-3 list-disc space-y-2 pl-5 text-[0.86rem] leading-relaxed text-app-soft">
           <li>Postings that fingerprint against a known scam template.</li>
           <li>Companies with no verifiable history and a payment or bank-detail request.</li>
           <li>Salary ranges that fall far below the local median for that profession.</li>
           <li>Duplicate postings replayed across dozens of boards to farm applications.</li>
         </ul>
-        <div className="mt-[0.9rem]">
+        <div className="mt-4">
           <Link href="/admin">
             <Button variant="outline" size="sm">
               Open the full control room

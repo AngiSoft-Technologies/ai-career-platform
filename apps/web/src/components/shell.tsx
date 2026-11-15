@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   Activity,
   BadgeCheck,
@@ -17,6 +24,7 @@ import {
   LayoutDashboard,
   Link2,
   ListChecks,
+  Menu,
   MessageSquare,
   Radio,
   Search,
@@ -30,10 +38,23 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useTheme, ROLE_LABELS, THEMES, type RoleKey } from "@/components/theme";
-import { Avatar, Badge, IconButton, cx } from "@/components/ui";
-import { useWebSocket } from "@/lib/realtime";
+import { Avatar, IconButton, cx } from "@/components/ui";
+import { useWebSocket, type RealtimeEvent } from "@/lib/realtime";
 import { api, outboxSize } from "@/lib/api";
 import type { Session } from "@/lib/auth";
+
+/**
+ * The application frame.
+ *
+ * One layout for every theme. The themes swap tokens — colour, radius,
+ * typeface — and the frame reads those tokens, so a theme change never
+ * changes the structure.
+ *
+ * The sidebar collapses by changing its own width, and because it is a flex
+ * sibling of the content rather than a fixed column in a grid template, the
+ * content reflows with it. (It used to be a grid whose column width was
+ * hard-coded, so collapsing the sidebar moved nothing but the sidebar.)
+ */
 
 interface NavSubItem {
   href: string;
@@ -41,6 +62,15 @@ interface NavSubItem {
   icon: LucideIcon;
   roles: RoleKey[];
 }
+
+/**
+ * Where the sidebar's collapsed state lives between visits.
+ *
+ * The preference is read on the client after hydration (never during render),
+ * so the server's HTML and the first client render agree and the person's
+ * stored choice is never overwritten by the default.
+ */
+const SIDEBAR_COLLAPSED_KEY = "mboqara.sidebar.collapsed";
 
 interface NavItem {
   href: string;
@@ -50,20 +80,6 @@ interface NavItem {
   group: string;
   subItems?: NavSubItem[];
 }
-
-const ALL: RoleKey[] = [
-  "job_seeker",
-  "analyst",
-  "moderator",
-  "support_agent",
-  "source_curator",
-  "automation",
-  "admin",
-  "super_admin",
-];
-
-const ADMIN: RoleKey[] = ["admin", "super_admin"];
-const CURATORS: RoleKey[] = ["source_curator", "admin", "super_admin"];
 
 const ROLE_NAV: Record<RoleKey, NavItem[]> = {
   job_seeker: [
@@ -128,8 +144,8 @@ const ROLE_NAV: Record<RoleKey, NavItem[]> = {
       roles: ["source_curator"],
       group: "Sources",
       subItems: [
-        { href: "/sources", label: "All Sources", icon: Globe2, roles: ["source_curator"] },
-        { href: "/sources/add", label: "Add Source", icon: Globe2, roles: ["source_curator"] },
+        { href: "/sources", label: "All sources", icon: Globe2, roles: ["source_curator"] },
+        { href: "/sources/add", label: "Add source", icon: Globe2, roles: ["source_curator"] },
         { href: "/sources/health", label: "Health", icon: Activity, roles: ["source_curator"] },
       ],
     },
@@ -140,7 +156,7 @@ const ROLE_NAV: Record<RoleKey, NavItem[]> = {
       roles: ["source_curator"],
       group: "Jobs",
       subItems: [
-        { href: "/opportunities", label: "All Jobs", icon: Compass, roles: ["source_curator"] },
+        { href: "/opportunities", label: "All jobs", icon: Compass, roles: ["source_curator"] },
         { href: "/opportunities/import", label: "Import", icon: Globe2, roles: ["source_curator"] },
       ],
     },
@@ -151,8 +167,8 @@ const ROLE_NAV: Record<RoleKey, NavItem[]> = {
       roles: ["source_curator"],
       group: "Companies",
       subItems: [
-        { href: "/companies", label: "All Companies", icon: Users, roles: ["source_curator"] },
-        { href: "/companies/add", label: "Add Company", icon: Users, roles: ["source_curator"] },
+        { href: "/companies", label: "All companies", icon: Users, roles: ["source_curator"] },
+        { href: "/companies/add", label: "Add company", icon: Users, roles: ["source_curator"] },
       ],
     },
     { href: "/settings", label: "Settings", icon: Settings, roles: ["source_curator"], group: "You" },
@@ -185,10 +201,10 @@ const ROLE_NAV: Record<RoleKey, NavItem[]> = {
       subItems: [
         { href: "/admin", label: "Overview", icon: LayoutDashboard, roles: ["admin"] },
         { href: "/admin/users", label: "Users", icon: Users, roles: ["admin"] },
-        { href: "/admin/roles", label: "Roles & Permissions", icon: ShieldCheck, roles: ["admin"] },
+        { href: "/admin/roles", label: "Roles and permissions", icon: ShieldCheck, roles: ["admin"] },
         { href: "/admin/invitations", label: "Invitations", icon: Users, roles: ["admin"] },
         { href: "/admin/taxonomy", label: "Taxonomy", icon: FileText, roles: ["admin"] },
-        { href: "/admin/scam-corpus", label: "Scam Corpus", icon: ShieldCheck, roles: ["admin"] },
+        { href: "/admin/scam-corpus", label: "Scam corpus", icon: ShieldCheck, roles: ["admin"] },
       ],
     },
     {
@@ -198,8 +214,8 @@ const ROLE_NAV: Record<RoleKey, NavItem[]> = {
       roles: ["admin"],
       group: "Platform",
       subItems: [
-        { href: "/sources", label: "All Sources", icon: Globe2, roles: ["admin"] },
-        { href: "/sources/add", label: "Add Source", icon: Globe2, roles: ["admin"] },
+        { href: "/sources", label: "All sources", icon: Globe2, roles: ["admin"] },
+        { href: "/sources/add", label: "Add source", icon: Globe2, roles: ["admin"] },
       ],
     },
     {
@@ -226,11 +242,11 @@ const ROLE_NAV: Record<RoleKey, NavItem[]> = {
       subItems: [
         { href: "/admin", label: "Overview", icon: LayoutDashboard, roles: ["super_admin"] },
         { href: "/admin/users", label: "Users", icon: Users, roles: ["super_admin"] },
-        { href: "/admin/roles", label: "Roles & Permissions", icon: ShieldCheck, roles: ["super_admin"] },
+        { href: "/admin/roles", label: "Roles and permissions", icon: ShieldCheck, roles: ["super_admin"] },
         { href: "/admin/invitations", label: "Invitations", icon: Users, roles: ["super_admin"] },
         { href: "/admin/taxonomy", label: "Taxonomy", icon: FileText, roles: ["super_admin"] },
-        { href: "/admin/scam-corpus", label: "Scam Corpus", icon: ShieldCheck, roles: ["super_admin"] },
-        { href: "/admin/audit", label: "Audit Logs", icon: FileText, roles: ["super_admin"] },
+        { href: "/admin/scam-corpus", label: "Scam corpus", icon: ShieldCheck, roles: ["super_admin"] },
+        { href: "/admin/audit", label: "Audit logs", icon: FileText, roles: ["super_admin"] },
         { href: "/admin/system", label: "System", icon: Wrench, roles: ["super_admin"] },
       ],
     },
@@ -241,8 +257,8 @@ const ROLE_NAV: Record<RoleKey, NavItem[]> = {
       roles: ["super_admin"],
       group: "Platform",
       subItems: [
-        { href: "/sources", label: "All Sources", icon: Globe2, roles: ["super_admin"] },
-        { href: "/sources/add", label: "Add Source", icon: Globe2, roles: ["super_admin"] },
+        { href: "/sources", label: "All sources", icon: Globe2, roles: ["super_admin"] },
+        { href: "/sources/add", label: "Add source", icon: Globe2, roles: ["super_admin"] },
         { href: "/sources/health", label: "Health", icon: Activity, roles: ["super_admin"] },
       ],
     },
@@ -283,7 +299,7 @@ const ROLE_NAV: Record<RoleKey, NavItem[]> = {
     },
     {
       href: "/dashboard",
-      label: "Preview as Job Seeker",
+      label: "Preview as job seeker",
       icon: UserRound,
       roles: ["super_admin"],
       group: "Preview",
@@ -292,10 +308,378 @@ const ROLE_NAV: Record<RoleKey, NavItem[]> = {
   ],
 };
 
-function useNav(role: RoleKey) {
-  return useMemo(() => ROLE_NAV[role] ?? [], [role]);
+function useNav(role: RoleKey): NavItem[] {
   return useMemo(() => ROLE_NAV[role] ?? [], [role]);
 }
+
+/* ========================================================================== */
+/* Frame                                                                      */
+/* ========================================================================== */
+
+export function AppShell({
+  children,
+  session,
+}: {
+  children: ReactNode;
+  session: Session | null;
+}) {
+  const { role } = useTheme();
+  const nav = useNav(role);
+  const pathname = usePathname();
+  const { connected, events, pending } = useConnection();
+
+  const [collapsed, setCollapsed] = useState(false);
+  const [collapseReady, setCollapseReady] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // The sidebar's collapsed state is a workspace preference, not a
+  // per-navigation accident. Loading it on the client keeps the server and
+  // first hydration render identical; writing it after that load means the
+  // first render can never overwrite the person's stored choice.
+  useEffect(() => {
+    try {
+      setCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true");
+    } catch {
+      setCollapsed(false);
+    }
+    setCollapseReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!collapseReady) return;
+    try {
+      window.localStorage.setItem(
+        SIDEBAR_COLLAPSED_KEY,
+        String(collapsed),
+      );
+    } catch {
+      // A failed preference must never break the shell.
+    }
+  }, [collapsed, collapseReady]);
+
+  // The drawer is a mobile affordance; leaving it open on a resize would
+  // leave the content unreachable.
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const close = () => setDrawerOpen(false);
+    window.addEventListener("resize", close);
+    return () => window.removeEventListener("resize", close);
+  }, [drawerOpen]);
+
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [pathname]);
+
+  return (
+    <div className="min-h-dvh bg-app-bg text-app-text">
+      <div className="flex min-h-dvh">
+        {/* Desktop sidebar. Its width is the flex basis, so the content
+            beside it reflows as it changes. */}
+        <aside
+          className={cx(
+            "sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-app-border bg-app-elevated/40",
+            "transition-[width] duration-200 ease-out lg:flex",
+            collapsed ? "w-[76px]" : "w-[264px]",
+          )}
+        >
+          <Sidebar
+            nav={nav}
+            pathname={pathname}
+            collapsed={collapsed}
+            session={session}
+            connected={connected}
+            pending={pending}
+            onToggleCollapse={() => setCollapsed((value) => !value)}
+          />
+        </aside>
+
+        {/* Mobile drawer. */}
+        {drawerOpen ? (
+          <div className="fixed inset-0 z-50 lg:hidden">
+            <button
+              type="button"
+              aria-label="Close navigation"
+              onClick={() => setDrawerOpen(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <div className="absolute inset-y-0 left-0 flex w-[272px] max-w-[82vw] flex-col border-r border-app-border bg-app-elevated shadow-app-lg">
+              <Sidebar
+                nav={nav}
+                pathname={pathname}
+                collapsed={false}
+                session={session}
+                connected={connected}
+                pending={pending}
+                onClose={() => setDrawerOpen(false)}
+              />
+            </div>
+          </div>
+        ) : null}
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          <TopBar
+            session={session}
+            onOpenDrawer={() => setDrawerOpen(true)}
+            events={events}
+          />
+          <main className="mx-auto w-full min-w-0 max-w-[1560px] flex-1 px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
+            {children}
+          </main>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ========================================================================== */
+/* Sidebar                                                                    */
+/* ========================================================================== */
+
+function Sidebar({
+  nav,
+  pathname,
+  collapsed,
+  session,
+  connected,
+  pending,
+  onToggleCollapse,
+  onClose,
+}: {
+  nav: NavItem[];
+  pathname: string;
+  collapsed: boolean;
+  session: Session | null;
+  connected: boolean;
+  pending: number;
+  onToggleCollapse?: () => void;
+  onClose?: () => void;
+}) {
+  const { role } = useTheme();
+  const groups = useMemo(() => {
+    const map = new Map<string, NavItem[]>();
+    for (const item of nav) {
+      const list = map.get(item.group) ?? [];
+      list.push(item);
+      map.set(item.group, list);
+    }
+    return [...map.entries()];
+  }, [nav]);
+
+  return (
+    <>
+      <div
+        className={cx(
+          "flex h-16 shrink-0 items-center gap-2 border-b border-app-border px-3",
+          collapsed && "justify-center px-2",
+        )}
+      >
+        <Link href="/dashboard" className="flex min-w-0 items-center gap-2.5">
+          <img
+            src="/brand/logo-mark.png"
+            alt=""
+            width={28}
+            height={28}
+            className="size-7 shrink-0 rounded-app-sm"
+          />
+          {collapsed ? null : (
+            <span className="truncate text-[0.95rem] font-bold tracking-[-0.01em] text-app-text">
+              MboQara
+            </span>
+          )}
+        </Link>
+
+        <div className="ml-auto flex items-center gap-1">
+          {onClose ? (
+            <IconButton onClick={onClose} aria-label="Close navigation">
+              <X size={17} />
+            </IconButton>
+          ) : null}
+          {onToggleCollapse ? (
+            <IconButton
+              onClick={onToggleCollapse}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              className="hidden lg:inline-grid"
+            >
+              {collapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}
+            </IconButton>
+          ) : null}
+        </div>
+      </div>
+
+      <nav className="min-h-0 flex-1 overflow-y-auto px-2.5 py-3">
+        {groups.map(([group, items]) => (
+          <div key={group} className="mb-4 last:mb-0">
+            {collapsed ? (
+              <div className="mx-auto my-2 h-px w-6 bg-app-border" />
+            ) : (
+              <p className="px-2.5 pb-1.5 text-[0.66rem] font-semibold tracking-[0.14em] text-app-muted uppercase">
+                {group}
+              </p>
+            )}
+            <ul className="flex flex-col gap-0.5">
+              {items.map((item) => (
+                <li key={item.href}>
+                  <NavLink item={item} active={pathname.startsWith(item.href)} collapsed={collapsed} />
+                  {item.subItems && !collapsed ? (
+                    <ul className="mt-0.5 ml-4 flex flex-col gap-0.5 border-l border-app-border pl-2.5">
+                      {item.subItems.map((sub) => (
+                        <li key={sub.href}>
+                          <NavLink
+                            item={sub}
+                            active={pathname === sub.href}
+                            collapsed={false}
+                            nested
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </nav>
+
+      <div className="shrink-0 border-t border-app-border p-2.5">
+        <div
+          className={cx(
+            "flex items-center gap-2.5 rounded-app-md px-2 py-2",
+            collapsed && "justify-center px-0",
+          )}
+        >
+          <span
+            className={cx(
+              "size-2 shrink-0 rounded-full",
+              connected ? "bg-app-success" : "bg-app-muted",
+            )}
+            aria-hidden
+          />
+          {collapsed ? null : (
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[0.78rem] font-medium text-app-soft">
+                {pending > 0
+                  ? `${pending} change${pending === 1 ? "" : "s"} queued`
+                  : connected
+                    ? "Live"
+                    : "Reconnecting"}
+              </span>
+              <span className="block truncate text-[0.7rem] text-app-muted">
+                {ROLE_LABELS[role]}
+              </span>
+            </span>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function NavLink({
+  item,
+  active,
+  collapsed,
+  nested = false,
+}: {
+  item: NavItem | NavSubItem;
+  active: boolean;
+  collapsed: boolean;
+  nested?: boolean;
+}) {
+  const Icon = item.icon;
+  return (
+    <Link
+      href={item.href}
+      title={collapsed ? item.label : undefined}
+      aria-current={active ? "page" : undefined}
+      className={cx(
+        "group flex items-center gap-2.5 rounded-app-md text-[0.83rem] font-medium transition-colors duration-150",
+        nested ? "px-2 py-1.5" : "px-2.5 py-2",
+        collapsed && "justify-center px-0",
+        active
+          ? "bg-app-accent-soft text-app-accent"
+          : "text-app-soft hover:bg-app-surface-2 hover:text-app-text",
+      )}
+    >
+      <Icon size={nested ? 14 : 16} className="shrink-0" />
+      {collapsed ? (
+        <span className="sr-only">{item.label}</span>
+      ) : (
+        <span className="truncate">{item.label}</span>
+      )}
+    </Link>
+  );
+}
+
+/* ========================================================================== */
+/* Top bar                                                                    */
+/* ========================================================================== */
+
+function TopBar({
+  session,
+  onOpenDrawer,
+  events,
+}: {
+  session: Session | null;
+  onOpenDrawer: () => void;
+  events: RealtimeEvent[];
+}) {
+  const router = useRouter();
+  const [query, setQuery] = useState("");
+
+  return (
+    <header className="sticky top-0 z-40 border-b border-app-border bg-app-bg/85 backdrop-blur-xl">
+      <div className="mx-auto flex h-16 w-full max-w-[1560px] items-center gap-2 px-4 sm:px-6 lg:px-8">
+        <IconButton
+          onClick={onOpenDrawer}
+          aria-label="Open navigation"
+          className="lg:hidden"
+        >
+          <Menu size={18} />
+        </IconButton>
+
+        <form
+          role="search"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const q = query.trim();
+            router.push(q ? `/opportunities?q=${encodeURIComponent(q)}` : "/opportunities");
+          }}
+          className="relative min-w-0 flex-1 max-w-md"
+        >
+          <Search
+            size={15}
+            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-app-muted"
+          />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search roles, companies, skills"
+            aria-label="Search"
+            className="h-9 w-full rounded-app-md border border-app-border bg-app-surface-2/50 pr-3 pl-9 text-[0.84rem] text-app-text placeholder:text-app-muted focus:border-app-accent focus:bg-app-surface-2 focus:outline-none"
+          />
+        </form>
+
+        <div className="ml-auto flex items-center gap-1.5">
+          <NotificationsBell events={events} />
+          <Link
+            href="/profile"
+            className="flex items-center gap-2 rounded-app-md px-1.5 py-1 transition-colors duration-150 hover:bg-app-surface-2"
+          >
+            <Avatar name={session?.user.name ?? session?.user.email} size={30} />
+            <span className="hidden text-[0.82rem] text-app-soft sm:block">
+              {session?.user.name ?? session?.user.email}
+            </span>
+          </Link>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+/* ========================================================================== */
+/* Connection, notifications                                                   */
+/* ========================================================================== */
 
 function useConnection() {
   const { connected, events } = useWebSocket(true);
@@ -318,838 +702,132 @@ function useConnection() {
 /**
  * The bell is a real destination now, not decoration.
  *
- * The count comes from the API (the `notifications` table), refreshes on a
- * slow poll, and is re-read immediately when another view marks notifications
- * read via the `jr:notifications` event.
+ * The count comes from the API (the `notifications` table). It used to be
+ * asked for every minute, which was a request per signed-in user per minute
+ * to answer a question the server already knew the answer to.
+ *
+ * Now the server pushes: a notification is announced on the realtime
+ * channel and the count moves without a request. What is left is a slow
+ * safety net — a refresh when the tab comes back into view, and one every
+ * few minutes for anything that arrived while the socket was down.
  */
-function NotificationsBell() {
+const UNREAD_POLL_INTERVAL_MS = 5 * 60_000;
+
+function NotificationsBell({ events }: { events: RealtimeEvent[] }) {
   const router = useRouter();
   const [unread, setUnread] = useState(0);
+  const inFlight = useRef<Promise<void> | null>(null);
 
+  const load = useCallback(() => {
+    // One request at a time: a slow answer is better than two questions.
+    if (inFlight.current) return inFlight.current;
+    const request = api
+      .get<{ unreadCount: number }>("/me/notifications/unread-count")
+      .then((data) => {
+        setUnread(data.unreadCount ?? 0);
+      })
+      .catch(() => {
+        // A failed count must never break the shell.
+      })
+      .finally(() => {
+        inFlight.current = null;
+      });
+    inFlight.current = request;
+    return request;
+  }, []);
+
+  // The server announces a notification; the count follows on its own.
   useEffect(() => {
-    let cancelled = false;
-    const load = () => {
-      void api
-        .get<{ unreadCount: number }>("/me/notifications/unread-count")
-        .then((data) => {
-          if (!cancelled) setUnread(data.unreadCount ?? 0);
-        })
-        .catch(() => {
-          // A failed count must never break the shell.
-        });
+    const latest = events[0];
+    if (!latest) return;
+    if (latest.type === "notification.created") {
+      setUnread((count) => count + 1);
+    }
+  }, [events]);
+
+  // The safety net: on load, when the tab comes back, and rarely otherwise.
+  useEffect(() => {
+    let timer: number | undefined;
+
+    const schedule = () => {
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        if (document.visibilityState === "visible") void load();
+        schedule();
+      }, UNREAD_POLL_INTERVAL_MS);
     };
-    load();
-    const timer = window.setInterval(load, 60_000);
-    window.addEventListener("jr:notifications", load);
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+
+    void load();
+    schedule();
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-      window.removeEventListener("jr:notifications", load);
+      if (timer) window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
+  }, [load]);
+
+  // The notifications page marks everything read; the count is known.
+  useEffect(() => {
+    const markRead = () => setUnread(0);
+    window.addEventListener("jr:notifications", markRead);
+    return () => window.removeEventListener("jr:notifications", markRead);
   }, []);
 
   return (
-    <div style={{ position: "relative", display: "inline-flex" }}>
-      <IconButton
-        aria-label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"}
-        onClick={() => router.push("/notifications")}
-      >
-        <Bell size={18} />
-      </IconButton>
+    <button
+      type="button"
+      onClick={() => router.push("/notifications")}
+      aria-label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"}
+      className="relative inline-grid size-9 place-items-center rounded-app-md text-app-soft transition-colors duration-150 hover:bg-app-surface-2 hover:text-app-text"
+    >
+      <Bell size={17} />
       {unread > 0 ? (
-        <span
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            top: -2,
-            right: -2,
-            minWidth: 16,
-            height: 16,
-            padding: "0 4px",
-            borderRadius: 999,
-            background: "var(--accent)",
-            color: "var(--accent-contrast, #fff)",
-            fontSize: "0.62rem",
-            fontWeight: 700,
-            lineHeight: "16px",
-            textAlign: "center",
-            pointerEvents: "none",
-          }}
-        >
+        <span className="absolute top-1 right-0.5 grid min-w-4 place-items-center rounded-full bg-app-accent px-1 text-[0.6rem] leading-4 font-bold text-app-accent-contrast">
           {unread > 99 ? "99+" : unread}
         </span>
       ) : null}
-    </div>
-  );
-}
-
-function Brand({ compact = false }: { compact?: boolean }) {
-  return (
-    <Link href="/dashboard" className="row" style={{ gap: "0.55rem" }}>
-      <img
-        src="/brand/logo-mark.png"
-        alt="MboQara"
-        width={30}
-        height={30}
-        style={{ width: 30, height: 30, flexShrink: 0, objectFit: "contain" }}
-      />
-      {!compact ? (
-        <span style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
-          <span style={{ fontWeight: 700, fontSize: "0.9rem" }}>MboQara</span>
-          <span style={{ fontSize: "0.62rem", color: "var(--text-muted)", letterSpacing: "0.14em" }}>
-            ANGISOFT
-          </span>
-        </span>
-      ) : null}
-    </Link>
-  );
-}
-
-function ConnectionPill({ connected, pending }: { connected: boolean; pending: number }) {
-  return (
-    <div className="row" style={{ gap: "0.4rem" }}>
-      {pending > 0 ? (
-        <Badge tone="warning">{pending} queued</Badge>
-      ) : null}
-      <Badge tone={connected ? "success" : "neutral"}>
-        <span className={connected ? "live-dot" : undefined} />
-        {connected ? "Live" : "Offline"}
-      </Badge>
-    </div>
-  );
-}
-
-function MobileMenu({
-  open,
-  onClose,
-  nav,
-}: {
-  open: boolean;
-  onClose: () => void;
-  nav: NavItem[];
-}) {
-  const pathname = usePathname();
-  const drawerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const focusFrame = window.requestAnimationFrame(() => {
-      drawerRef.current?.querySelector<HTMLElement>("a[href], button:not([disabled])")?.focus();
-    });
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
-        return;
-      }
-      if (event.key !== "Tab" || !drawerRef.current) return;
-      const focusable = drawerRef.current.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      );
-      const first = focusable.item(0);
-      const last = focusable.item(focusable.length - 1);
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last?.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first?.focus();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.cancelAnimationFrame(focusFrame);
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [open, onClose]);
-
-  if (!open) return null;
-  return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 150,
-        background: "rgba(3, 6, 14, 0.7)",
-        backdropFilter: "blur(4px)",
-      }}
-    >
-      <button
-        type="button"
-        aria-label="Close navigation menu"
-        onClick={onClose}
-        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0, background: "transparent" }}
-      />
-      <div
-        ref={drawerRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Mobile navigation"
-        tabIndex={-1}
-        className="surface-solid"
-        style={{
-          position: "absolute",
-          inset: "0 0 0 auto",
-          width: "min(300px, 86vw)",
-          padding: "1rem",
-          overflowY: "auto",
-          borderRadius: 0,
-          borderRight: "none",
-        }}
-      >
-        <div className="row" style={{ justifyContent: "space-between", marginBottom: "1rem" }}>
-          <Brand />
-          <IconButton onClick={onClose} aria-label="Close navigation">
-            <X size={18} />
-          </IconButton>
-        </div>
-        <nav aria-label="Primary navigation">
-          <div className="stack" style={{ gap: "0.2rem" }}>
-            {nav.map((item) => (
-              <NavLink key={item.href} item={item} active={pathname.startsWith(item.href)} onClick={onClose} />
-            ))}
-          </div>
-        </nav>
-      </div>
-    </div>
+    </button>
   );
 }
 
 /* ========================================================================== */
-/* Aurora — floating glass sidebar                                            */
+/* Theme picker                                                               */
 /* ========================================================================== */
 
-function AuroraShell({ children, session }: { children: ReactNode; session: Session | null }) {
-  const { role } = useTheme();
-  const nav = useNav(role);
-  const pathname = usePathname();
-  const { connected, pending } = useConnection();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const closeMenu = useCallback(() => setMenuOpen(false), []);
-
+export function ThemeSwitcher() {
+  const { theme, setTheme } = useTheme();
   return (
-    <div className="aurora-grid">
-      <aside className={`glass aurora-side ${sidebarCollapsed ? "collapsed" : ""}`}>
-        <Brand compact={sidebarCollapsed} />
+    <div className="flex flex-wrap gap-1.5">
+      {THEMES.map((entry) => (
         <button
+          key={entry.key}
           type="button"
-          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className="sidebar-toggle"
+          onClick={() => setTheme(entry.key)}
+          aria-pressed={theme === entry.key}
+          className={cx(
+            "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.74rem] font-medium transition-colors duration-150",
+            theme === entry.key
+              ? "border-app-accent/45 bg-app-accent-soft text-app-accent"
+              : "border-app-border text-app-muted hover:text-app-soft",
+          )}
         >
-          {sidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-        </button>
-        <NavStack nav={nav} pathname={pathname} collapsed={sidebarCollapsed} />
-        <div style={{ marginTop: "auto" }} className="stack">
-          <ConnectionPill connected={connected} pending={pending} />
-          <UserBlock session={session} role={role} />
-        </div>
-      </aside>
-
-      <div style={{ minWidth: 0 }}>
-        <header className="glass aurora-topbar">
-          <div className="aurora-mobile-brand">
-            <Brand />
-          </div>
-          <IconButton
-            className="aurora-menu-button"
-            onClick={() => setMenuOpen(true)}
-            aria-label="Open navigation"
-          >
-            <LayoutDashboard size={18} />
-          </IconButton>
-          <SearchBar />
-          <div className="spacer" />
-          <ConnectionPill connected={connected} pending={pending} />
-          <NotificationsBell />
-          <Avatar name={session?.user.name ?? session?.user.email} size={32} />
-        </header>
-
-        <main id="main-content" className="main-pad" style={{ maxWidth: 1440, margin: "0 auto" }}>
-          {children}
-        </main>
-      </div>
-
-      <MobileMenu open={menuOpen} onClose={closeMenu} nav={nav} />
-    </div>
-  );
-}
-
-/* ========================================================================== */
-/* Editorial — masthead, rules, horizontal navigation                         */
-/* ========================================================================== */
-
-function EditorialShell({ children, session }: { children: ReactNode; session: Session | null }) {
-  const { role } = useTheme();
-  const nav = useNav(role);
-  const pathname = usePathname();
-  const { connected, pending } = useConnection();
-  const groups = useMemo(() => {
-    const map = new Map<string, NavItem[]>();
-    for (const item of nav) {
-      const list = map.get(item.group) ?? [];
-      list.push(item);
-      map.set(item.group, list);
-    }
-    return [...map.entries()];
-  }, [nav]);
-
-  return (
-    <div style={{ minHeight: "100dvh" }}>
-      <header
-        style={{
-          borderBottom: "3px double var(--border-strong)",
-          padding: "1.4rem 1.5rem 0.8rem",
-        }}
-      >
-        <div
-          className="row row-wrap"
-          style={{ justifyContent: "space-between", gap: "1rem" }}
-        >
-          <div>
-            <div className="eyebrow" style={{ marginBottom: 6 }}>
-              AngiSoft Technologies · Est. 2026
-            </div>
-            <h1 className="display" style={{ fontSize: "clamp(2.2rem, 6vw, 3.6rem)" }}>
-              MboQara
-            </h1>
-            <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginTop: 4 }}>
-              The global employment gazette
-            </p>
-          </div>
-          <div className="row" style={{ gap: "0.8rem" }}>
-            <ConnectionPill connected={connected} pending={pending} />
-            <div style={{ textAlign: "right" }}>
-              <div style={{ fontWeight: 700, fontSize: "0.9rem" }}>
-                {session?.user.name ?? session?.user.email ?? "Guest"}
-              </div>
-              <div className="eyebrow">{ROLE_LABELS[role]}</div>
-            </div>
-          </div>
-        </div>
-
-        <nav
-          className="row row-wrap scroll-x"
-          style={{
-            gap: "0.2rem",
-            marginTop: "1rem",
-            borderTop: "1px solid var(--border)",
-            paddingTop: "0.5rem",
-          }}
-        >
-          {groups.map(([group, items]) => (
-            <div key={group} className="row" style={{ gap: "0.15rem" }}>
+          <span className="flex gap-0.5">
+            {entry.swatch.map((color) => (
               <span
-                className="eyebrow"
-                style={{ padding: "0 0.5rem", color: "var(--accent)" }}
-              >
-                {group}
-              </span>
-              {items.map((item) => {
-                const active = pathname.startsWith(item.href);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    style={{
-                      padding: "0.3rem 0.6rem",
-                      fontSize: "0.86rem",
-                      fontWeight: active ? 700 : 500,
-                      color: active ? "var(--accent)" : "var(--text-soft)",
-                      borderBottom: active ? "2px solid var(--accent)" : "2px solid transparent",
-                    }}
-                  >
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </div>
-          ))}
-        </nav>
-      </header>
-
-      <main id="main-content" className="main-pad" style={{ maxWidth: 1240, margin: "0 auto" }}>
-        {children}
-      </main>
-
-      <footer
-        style={{
-          borderTop: "1px solid var(--border)",
-          padding: "1.2rem 1.5rem",
-          color: "var(--text-muted)",
-          fontSize: "0.78rem",
-        }}
-        className="row row-wrap"
-      >
-        <span>© 2026 AngiSoft Technologies</span>
-        <span className="spacer" />
-        <span>MboQara prepares. You review, approve and submit.</span>
-      </footer>
-    </div>
-  );
-}
-
-/* ========================================================================== */
-/* Terminal — status bar, mono rail, dense canvas                             */
-/* ========================================================================== */
-
-function TerminalShell({ children, session }: { children: ReactNode; session: Session | null }) {
-  const { role } = useTheme();
-  const nav = useNav(role);
-  const pathname = usePathname();
-  const { connected, events, pending } = useConnection();
-
-  return (
-    <div style={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
-      <header
-        style={{
-          borderBottom: "1px solid var(--border-strong)",
-          background: "var(--surface)",
-          padding: "0.45rem 0.8rem",
-          display: "flex",
-          alignItems: "center",
-          gap: "0.8rem",
-          flexWrap: "wrap",
-        }}
-      >
-        <span className="mono" style={{ color: "var(--accent)", fontWeight: 700 }}>
-          mboqara://shell
-        </span>
-        <span className="mono" style={{ color: "var(--text-muted)", fontSize: "0.76rem" }}>
-          user={session?.user.email ?? "anonymous"}
-        </span>
-        <span className="mono" style={{ color: "var(--text-muted)", fontSize: "0.76rem" }}>
-          role={role}
-        </span>
-        <span className="spacer" />
-        {pending > 0 ? <Badge tone="warning">outbox:{pending}</Badge> : null}
-        <span className="mono" style={{ color: "var(--text-muted)", fontSize: "0.76rem" }}>
-          ws={connected ? "connected" : "reconnecting"}
-        </span>
-        <span className="mono" style={{ color: "var(--text-muted)", fontSize: "0.76rem" }}>
-          evt={events.length}
-        </span>
-      </header>
-
-      <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
-        <nav
-          className="mono"
-          style={{
-            display: "none",
-            width: 216,
-            flexShrink: 0,
-            borderRight: "1px solid var(--border)",
-            padding: "0.7rem 0.5rem",
-            fontSize: "0.78rem",
-          }}
-        >
-          {nav.map((item) => {
-            const active = pathname.startsWith(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                style={{
-                  display: "block",
-                  padding: "0.24rem 0.5rem",
-                  color: active ? "var(--accent)" : "var(--text-soft)",
-                  background: active ? "var(--accent-soft)" : "transparent",
-                }}
-              >
-                <span style={{ color: "var(--text-muted)" }}>{active ? "▸" : "·"}</span>{" "}
-                {item.label.toLowerCase().replace(/\s+/g, "-")}
-              </Link>
-            );
-          })}
-        </nav>
-
-        <main id="main-content" style={{ flex: 1, minWidth: 0, padding: "1rem" }}>{children}</main>
-      </div>
-
-      <footer
-        className="mono"
-        style={{
-          borderTop: "1px solid var(--border)",
-          padding: "0.4rem 0.8rem",
-          fontSize: "0.72rem",
-          color: "var(--text-muted)",
-          display: "flex",
-          gap: "1rem",
-          flexWrap: "wrap",
-        }}
-      >
-        <span>READY</span>
-        <span className="spacer" />
-        <span>{events[0] ? `last=${events[0].type}` : "last=—"}</span>
-        <span>v1</span>
-      </footer>
-    </div>
-  );
-}
-
-/* ========================================================================== */
-/* Kinetic — colour block navigation                                          */
-/* ========================================================================== */
-
-function KineticShell({ children, session }: { children: ReactNode; session: Session | null }) {
-  const { role } = useTheme();
-  const nav = useNav(role);
-  const pathname = usePathname();
-  const { connected, pending } = useConnection();
-
-  return (
-    <div style={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
-      <header style={{ borderBottom: "3px solid var(--border-strong)" }}>
-        <div
-          className="row row-wrap"
-          style={{ justifyContent: "space-between", padding: "1rem 1.2rem", gap: "0.8rem" }}
-        >
-          <h1 className="display" style={{ fontSize: "clamp(2.4rem, 8vw, 4.6rem)" }}>
-            MboQara
-          </h1>
-          <div className="row" style={{ gap: "0.6rem" }}>
-            {pending > 0 ? <Badge tone="warning">{pending} queued</Badge> : null}
-            <Badge tone={connected ? "success" : "neutral"}>
-              {connected ? "LIVE" : "OFFLINE"}
-            </Badge>
-            <span style={{ fontWeight: 700, fontSize: "0.8rem" }}>
-              {ROLE_LABELS[role].toUpperCase()}
-            </span>
-          </div>
-        </div>
-
-        <nav className="scroll-x" style={{ display: "flex" }}>
-          {nav.map((item, index) => {
-            const active = pathname.startsWith(item.href);
-            const palette = ["var(--accent)", "var(--accent-2)", "#14120e"];
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                style={{
-                  flex: "1 0 auto",
-                  minWidth: 118,
-                  padding: "0.8rem 1rem",
-                  background: active ? palette[index % palette.length] : "transparent",
-                  color: active ? "#fff" : "var(--text)",
-                  fontWeight: 800,
-                  fontSize: "0.8rem",
-                  letterSpacing: "0.04em",
-                  textTransform: "uppercase",
-                  borderRight: "2px solid var(--border-strong)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.4rem",
-                }}
-              >
-                <item.icon size={15} />
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-      </header>
-
-      <main id="main-content" className="main-pad" style={{ flex: 1, maxWidth: 1500, margin: "0 auto", width: "100%" }}>
-        {children}
-      </main>
-
-      <footer
-        style={{
-          background: "var(--accent)",
-          color: "#fff",
-          padding: "0.5rem 1.2rem",
-          fontWeight: 800,
-          fontSize: "0.78rem",
-          letterSpacing: "0.06em",
-        }}
-      >
-        <div className="marquee">
-          <div className="marquee-track">
-            {Array.from({ length: 2 }).map((_, index) => (
-              <span key={index}>
-                MBOQARA · AI PREPARES · YOU REVIEW · YOU APPROVE · YOU SUBMIT · GLOBAL
-                COVERAGE · ALL PROFESSIONS ·{' '}
-              </span>
-            ))}
-          </div>
-        </div>
-      </footer>
-    </div>
-  );
-}
-
-/* ========================================================================== */
-/* Atlas — telemetry bar, grouped nav, live rail                              */
-/* ========================================================================== */
-
-function AtlasShell({ children, session }: { children: ReactNode; session: Session | null }) {
-  const { role } = useTheme();
-  const nav = useNav(role);
-  const pathname = usePathname();
-  const { connected, events, pending } = useConnection();
-  const groups = useMemo(() => {
-    const map = new Map<string, NavItem[]>();
-    for (const item of nav) {
-      const list = map.get(item.group) ?? [];
-      list.push(item);
-      map.set(item.group, list);
-    }
-    return [...map.entries()];
-  }, [nav]);
-
-  return (
-    <div style={{ minHeight: "100dvh" }}>
-      <header
-        style={{
-          borderBottom: "1px solid var(--border)",
-          background: "var(--surface-solid)",
-          padding: "0.5rem 1rem",
-        }}
-      >
-        <div className="row row-wrap" style={{ gap: "1rem" }}>
-          <Brand />
-          <span className="mono" style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
-            SECTOR 01.3 · {role.toUpperCase()} · {ROLE_LABELS[role]}
-          </span>
-          <span className="spacer" />
-          {pending > 0 ? <Badge tone="warning">{pending} queued</Badge> : null}
-          <Badge tone={connected ? "success" : "neutral"}>
-            <Radio size={11} />
-            {connected ? "TELEMETRY LIVE" : "TELEMETRY IDLE"}
-          </Badge>
-        </div>
-      </header>
-
-      <div className="app-grid">
-        <nav
-          style={{
-            borderRight: "1px solid var(--border)",
-            padding: "1rem 0.8rem",
-            display: "none",
-          }}
-        >
-          {groups.map(([group, items]) => (
-            <div key={group} style={{ marginBottom: "1.3rem" }}>
-              <div className="eyebrow" style={{ marginBottom: "0.4rem" }}>
-                {group}
-              </div>
-              <div className="stack" style={{ gap: "0.12rem" }}>
-                {items.map((item) => {
-                  const active = pathname.startsWith(item.href);
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.55rem",
-                        padding: "0.42rem 0.55rem",
-                        fontSize: "0.84rem",
-                        borderRadius: "var(--radius-sm)",
-                        color: active ? "var(--accent)" : "var(--text-soft)",
-                        background: active ? "var(--accent-soft)" : "transparent",
-                        borderLeft: active ? "2px solid var(--accent)" : "2px solid transparent",
-                      }}
-                    >
-                      <item.icon size={15} />
-                      {item.label}
-                      {active ? <ChevronRight size={13} style={{ marginLeft: "auto" }} /> : null}
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </nav>
-
-        <main id="main-content" style={{ minWidth: 0, display: "flex" }}>
-          <div style={{ flex: 1, minWidth: 0, padding: "1.2rem" }}>{children}</div>
-          <aside
-            style={{
-              display: "none",
-              width: 280,
-              borderLeft: "1px solid var(--border)",
-              padding: "1rem",
-            }}
-          >
-            <div className="eyebrow" style={{ marginBottom: "0.6rem" }}>
-              Live feed
-            </div>
-            <div className="stack" style={{ gap: "0.5rem" }}>
-              {events.length === 0 ? (
-                <p style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-                  Waiting for events on the websocket channel.
-                </p>
-              ) : (
-                events.slice(0, 12).map((event, index) => (
-                  <div
-                    key={`${event.type}-${index}`}
-                    style={{
-                      borderLeft: "2px solid var(--accent)",
-                      paddingLeft: "0.6rem",
-                    }}
-                  >
-                    <div style={{ fontSize: "0.78rem", fontWeight: 600 }}>{event.type}</div>
-                    <div className="mono" style={{ fontSize: "0.68rem", color: "var(--text-muted)" }}>
-                      {new Date(event.at).toLocaleTimeString()}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </aside>
-        </main>
-      </div>
-    </div>
-  );
-}
-
-/* ========================================================================== */
-/* Shared pieces                                                             */
-/* ========================================================================== */
-
-function NavStack({ nav, pathname, collapsed }: { nav: NavItem[]; pathname: string; collapsed?: boolean }) {
-  const groups = useMemo(() => {
-    const map = new Map<string, NavItem[]>();
-    for (const item of nav) {
-      const list = map.get(item.group) ?? [];
-      list.push(item);
-      map.set(item.group, list);
-    }
-    return [...map.entries()];
-  }, [nav]);
-
-  return (
-    <div>
-      {groups.map(([group, items]) => (
-        <div key={group} style={{ marginBottom: "1rem" }}>
-          <div className="eyebrow" style={{ marginBottom: "0.35rem" }}>
-            {group}
-          </div>
-          <div className="stack" style={{ gap: "0.12rem" }}>
-            {items.map((item) => (
-              <NavLink
-                key={item.href}
-                item={item}
-                active={pathname.startsWith(item.href)}
-                collapsed={collapsed}
+                key={color}
+                className="size-2.5 rounded-full"
+                style={{ background: color }}
+                aria-hidden
               />
             ))}
-          </div>
-        </div>
+          </span>
+          {entry.label}
+        </button>
       ))}
     </div>
   );
-}
-
-function NavLink({
-  item,
-  active,
-  onClick,
-  collapsed,
-}: {
-  item: NavItem;
-  active: boolean;
-  onClick?: () => void;
-  collapsed?: boolean;
-}) {
-  return (
-    <Link
-      href={item.href}
-      onClick={onClick}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: collapsed ? 0 : "0.55rem",
-        padding: collapsed ? "0.6rem 0.4rem" : "0.46rem 0.6rem",
-        borderRadius: "var(--radius-md)",
-        fontSize: "0.86rem",
-        fontWeight: active ? 700 : 500,
-        color: active ? "var(--accent)" : "var(--text-soft)",
-        background: active ? "var(--accent-soft)" : "transparent",
-        justifyContent: collapsed ? "center" : "flex-start",
-      }}
-    >
-      <item.icon size={16} />
-      {!collapsed && item.label}
-    </Link>
-  );
-}
-
-function SearchBar() {
-  const [query, setQuery] = useState("");
-  return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (!query.trim()) return;
-        window.location.href = `/opportunities?q=${encodeURIComponent(query.trim())}`;
-      }}
-      className="row"
-      style={{
-        flex: 1,
-        maxWidth: 380,
-        gap: "0.4rem",
-        background: "var(--surface-2)",
-        border: "1px solid var(--border)",
-        borderRadius: "var(--radius-pill)",
-        padding: "0.3rem 0.75rem",
-      }}
-    >
-      <Search size={15} style={{ color: "var(--text-muted)" }} />
-      <input
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder="Search roles, companies, skills"
-        aria-label="Search opportunities"
-        style={{
-          background: "transparent",
-          border: "none",
-          outline: "none",
-          color: "var(--text)",
-          fontSize: "0.85rem",
-          width: "100%",
-          fontFamily: "var(--font-body)",
-        }}
-      />
-    </form>
-  );
-}
-
-function UserBlock({ session, role }: { session: Session | null; role: RoleKey }) {
-  return (
-    <div className="row" style={{ gap: "0.6rem" }}>
-      <Avatar name={session?.user.name ?? session?.user.email} />
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: "0.84rem", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {session?.user.name ?? session?.user.email ?? "Guest"}
-        </div>
-        <div className="eyebrow">{ROLE_LABELS[role]}</div>
-      </div>
-    </div>
-  );
-}
-
-export function AppShell({
-  children,
-  session,
-}: {
-  children: ReactNode;
-  session: Session | null;
-}) {
-  const { theme } = useTheme();
-  switch (theme) {
-    case "editorial":
-      return <EditorialShell session={session}>{children}</EditorialShell>;
-    case "terminal":
-      return <TerminalShell session={session}>{children}</TerminalShell>;
-    case "kinetic":
-      return <KineticShell session={session}>{children}</KineticShell>;
-    case "atlas":
-      return <AtlasShell session={session}>{children}</AtlasShell>;
-    default:
-      return <AuroraShell session={session}>{children}</AuroraShell>;
-  }
 }

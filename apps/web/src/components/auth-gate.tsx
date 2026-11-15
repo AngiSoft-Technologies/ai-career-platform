@@ -9,6 +9,15 @@ import { api } from "@/lib/api";
 /** Routes that belong to onboarding itself and must not be redirected. */
 const ONBOARDING_PREFIX = "/onboarding";
 
+/** A full-screen hold while we know whether there is a session to show. */
+function ScreenHold({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="grid min-h-dvh place-items-center bg-app-bg p-6">
+      {children}
+    </div>
+  );
+}
+
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const { session, loading } = useSession();
   const router = useRouter();
@@ -52,54 +61,24 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   if (loading || checkingOnboarding) {
     return (
-      <div
-        style={{
-          minHeight: "100dvh",
-          display: "grid",
-          placeItems: "center",
-          background: "var(--bg)",
-        }}
-      >
+      <ScreenHold>
         <Spinner />
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div
-        style={{
-          minHeight: "100dvh",
-          display: "grid",
-          placeItems: "center",
-          background: "var(--bg)",
-        }}
-      >
-        <Spinner />
-      </div>
+      </ScreenHold>
     );
   }
 
   if (!session) {
     return (
-      <div
-        style={{
-          minHeight: "100dvh",
-          display: "grid",
-          placeItems: "center",
-          background: "var(--bg)",
-          padding: "2rem",
-        }}
-      >
-        <div className="surface" style={{ padding: "1.5rem", textAlign: "center" }}>
-          <p style={{ color: "var(--text-muted)", marginBottom: "0.9rem" }}>
+      <ScreenHold>
+        <div className="rounded-app-lg border border-app-border bg-app-surface p-6 text-center">
+          <p className="mb-3.5 text-[0.9rem] text-app-muted">
             You need to sign in to open the radar.
           </p>
           <Button onClick={() => router.replace(`/login?next=${encodeURIComponent(pathname)}`)}>
             Go to sign in
           </Button>
         </div>
-      </div>
+      </ScreenHold>
     );
   }
 
