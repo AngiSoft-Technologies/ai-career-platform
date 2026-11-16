@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -10,6 +10,8 @@ import {
   ScanSearch,
   ShieldCheck,
   TriangleAlert,
+  Sparkles,
+  RefreshCw,
 } from "lucide-react";
 import {
   Badge,
@@ -48,6 +50,31 @@ interface OpportunityDetail extends Omit<Opportunity, "match"> {
   };
   riskFlags?: string[];
   riskAction?: string | null;
+  riskScore?: number;
+}
+
+interface TailoredDocuments {
+  cv: { content: string; changes: string[]; matchedRequirements: string[]; uncoveredRequirements: string[] };
+  coverLetter: { content: string; changes: string[]; matchedRequirements: string[]; uncoveredRequirements: string[] };
+  generatedAt: string;
+}
+
+interface EmployerIntelligence {
+  companyName: string;
+  techStack: string[];
+  cultureSignals: string[];
+  interviewProcess: string[];
+  recentNews: string[];
+  glassdoorRating: number | null;
+  employeeCount: number | null;
+  fundingStage: string | null;
+}
+
+interface PreparationResponse {
+  analysis: ApplicationAnalysis;
+  documents: TailoredDocuments;
+  employerIntel: EmployerIntelligence;
+  ready: boolean;
 }
 
 function OpportunityDetailInner() {
@@ -55,9 +82,11 @@ function OpportunityDetailInner() {
   const router = useRouter();
   const toast = useToast();
   const [tab, setTab] = useState("overview");
-  const [analysing, setAnalysing] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [preparing, setPreparing] = useState(true);
   const [analysis, setAnalysis] = useState<ApplicationAnalysis | null>(null);
+  const [documents, setDocuments] = useState<TailoredDocuments | null>(null);
+  const [employerIntel, setEmployerIntel] = useState<EmployerIntelligence | null>(null);
   const [applicationId, setApplicationId] = useState<string | null>(null);
 
   const { data, loading, error } = useApi<OpportunityDetail>(`/opportunities/${params.id}`);
@@ -67,6 +96,28 @@ function OpportunityDetailInner() {
   );
 
   const item = data;
+
+  // PROACTIVE: Fetch preparation on mount - no user click needed
+  const fetchPreparation = useCallback(async () => {
+    if (!item) return;
+    setPreparing(true);
+    try {
+      const response = await api.post<PreparationResponse>(`/analysis/prepare/${item.id}`);
+      setAnalysis(response.analysis);
+      setDocuments(response.documents);
+      setEmployerIntel(response.employerIntel);
+    } catch (caught) {
+      console.warn("Preparation fetch failed:", caught);
+    } finally {
+      setPreparing(false);
+    }
+  }, [item, api]);
+
+  useEffect(() => {
+    if (item && !preparing && !analysis) {
+      fetchPreparation();
+    }
+  }, [item, preparing, analysis, fetchPreparation]);
 
   const startApplication = async () => {
     if (!item) return;
@@ -88,34 +139,22 @@ function OpportunityDetailInner() {
     }
   };
 
-  const analyse = async () => {
+  const refreshPreparation = async () => {
     if (!item) return;
-    let id = applicationId;
-    if (!id) {
-      const response = await api.post<{ application: { id: string } }>("/applications", {
-        opportunityId: item.id,
-      });
-      id = response.application.id;
-      setApplicationId(id);
-    }
-    setAnalysing(true);
+    setPreparing(true);
     try {
-      const response = await api.post<{ analysis: ApplicationAnalysis }>(
-        `/applications/${id}/analyze`,
-      );
+      const response = await api.post<PreparationResponse>(`/analysis/prepare/${item.id}/refresh`);
       setAnalysis(response.analysis);
-      toast.push(
-        `Detected ${response.analysis.platform}. ${response.analysis.fields.length} fields found.`,
-        "accent",
-      );
-      setTab("apply");
+      setDocuments(response.documents);
+      setEmployerIntel(response.employerIntel);
+      toast.push("Application package refreshed", "success");
     } catch (caught) {
       toast.push(
-        caught instanceof Error ? caught.message : "Analysis failed",
+        caught instanceof Error ? caught.message : "Could not refresh preparation",
         "danger",
       );
     } finally {
-      setAnalysing(false);
+      setPreparing(false);
     }
   };
 
@@ -198,14 +237,6 @@ function OpportunityDetailInner() {
               {item.applicationMethod === "email"
                 ? "Prepare application email"
                 : "Start application"}
-            </Button>
-            <Button
-              variant="outline"
-              icon={<ScanSearch size={14} />}
-              loading={analysing}
-              onClick={() => void analyse()}
-            >
-              Analyse employer form
             </Button>
           </>
         }
@@ -401,22 +432,31 @@ function OpportunityDetailInner() {
                   The employer&rsquo;s form
                 </h2>
                 <p className="mt-1 max-w-[56ch] text-[0.84rem] leading-relaxed text-app-muted">
-                  We detect the platform, map your profile to every field, and flag anything you must
-                  supply yourself.
+                  We&rsquo;ve already analysed the application page. Your tailored CV and cover letter are ready.
                 </p>
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                icon={<ScanSearch size={14} />}
-                loading={analysing}
-                onClick={() => void analyse()}
-              >
-                Analyse
-              </Button>
+              {preparing ? (
+                <Button size="sm" variant="outline" disabled>
+                  <ScanSearch size={14} className="animate-spin" /> Preparing&hellip;
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  icon={<RefreshCw size={14} />}
+                  onClick={() => void refreshPreparation()}
+                >
+                  Refresh
+                </Button>
+              )}
             </div>
 
-            {analysis ? (
+            {preparing ? (
+              <div className="mt-5 flex items-center justify-center gap-3 py-8">
+                <ScanSearch size={20} className="animate-spin text-app-accent" />
+                <p className="text-[0.9rem] text-app-muted">Preparing your application package&hellip;</p>
+              </div>
+            ) : analysis ? (
               <div className="mt-5 flex flex-col gap-6">
                 <div className="flex flex-wrap gap-1.5">
                   <Badge tone="accent">{titleCase(analysis.platform)}</Badge>
@@ -498,16 +538,16 @@ function OpportunityDetailInner() {
               </div>
             ) : (
               <EmptyState
-                icon={<ScanSearch size={26} />}
-                title="Not analysed yet"
-                description="Run the analyser to detect the employer's application platform, fields and screening questions."
+                icon={<TriangleAlert size={26} />}
+                title="Could not prepare application"
+                description="The employer&rsquo;s page could not be analysed. You can still apply manually."
               />
             )}
           </div>
 
           <aside className="flex flex-col gap-4 lg:sticky lg:top-[92px]">
             <Panel>
-              <PanelHead eyebrow="Documents" title="Prepare the kit" />
+              <PanelHead eyebrow="Documents" title="Your tailored kit" />
               <div className="flex flex-col gap-2 border-t border-app-border px-5 py-4">
                 <Link href={`/documents?opportunityId=${item.id}`}>
                   <Button variant="outline" className="w-full" icon={<FileText size={15} />}>
@@ -521,6 +561,80 @@ function OpportunityDetailInner() {
                 </Button>
               </div>
             </Panel>
+
+            {documents ? (
+              <Panel>
+                <PanelHead eyebrow="Ready to review" title="Tailored for this role" />
+                <div className="flex flex-col gap-2 border-t border-app-border px-5 py-4">
+                  <div className="rounded-app-md border border-app-border bg-app-surface-2/40 p-3">
+                    <p className="font-mono text-[0.6rem] tracking-[0.16em] text-app-accent uppercase">
+                      CV &mdash; {documents.cv.matchedRequirements.length} requirements matched
+                    </p>
+                    <p className="mt-1 text-[0.8rem] text-app-soft">
+                      {documents.cv.changes[0] || "Tailored from your base CV"}
+                    </p>
+                  </div>
+                  <div className="rounded-app-md border border-app-border bg-app-surface-2/40 p-3">
+                    <p className="font-mono text-[0.6rem] tracking-[0.16em] text-app-accent uppercase">
+                      Cover Letter &mdash; {documents.coverLetter.matchedRequirements.length} points addressed
+                    </p>
+                    <p className="mt-1 text-[0.8rem] text-app-soft">
+                      {documents.coverLetter.changes[0] || "Generated for this role"}
+                    </p>
+                  </div>
+                  <Link href={`/documents?opportunityId=${item.id}`} className="mt-2 block">
+                    <Button variant="outline" size="sm" className="w-full">
+                      Review & edit documents
+                    </Button>
+                  </Link>
+                </div>
+              </Panel>
+            ) : null}
+
+            {employerIntel ? (
+              <Panel>
+                <PanelHead eyebrow="Employer intelligence" title="What we know about them" />
+                <div className="flex flex-col gap-3 border-t border-app-border px-5 py-4">
+                  {employerIntel.techStack.length > 0 && (
+                    <div>
+                      <p className="font-mono text-[0.6rem] tracking-[0.16em] text-app-muted uppercase">
+                        Tech stack
+                      </p>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {employerIntel.techStack.slice(0, 8).map((tech) => (
+                          <Badge key={tech} tone="neutral">{tech}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {employerIntel.cultureSignals.length > 0 && (
+                    <div>
+                      <p className="font-mono text-[0.6rem] tracking-[0.16em] text-app-muted uppercase">
+                        Culture signals
+                      </p>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {employerIntel.cultureSignals.map((signal) => (
+                          <Badge key={signal} tone="info">{signal}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {employerIntel.interviewProcess.length > 0 && (
+                    <div>
+                      <p className="font-mono text-[0.6rem] tracking-[0.16em] text-app-muted uppercase">
+                        Interview process
+                      </p>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {employerIntel.interviewProcess.map((step) => (
+                          <Badge key={step} tone="warning">{step}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </Panel>
+            ) : null}
+
             <div className="rounded-app-lg border border-app-success/25 bg-app-success/8 p-4">
               <p className="font-mono text-[0.6rem] tracking-[0.16em] text-app-success uppercase">
                 Your control

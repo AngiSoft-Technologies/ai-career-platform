@@ -75,8 +75,12 @@ export function toUpstreamCookieHeader(
  * ways ("session_challenge" and "session_challange"), and a marker that
  * matches only one of them fails silently — the cookie is present in the
  * jar and simply never noticed.
+ *
+ * The Neon Auth session cookie (`__Secure-neon-auth.session_token`) also
+ * has to cross the Google redirect boundary, so it is included here via the
+ * "neon-auth" prefix which matches all Neon auth cookies.
  */
-const CROSS_SITE_COOKIES = ["session_chall"];
+const CROSS_SITE_COOKIES = ["session_chall", "neon-auth"];
 
 function travelsCrossSite(name: string): boolean {
   return CROSS_SITE_COOKIES.some((marker) => name.includes(marker));
