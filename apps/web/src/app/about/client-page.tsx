@@ -173,7 +173,7 @@ const FALLBACK_STORIES: TestimonialContent[] = [
 const WHO_WE_SERVE: MediaSlide[] = [
   {
     id: "serve-builders",
-    image: "/media/careers/technology-professional.webp",
+    image: "https://cdn.angisoft.co.ke/public/images/mboqara/careers/technology-professional.webp",
     alt: "A technology professional working at a computer",
     eyebrow: "Builders and engineers",
     title: "People whose skills outpace their CV",
@@ -182,7 +182,7 @@ const WHO_WE_SERVE: MediaSlide[] = [
   },
   {
     id: "serve-technical",
-    image: "/media/careers/engineering-professional.webp",
+    image: "https://cdn.angisoft.co.ke/public/images/mboqara/careers/engineering-professional.webp",
     alt: "An engineering professional reviewing technical drawings",
     eyebrow: "Technical roles",
     title: "Requirements described in specialist language",
@@ -191,7 +191,7 @@ const WHO_WE_SERVE: MediaSlide[] = [
   },
   {
     id: "serve-essential",
-    image: "/media/careers/healthcare-professional.webp",
+    image: "https://cdn.angisoft.co.ke/public/images/mboqara/careers/healthcare-professional.webp",
     alt: "A healthcare professional standing in a hospital corridor",
     eyebrow: "Essential work",
     title: "Careers that keep people busy all day",
@@ -200,7 +200,7 @@ const WHO_WE_SERVE: MediaSlide[] = [
   },
   {
     id: "serve-changers",
-    image: "/media/careers/lagos-career-story.webp",
+    image: "https://cdn.angisoft.co.ke/public/images/mboqara/careers/lagos-career-story.webp",
     alt: "A professional working on a laptop in a café",
     eyebrow: "Career changers",
     title: "The move from one field to another",
@@ -209,7 +209,7 @@ const WHO_WE_SERVE: MediaSlide[] = [
   },
   {
     id: "serve-women",
-    image: "/media/careers/women-in-tech.webp",
+    image: "https://cdn.angisoft.co.ke/public/images/mboqara/careers/women-in-tech.webp",
     alt: "A woman working in technology, photographed in a dark studio",
     eyebrow: "Underrepresented in tech",
     title: "Half the talent, a fraction of the referrals",
@@ -241,10 +241,10 @@ export default function AboutPage({
 
   return (
     <MarketingLayout>
-      {/* --- hero: the studio, with the radar running behind it -------------- */}
+      {/* --- hero: the studio, with the motion film behind it ---------------- */}
       <section className="mk-video-hero" aria-labelledby="about-title">
         <div className="mk-video-hero__media" aria-hidden="true">
-          <BackdropVideo src="/media/motion-about.mp4" poster="/media/radar-poster.jpg" />
+          <BackdropVideo src="https://cdn.angisoft.co.ke/public/images/mboqara/motion-about.mp4" poster="https://cdn.angisoft.co.ke/public/images/mboqara/radar-poster.jpg" />
           <span className="mk-video-hero__veil" />
           <span className="mk-aurora" />
         </div>
@@ -275,7 +275,7 @@ export default function AboutPage({
               <InView className="mk-reveal mk-reveal--right" delay={120}>
                 <Parallax speed={0.12}>
                   <Image
-                    src="/media/nairobi-skyline.webp"
+                    src="https://cdn.angisoft.co.ke/public/images/mboqara/nairobi-skyline.webp"
                     alt="The Nairobi skyline seen from Uhuru Park"
                     width={1200}
                     height={800}
@@ -294,7 +294,7 @@ export default function AboutPage({
       {/* --- who builds it: full-bleed imagery, glass copy -------------------- */}
       <section className="mk-feature-hero" aria-labelledby="team-heading">
         <div className="mk-feature-hero__media" aria-hidden="true">
-          <Image src="/media/team-meeting.webp" alt="" fill sizes="100vw" priority />
+          <Image src="https://cdn.angisoft.co.ke/public/images/mboqara/team-meeting.webp" alt="" fill sizes="100vw" priority />
           <span className="mk-feature-hero__veil" />
         </div>
         <div className="mk-container" style={{ position: "relative" }}>
@@ -404,7 +404,7 @@ export default function AboutPage({
       {/* --- the caption band ---------------------------------------------------- */}
       <section className="mk-caption-band" aria-label="Where we are">
         <div className="mk-caption-band__media">
-          <Image src="/media/mobile-worker.webp" alt="A professional working from a phone" fill sizes="100vw" />
+          <Image src="https://cdn.angisoft.co.ke/public/images/mboqara/mobile-worker.webp" alt="A professional working from a phone" fill sizes="100vw" />
           <span className="mk-caption-band__veil" />
         </div>
         <div className="mk-caption-band__text">

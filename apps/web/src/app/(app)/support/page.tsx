@@ -6,14 +6,15 @@ import { LifeBuoy, MessageCircle, Send, Ticket, UserRound } from "lucide-react";
 import {
   Badge,
   Button,
-  Card,
   DataTable,
   EmptyState,
   Field,
   Input,
+  Page,
   PageHeader,
   Pagination,
-  SectionTitle,
+  Panel,
+  PanelHead,
   Skeleton,
   Tabs,
   Td,
@@ -93,11 +94,16 @@ export default function SupportPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <Page>
       <PageHeader
         eyebrow="Support desk"
         title="Help people get unstuck"
         description="Look up a user, read their application state, draft a reply. You send it."
+        art={{
+          src: "https://cdn.angisoft.co.ke/public/images/mboqara/careers/healthcare-professional.webp",
+          alt: "A professional at a desk ready to help",
+          caption: "You send every reply",
+        }}
         meta={
           selectedUser ? (
             <div className="flex flex-wrap items-center gap-2">
@@ -125,8 +131,8 @@ export default function SupportPage() {
       />
 
       {tab === "queue" ? (
-        <Card className="p-4 sm:p-5">
-          <SectionTitle
+        <Panel>
+          <PanelHead
             eyebrow="Tickets"
             title={selectedUser ? "Their applications" : "Recent applications"}
             description={
@@ -137,15 +143,17 @@ export default function SupportPage() {
             action={<Ticket size={16} className="text-app-muted" />}
           />
           {applications.error ? (
-            <div className="mt-4 rounded-app-md border border-app-danger/40 bg-app-danger/10 px-4 py-3 text-[0.84rem] text-app-danger">
-              {applications.error}
+            <div className="border-t border-app-border px-5 py-4">
+              <div className="rounded-app-md border border-app-danger/40 bg-app-danger/10 px-4 py-3 text-[0.84rem] text-app-danger">
+                {applications.error}
+              </div>
             </div>
           ) : applications.loading && apps.length === 0 ? (
-            <div className="mt-4">
+            <div className="border-t border-app-border p-5">
               <Skeleton height={160} />
             </div>
           ) : apps.length === 0 ? (
-            <div className="mt-4">
+            <div className="border-t border-app-border p-5">
               <EmptyState
                 icon={<Ticket size={26} />}
                 title={selectedUser ? "No applications" : "No applications yet"}
@@ -162,8 +170,8 @@ export default function SupportPage() {
               />
             </div>
           ) : (
-            <div className="mt-4">
-              <DataTable>
+            <div className="border-t border-app-border">
+              <DataTable className="rounded-none border-0 shadow-none">
                 <thead>
                   <tr>
                     <Th>Application</Th>
@@ -197,42 +205,46 @@ export default function SupportPage() {
                   ))}
                 </tbody>
               </DataTable>
-              <p className="mt-3 text-[0.76rem] text-app-muted">
+              <p className="border-t border-app-border px-5 py-3 text-[0.76rem] text-app-muted">
                 {appsTotal.toLocaleString()} application{appsTotal === 1 ? "" : "s"} in total
               </p>
             </div>
           )}
-        </Card>
+        </Panel>
       ) : null}
 
       {tab === "users" ? (
-        <Card className="p-4 sm:p-5">
-          <SectionTitle
+        <Panel>
+          <PanelHead
             eyebrow="Directory"
             title="Find a user"
             description="Search by email, then open their applications."
             action={<UserRound size={16} className="text-app-muted" />}
           />
-          <div className="mt-4 max-w-md">
-            <Input
-              value={query}
-              onChange={(event) => {
-                setQuery(event.target.value);
-                setPage(1);
-              }}
-              placeholder="Search by email"
-            />
+          <div className="border-t border-app-border px-5 py-4">
+            <div className="max-w-md">
+              <Input
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setPage(1);
+                }}
+                placeholder="Search by email"
+              />
+            </div>
           </div>
           {users.error ? (
-            <div className="mt-4 rounded-app-md border border-app-danger/40 bg-app-danger/10 px-4 py-3 text-[0.84rem] text-app-danger">
-              {users.error}
+            <div className="border-t border-app-border px-5 py-4">
+              <div className="rounded-app-md border border-app-danger/40 bg-app-danger/10 px-4 py-3 text-[0.84rem] text-app-danger">
+                {users.error}
+              </div>
             </div>
           ) : users.loading && usersList.length === 0 ? (
-            <div className="mt-4">
+            <div className="border-t border-app-border p-5">
               <Skeleton height={160} />
             </div>
           ) : usersList.length === 0 ? (
-            <div className="mt-4">
+            <div className="border-t border-app-border p-5">
               <EmptyState
                 icon={<UserRound size={26} />}
                 title="No users match"
@@ -241,8 +253,8 @@ export default function SupportPage() {
             </div>
           ) : (
             <>
-              <div className="mt-4">
-                <DataTable>
+              <div className="border-t border-app-border">
+                <DataTable className="rounded-none border-0 shadow-none">
                   <thead>
                     <tr>
                       <Th>Email</Th>
@@ -279,26 +291,28 @@ export default function SupportPage() {
                   </tbody>
                 </DataTable>
               </div>
-              <Pagination
-                page={page}
-                pageSize={USER_PAGE_SIZE}
-                total={users.data?.total ?? 0}
-                onPageChange={setPage}
-              />
+              <div className="border-t border-app-border p-4">
+                <Pagination
+                  page={page}
+                  pageSize={USER_PAGE_SIZE}
+                  total={users.data?.total ?? 0}
+                  onPageChange={setPage}
+                />
+              </div>
             </>
           )}
-        </Card>
+        </Panel>
       ) : null}
 
       {tab === "reply" ? (
-        <Card className="p-4 sm:p-5">
-          <SectionTitle
+        <Panel>
+          <PanelHead
             eyebrow="Response"
             title="Draft a reply"
             description="Draft it here, review it, then send it from the channel you normally use. Nothing is sent on your behalf."
             action={<MessageCircle size={16} className="text-app-muted" />}
           />
-          <div className="mt-4 flex max-w-2xl flex-col gap-3">
+          <div className="flex max-w-2xl flex-col gap-3 border-t border-app-border px-5 py-5">
             <Field label="Recipient email">
               <Input
                 value={recipient}
@@ -320,28 +334,26 @@ export default function SupportPage() {
               </Button>
             </div>
           </div>
-        </Card>
+        </Panel>
       ) : null}
 
-      <Card className="p-4 sm:p-5">
+      <Panel className="flex flex-wrap items-center justify-between gap-4 p-5">
         <div className="flex items-start gap-3">
           <LifeBuoy size={17} className="mt-0.5 shrink-0 text-app-accent" />
           <div>
             <strong className="text-[0.92rem] text-app-text">Escalate to engineering</strong>
-            <p className="mt-0.5 text-[0.82rem] leading-relaxed text-app-muted">
+            <p className="mt-0.5 max-w-[60ch] text-[0.82rem] leading-relaxed text-app-muted">
               If a user reports a failure, capture the request id and check the event stream before
               escalating.
             </p>
           </div>
         </div>
-        <div className="mt-3">
-          <Link href="/admin">
-            <Button variant="outline" size="sm">
-              Open event stream
-            </Button>
-          </Link>
-        </div>
-      </Card>
-    </div>
+        <Link href="/admin">
+          <Button variant="outline" size="sm">
+            Open event stream
+          </Button>
+        </Link>
+      </Panel>
+    </Page>
   );
 }

@@ -11,7 +11,7 @@ import {
   FALLBACK_COVER_LETTER_TEMPLATES,
   FALLBACK_RESUME_TEMPLATES,
 } from "@angisoft/mboqara-contracts";
-import { Button, Card, Input, SectionTitle, Skeleton, cx } from "@/components/ui";
+import { Button, Input, Panel, PanelHead, Skeleton, cx } from "@/components/ui";
 import { useApi } from "@/lib/hooks";
 
 interface TemplateResponse extends TemplateCatalogue {}
@@ -92,8 +92,9 @@ export function TemplateGallery({
   const visible = isCoverLetter ? filteredCover : filteredResume;
 
   return (
-    <Card className={cx("p-4", className)}>
-      <SectionTitle
+    <Panel className={cx("p-4", className)}>
+      <PanelHead
+        className="px-0 py-0"
         eyebrow={isCoverLetter ? "Cover letters" : "Templates"}
         title={isCoverLetter ? "Choose a letter style" : "Choose your layout"}
         description={
@@ -179,7 +180,7 @@ export function TemplateGallery({
           No templates match that search.
         </p>
       ) : null}
-    </Card>
+    </Panel>
   );
 }
 

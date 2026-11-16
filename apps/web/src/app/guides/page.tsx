@@ -150,8 +150,8 @@ export default function GuidesPage() {
         <section className="mk-video-hero" aria-labelledby="guides-title">
           <div className="mk-video-hero__media" aria-hidden="true">
             <BackdropVideo
-              src="/media/motion-guides.mp4"
-              poster="/media/nairobi-wikimania-2025.webp"
+              src="https://cdn.angisoft.co.ke/public/images/mboqara/motion-guides.mp4"
+              poster="https://cdn.angisoft.co.ke/public/images/mboqara/nairobi-at-night.webp"
             />
             <span className="mk-video-hero__veil" />
             <span className="mk-aurora" />

@@ -17,13 +17,14 @@ import {
 import {
   Badge,
   Button,
-  Card,
   EmptyState,
   Field,
   Input,
   Meter,
   Modal,
-  SectionTitle,
+  Page,
+  Panel,
+  PanelHead,
   Select,
   Skeleton,
   Tabs,
@@ -31,6 +32,7 @@ import {
   cx,
   useToast,
 } from "@/components/ui";
+import { PhotoBand } from "@/components/app-art";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/hooks";
 import {
@@ -375,28 +377,46 @@ function DocumentEditorInner() {
   }
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <Button variant="ghost" size="sm" icon={<ArrowLeft size={14} />} onClick={() => router.back()}>
-            Back
-          </Button>
-          <div className="min-w-0">
-            <p className="text-[0.7rem] font-semibold tracking-[0.14em] text-app-accent uppercase">
-              {titleCase(data.type)} editor
-            </p>
-            <h1 className="mt-0.5 truncate text-[clamp(1.3rem,3vw,1.9rem)] leading-tight font-semibold text-app-text">
-              {title}
-            </h1>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge tone={dirty ? "warning" : "success"}>
+    <Page>
+      <div>
+        <Button variant="ghost" size="sm" icon={<ArrowLeft size={14} />} onClick={() => router.back()}>
+          Back
+        </Button>
+      </div>
+
+      <PhotoBand
+        src="https://cdn.angisoft.co.ke/public/images/mboqara/careers/engineering-professional.webp"
+        alt="A person working on a document"
+        priority
+        height="clamp(210px, 24vw, 280px)"
+      >
+        <p className="flex flex-wrap items-center gap-x-2.5 gap-y-1 font-mono text-[0.64rem] font-semibold tracking-[0.22em] text-white/70 uppercase">
+          <span aria-hidden className="h-px w-8 bg-white/60" />
+          {titleCase(data.type)} editor
+          <span aria-hidden className="text-white/30">
+            /
+          </span>
+          Last saved {formatDateTime(data.createdAt)}
+        </p>
+        <h1 className="mt-3 max-w-[30ch] text-[clamp(1.7rem,3.6vw,2.6rem)] leading-[1.03] font-semibold tracking-[-0.03em] text-balance text-white">
+          {title}
+        </h1>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <span
+            className={cx(
+              "inline-flex items-center gap-1.5 rounded-app-pill border px-2.5 py-1 text-[0.72rem] font-medium",
+              dirty
+                ? "border-amber-300/40 bg-amber-300/15 text-amber-100"
+                : "border-emerald-300/40 bg-emerald-300/15 text-emerald-100",
+            )}
+          >
+            <span aria-hidden className="size-1.5 rounded-full bg-current" />
             {saving ? "Saving…" : dirty ? "Unsaved changes" : "All changes saved"}
-          </Badge>
+          </span>
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
+            className="border-white/25 bg-white/10 text-white hover:bg-white/20"
             icon={<Wand2 size={14} />}
             loading={validating}
             onClick={() => void validate()}
@@ -405,8 +425,9 @@ function DocumentEditorInner() {
           </Button>
           {data.type === "cv" || data.type === "cover_letter" ? (
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
+              className="border-white/25 bg-white/10 text-white hover:bg-white/20"
               icon={<Wand2 size={14} />}
               onClick={() => {
                 setTailoringProposal(null);
@@ -417,19 +438,20 @@ function DocumentEditorInner() {
             </Button>
           ) : null}
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
+            className="border-white/25 bg-white/10 text-white hover:bg-white/20"
             icon={<FileText size={14} />}
             loading={creatingVersion}
             onClick={() => void createVersion()}
           >
-            Duplicate document
+            Duplicate
           </Button>
           <Button size="sm" icon={<Save size={14} />} loading={saving} onClick={() => void save()}>
             Save
           </Button>
         </div>
-      </div>
+      </PhotoBand>
 
       <div className="flex flex-wrap items-center gap-2">
         <TemplateGallery
@@ -470,7 +492,7 @@ function DocumentEditorInner() {
       </div>
 
       {data.parentDocumentId && baseDocument ? (
-        <Card className="px-4 py-3">
+        <Panel className="px-4 py-3">
           <p className="text-[0.7rem] font-semibold tracking-[0.14em] text-app-muted uppercase">
             Job-specific version
           </p>
@@ -489,10 +511,10 @@ function DocumentEditorInner() {
               ))}
             </div>
           ) : null}
-        </Card>
+        </Panel>
       ) : null}
       {!data.parentDocumentId && jobVersions.length > 0 ? (
-        <Card className="px-4 py-3">
+        <Panel className="px-4 py-3">
           <p className="text-[0.7rem] font-semibold tracking-[0.14em] text-app-muted uppercase">
             Job-specific versions · {jobVersions.length}
           </p>
@@ -503,7 +525,7 @@ function DocumentEditorInner() {
               </Link>
             ))}
           </div>
-        </Card>
+        </Panel>
       ) : null}
 
       <Tabs
@@ -520,7 +542,7 @@ function DocumentEditorInner() {
       {tab === "edit" ? (
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <div className="flex min-w-0 flex-col gap-2.5">
-            <Card className="p-3.5">
+            <Panel className="p-3.5">
               <Field label="Document title">
                 <Input
                   value={title}
@@ -530,7 +552,7 @@ function DocumentEditorInner() {
                   }}
                 />
               </Field>
-            </Card>
+            </Panel>
 
             {sections.map((section, index) => (
               <div
@@ -620,10 +642,12 @@ function DocumentEditorInner() {
               content={content}
               opportunityId={tailoringOpportunityId || data.opportunityId}
             />
-            <Card className="overflow-hidden p-0">
-              <div className="border-b border-app-border px-4 py-3">
-                <SectionTitle eyebrow="Live preview" title="How it prints" />
-              </div>
+            <Panel className="overflow-hidden">
+              <PanelHead
+                eyebrow="Live preview"
+                title="How it prints"
+                className="border-b border-app-border"
+              />
               <div className="bg-app-surface-2/50 p-4">
                 <div className={paperSurface(template)}>
                   <h1>{title}</h1>
@@ -640,24 +664,24 @@ function DocumentEditorInner() {
                   />
                 </div>
               </div>
-            </Card>
+            </Panel>
           </div>
         </div>
       ) : null}
 
       {tab === "preview" ? (
-        <Card className="p-6">
+        <Panel className="p-6">
           <div className={cx("mx-auto max-w-[780px]", paperSurface(template))}>
             <h1>{title}</h1>
             <div dangerouslySetInnerHTML={{ __html: buildPreviewHtml(title, sections) }} />
           </div>
-        </Card>
+        </Panel>
       ) : null}
 
       {tab === "ats" ? (
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)]">
-          <Card className="p-4 sm:p-5">
-            <SectionTitle eyebrow="ATS readiness" title="Parser simulation" />
+          <Panel className="p-4 sm:p-5">
+            <PanelHead eyebrow="ATS readiness" title="Parser simulation" className="px-0 py-0" />
             {report ? (
               <div className="mt-4">
                 <div className="mb-1.5 flex items-baseline justify-between gap-2">
@@ -717,10 +741,10 @@ function DocumentEditorInner() {
                 />
               </div>
             )}
-          </Card>
+          </Panel>
 
-          <Card className="p-4 sm:p-5">
-            <SectionTitle eyebrow="Findings" title="What to fix" />
+          <Panel className="p-4 sm:p-5">
+            <PanelHead eyebrow="Findings" title="What to fix" className="px-0 py-0" />
             <div className="mt-4 flex flex-col gap-2">
               {!report ? (
                 <p className="text-[0.86rem] text-app-muted">No findings yet.</p>
@@ -780,7 +804,7 @@ function DocumentEditorInner() {
                 </div>
               </div>
             ) : null}
-          </Card>
+          </Panel>
         </div>
       ) : null}
 
@@ -867,7 +891,7 @@ function DocumentEditorInner() {
           {tailoringProposal ? (
             <>
               <div className="grid gap-3 sm:grid-cols-2">
-                <Card className="p-3.5">
+                <Panel className="p-3.5">
                   <p className="text-[0.68rem] font-semibold tracking-[0.14em] text-app-muted uppercase">
                     What changed
                   </p>
@@ -884,8 +908,8 @@ function DocumentEditorInner() {
                       <li key={`${index}-${item}`}>{item}</li>
                     ))}
                   </ul>
-                </Card>
-                <Card className="p-3.5">
+                </Panel>
+                <Panel className="p-3.5">
                   <p className="text-[0.68rem] font-semibold tracking-[0.14em] text-app-muted uppercase">
                     Gaps to review honestly
                   </p>
@@ -903,7 +927,7 @@ function DocumentEditorInner() {
                   <p className="mt-2.5 text-[0.76rem] text-app-muted">
                     A gap is not a suggestion to add a skill or experience you do not have.
                   </p>
-                </Card>
+                </Panel>
               </div>
               <Field label="Version name">
                 <Input
@@ -930,7 +954,7 @@ function DocumentEditorInner() {
           ) : null}
         </div>
       </Modal>
-    </div>
+    </Page>
   );
 }
 

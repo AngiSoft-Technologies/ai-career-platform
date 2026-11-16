@@ -58,10 +58,10 @@ export default function PricingPage({
 
   return (
     <MarketingLayout>
-      {/* --- hero: the radar runs behind the price --------------------------- */}
+      {/* --- hero: the motion film runs behind the price --------------------- */}
       <section className="mk-video-hero" aria-labelledby="pricing-title">
         <div className="mk-video-hero__media" aria-hidden="true">
-          <BackdropVideo src="/media/motion-pricing.mp4" poster="/media/radar-poster.jpg" />
+          <BackdropVideo src="https://cdn.angisoft.co.ke/public/images/mboqara/motion-pricing.mp4" poster="https://cdn.angisoft.co.ke/public/images/mboqara/radar-poster.jpg" />
           <span className="mk-video-hero__veil" />
           <span className="mk-aurora" />
         </div>

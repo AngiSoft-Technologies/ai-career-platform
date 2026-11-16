@@ -11,6 +11,7 @@ import { healthCheck } from "./db/pool.js";
 import { redis } from "./db/redis.js";
 import { schema } from "./graphql/schema.js";
 import { logger } from "./logger.js";
+import { tickerStatus } from "./lib/ticker.js";
 import {
   errorHandler,
   flyReplayMiddleware,
@@ -120,10 +121,23 @@ function buildYoga(endpoint: string) {
 }
 
 app.get("/live", (_request, response) => {
+  const ticker = tickerStatus();
   response.json({
     status: "ok",
     service: "mboqara-api",
     apiVersion: API_VERSION,
+    // A stopped clock is a silent failure of every periodic job, so the
+    // liveness payload says when it last ticked.
+    ticker: ticker
+      ? {
+          running: true,
+          intervalMs: ticker.intervalMs,
+          ticks: ticker.ticks,
+          lastTickAt: ticker.lastTickAt
+            ? new Date(ticker.lastTickAt).toISOString()
+            : null,
+        }
+      : { running: false },
   });
 });
 
@@ -135,6 +149,7 @@ app.get(["/health", "/v1/health"], async (_request, response) => {
       database,
       cache: redis.status,
       apiVersion: API_VERSION,
+      ticker: tickerStatus(),
       timestamp: new Date().toISOString(),
     });
   } catch {

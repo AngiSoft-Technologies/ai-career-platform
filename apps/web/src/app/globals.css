@@ -93,10 +93,41 @@ html {
   --radius-app-md: var(--radius-md);
   --radius-app-lg: var(--radius-lg);
   --radius-app-xl: var(--radius-xl);
+  --radius-app-pill: var(--radius-pill);
 
   --shadow-app-sm: var(--shadow-sm);
   --shadow-app-md: var(--shadow-md);
   --shadow-app-lg: var(--shadow-lg);
+
+  /* The signed-in shell measures itself in these, so the rail and the
+     content column always agree about how wide they are. They are theme
+     values, not bespoke classes: the shell reads them with ordinary
+     Tailwind utilities (`h-shell-topbar`, `max-w-shell-content`,
+     `lg:grid-cols-shell-rail`). */
+  --spacing-shell-topbar: 64px;
+  --spacing-shell-rail: 252px;
+  --spacing-shell-rail-collapsed: 80px;
+  --container-shell-content: 1800px;
+
+  /* Depth without a second border: an inset highlight on top and a soft
+     shadow underneath, so a card reads as lifted off the page. */
+  --shadow-app-card:
+    inset 0 1px 0 color-mix(in srgb, white 5%, transparent),
+    0 1px 2px rgba(0, 0, 0, 0.22);
+  --shadow-app-lift:
+    inset 0 1px 0 color-mix(in srgb, white 7%, transparent),
+    var(--shadow-md);
+
+  --animate-app-shimmer: app-shimmer 1.6s ease-in-out infinite;
+
+  @keyframes app-shimmer {
+    from {
+      background-position: 200% 0;
+    }
+    to {
+      background-position: -200% 0;
+    }
+  }
 }
 
 /* ==========================================================================
@@ -106,46 +137,46 @@ html {
    ========================================================================== */
 
 :root {
-  --font-display: ui-sans-serif, system-ui, sans-serif;
-  --font-body: ui-sans-serif, system-ui, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-display: var(--font-serif-brand), Georgia, serif;
+  --font-body: var(--font-sans-brand), ui-sans-serif, sans-serif;
+  --font-mono: var(--font-mono-brand), ui-monospace, SFMono-Regular, monospace;
 
-  --bg: #070b14;
-  --bg-elevated: #0d1320;
-  --surface: rgba(255, 255, 255, 0.04);
-  --surface-2: rgba(255, 255, 255, 0.07);
-  --surface-solid: #121a2b;
-  --border: rgba(255, 255, 255, 0.1);
-  --border-strong: rgba(255, 255, 255, 0.22);
+  --bg: #07070c;
+  --bg-elevated: #0c0c14;
+  --surface: rgba(255, 255, 255, 0.035);
+  --surface-2: rgba(255, 255, 255, 0.065);
+  --surface-solid: #101018;
+  --border: rgba(255, 255, 255, 0.075);
+  --border-strong: rgba(255, 255, 255, 0.17);
 
-  --text: #f2f5fb;
-  --text-soft: #b9c2d4;
-  --text-muted: #7b8699;
+  --text: #f7f8fc;
+  --text-soft: #c2c6d4;
+  --text-muted: #8b90a3;
 
-  --accent: #5b8cff;
-  --accent-2: #a06bff;
-  --accent-soft: rgba(91, 140, 255, 0.16);
-  --accent-contrast: #ffffff;
+  --accent: #7c93ff;
+  --accent-2: #d9a6ff;
+  --accent-soft: rgba(124, 147, 255, 0.14);
+  --accent-contrast: #080a14;
 
-  --success: #34d399;
-  --success-soft: rgba(52, 211, 153, 0.14);
-  --warning: #fbbf24;
-  --warning-soft: rgba(251, 191, 36, 0.14);
-  --danger: #fb7185;
-  --danger-soft: rgba(251, 113, 133, 0.14);
-  --info: #38bdf8;
-  --info-soft: rgba(56, 189, 248, 0.14);
+  --success: #46d399;
+  --success-soft: rgba(70, 211, 153, 0.13);
+  --warning: #f5b544;
+  --warning-soft: rgba(245, 181, 68, 0.14);
+  --danger: #ff7a8a;
+  --danger-soft: rgba(255, 122, 138, 0.13);
+  --info: #56b8f5;
+  --info-soft: rgba(86, 184, 245, 0.13);
 
-  --radius-sm: 8px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
-  --radius-xl: 28px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
   --radius-pill: 999px;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.28);
-  --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.42);
-  --glow: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 12px 40px rgba(91, 140, 255, 0.16);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 30px 80px rgba(0, 0, 0, 0.55);
+  --glow: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 24px 70px rgba(124, 147, 255, 0.16);
 
   --blur: 18px;
   --header-h: 64px;
@@ -156,32 +187,40 @@ html {
   --dur: 220ms;
 }
 
-/* ---------- Aurora: bento, glass, soft gradients ------------------------- */
+/* ---------- Aurora: ink, editorial serif, warm signal -------------------- */
 [data-theme="aurora"] {
-  --font-display: var(--font-sans-brand), ui-sans-serif, sans-serif;
+  --font-display: var(--font-serif-brand), Georgia, serif;
   --font-body: var(--font-sans-brand), ui-sans-serif, sans-serif;
-  --bg: #060911;
-  --bg-elevated: #0b1020;
-  --surface: rgba(255, 255, 255, 0.055);
-  --surface-2: rgba(255, 255, 255, 0.09);
-  --surface-solid: #121a30;
-  --border: rgba(255, 255, 255, 0.09);
-  --border-strong: rgba(255, 255, 255, 0.2);
-  --text: #eef2ff;
-  --text-soft: #b8c2e3;
-  --text-muted: #7e88a8;
-  --accent: #6d8bff;
-  --accent-2: #c084fc;
-  --accent-soft: rgba(109, 139, 255, 0.18);
-  --success: #4ade80;
-  --warning: #fbbf24;
-  --danger: #fb7185;
-  --info: #38bdf8;
-  --radius-sm: 10px;
-  --radius-md: 16px;
-  --radius-lg: 24px;
-  --radius-xl: 32px;
-  --glow: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 20px 60px rgba(109, 139, 255, 0.2);
+  --bg: #07070c;
+  --bg-elevated: #0c0c14;
+  --surface: rgba(255, 255, 255, 0.035);
+  --surface-2: rgba(255, 255, 255, 0.065);
+  --surface-solid: #101018;
+  --border: rgba(255, 255, 255, 0.075);
+  --border-strong: rgba(255, 255, 255, 0.17);
+  --text: #f7f8fc;
+  --text-soft: #c2c6d4;
+  --text-muted: #8b90a3;
+  --accent: #7c93ff;
+  --accent-2: #d9a6ff;
+  --accent-soft: rgba(124, 147, 255, 0.14);
+  --accent-contrast: #080a14;
+  --success: #46d399;
+  --success-soft: rgba(70, 211, 153, 0.13);
+  --warning: #f5b544;
+  --warning-soft: rgba(245, 181, 68, 0.14);
+  --danger: #ff7a8a;
+  --danger-soft: rgba(255, 122, 138, 0.13);
+  --info: #56b8f5;
+  --info-soft: rgba(86, 184, 245, 0.13);
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 30px 80px rgba(0, 0, 0, 0.55);
+  --glow: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 24px 70px rgba(124, 147, 255, 0.16);
 }
 
 /* ---------- Editorial: serif, magazine, paper ---------------------------- */
@@ -912,16 +951,15 @@ a {
    ========================================================================== */
 
 [data-theme="aurora"] body {
-  background-image: radial-gradient(
-      70rem 40rem at 12% -10%,
-      color-mix(in srgb, var(--accent) 18%, transparent),
-      transparent 60%
-    ),
+  background-image:
     radial-gradient(
-      55rem 38rem at 92% 4%,
-      color-mix(in srgb, var(--accent-2) 16%, transparent),
-      transparent 62%
-    );
+      60rem 34rem at 50% -18%,
+      color-mix(in srgb, var(--accent) 13%, transparent),
+      transparent 70%
+    ),
+    linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px);
+  background-size: auto, 72px 72px, 72px 72px;
   background-attachment: fixed;
 }
 

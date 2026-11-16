@@ -5,11 +5,11 @@ import { Copy, Link2, Mail, UserPlus } from "lucide-react";
 import {
   Badge,
   Button,
-  Card,
   EmptyState,
   Field,
   Input,
-  SectionTitle,
+  Panel,
+  PanelHead,
   Select,
   Skeleton,
   useToast,
@@ -140,8 +140,9 @@ export function InvitationsPanel() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Card className="p-4 sm:p-5">
-        <SectionTitle
+      <Panel className="p-4 sm:p-5">
+        <PanelHead
+          className="px-0 py-0"
           eyebrow="People"
           title="Invite someone to MboQara"
           description="They receive an email with a link to set their own password, and join with the role you choose here."
@@ -192,10 +193,10 @@ export function InvitationsPanel() {
             </Button>
           </div>
         ) : null}
-      </Card>
+      </Panel>
 
-      <Card className="p-4 sm:p-5">
-        <SectionTitle eyebrow="History" title={`${items.length} invitations`} />
+      <Panel className="p-4 sm:p-5">
+        <PanelHead className="px-0 py-0" eyebrow="History" title={`${items.length} invitations`} />
         <div className="mt-4">
           {invitations.loading && items.length === 0 ? (
             <Skeleton height={180} />
@@ -250,7 +251,7 @@ export function InvitationsPanel() {
             </ul>
           )}
         </div>
-      </Card>
+      </Panel>
     </div>
   );
 }

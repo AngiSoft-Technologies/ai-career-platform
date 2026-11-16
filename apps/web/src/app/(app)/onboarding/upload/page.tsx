@@ -12,7 +12,17 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { Button, Card, Meter, useToast, cx } from "@/components/ui";
+import {
+  Button,
+  Meter,
+  Page,
+  Panel,
+  PanelHead,
+  Rows,
+  Row,
+  useToast,
+  cx,
+} from "@/components/ui";
 import { api } from "@/lib/api";
 import { rememberOnboardingPath } from "@/lib/onboarding";
 
@@ -134,68 +144,103 @@ export default function OnboardingUploadPage() {
 
   if (stage === "done") {
     return (
-      <div className="mx-auto flex max-w-[520px] flex-col items-center gap-5 pt-12 text-center">
-        <div className="grid size-[72px] place-items-center rounded-full bg-app-success/15 text-app-success">
-          <ShieldCheck size={30} />
-        </div>
-        <h1 className="text-[1.8rem] font-semibold text-app-text">Your resume is ready</h1>
-        {atsScore !== null ? (
-          <Card className="w-full p-4">
-            <div className="flex flex-col gap-2.5">
-              <div className="flex items-baseline justify-between text-[0.85rem] text-app-soft">
-                <span>ATS readiness</span>
-                <span className="font-semibold tabular-nums text-app-text">{atsScore}/100</span>
+      <Page className="mx-auto max-w-[620px]">
+        <Panel className="relative overflow-hidden">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(70%_90%_at_50%_0%,color-mix(in_srgb,var(--success)_16%,transparent),transparent_70%)]"
+          />
+          <div className="relative flex flex-col items-center gap-5 px-6 py-14 text-center">
+            <span className="grid size-[76px] place-items-center rounded-app-lg border border-app-success/30 bg-app-success/12 text-app-success">
+              <ShieldCheck size={32} />
+            </span>
+            <h1 className="text-[1.85rem] leading-tight font-semibold tracking-[-0.025em] text-app-text">
+              Your resume is ready
+            </h1>
+            <p className="max-w-[46ch] text-[0.9rem] leading-relaxed text-app-muted">
+              We extracted your details, rebuilt the document and ran an ATS
+              check. Next, tell us how you want to be matched to roles.
+            </p>
+
+            {atsScore !== null ? (
+              <div className="w-full max-w-[380px] rounded-app-lg border border-app-border bg-app-surface-2/50 p-4">
+                <div className="flex items-baseline justify-between text-[0.85rem] text-app-soft">
+                  <span>ATS readiness</span>
+                  <span className="font-display text-[1.35rem] font-semibold tabular-nums text-app-text">
+                    {atsScore}
+                    <span className="font-mono text-[0.7rem] font-normal text-app-muted">
+                      /100
+                    </span>
+                  </span>
+                </div>
+                <div className="mt-2.5">
+                  <Meter value={atsScore} />
+                </div>
               </div>
-              <Meter value={atsScore} />
-            </div>
-          </Card>
-        ) : null}
-        <p className="text-[0.9rem] leading-relaxed text-app-muted">
-          We extracted your details, rebuilt the document and ran an ATS check. Next, tell us how
-          you want to be matched to roles.
-        </p>
-        <Button
-          size="lg"
-          icon={<ArrowRight size={16} />}
-          onClick={() =>
-            router.push(
-              documentId ? `/onboarding/preferences?documentId=${documentId}` : "/onboarding/preferences",
-            )
-          }
-        >
-          Continue
-        </Button>
-      </div>
+            ) : null}
+
+            <Button
+              size="lg"
+              icon={<ArrowRight size={16} />}
+              onClick={() =>
+                router.push(
+                  documentId
+                    ? `/onboarding/preferences?documentId=${documentId}`
+                    : "/onboarding/preferences",
+                )
+              }
+            >
+              Continue to preferences
+            </Button>
+          </div>
+        </Panel>
+      </Page>
     );
   }
 
   return (
-    <div className="mx-auto flex max-w-[620px] flex-col gap-6">
+    <Page className="mx-auto max-w-[760px]">
       <header className="text-center">
         <Link
           href="/onboarding"
-          className="mb-4 inline-flex items-center gap-1.5 text-[0.9rem] text-app-muted transition-colors hover:text-app-text"
+          className="mb-5 inline-flex items-center gap-1.5 text-[0.9rem] text-app-muted transition-colors hover:text-app-text"
         >
           <X size={14} /> Back to options
         </Link>
-        <p className="flex items-center justify-center gap-1.5 text-[0.7rem] font-semibold tracking-[0.14em] text-app-accent uppercase">
-          <Upload size={16} /> Upload resume
+        <p className="flex items-center justify-center gap-2 font-mono text-[0.62rem] font-semibold tracking-[0.24em] text-app-muted uppercase">
+          <span
+            aria-hidden
+            className="h-px w-8 bg-[linear-gradient(90deg,var(--accent),var(--accent-2))]"
+          />
+          Upload resume
         </p>
-        <h1 className="mt-2 text-[clamp(1.6rem,4vw,2.2rem)] leading-tight font-semibold text-app-text">
+        <h1 className="mt-4 text-[clamp(1.7rem,4vw,2.5rem)] leading-[1.02] font-semibold tracking-[-0.03em] text-balance text-app-text">
           Upload your existing resume
         </h1>
-        <p className="mt-1 text-[0.92rem] text-app-muted">PDF, DOCX, or an image. Maximum 10MB.</p>
+        <p className="mx-auto mt-3 max-w-[46ch] text-[0.94rem] leading-relaxed text-app-muted">
+          PDF, DOCX, or an image. Maximum 10MB. We read it, rebuild it and
+          score it before you ever see it.
+        </p>
       </header>
 
-      <Card className="p-7" onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
+      <Panel
+        className="relative"
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={handleDrop}
+      >
         {file ? (
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-3.5 rounded-app-md bg-app-surface-2/60 p-4">
-              <FileText size={24} className="shrink-0 text-app-accent" />
+          <div className="flex flex-col gap-5 p-6">
+            <div className="flex items-center gap-3.5 rounded-app-md border border-app-border bg-app-surface-2/60 p-4">
+              <span className="grid size-11 shrink-0 place-items-center rounded-app-md bg-app-accent-soft text-app-accent">
+                <FileText size={20} />
+              </span>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[0.92rem] font-semibold text-app-text">{file.name}</p>
+                <p className="truncate text-[0.92rem] font-semibold text-app-text">
+                  {file.name}
+                </p>
                 <p className="text-[0.8rem] text-app-muted">
-                  {(file.size / 1024 / 1024).toFixed(1)} MB
+                  {(file.size / 1024 / 1024).toFixed(1)} MB ·{" "}
+                  {file.type.split("/").pop()?.toUpperCase()}
                 </p>
               </div>
               <Button
@@ -214,28 +259,34 @@ export default function OnboardingUploadPage() {
                 <X size={14} />
               </Button>
             </div>
-            <Button size="lg" loading={busy} onClick={() => void runImport()} className="w-full justify-center">
-              {busy ? <Loader2 size={16} /> : null}
+            <Button
+              size="lg"
+              loading={busy}
+              onClick={() => void runImport()}
+              className="w-full justify-center"
+            >
               {busy ? "Working…" : "Extract & build resume"}
             </Button>
           </div>
         ) : (
-          <div>
+          <div className="p-6">
             <button
               type="button"
               onClick={() => inputRef.current?.click()}
               className={cx(
-                "w-full cursor-pointer rounded-app-lg border-2 border-dashed border-app-border px-6 py-11",
+                "group w-full cursor-pointer rounded-app-lg border-2 border-dashed border-app-border px-6 py-14",
                 "text-app-soft transition-colors duration-150 hover:border-app-accent hover:bg-app-accent-soft/30",
               )}
             >
-              <Upload size={40} className="mx-auto mb-3 text-app-muted" />
-              <div className="text-[1.05rem] font-medium text-app-text">
-                Drag &amp; drop or click to select
-              </div>
-              <div className="mt-1 text-[0.85rem] text-app-muted">
+              <span className="mx-auto mb-4 grid size-16 place-items-center rounded-app-lg border border-app-border bg-app-surface-2 text-app-muted transition-colors duration-200 group-hover:border-app-accent/40 group-hover:text-app-accent">
+                <Upload size={26} />
+              </span>
+              <span className="block text-[1.05rem] font-medium text-app-text">
+                Drag & drop or click to select
+              </span>
+              <span className="mt-1.5 block text-[0.85rem] text-app-muted">
                 PDF, DOCX, PNG, JPG, WebP · Maximum 10MB
-              </div>
+              </span>
             </button>
             <input
               ref={inputRef}
@@ -249,28 +300,71 @@ export default function OnboardingUploadPage() {
             </p>
           </div>
         )}
-      </Card>
+      </Panel>
 
       {busy ? (
-        <Card className="p-5">
+        <Panel className="p-5">
           <div className="flex flex-col gap-2.5">
             <div className="flex items-baseline justify-between text-[0.85rem] text-app-soft">
-              <span>{STAGE_LABEL[stage]}</span>
-              <span className="text-[0.78rem] text-app-muted">{STAGE_LABEL[stage]}</span>
+              <span className="font-medium">{STAGE_LABEL[stage]}</span>
+              <span className="font-mono text-[0.72rem] text-app-muted">
+                {stage === "uploading" ? "35%" : "80%"}
+              </span>
             </div>
-            <Meter value={stage === "uploading" ? 45 : 90} />
+            <Meter value={stage === "uploading" ? 35 : 80} />
           </div>
-        </Card>
+        </Panel>
       ) : null}
 
       {error ? (
-        <Card className="border-app-danger/40 bg-app-danger/10 p-4">
-          <div className="flex items-start gap-2 text-app-danger">
-            <AlertCircle size={16} className="mt-0.5 shrink-0" />
-            <span className="text-[0.88rem] leading-relaxed">{error}</span>
-          </div>
-        </Card>
+        <div
+          role="alert"
+          className="flex items-start gap-2.5 rounded-app-lg border border-app-danger/40 bg-app-danger/10 px-4 py-3.5 text-app-danger"
+        >
+          <AlertCircle size={16} className="mt-0.5 shrink-0" />
+          <span className="text-[0.88rem] leading-relaxed">{error}</span>
+        </div>
       ) : null}
+
+      <Panel>
+        <PanelHead eyebrow="What the agent does" title="Four steps, no formatting work" />
+        <Rows className="border-t border-app-border">
+          {[
+            {
+              title: "Reads the file",
+              description:
+                "Text-based PDFs, DOCX and photographed pages are all parsed the same way.",
+            },
+            {
+              title: "Structures the facts",
+              description:
+                "Basics, experience, education, skills and certifications become editable fields.",
+            },
+            {
+              title: "Rebuilds the document",
+              description:
+                "A clean, ATS-readable CV replaces the layout you sent us.",
+            },
+            {
+              title: "Scores it",
+              description:
+                "We check what an applicant tracking system will actually read, and suggest fixes.",
+            },
+          ].map((step, index) => (
+            <Row key={step.title} as="li" className="items-start gap-4">
+              <span className="font-mono text-[0.7rem] font-semibold tabular-nums text-app-accent">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              <div className="min-w-0">
+                <p className="text-[0.9rem] font-semibold text-app-text">{step.title}</p>
+                <p className="mt-1 max-w-[62ch] text-[0.82rem] leading-relaxed text-app-muted">
+                  {step.description}
+                </p>
+              </div>
+            </Row>
+          ))}
+        </Rows>
+      </Panel>
 
       <Link
         href="/onboarding/manual"
@@ -278,6 +372,6 @@ export default function OnboardingUploadPage() {
       >
         Rather type it yourself? Build it manually →
       </Link>
-    </div>
+    </Page>
   );
 }

@@ -6,13 +6,10 @@ import {
   ArrowUpRight,
   BadgeCheck,
   Briefcase,
-  Building2,
+  Compass,
   FileText,
   Globe2,
-  ListChecks,
-  Radar,
   ShieldAlert,
-  Sparkles,
   TrendingUp,
   Users,
 } from "lucide-react";
@@ -20,13 +17,16 @@ import {
   BarList,
   Badge,
   Button,
-  Card,
   DataTable,
   EmptyState,
-  MatchRing,
   Meter,
+  Page,
   PageHeader,
-  SectionTitle,
+  Panel,
+  PanelHead,
+  Rows,
+  Row,
+  ScoreBar,
   Skeleton,
   StatTile,
   Td,
@@ -34,6 +34,7 @@ import {
   cx,
   type Tone,
 } from "@/components/ui";
+import { CompanyMark, EmptySearchArt, HeroSplit } from "@/components/app-art";
 import { useSession } from "@/components/session";
 import { useApi } from "@/lib/hooks";
 import { formatDate, formatNumber, formatSalary, relativeTime, titleCase } from "@/lib/format";
@@ -104,53 +105,52 @@ function DashboardFrame({
   description,
   children,
   actions,
+  image,
 }: {
   eyebrow: string;
   title: string;
   description?: string;
   children: React.ReactNode;
   actions?: React.ReactNode;
+  image?: { src: string; alt: string };
 }) {
+  if (image) {
+    return (
+      <Page>
+        <HeroSplit
+          src={image.src}
+          alt={image.alt}
+          eyebrow={eyebrow}
+          title={title}
+          description={description}
+          actions={actions}
+          priority
+        />
+        {children}
+      </Page>
+    );
+  }
+
   return (
-    <div className="flex flex-col gap-6">
-      <PageHeader
-        eyebrow={eyebrow}
-        title={title}
-        description={description}
-        actions={actions}
-      />
+    <Page>
+      <PageHeader eyebrow={eyebrow} title={title} description={description} actions={actions} />
       {children}
-    </div>
+    </Page>
   );
 }
 
-/** A compact, two-column section that collapses on small screens. */
-function Split({
-  main,
-  side,
-  flip = false,
-}: {
-  main: React.ReactNode;
-  side: React.ReactNode;
-  flip?: boolean;
-}) {
+function StatGrid({ children, cols = 4 }: { children: React.ReactNode; cols?: 3 | 4 }) {
   return (
-    <div
+    <Panel
+      variant="outline"
       className={cx(
-        "grid items-start gap-4",
-        flip
-          ? "lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)]"
-          : "lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)]",
+        "grid gap-px divide-app-border bg-app-border/60 sm:grid-cols-2",
+        cols === 4 ? "xl:grid-cols-4" : "sm:grid-cols-3",
       )}
     >
-      <div className={cx("flex min-w-0 flex-col gap-4", flip && "lg:order-2")}>{main}</div>
-      <div className={cx("flex min-w-0 flex-col gap-4", flip && "lg:order-1")}>{side}</div>
-    </div>
+      {children}
+    </Panel>
   );
-}
-
-function StatGrid({ children }: { children: React.ReactNode }) {
-  return <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{children}</div>;
 }
 
 /* ========================================================================== */
@@ -162,6 +162,7 @@ function SeekerDashboard() {
   const applications = useApi<ApplicationsResponse>("/applications");
   const followups = useApi<FollowUpsResponse>("/followups");
   const profile = useApi<ProfileResponse>("/profile");
+  const documents = useApi<DocumentsResponse>("/documents");
 
   const top = matches.data?.items ?? [];
   const pipeline = applications.data?.items ?? [];
@@ -171,64 +172,89 @@ function SeekerDashboard() {
   const completeness = profileValue?.skills?.length
     ? Math.min(100, 20 + profileValue.skills.length * 6)
     : 20;
+  const firstName = profileValue?.name?.split(" ")[0];
 
   return (
-    <DashboardFrame
-      eyebrow="Your radar"
-      title={
-        profileValue?.name
-          ? `Good to see you, ${profileValue.name.split(" ")[0]}`
-          : "Your radar"
-      }
-      description="Roles ranked against your profile, your pipeline, and what needs a decision next."
-      actions={
-        <>
-          <Link href="/profile">
-            <Button variant="outline" icon={<FileText size={15} />}>
-              Complete profile
-            </Button>
-          </Link>
-          <Link href="/opportunities">
-            <Button icon={<Radar size={15} />}>Browse roles</Button>
-          </Link>
-        </>
-      }
-    >
-      <StatGrid>
-        <StatTile
-          label="Ranked roles"
-          value={matches.data ? formatNumber(matches.data.total) : "—"}
-          hint="in your match pool"
-          tone="accent"
-          icon={<Sparkles size={15} />}
-        />
-        <StatTile
-          label="Applications"
-          value={formatNumber(pipeline.length)}
-          hint="tracked"
-          icon={<Briefcase size={15} />}
-        />
-        <StatTile
-          label="Follow-ups due"
-          value={formatNumber(pending.length)}
-          tone={pending.length > 0 ? "warning" : "success"}
-          icon={<ListChecks size={15} />}
-        />
-        <StatTile
-          label="Profile strength"
-          value={`${completeness}%`}
-          tone={completeness >= 70 ? "success" : "warning"}
-          icon={<BadgeCheck size={15} />}
-        />
-      </StatGrid>
+    <Page>
+      <HeroSplit
+        src="https://cdn.angisoft.co.ke/public/images/mboqara/careers/technology-professional.webp"
+        alt="A professional working at a laptop in a studio"
+        eyebrow="MboQara · live"
+        priority
+        title={firstName ? `Good to see you, ${firstName}.` : "Your job search is live."}
+        description="Every opening we monitor, ranked against your profile. Work the top of the list, then keep your pipeline moving."
+        actions={
+          <>
+            <Link href="/opportunities">
+              <Button icon={<Compass size={15} />}>Browse ranked roles</Button>
+            </Link>
+            <Link href="/profile">
+              <Button
+                variant="outline"
+                icon={<FileText size={15} />}
+              >
+                Complete profile
+              </Button>
+            </Link>
+          </>
+        }
+        badge={
+          <div className="rounded-app-lg border border-white/15 bg-black/45 px-4 py-3 backdrop-blur-md">
+            <p className="font-mono text-[0.56rem] tracking-[0.2em] text-white/60 uppercase">
+              Profile strength
+            </p>
+            <p className="mt-1 font-display text-[1.75rem] leading-none font-semibold text-white">
+              {completeness}%
+            </p>
+            <div className="mt-2 h-[3px] w-full overflow-hidden rounded-full bg-white/20">
+              <span
+                className="block h-full rounded-full bg-[linear-gradient(90deg,var(--accent),var(--accent-2))]"
+                style={{ width: `${completeness}%` }}
+              />
+            </div>
+          </div>
+        }
+        stats={[
+          {
+            label: "Ranked roles",
+            value: matches.data ? formatNumber(matches.data.total) : "—",
+            hint: "in your match pool",
+          },
+          {
+            label: "Applications",
+            value: formatNumber(pipeline.length),
+            hint: "being tracked",
+          },
+          {
+            label: "Follow-ups",
+            value: formatNumber(pending.length),
+            hint: pending.length ? "due now" : "nothing due",
+          },
+          {
+            label: "Documents",
+            value: formatNumber(documents.data?.documents.length ?? 0),
+            hint: "ready to send",
+          },
+        ].map((stat) => (
+          <div key={stat.label}>
+            <dt className="font-mono text-[0.56rem] tracking-[0.18em] text-app-muted uppercase">
+              {stat.label}
+            </dt>
+            <dd className="mt-1.5 font-display text-[1.75rem] leading-none font-semibold tracking-[-0.02em] tabular-nums text-app-text">
+              {stat.value}
+            </dd>
+            <dd className="mt-1 text-[0.7rem] text-app-muted">{stat.hint}</dd>
+          </div>
+        ))}
+      />
 
-      <Split
-        main={
-          <Card className="p-4 sm:p-5">
-            <SectionTitle
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,380px)]">
+        <div className="flex min-w-0 flex-col gap-6">
+          <Panel>
+            <PanelHead
               eyebrow="Highest match"
-              title="Start here"
-              description="Strongest alignment with your skills, location and seniority."
+              title="Start with these"
+              description="Strongest alignment with your skills, location and seniority this week."
               action={
                 <Link href="/opportunities">
                   <Button variant="ghost" size="sm" icon={<ArrowUpRight size={14} />}>
@@ -239,15 +265,15 @@ function SeekerDashboard() {
             />
 
             {matches.loading ? (
-              <div className="mt-4 flex flex-col gap-2.5">
-                <Skeleton height={68} />
-                <Skeleton height={68} />
-                <Skeleton height={68} />
+              <div className="flex flex-col gap-2 px-5 pb-5">
+                <Skeleton height={76} />
+                <Skeleton height={76} />
+                <Skeleton height={76} />
               </div>
             ) : top.length === 0 ? (
-              <div className="mt-4">
+              <div className="px-5 pb-5">
                 <EmptyState
-                  icon={<Sparkles size={24} />}
+                  icon={<EmptySearchArt />}
                   title="No ranked roles yet"
                   description="Complete your profile and we will rank every opening we monitor against it."
                   action={
@@ -258,114 +284,163 @@ function SeekerDashboard() {
                 />
               </div>
             ) : (
-              <ul className="mt-4 flex flex-col gap-2">
-                {top.slice(0, 4).map((item) => (
-                  <li key={item.id}>
-                    <Link
-                      href={`/opportunities/${item.id}`}
-                      className="group flex items-center gap-3 rounded-app-md border border-app-border bg-app-surface-2/40 p-3 transition-[border-color,background] duration-150 hover:border-app-border-strong hover:bg-app-surface-2"
-                    >
-                      <MatchRing score={item.match?.score ?? 0} size={48} />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[0.93rem] font-semibold text-app-text">
-                          {item.title}
-                        </p>
-                        <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[0.78rem] text-app-muted">
-                          <span>{item.companyName}</span>
-                          <span aria-hidden>·</span>
-                          <span>{item.city || item.country}</span>
-                          <span aria-hidden>·</span>
-                          <span>{titleCase(item.workMode)}</span>
-                        </p>
-                      </div>
-                      <ArrowUpRight
-                        size={15}
-                        className="shrink-0 text-app-muted transition-colors duration-150 group-hover:text-app-accent"
-                      />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-        }
-        side={
-          <>
-            <Card className="p-4">
-              <SectionTitle eyebrow="Pipeline" title="Applications" />
-              <div className="mt-3 flex flex-col gap-3">
-                {(["SHORTLISTED", "APPLIED", "INTERVIEW", "OFFER"] as const).map((stage) => {
-                  const count = pipeline.filter((item) => item.status === stage).length;
-                  return (
-                    <div key={stage}>
-                      <div className="mb-1.5 flex items-baseline justify-between gap-2">
-                        <span className="text-[0.8rem] text-app-soft">{titleCase(stage)}</span>
-                        <span className="font-mono text-[0.76rem] tabular-nums text-app-muted">
-                          {count}
-                        </span>
-                      </div>
-                      <Meter value={count} max={Math.max(pipeline.length, 1)} />
+              <Rows className="border-t border-app-border">
+                {top.slice(0, 5).map((item, index) => (
+                  <Row key={item.id} as="div" className="items-center hover:bg-app-surface-2/40">
+                    <span className="w-6 shrink-0 font-mono text-[0.7rem] tabular-nums text-app-muted">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <CompanyMark name={item.companyName} size={40} className="rounded-app-md" />
+                    <div className="min-w-0 flex-1">
+                      <Link
+                        href={`/opportunities/${item.id}`}
+                        className="block truncate text-[0.98rem] leading-snug font-medium text-app-text hover:text-app-accent"
+                      >
+                        {item.title}
+                      </Link>
+                      <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.75rem] text-app-muted">
+                        <span className="text-app-soft">{item.companyName}</span>
+                        <span aria-hidden>·</span>
+                        <span>{item.city || item.country}</span>
+                        <span aria-hidden>·</span>
+                        <span>{titleCase(item.workMode)}</span>
+                        {item.salaryMin ? (
+                          <>
+                            <span aria-hidden>·</span>
+                            <span>{formatSalary(item.salaryMin, item.salaryMax, item.currency)}</span>
+                          </>
+                        ) : null}
+                      </p>
                     </div>
-                  );
-                })}
-              </div>
-              <Link href="/applications" className="mt-4 block">
-                <Button variant="ghost" size="sm" className="w-full">
-                  View applications
+                    <div className="hidden shrink-0 flex-col items-end gap-1.5 sm:flex">
+                      <ScoreBar score={item.match?.score ?? 0} />
+                      <span className="text-[0.68rem] text-app-muted">{relativeTime(item.postedAt)}</span>
+                    </div>
+                    <ArrowUpRight
+                      size={15}
+                      className="shrink-0 text-app-muted transition-colors duration-150 group-hover:text-app-accent"
+                    />
+                  </Row>
+                ))}
+              </Rows>
+            )}
+          </Panel>
+
+          <Panel>
+            <PanelHead
+              eyebrow="Application kit"
+              title="Your documents"
+              description="A source CV, tailored editions and the cover letters that go with them."
+              action={
+                <Link href="/documents">
+                  <Button variant="ghost" size="sm" icon={<ArrowUpRight size={14} />}>
+                    Open kit
+                  </Button>
+                </Link>
+              }
+            />
+            <Rows className="border-t border-app-border">
+              {(documents.data?.documents ?? []).slice(0, 3).map((document) => (
+                <Row key={document.id} className="items-center">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-app-sm border border-app-border bg-app-surface-2 text-app-accent">
+                    <FileText size={15} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      href={`/documents/${document.id}`}
+                      className="block truncate text-[0.88rem] font-medium text-app-text hover:text-app-accent"
+                    >
+                      {document.title}
+                    </Link>
+                    <p className="text-[0.72rem] text-app-muted">
+                      {document.type} · created {relativeTime(document.createdAt)}
+                    </p>
+                  </div>
+                  <Badge tone="neutral">{document.type}</Badge>
+                </Row>
+              ))}
+              {(documents.data?.documents ?? []).length === 0 && !documents.loading ? (
+                <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-5">
+                  <p className="text-[0.84rem] text-app-muted">
+                    Nothing generated yet. Pick a role and we will draft a CV from your profile.
+                  </p>
+                  <Link href="/documents">
+                    <Button size="sm" icon={<FileText size={14} />}>
+                      Generate a document
+                    </Button>
+                  </Link>
+                </div>
+              ) : null}
+            </Rows>
+          </Panel>
+        </div>
+
+        <div className="flex flex-col gap-6">
+          <Panel>
+            <PanelHead eyebrow="Pipeline" title="Applications" />
+            <div className="flex flex-col gap-3 px-5 pb-5">
+              {(["SHORTLISTED", "APPLIED", "INTERVIEW", "OFFER"] as const).map((stage) => {
+                const count = pipeline.filter((item) => item.status === stage).length;
+                return (
+                  <div key={stage}>
+                    <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                      <span className="text-[0.8rem] text-app-soft">{titleCase(stage)}</span>
+                      <span className="font-mono text-[0.74rem] tabular-nums text-app-muted">
+                        {count}
+                      </span>
+                    </div>
+                    <Meter value={count} max={Math.max(pipeline.length, 1)} />
+                  </div>
+                );
+              })}
+              <Link href="/applications" className="mt-1">
+                <Button variant="outline" size="sm" className="w-full">
+                  Open pipeline
                 </Button>
               </Link>
-            </Card>
+            </div>
+          </Panel>
 
-            <Card className="p-4">
-              <SectionTitle eyebrow="Next actions" title="Follow-ups" />
-              <div className="mt-3 flex flex-col gap-2">
-                {pending.length === 0 ? (
-                  <p className="text-[0.82rem] leading-relaxed text-app-muted">
-                    Nothing due. We will remind you when an application needs chasing.
-                  </p>
-                ) : (
-                  pending.slice(0, 4).map((item) => (
-                    <div
-                      key={item.id}
-                      className="rounded-app-md border border-app-border bg-app-surface-2/40 px-3 py-2"
-                    >
-                      <p className="truncate text-[0.82rem] font-semibold text-app-text">
+          <Panel>
+            <PanelHead eyebrow="Next actions" title="Follow-ups" />
+            {pending.length === 0 ? (
+              <p className="px-5 pb-5 text-[0.82rem] leading-relaxed text-app-muted">
+                Nothing due. We will remind you when an application needs chasing.
+              </p>
+            ) : (
+              <Rows className="border-t border-app-border">
+                {pending.slice(0, 4).map((item) => (
+                  <Row key={item.id} className="items-center gap-3">
+                    <span className="size-1.5 shrink-0 rounded-full bg-app-warning" aria-hidden />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[0.84rem] font-medium text-app-text">
                         {item.opportunityTitle}
                       </p>
-                      <div className="mt-1 flex items-center justify-between gap-2">
-                        <span className="truncate text-[0.72rem] text-app-muted">
-                          {item.companyName}
-                        </span>
-                        <Badge tone="warning">{relativeTime(item.dueAt)}</Badge>
-                      </div>
+                      <p className="truncate text-[0.72rem] text-app-muted">{item.companyName}</p>
                     </div>
-                  ))
-                )}
-              </div>
-            </Card>
+                    <Badge tone="warning">{relativeTime(item.dueAt)}</Badge>
+                  </Row>
+                ))}
+              </Rows>
+            )}
+          </Panel>
 
-            <Card className="p-4">
-              <SectionTitle eyebrow="Coverage" title="Where we are looking" />
-              <div className="mt-3">
-                <BarList
-                  items={[
-                    { label: "Remote", value: 48, hint: "48" },
-                    { label: "Hybrid", value: 31, hint: "31" },
-                    { label: "On site", value: 22, hint: "22" },
-                    { label: "Internships", value: 14, hint: "14" },
-                  ]}
-                />
-              </div>
-              <Link href="/opportunities" className="mt-4 block">
-                <Button variant="ghost" size="sm" className="w-full">
-                  Filter by work mode
-                </Button>
-              </Link>
-            </Card>
-          </>
-        }
-      />
-    </DashboardFrame>
+          <Panel>
+            <PanelHead eyebrow="Coverage" title="Where we are looking" />
+            <div className="px-5 pb-5">
+              <BarList
+                items={[
+                  { label: "Remote", value: 48, hint: "48%" },
+                  { label: "Hybrid", value: 31, hint: "31%" },
+                  { label: "On site", value: 22, hint: "22%" },
+                  { label: "Internships", value: 14, hint: "14%" },
+                ]}
+              />
+            </div>
+          </Panel>
+        </div>
+      </div>
+    </Page>
   );
 }
 
@@ -399,6 +474,7 @@ function AnalystDashboard() {
           </Button>
         </Link>
       }
+      image={{ src: "https://cdn.angisoft.co.ke/public/images/mboqara/nairobi-skyline.webp", alt: "The Nairobi skyline at dusk" }}
     >
       <StatGrid>
         <StatTile
@@ -414,13 +490,17 @@ function AnalystDashboard() {
           delta="24h"
           tone="accent"
         />
-        <StatTile label="Events (24h)" value={formatNumber(stats.data?.totals.events24h ?? 0)} tone="info" />
+        <StatTile
+          label="Events (24h)"
+          value={formatNumber(stats.data?.totals.events24h ?? 0)}
+          tone="info"
+        />
       </StatGrid>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="p-4">
-          <SectionTitle eyebrow="Distribution" title="Opportunities by country" />
-          <div className="mt-4">
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Panel>
+          <PanelHead eyebrow="Distribution" title="Opportunities by country" />
+          <div className="px-5 pb-5 pt-1">
             {stats.loading ? (
               <Skeleton height={140} />
             ) : (
@@ -433,11 +513,11 @@ function AnalystDashboard() {
               />
             )}
           </div>
-        </Card>
+        </Panel>
 
-        <Card className="p-4">
-          <SectionTitle eyebrow="Risk" title="Fraud risk distribution" />
-          <div className="mt-4">
+        <Panel>
+          <PanelHead eyebrow="Risk" title="Fraud risk distribution" />
+          <div className="px-5 pb-5 pt-1">
             {stats.loading ? (
               <Skeleton height={140} />
             ) : (
@@ -450,13 +530,13 @@ function AnalystDashboard() {
               />
             )}
           </div>
-        </Card>
+        </Panel>
       </div>
 
-      <Card className="p-4">
-        <SectionTitle eyebrow="Ranked output" title="Match distribution" />
-        <div className="mt-3">
-          <DataTable>
+      <Panel>
+        <PanelHead eyebrow="Ranked output" title="Match distribution" />
+        <div className="px-1 pb-1">
+          <DataTable className="rounded-none border-0 bg-transparent">
             <thead>
               <tr>
                 <Th>Role</Th>
@@ -473,7 +553,7 @@ function AnalystDashboard() {
                   <Td>
                     <Link
                       href={`/opportunities/${item.id}`}
-                      className="font-semibold text-app-text hover:text-app-accent"
+                      className="font-medium text-app-text hover:text-app-accent"
                     >
                       {item.title}
                     </Link>
@@ -501,12 +581,12 @@ function AnalystDashboard() {
             </tbody>
           </DataTable>
         </div>
-      </Card>
+      </Panel>
 
-      <Card className="p-4">
-        <SectionTitle eyebrow="Source yield" title="Registered sources" />
-        <div className="mt-3">
-          <DataTable>
+      <Panel>
+        <PanelHead eyebrow="Source yield" title="Registered sources" />
+        <div className="px-1 pb-1">
+          <DataTable className="rounded-none border-0 bg-transparent">
             <thead>
               <tr>
                 <Th>Source</Th>
@@ -520,10 +600,10 @@ function AnalystDashboard() {
             <tbody>
               {(sources.data?.items ?? []).slice(0, 12).map((source) => (
                 <tr key={source.id} className="transition-colors hover:bg-app-surface-2/40">
-                  <Td className="font-semibold text-app-text">{source.name}</Td>
+                  <Td className="font-medium text-app-text">{source.name}</Td>
                   <Td className="font-mono text-[0.78rem]">{source.type}</Td>
                   <Td>
-                    <Badge tone={source.status === "verified" ? "success" : "warning"}>
+                    <Badge tone={source.status === "verified" ? "success" : "warning"} dot>
                       {source.status}
                     </Badge>
                   </Td>
@@ -535,7 +615,7 @@ function AnalystDashboard() {
             </tbody>
           </DataTable>
         </div>
-      </Card>
+      </Panel>
     </DashboardFrame>
   );
 }
@@ -562,7 +642,7 @@ function ModeratorDashboard() {
         </Link>
       }
     >
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-px overflow-hidden rounded-app-lg border border-app-border bg-app-border/60 sm:grid-cols-3">
         <StatTile label="Awaiting review" value={queue.length} tone="warning" />
         <StatTile
           label="Flagged by model"
@@ -583,35 +663,45 @@ function ModeratorDashboard() {
           description="Nothing needs a human decision right now."
         />
       ) : (
-        <div className="flex flex-col gap-3">
-          {queue.slice(0, 6).map((item, index) => (
-            <Card key={item.id} as="article" className="p-4 sm:p-5">
-              <div className="flex flex-wrap items-start gap-4">
-                <div className="min-w-[240px] flex-1">
-                  <p className="text-[0.68rem] font-semibold tracking-[0.14em] text-app-muted uppercase">
-                    {index === 0 ? "Lead item" : `Item ${String(index + 1).padStart(2, "0")}`} ·{" "}
-                    {item.country} · {formatDate(item.postedAt)}
-                  </p>
-                  <h2 className="mt-1.5 text-[1.2rem] leading-snug font-semibold text-app-text">
-                    {item.title}
-                  </h2>
-                  <p className="mt-1 text-[0.85rem] text-app-soft">
-                    {item.companyName} · {titleCase(item.city || item.country)} ·{" "}
-                    {formatSalary(item.salaryMin, item.salaryMax, item.currency)}
-                  </p>
-                  {item.riskFlags?.length ? (
-                    <blockquote className="mt-3 border-l-2 border-app-accent pl-3 text-[0.84rem] text-app-muted italic">
-                      {item.riskFlags.join(" · ")}
-                    </blockquote>
-                  ) : (
-                    <p className="mt-3 text-[0.84rem] leading-relaxed text-app-muted">
-                      {item.description.slice(0, 220)}
-                      {item.description.length > 220 ? "…" : ""}
+        <Panel>
+          <PanelHead
+            eyebrow="Held for review"
+            title="Lead item first"
+            description="The model's ordering, with the reason it held each posting."
+          />
+          <Rows className="border-t border-app-border">
+            {queue.slice(0, 6).map((item, index) => (
+              <Row key={item.id} className="flex-col gap-4 sm:flex-row sm:items-start">
+                <div className="flex w-full min-w-0 flex-1 gap-4">
+                  <span className="w-6 shrink-0 font-mono text-[0.7rem] tabular-nums text-app-muted">
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                  <CompanyMark name={item.companyName} size={40} />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-mono text-[0.6rem] tracking-[0.16em] text-app-muted uppercase">
+                      {item.country} · {formatDate(item.postedAt)}
                     </p>
-                  )}
+                    <h2 className="mt-1 text-[1.1rem] leading-snug font-medium text-app-text">
+                      {item.title}
+                    </h2>
+                    <p className="mt-1 text-[0.82rem] text-app-soft">
+                      {item.companyName} · {titleCase(item.city || item.country)} ·{" "}
+                      {formatSalary(item.salaryMin, item.salaryMax, item.currency)}
+                    </p>
+                    {item.riskFlags?.length ? (
+                      <blockquote className="mt-3 border-l-2 border-app-warning pl-3 text-[0.82rem] text-app-muted italic">
+                        {item.riskFlags.join(" · ")}
+                      </blockquote>
+                    ) : (
+                      <p className="mt-3 max-w-prose text-[0.82rem] leading-relaxed text-app-muted">
+                        {item.description.slice(0, 220)}
+                        {item.description.length > 220 ? "…" : ""}
+                      </p>
+                    )}
+                  </div>
                 </div>
-                <div className="flex min-w-[140px] flex-col items-stretch gap-2">
-                  <Badge tone={scoreTone(100 - (item.riskScore ?? 0))}>
+                <div className="flex shrink-0 flex-row items-center gap-2 sm:w-[150px] sm:flex-col sm:items-stretch">
+                  <Badge tone={scoreTone(100 - (item.riskScore ?? 0))} dot>
                     Risk {Math.round(item.riskScore ?? 0)}
                   </Badge>
                   <Link href={`/opportunities/${item.id}`}>
@@ -620,10 +710,10 @@ function ModeratorDashboard() {
                     </Button>
                   </Link>
                 </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+              </Row>
+            ))}
+          </Rows>
+        </Panel>
       )}
     </DashboardFrame>
   );
@@ -655,66 +745,62 @@ function SupportDashboard() {
         </Link>
       }
     >
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-px overflow-hidden rounded-app-lg border border-app-border bg-app-border/60 sm:grid-cols-3">
         <StatTile label="Open cases" value={cases.length} tone="accent" />
         <StatTile label="Pending follow-ups" value={stuck.length} tone="warning" />
         <StatTile label="Connected channels" value={channels.length} tone="success" />
       </div>
 
-      <Split
-        main={
-          <Card className="p-4">
-            <SectionTitle eyebrow="Case list" title="Latest cases" />
-            <ul className="mt-3 flex flex-col gap-2">
-              {cases.map((item) => (
-                <li
-                  key={item.id}
-                  className="flex items-center justify-between gap-3 rounded-app-md border border-app-border bg-app-surface-2/40 px-3 py-2.5"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-[0.84rem] font-semibold text-app-text">
-                      Application {item.id.slice(0, 8)}
-                    </p>
-                    <p className="text-[0.72rem] text-app-muted">
-                      updated {relativeTime(item.updatedAt)}
-                    </p>
-                  </div>
-                  <Badge tone={item.status === "OFFER" ? "success" : "neutral"}>{item.status}</Badge>
-                </li>
-              ))}
-              {!cases.length && !applications.loading ? (
-                <li className="text-[0.84rem] text-app-muted">No open cases.</li>
-              ) : null}
-            </ul>
-          </Card>
-        }
-        side={
-          <Card className="p-4">
-            <SectionTitle eyebrow="Channels" title="Messaging connections" />
-            <div className="mt-3 flex flex-col gap-2">
-              {["gmail", "whatsapp", "linkedin", "github"].map((provider) => {
-                const active = channels.find((item) => item.provider === provider);
-                return (
-                  <div
-                    key={provider}
-                    className="flex items-center justify-between gap-3 rounded-app-md border border-app-border px-3 py-2"
-                  >
-                    <span className="text-[0.82rem] text-app-soft capitalize">{provider}</span>
-                    <Badge tone={active ? "success" : "neutral"}>
-                      {active ? active.status : "not linked"}
-                    </Badge>
-                  </div>
-                );
-              })}
-            </div>
-            <Link href="/connections" className="mt-4 block">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)]">
+        <Panel>
+          <PanelHead eyebrow="Case list" title="Latest cases" />
+          <Rows className="border-t border-app-border">
+            {cases.map((item) => (
+              <Row key={item.id} className="items-center">
+                <span className="grid size-9 shrink-0 place-items-center rounded-app-sm border border-app-border bg-app-surface-2 text-app-muted">
+                  <Briefcase size={15} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[0.86rem] font-medium text-app-text">
+                    Application {item.id.slice(0, 8)}
+                  </p>
+                  <p className="text-[0.72rem] text-app-muted">
+                    updated {relativeTime(item.updatedAt)}
+                  </p>
+                </div>
+                <Badge tone={item.status === "OFFER" ? "success" : "neutral"}>{item.status}</Badge>
+              </Row>
+            ))}
+            {!cases.length && !applications.loading ? (
+              <p className="px-5 py-6 text-[0.84rem] text-app-muted">No open cases.</p>
+            ) : null}
+          </Rows>
+        </Panel>
+
+        <Panel>
+          <PanelHead eyebrow="Channels" title="Messaging connections" />
+          <Rows className="border-t border-app-border">
+            {["gmail", "whatsapp", "linkedin", "github"].map((provider) => {
+              const active = channels.find((item) => item.provider === provider);
+              return (
+                <Row key={provider} className="items-center py-3">
+                  <span className="flex-1 text-[0.82rem] text-app-soft capitalize">{provider}</span>
+                  <Badge tone={active ? "success" : "neutral"} dot>
+                    {active ? active.status : "not linked"}
+                  </Badge>
+                </Row>
+              );
+            })}
+          </Rows>
+          <div className="px-5 py-4">
+            <Link href="/connections">
               <Button variant="outline" size="sm" className="w-full">
                 Manage connections
               </Button>
             </Link>
-          </Card>
-        }
-      />
+          </div>
+        </Panel>
+      </div>
     </DashboardFrame>
   );
 }
@@ -753,84 +839,86 @@ function CuratorDashboard() {
         <StatTile label="Awaiting verification" value={pending.length} tone="warning" />
       </StatGrid>
 
-      <Split
-        main={
-          <Card className="p-4">
-            <SectionTitle eyebrow="Network" title="Source register" />
-            <div className="mt-3">
-              <DataTable>
-                <thead>
-                  <tr>
-                    <Th>Source</Th>
-                    <Th>Adapter</Th>
-                    <Th>Status</Th>
-                    <Th>Yield</Th>
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)]">
+        <Panel>
+          <PanelHead eyebrow="Network" title="Source register" />
+          <div className="px-1 pb-1">
+            <DataTable className="rounded-none border-0 bg-transparent">
+              <thead>
+                <tr>
+                  <Th>Source</Th>
+                  <Th>Adapter</Th>
+                  <Th>Status</Th>
+                  <Th>Yield</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.slice(0, 14).map((source) => (
+                  <tr key={source.id} className="transition-colors hover:bg-app-surface-2/40">
+                    <Td>
+                      <p className="font-medium text-app-text">{source.name}</p>
+                      <p className="truncate text-[0.7rem] text-app-muted">{source.url}</p>
+                    </Td>
+                    <Td className="font-mono text-[0.78rem]">{source.adapter ?? source.kind}</Td>
+                    <Td>
+                      <Badge
+                        dot
+                        tone={
+                          source.status === "verified"
+                            ? "success"
+                            : source.status === "rejected"
+                              ? "danger"
+                              : "warning"
+                        }
+                      >
+                        {source.status}
+                      </Badge>
+                    </Td>
+                    <Td className="font-mono text-[0.78rem]">{formatNumber(source.discoveredCount)}</Td>
                   </tr>
-                </thead>
-                <tbody>
-                  {items.slice(0, 14).map((source) => (
-                    <tr key={source.id} className="transition-colors hover:bg-app-surface-2/40">
-                      <Td>
-                        <p className="font-semibold text-app-text">{source.name}</p>
-                        <p className="truncate text-[0.7rem] text-app-muted">{source.url}</p>
-                      </Td>
-                      <Td className="font-mono text-[0.78rem]">{source.adapter ?? source.kind}</Td>
-                      <Td>
-                        <Badge
-                          tone={
-                            source.status === "verified"
-                              ? "success"
-                              : source.status === "rejected"
-                                ? "danger"
-                                : "warning"
-                          }
-                        >
-                          {source.status}
-                        </Badge>
-                      </Td>
-                      <Td className="font-mono text-[0.78rem]">{formatNumber(source.discoveredCount)}</Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </DataTable>
-            </div>
-          </Card>
-        }
-        side={
-          <>
-            <Card className="p-4">
-              <SectionTitle eyebrow="Gaps" title="Where we are thin" />
-              <div className="mt-3">
-                <BarList
-                  items={(stats.data?.sourcesByType ?? []).map((entry) => ({
-                    label: titleCase(entry.type),
-                    value: entry.jobs,
-                    hint: `${entry.count} sources`,
-                  }))}
-                />
-              </div>
-            </Card>
+                ))}
+              </tbody>
+            </DataTable>
+          </div>
+        </Panel>
 
-            <Card className="p-4">
-              <SectionTitle eyebrow="Intake" title="Verification queue" />
-              <div className="mt-3 flex flex-col gap-2">
-                {pending.length === 0 ? (
-                  <p className="text-[0.82rem] leading-relaxed text-app-muted">
-                    Nothing waiting. Candidates can submit new sources from the web app.
-                  </p>
-                ) : (
-                  pending.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between gap-2">
-                      <span className="truncate text-[0.82rem] text-app-soft">{item.name}</span>
-                      <Badge tone="warning">pending</Badge>
-                    </div>
-                  ))
-                )}
-              </div>
-            </Card>
-          </>
-        }
-      />
+        <div className="flex flex-col gap-6">
+          <Panel>
+            <PanelHead eyebrow="Gaps" title="Where we are thin" />
+            <div className="px-5 pb-5 pt-1">
+              <BarList
+                items={(stats.data?.sourcesByType ?? []).map((entry) => ({
+                  label: titleCase(entry.type),
+                  value: entry.jobs,
+                  hint: `${entry.count} sources`,
+                }))}
+              />
+            </div>
+          </Panel>
+
+          <Panel>
+            <PanelHead eyebrow="Intake" title="Verification queue" />
+            <Rows className="border-t border-app-border">
+              {pending.length === 0 ? (
+                <p className="px-5 py-5 text-[0.82rem] leading-relaxed text-app-muted">
+                  Nothing waiting. Candidates can submit new sources from the web app.
+                </p>
+              ) : (
+                pending.map((item) => (
+                  <Row key={item.id} className="items-center py-3">
+                    <span className="min-w-0 flex-1 truncate text-[0.82rem] text-app-soft">
+                      {item.name}
+                    </span>
+                    <Badge tone="warning" dot>
+                      pending
+                    </Badge>
+                  </Row>
+                ))
+              )}
+            </Rows>
+          </Panel>
+        </div>
+      </div>
     </DashboardFrame>
   );
 }
@@ -861,44 +949,44 @@ function AutomationDashboard() {
         </Link>
       }
     >
-      <div className="grid gap-3 lg:grid-cols-3">
-        <Card className="border-app-accent bg-app-accent p-5">
-          <p className="text-[0.7rem] font-semibold tracking-[0.14em] text-app-accent-contrast/80 uppercase">
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Panel variant="solid" className="bg-app-accent p-5 text-app-accent-contrast">
+          <p className="font-mono text-[0.6rem] tracking-[0.18em] uppercase opacity-70">
             Jobs ingested
           </p>
-          <p className="mt-1 text-[clamp(2.2rem,7vw,3.4rem)] leading-none font-bold tabular-nums text-app-accent-contrast">
+          <p className="mt-3 font-display text-[clamp(2.4rem,6vw,3.6rem)] leading-none font-semibold tabular-nums">
             {formatNumber(totalYield)}
           </p>
-          <p className="mt-2 text-[0.8rem] text-app-accent-contrast/85">
+          <p className="mt-3 text-[0.8rem] opacity-75">
             all time across {sources.data?.items.length ?? 0} sources
           </p>
-        </Card>
+        </Panel>
 
-        <Card className="border-app-accent-2 bg-app-accent-2 p-5">
-          <p className="text-[0.7rem] font-semibold tracking-[0.14em] text-app-accent-contrast/80 uppercase">
+        <Panel variant="solid" className="p-5">
+          <p className="font-mono text-[0.6rem] tracking-[0.18em] text-app-muted uppercase">
             Events (24h)
           </p>
-          <p className="mt-1 text-[clamp(2.2rem,7vw,3.4rem)] leading-none font-bold tabular-nums text-app-accent-contrast">
+          <p className="mt-3 font-display text-[clamp(2.4rem,6vw,3.6rem)] leading-none font-semibold tabular-nums text-app-text">
             {formatNumber(stats.data?.totals.events24h ?? 0)}
           </p>
-          <p className="mt-2 text-[0.8rem] text-app-accent-contrast/85">across the event bus</p>
-        </Card>
+          <p className="mt-3 text-[0.8rem] text-app-muted">across the event bus</p>
+        </Panel>
 
-        <Card className="p-5">
-          <p className="text-[0.7rem] font-semibold tracking-[0.14em] text-app-muted uppercase">
+        <Panel variant="solid" className="p-5">
+          <p className="font-mono text-[0.6rem] tracking-[0.18em] text-app-muted uppercase">
             AI tasks recorded
           </p>
-          <p className="mt-1 text-[clamp(2.2rem,7vw,3.4rem)] leading-none font-bold tabular-nums text-app-text">
+          <p className="mt-3 font-display text-[clamp(2.4rem,6vw,3.6rem)] leading-none font-semibold tabular-nums text-app-text">
             {formatNumber(stats.data?.totals.aiTasks ?? 0)}
           </p>
-          <p className="mt-2 text-[0.8rem] text-app-muted">latency, tokens and cost per task</p>
-        </Card>
+          <p className="mt-3 text-[0.8rem] text-app-muted">latency, tokens and cost per task</p>
+        </Panel>
       </div>
 
-      <Card className="p-4">
-        <SectionTitle eyebrow="Schedules" title="Source check cadence" />
-        <div className="mt-3">
-          <DataTable>
+      <Panel>
+        <PanelHead eyebrow="Schedules" title="Source check cadence" />
+        <div className="px-1 pb-1">
+          <DataTable className="rounded-none border-0 bg-transparent">
             <thead>
               <tr>
                 <Th>Source</Th>
@@ -911,7 +999,7 @@ function AutomationDashboard() {
             <tbody>
               {(sources.data?.items ?? []).slice(0, 12).map((source) => (
                 <tr key={source.id} className="transition-colors hover:bg-app-surface-2/40">
-                  <Td className="font-semibold text-app-text">{source.name}</Td>
+                  <Td className="font-medium text-app-text">{source.name}</Td>
                   <Td className="font-mono text-[0.78rem]">{source.checkFrequencyMinutes}m</Td>
                   <Td className="font-mono text-[0.78rem]">{relativeTime(source.lastCheckedAt)}</Td>
                   <Td className="font-mono text-[0.78rem]">{relativeTime(source.nextCheckAt)}</Td>
@@ -923,7 +1011,7 @@ function AutomationDashboard() {
             </tbody>
           </DataTable>
         </div>
-      </Card>
+      </Panel>
     </DashboardFrame>
   );
 }
@@ -971,33 +1059,30 @@ function AdminDashboard() {
         <StatTile label="Documents" value={formatNumber(stats.data?.totals.documents ?? 0)} tone="info" />
       </StatGrid>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="p-4">
-          <SectionTitle eyebrow="Roles" title="Access model" />
-          <div className="mt-3 flex flex-col gap-2">
+      <div className="grid items-start gap-6 lg:grid-cols-2">
+        <Panel>
+          <PanelHead eyebrow="Roles" title="Access model" />
+          <Rows className="border-t border-app-border">
             {(roles.data?.roles ?? []).map((role) => (
-              <div
-                key={role.id}
-                className="flex items-center justify-between gap-3 rounded-app-md border border-app-border px-3 py-2"
-              >
-                <div className="min-w-0">
-                  <p className="truncate font-mono text-[0.82rem] font-semibold text-app-text">
+              <Row key={role.id} className="items-center py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-mono text-[0.8rem] font-medium text-app-text">
                     {role.name}
                   </p>
-                  <p className="text-[0.72rem] text-app-muted">{role.description}</p>
+                  <p className="truncate text-[0.72rem] text-app-muted">{role.description}</p>
                 </div>
                 <Badge tone="neutral">
                   {(roles.data?.assignments ?? []).filter((item) => item.role === role.name).length}
                 </Badge>
-              </div>
+              </Row>
             ))}
-          </div>
-        </Card>
+          </Rows>
+        </Panel>
 
-        <Card className="p-4">
-          <SectionTitle eyebrow="Directory" title="Users" />
-          <div className="mt-3">
-            <DataTable>
+        <Panel>
+          <PanelHead eyebrow="Directory" title="Users" />
+          <div className="px-1 pb-1">
+            <DataTable className="rounded-none border-0 bg-transparent">
               <thead>
                 <tr>
                   <Th>Email</Th>
@@ -1007,7 +1092,7 @@ function AdminDashboard() {
               <tbody>
                 {(users.data?.items ?? []).slice(0, 10).map((user) => (
                   <tr key={user.id} className="transition-colors hover:bg-app-surface-2/40">
-                    <Td className="font-semibold text-app-text">{user.email}</Td>
+                    <Td className="font-medium text-app-text">{user.email}</Td>
                     <Td>
                       <div className="flex flex-wrap gap-1">
                         {(Array.isArray(user.roles) ? user.roles : []).map((role) => (
@@ -1022,12 +1107,12 @@ function AdminDashboard() {
               </tbody>
             </DataTable>
           </div>
-        </Card>
+        </Panel>
       </div>
 
-      <Card className="p-4">
-        <SectionTitle eyebrow="Taxonomy" title="Profession coverage" />
-        <div className="mt-4">
+      <Panel>
+        <PanelHead eyebrow="Taxonomy" title="Profession coverage" />
+        <div className="px-5 pb-5 pt-1">
           <BarList
             items={(stats.data?.opportunitiesByCountry ?? []).slice(0, 10).map((entry) => ({
               label: entry.country,
@@ -1036,7 +1121,7 @@ function AdminDashboard() {
             }))}
           />
         </div>
-      </Card>
+      </Panel>
     </DashboardFrame>
   );
 }

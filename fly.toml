@@ -4,6 +4,14 @@
 app = 'mboqara-api-angisoft'
 primary_region = 'jnb'  # Johannesburg - primary market
 
+# The worker group is the continuous backend service: it has no inbound
+# traffic, so Fly's default auto-stop would suspend it the moment its Redis
+# connections went quiet. Keeping it running is what makes the one-second
+# ticker (see services/api/src/lib/ticker.ts) a clock rather than a lottery.
+auto_stop_machines = 'off'
+auto_start_machines = true
+min_machines_running = 1
+
 [build]
   dockerfile = 'Dockerfile'
 
@@ -18,9 +26,14 @@ primary_region = 'jnb'  # Johannesburg - primary market
   NODE_ENV = 'production'
   PORT = '8088'
   S3_BUCKET = 'uploads'
+  # The backend owns its own clock: one 1-second heartbeat on the worker
+  # group that dispatches every periodic job (see services/api/src/lib/ticker.ts).
+  # No external scheduler is involved — the Vercel cron jobs were removed.
+  TICKER_INTERVAL_MS = '1000'
   WEB_ORIGIN = 'https://mboqara.angisoft.co.ke,https://mboqara.vercel.app,http://localhost:3000,http://localhost:3003,http://localhost:3100'
-  # Worker continuous polling mode - when set to "true", workers poll continuously
-  # instead of using fixed intervals. Set interval via INGESTION_INTERVAL_MS etc.
+  # Worker continuous polling mode - when set to "true", the one-second
+  # ticker dispatches each job on its own cadence instead of BullMQ's
+  # repeatable schedulers. Set interval via INGESTION_INTERVAL_MS etc.
   CONTINUOUS_INGESTION = 'true'
   CONTINUOUS_EMBEDDING = 'true'
   CONTINUOUS_MAINTENANCE = 'true'

@@ -3,16 +3,6 @@
   "framework": "nextjs",
   "buildCommand": "npm run build -w @angisoft/mboqara-contracts && npm run build",
   "regions": ["cpt1"],
-  "crons": [
-    {
-      "path": "/api/cron/refresh-jobs",
-      "schedule": "0 3 * * *"
-    },
-    {
-      "path": "/api/cron/ai-insights",
-      "schedule": "0 4 * * *"
-    }
-  ],
   "functions": {
     "app/api/agent/**/*.ts": {
       "maxDuration": 60,

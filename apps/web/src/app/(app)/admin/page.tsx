@@ -13,16 +13,19 @@ import {
   Badge,
   BarList,
   Button,
-  Card,
   DataTable,
   EmptyState,
   Field,
   Input,
+  Page,
   PageHeader,
-  SectionTitle,
+  Panel,
+  PanelHead,
+  Rows,
+  Row,
   Select,
   Skeleton,
-  StatTile,
+  StatStrip,
   Tabs,
   Td,
   Th,
@@ -160,11 +163,16 @@ export default function AdminPage() {
   const totals = stats.data?.totals;
 
   return (
-    <div className="flex flex-col gap-6">
+    <Page>
       <PageHeader
         eyebrow="Operations"
         title="Control room"
         description="Platform health, people and the knowledge that makes matching work."
+        art={{
+          src: "https://cdn.angisoft.co.ke/public/images/mboqara/nairobi-skyline.webp",
+          alt: "The Nairobi skyline over a park",
+          caption: "Platform operations",
+        }}
         actions={
           totals ? (
             <Badge tone={totals.events24h > 0 ? "success" : "neutral"}>
@@ -190,42 +198,59 @@ export default function AdminPage() {
 
       {tab === "overview" ? (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <StatTile label="Users" value={String(totals?.users ?? 0)} icon={<Users size={15} />} />
-            <StatTile
-              label="Live opportunities"
-              value={String(totals?.activeOpportunities ?? 0)}
-              icon={<Activity size={15} />}
-            />
-            <StatTile label="Applications" value={String(totals?.applications ?? 0)} />
-            <StatTile label="Sources" value={String(totals?.sources ?? 0)} />
-          </div>
+          <StatStrip
+            items={[
+              {
+                label: "Users",
+                value: (totals?.users ?? 0).toLocaleString(),
+                hint: "registered accounts",
+              },
+              {
+                label: "Live opportunities",
+                value: (totals?.activeOpportunities ?? 0).toLocaleString(),
+                hint: "published now",
+              },
+              {
+                label: "Applications",
+                value: (totals?.applications ?? 0).toLocaleString(),
+                hint: "tracked in total",
+              },
+              {
+                label: "Sources",
+                value: (totals?.sources ?? 0).toLocaleString(),
+                hint: "boards monitored",
+              },
+            ]}
+          />
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card className="p-4 sm:p-5">
-              <SectionTitle eyebrow="Coverage" title="Opportunities by country" />
-              <div className="mt-4">
-                <BarList
-                  items={(stats.data?.opportunitiesByCountry ?? []).slice(0, 12).map((row) => ({
-                    label: row.country,
-                    value: row.count,
-                    hint: String(row.count),
-                  }))}
-                />
+          <div className="grid items-start gap-6 lg:grid-cols-2">
+            <Panel>
+              <PanelHead eyebrow="Coverage" title="Opportunities by country" />
+              <div className="border-t border-app-border px-5 py-5">
+                {(stats.data?.opportunitiesByCountry ?? []).length === 0 ? (
+                  <p className="text-[0.83rem] leading-relaxed text-app-muted">
+                    No published roles with a country yet.
+                  </p>
+                ) : (
+                  <BarList
+                    items={(stats.data?.opportunitiesByCountry ?? []).slice(0, 12).map((row) => ({
+                      label: row.country,
+                      value: row.count,
+                      hint: String(row.count),
+                    }))}
+                  />
+                )}
               </div>
-            </Card>
-            <Card className="p-4 sm:p-5">
-              <SectionTitle
+            </Panel>
+            <Panel>
+              <PanelHead
                 eyebrow="Trust"
                 title="Risk distribution"
                 action={<ShieldAlert size={16} className="text-app-muted" />}
               />
-              <div className="mt-4 flex flex-col gap-2">
+              <Rows className="border-t border-app-border">
                 {(stats.data?.riskDistribution ?? []).map((row) => (
-                  <div
-                    key={row.risk_action}
-                    className="flex items-center justify-between gap-3 rounded-app-sm border border-app-border px-3 py-2"
-                  >
+                  <Row key={row.risk_action} as="li" className="items-center justify-between gap-3">
                     <Badge
                       tone={
                         row.risk_action === "block"
@@ -237,50 +262,57 @@ export default function AdminPage() {
                     >
                       {row.risk_action}
                     </Badge>
-                    <span className="font-mono text-[0.78rem] tabular-nums text-app-muted">
-                      {row.count}
+                    <span className="font-display text-[1.35rem] leading-none font-semibold tabular-nums text-app-text">
+                      {row.count.toLocaleString()}
                     </span>
-                  </div>
+                  </Row>
                 ))}
                 {(stats.data?.riskDistribution ?? []).length === 0 ? (
-                  <p className="text-[0.83rem] text-app-muted">No scored postings yet.</p>
+                  <Row as="li" className="text-[0.83rem] text-app-muted">
+                    No scored postings yet.
+                  </Row>
                 ) : null}
-              </div>
-            </Card>
+              </Rows>
+            </Panel>
           </div>
 
-          <Card className="p-4 sm:p-5">
-            <SectionTitle eyebrow="Flow" title="Application pipeline" />
-            <div className="mt-4 flex flex-wrap gap-2">
-              {(stats.data?.pipeline ?? []).map((row) => (
-                <div
-                  key={row.status}
-                  className="min-w-[110px] rounded-app-md border border-app-border bg-app-surface-2/40 px-3 py-2"
-                >
-                  <p className="font-mono text-[1.2rem] leading-none font-bold tabular-nums text-app-text">
-                    {row.count}
-                  </p>
-                  <p className="mt-1 text-[0.72rem] text-app-muted">{titleCase(row.status)}</p>
-                </div>
-              ))}
-            </div>
-          </Card>
+          <Panel>
+            <PanelHead eyebrow="Flow" title="Application pipeline" />
+            {(stats.data?.pipeline ?? []).length === 0 ? (
+              <p className="border-t border-app-border px-5 py-5 text-[0.83rem] leading-relaxed text-app-muted">
+                No applications tracked yet.
+              </p>
+            ) : (
+              <Rows className="border-t border-app-border sm:grid sm:grid-cols-2 lg:grid-cols-4">
+                {(stats.data?.pipeline ?? []).map((row) => (
+                  <Row key={row.status} className="flex-col items-start gap-1">
+                    <span className="font-display text-[1.8rem] leading-none font-semibold tabular-nums text-app-text">
+                      {row.count.toLocaleString()}
+                    </span>
+                    <span className="text-[0.76rem] text-app-muted">{titleCase(row.status)}</span>
+                  </Row>
+                ))}
+              </Rows>
+            )}
+          </Panel>
         </>
       ) : null}
 
       {tab === "users" ? (
-        <Card className="p-4 sm:p-5">
-          <SectionTitle
+        <Panel>
+          <PanelHead
             eyebrow="People"
             title="Registered users"
             description={`${users.data?.total ?? 0} accounts`}
             action={<Users size={16} className="text-app-muted" />}
           />
-          <div className="mt-4">
+          <div className="border-t border-app-border">
             {users.loading && !users.data ? (
-              <Skeleton height={220} />
+              <div className="p-5">
+                <Skeleton height={220} />
+              </div>
             ) : (
-              <DataTable>
+              <DataTable className="rounded-none border-0 shadow-none">
                 <thead>
                   <tr>
                     <Th>Email</Th>
@@ -314,18 +346,18 @@ export default function AdminPage() {
               </DataTable>
             )}
           </div>
-        </Card>
+        </Panel>
       ) : null}
 
       {tab === "roles" ? (
-        <div className="grid items-start gap-4 lg:grid-cols-2">
-          <Card className="p-4 sm:p-5">
-            <SectionTitle
+        <div className="grid items-start gap-6 lg:grid-cols-2">
+          <Panel>
+            <PanelHead
               eyebrow="Access control"
               title="Assign a role"
               action={<UserCog size={16} className="text-app-muted" />}
             />
-            <div className="mt-4 flex flex-col gap-3">
+            <div className="flex flex-col gap-3 border-t border-app-border px-5 py-5">
               <Field label="User id">
                 <Input
                   value={assignUser}
@@ -344,42 +376,47 @@ export default function AdminPage() {
                 </Select>
               </Field>
               <div>
-                <Button loading={busy} disabled={!assignUser || !assignRole} onClick={() => void assign()}>
+                <Button
+                  loading={busy}
+                  disabled={!assignUser || !assignRole}
+                  onClick={() => void assign()}
+                >
                   Assign role
                 </Button>
               </div>
             </div>
-          </Card>
+          </Panel>
 
-          <Card className="p-4 sm:p-5">
-            <SectionTitle
+          <Panel>
+            <PanelHead
               eyebrow="Catalogue"
               title={`${roles.data?.permissions?.length ?? 0} permissions`}
+              description="Everything a role can be granted, platform-wide."
             />
-            <div className="mt-4 flex flex-wrap gap-1">
+            <div className="flex flex-wrap gap-1 border-t border-app-border px-5 py-5">
               {(roles.data?.permissions ?? []).map((permission) => (
                 <span
                   key={permission.name}
-                  className="rounded bg-app-surface-2 px-1.5 py-0.5 font-mono text-[0.7rem] text-app-soft"
+                  className="rounded-app-sm border border-app-border bg-app-surface-2 px-1.5 py-0.5 font-mono text-[0.7rem] text-app-soft"
                 >
                   {permission.name}
                 </span>
               ))}
             </div>
-          </Card>
+          </Panel>
         </div>
       ) : null}
 
       {tab === "taxonomy" ? (
-        <div className="flex flex-col gap-4">
-          <Card className="p-4 sm:p-5">
-            <SectionTitle
+        <div className="flex flex-col gap-6">
+          <Panel>
+            <PanelHead
               eyebrow="Knowledge"
               title="Add a profession"
               description="Every profession gets a path, aliases and a salary median."
               action={<Tags size={16} className="text-app-muted" />}
             />
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 border-t border-app-border px-5 py-5 sm:grid-cols-2">
               <Field label="Name">
                 <Input value={newName} onChange={(event) => setNewName(event.target.value)} />
               </Field>
@@ -393,22 +430,26 @@ export default function AdminPage() {
                 <Input value={newDomain} onChange={(event) => setNewDomain(event.target.value)} />
               </Field>
             </div>
-            <div className="mt-4">
-              <Button loading={busy} disabled={!newSlug || !newName} onClick={() => void addProfession()}>
+            <div className="border-t border-app-border px-5 py-4">
+              <Button
+                loading={busy}
+                disabled={!newSlug || !newName}
+                onClick={() => void addProfession()}
+              >
                 Add profession
               </Button>
             </div>
-          </Card>
+          </Panel>
 
-          <Card className="p-4 sm:p-5">
-            <SectionTitle
+          <Panel>
+            <PanelHead
               eyebrow="Catalogue"
               title={`${taxonomy.data?.professions?.length ?? 0} professions · ${
                 taxonomy.data?.opportunityLinks?.length ?? 0
               } linked to live roles`}
             />
-            <div className="mt-4">
-              <DataTable>
+            <div className="border-t border-app-border">
+              <DataTable className="rounded-none border-0 shadow-none">
                 <thead>
                   <tr>
                     <Th>Name</Th>
@@ -438,25 +479,29 @@ export default function AdminPage() {
                 </tbody>
               </DataTable>
             </div>
-          </Card>
+          </Panel>
         </div>
       ) : null}
 
       {tab === "scam" ? (
-        <Card className="p-4 sm:p-5">
-          <SectionTitle
+        <Panel>
+          <PanelHead
             eyebrow="Trust and safety"
             title={`${scam.data?.total ?? 0} known scam fingerprints`}
             description="Every posting is fingerprinted and compared against this corpus."
             action={<Fingerprint size={16} className="text-app-muted" />}
           />
-          <div className="mt-4">
+          <div className="border-t border-app-border">
             {scam.loading && !scam.data ? (
-              <Skeleton height={180} />
+              <div className="p-5">
+                <Skeleton height={180} />
+              </div>
             ) : (scam.data?.items?.length ?? 0) === 0 ? (
-              <EmptyState title="Corpus is empty" />
+              <div className="p-5">
+                <EmptyState title="Corpus is empty" />
+              </div>
             ) : (
-              <DataTable>
+              <DataTable className="rounded-none border-0 shadow-none">
                 <thead>
                   <tr>
                     <Th>Label</Th>
@@ -493,40 +538,38 @@ export default function AdminPage() {
               </DataTable>
             )}
           </div>
-        </Card>
+        </Panel>
       ) : null}
 
       {tab === "invitations" ? <InvitationsPanel /> : null}
 
       {tab === "events" ? (
-        <Card className="p-4 sm:p-5">
-          <SectionTitle eyebrow="Audit" title="Recent platform events" />
-          <div className="mt-4">
+        <Panel>
+          <PanelHead eyebrow="Audit" title="Recent platform events" />
+          <div className="border-t border-app-border">
             {events.loading && !events.data ? (
-              <Skeleton height={220} />
+              <div className="p-5">
+                <Skeleton height={220} />
+              </div>
             ) : (events.data?.items?.length ?? 0) === 0 ? (
-              <EmptyState title="No events yet" />
+              <div className="p-5">
+                <EmptyState title="No events yet" />
+              </div>
             ) : (
-              <ul className="flex flex-col gap-1.5">
+              <Rows>
                 {events.data?.items?.map((event) => (
-                  <li
-                    key={event.id}
-                    className={cx(
-                      "flex flex-wrap items-center justify-between gap-3 rounded-app-sm border border-app-border px-3 py-2",
-                      "transition-colors duration-150 hover:bg-app-surface-2/40",
-                    )}
-                  >
+                  <Row key={event.id} as="li" className="items-center justify-between gap-3">
                     <span className="font-mono text-[0.78rem] text-app-text">{event.type}</span>
                     <span className="text-[0.74rem] text-app-muted">
                       {event.aggregate_type ?? "—"} · {formatDateTime(event.occurred_at)}
                     </span>
-                  </li>
+                  </Row>
                 ))}
-              </ul>
+              </Rows>
             )}
           </div>
-        </Card>
+        </Panel>
       ) : null}
-    </div>
+    </Page>
   );
 }

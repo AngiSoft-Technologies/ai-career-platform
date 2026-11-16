@@ -25,7 +25,7 @@ export const metadata = pageMetadata({
 const WHO_WE_SERVE: MediaSlide[] = [
   {
     id: "serve-builders",
-    image: "/media/careers/technology-professional.webp",
+    image: "https://cdn.angisoft.co.ke/public/images/mboqara/careers/technology-professional.webp",
     alt: "A technology professional working at a computer",
     eyebrow: "Builders and engineers",
     title: "People whose skills outpace their CV",
@@ -34,7 +34,7 @@ const WHO_WE_SERVE: MediaSlide[] = [
   },
   {
     id: "serve-technical",
-    image: "/media/careers/engineering-professional.webp",
+    image: "https://cdn.angisoft.co.ke/public/images/mboqara/careers/engineering-professional.webp",
     alt: "An engineering professional reviewing technical drawings",
     eyebrow: "Technical roles",
     title: "Requirements described in specialist language",
@@ -43,7 +43,7 @@ const WHO_WE_SERVE: MediaSlide[] = [
   },
   {
     id: "serve-essential",
-    image: "/media/careers/healthcare-professional.webp",
+    image: "https://cdn.angisoft.co.ke/public/images/mboqara/careers/healthcare-professional.webp",
     alt: "A healthcare professional standing in a hospital corridor",
     eyebrow: "Essential work",
     title: "Careers that keep people busy all day",
@@ -52,7 +52,7 @@ const WHO_WE_SERVE: MediaSlide[] = [
   },
   {
     id: "serve-changers",
-    image: "/media/careers/lagos-career-story.webp",
+    image: "https://cdn.angisoft.co.ke/public/images/mboqara/careers/lagos-career-story.webp",
     alt: "A professional working on a laptop in a café",
     eyebrow: "Career changers",
     title: "The move from one field to another",
@@ -61,7 +61,7 @@ const WHO_WE_SERVE: MediaSlide[] = [
   },
   {
     id: "serve-women",
-    image: "/media/careers/women-in-tech.webp",
+    image: "https://cdn.angisoft.co.ke/public/images/mboqara/careers/women-in-tech.webp",
     alt: "A woman working in technology, photographed in a dark studio",
     eyebrow: "Underrepresented in tech",
     title: "Half the talent, a fraction of the referrals",
@@ -136,7 +136,7 @@ export default function CareersPage() {
           }
           media={
             <EditorialPhoto
-              src="/media/team-meeting.webp"
+              src="https://cdn.angisoft.co.ke/public/images/mboqara/team-meeting.webp"
               alt="A small team working together around a table with laptops"
               caption="A studio small enough to know everyone's name."
               credit="lejoe, CC BY 2.0"

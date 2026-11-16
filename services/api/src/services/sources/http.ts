@@ -54,7 +54,7 @@ export interface SafeFetchResult {
 }
 
 const DEFAULT_USER_AGENT =
-  "JobRadarBot/1.0 (+https://www.angisoft.co.ke; job discovery bot)";
+  "MboQaraBot/1.0 (+https://www.angisoft.co.ke; job discovery bot)";
 
 const DEFAULT_ACCEPT =
   "text/html,application/xhtml+xml,application/json,application/rss+xml,application/xml;q=0.9,*/*;q=0.8";

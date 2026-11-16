@@ -1,4 +1,4 @@
-# Job Radar — Client / Backend Boundary Architecture
+# MboQara — Client / Backend Boundary Architecture
 
 > **Status:** implemented. The boundary described here is enforced by
 > `npm run check:boundaries` in CI (`.github/workflows/ci.yml`).
@@ -9,21 +9,21 @@
 > **Last verified:** 2026-10-30 — `npm run check` passes, `npm run build` passes,
 > `flutter analyze` and `flutter test` pass, and
 > `node services/api/scripts/verify-auth.mjs` passes 25/25 against the live API
-> (`https://job-radar-api-angisoft.fly.dev/v1`).
+> (`https://mboqara-api-angisoft.fly.dev/v1`).
 
 ---
 
 ## 1. The rule
 
-**The backend running at `https://job-radar-api-angisoft.fly.dev` is the only component that
+**The backend running at `https://mboqara-api-angisoft.fly.dev` is the only component that
 talks to identity providers, databases, object storage, and third-party APIs. Web and mobile are
 thin clients that call the backend and render the result.**
 
 Corollaries, in priority order:
 
-1. **One network ingress per client.** `https://job-radar-api-angisoft.fly.dev/v1` plus the
+1. **One network ingress per client.** `https://mboqara-api-angisoft.fly.dev/v1` plus the
    realtime endpoints mounted under it (`/v1/ws`, `/v1/stream`). Nothing else.
-2. **No client holds a credential that belongs to a provider.** A JWT minted *by Job Radar* is
+2. **No client holds a credential that belongs to a provider.** A JWT minted *by MboQara* is
    fine. A Neon Auth session cookie, a provider URL, or a third-party secret is not.
 3. **No client owns a business rule.** Status machines, permission checks, quota rules, pricing,
    matching, scoring, initial state, defaults, and transition validity live in `services/api`
@@ -47,7 +47,7 @@ are REST (canonical, both clients), WebSocket/SSE (realtime, through the API), a
 
 | Destination | Web | Mobile | Allowed | Condition |
 |---|---|---|---|---|
-| `job-radar-api-angisoft.fly.dev/v1/*` | yes | yes | ✅ | Only via `apps/web/src/lib/api.ts` / `apps/mobile/lib/core/networking/api_client.dart` |
+| `mboqara-api-angisoft.fly.dev/v1/*` | yes | yes | ✅ | Only via `apps/web/src/lib/api.ts` / `apps/mobile/lib/core/networking/api_client.dart` |
 | `/v1/ws`, `/v1/stream` (same host) | yes | yes | ✅ | Bearer token, through the API |
 | Neon Auth (`*.neonauth.*.neon.tech`) | ❌ | ❌ | ⛔ | Backend only |
 | Neon Postgres | ❌ | ❌ | ⛔ | Backend only |
@@ -163,7 +163,7 @@ These rules apply identically to web and mobile. Any deviation is a review block
 
 ### 5.1 Identity
 
-- The client obtained **one** token from `POST /v1/auth/*`. It is a Job Radar token.
+- The client obtained **one** token from `POST /v1/auth/*`. It is a MboQara token.
 - The client sends `Authorization: Bearer <token>` and nothing else.
 - On `401`, the client calls `POST /v1/auth/refresh` **once**, retries once, then signs out.
 - The client never stores a provider cookie, never constructs a provider URL, never sends `Origin`
@@ -199,7 +199,7 @@ Cache and outbox are legitimate client concerns. Inventing server state is not.
 ### 5.4 Contracts
 
 - REST shapes are defined in `packages/contracts/openapi.yaml`.
-- TS consumers import `@angisoft/job-radar-contracts`; the API and web already do.
+- TS consumers import `@angisoft/mboqara-contracts`; the API and web already do.
 - Flutter must consume a **generated** client (see §8), not hand-written `fromJson`.
 - Additive changes only within `/v1`. Breaking changes go to `/v2`. Every response carries
   `x-api-version` (`services/api/src/app.ts:50-54`).
@@ -269,12 +269,12 @@ shape is published in `packages/contracts/openapi.yaml` and
 
 | Token | Form | TTL | Storage | Notes |
 |---|---|---|---|---|
-| Access | JWT, HS256 (`JWT_SECRET`) | 15 min | client secure storage / localStorage | `iss=job-radar`, `sub=<app user id>`, `aud=job-radar`, `jti`, `iat`, `exp` |
+| Access | JWT, HS256 (`JWT_SECRET`) | 15 min | client secure storage / localStorage | `iss=mboqara`, `sub=<app user id>`, `aud=mboqara`, `jti`, `iat`, `exp` |
 | Refresh | opaque 32-byte random | 30 days | hashed in `auth_refresh_tokens` | rotated on every use, reuse detection revokes the family |
 | Provider session | never leaves the API | — | provider-side only | not addressable by clients |
 | Password hash | scrypt, per-user salt | — | `auth_password_credentials` | the API verifies it; no provider is involved |
 
-`resolve-identity.ts` accepts exactly one token path: a Job Radar access token verified locally.
+`resolve-identity.ts` accepts exactly one token path: a MboQara access token verified locally.
 The provider-JWT fallback was removed — there is no backward-compatibility branch.
 
 ### 7.3 The identity provider, as verified
@@ -304,13 +304,13 @@ Three consequences, all of which shaped the implementation:
    a PKCE public client and runs the authorization-code flow. No Google client id is needed in the
    app, no `google-services.json`, no iOS `GIDClientID`, no Android Gradle plugin.
 3. **The provider session never reaches a client.** The API redeems the authorization code and
-   mints Job Radar tokens; the browser only receives a redirect.
+   mints MboQara tokens; the browser only receives a redirect.
 
 ### 7.4 The Google flow, end to end
 
 ```
 client                     API                          provider                Google
-  │  GET /auth/google/start?redirect_uri=jobradar://auth/callback
+  │  GET /auth/google/start?redirect_uri=mboqara://auth/callback
   │ ─────────────────────►│
   │                         │  GET /oauth2/authorize (PKCE, client_id, redirect_uri=API callback)
   │                         │ ──────────────────────────►│
@@ -336,8 +336,8 @@ login page (web)           API                          provider
   │                         │ ──────────────────────────►│
   │                         │ ◄──── { id_token } ─────────│
   │                         │  verify against provider JWKS
-  │                         │  map identity → app user, mint Job Radar tokens
-  │  302 jobradar://auth/callback#access_token=…&refresh_token=…
+  │                         │  map identity → app user, mint MboQara tokens
+  │  302 mboqara://auth/callback#access_token=…&refresh_token=…
   │ ◄──────────────────────│
 ```
 
@@ -349,7 +349,7 @@ Properties that matter:
 - The **redirect target is allowlisted** (`AUTH_OAUTH_REDIRECT_ALLOWLIST`), so a crafted
   `redirect_uri` cannot harvest the freshly minted tokens.
 - The **same flow serves web and mobile**: the web redirects to `/auth/callback`, mobile to
-  `jobradar://auth/callback`, and the tokens travel in the URL fragment so they are never sent to
+  `mboqara://auth/callback`, and the tokens travel in the URL fragment so they are never sent to
   a server, logged or stored in browser history.
 
 ### 7.5 Production wiring that is not optional

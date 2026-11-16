@@ -1,4 +1,4 @@
-# Job Radar — Platform Architecture for 10M+ Global Users
+# MboQara — Platform Architecture for 10M+ Global Users
 
 **Status:** Design. Nothing in this document is implemented yet.
 **Companion doc:** `docs/ARCHITECTURE_BOUNDARIES.md` (the boundary rule and the violation inventory). This document covers *capability and scale*; that one covers *ownership*.
@@ -135,7 +135,7 @@ Assumptions: 10M MAU, 300M requests/month, 60% of traffic from Africa (Kenya pri
 
 ```
                           ┌──────────────────────────────────────────────┐
-   Web (Next.js)          │  Netlify CDN  (static, edge-cached, global)   │
+   Web (Next.js)          │  Vercel CDN  (static, edge-cached, global)    │
    Mobile (Flutter)       └──────────────────────────────────────────────┘
                     │ REST /v1  ·  GraphQL /v1/graphql  ·  SSE /v1/stream
                     ▼
@@ -180,7 +180,7 @@ Assumptions: 10M MAU, 300M requests/month, 60% of traffic from Africa (Kenya pri
 ### The three hard geographic truths this diagram encodes
 
 1. **No Postgres can live in Africa.** Neither Fly (`jnb` has no Managed Postgres) nor Neon (no African region) offers it. The nearest Neon region supporting the full primitive set is **`aws-eu-central-1` (Frankfurt)**.
-2. **Therefore African reads must not come from Postgres.** They come from Redis (region-local), Tigris (global edge), and Netlify's CDN. Postgres is for the ~30% of requests that genuinely need fresh authoritative data, and those pay the jnb→fra latency.
+2. **Therefore African reads must not come from Postgres.** They come from Redis (region-local), Tigris (global edge), and Vercel's CDN. Postgres is for the ~30% of requests that genuinely need fresh authoritative data, and those pay the jnb→fra latency.
 3. **Writes always go to Frankfurt.** `fly-replay: region=fra` forwards the whole request through the edge back to Frankfurt — cheaper and faster than 3 round-trips from `jnb` to Frankfurt. Cross-region private transfer `jnb`→`fra` is $0.050/GB; same-region is free, so the write path is deliberately kept small.
 
 **Expected latencies from Nairobi (estimates, to be measured):**
@@ -210,7 +210,7 @@ a repeat of these numbers with a keep-alive client.
 
 ## 5. Neon capability blend — what each primitive is for
 
-| Primitive | Role in Job Radar | Why it, specifically |
+| Primitive | Role in MboQara | Why it, specifically |
 | --- | --- | --- |
 | **Lakebase Postgres** | System of record. Primary + read replicas | Standard Postgres, any ORM, decoupled storage, instant branch-per-PR |
 | **Branching** | Dev/test/CI/preview. `dev-*`, `br-<pr>`, `staging` | Copy-on-write, zero data duplication, spins up in seconds. Removes the need for a shared staging DB |
@@ -233,7 +233,7 @@ The user's instinct to blend REST, GraphQL, gRPC, MCP and SOAP is right, but onl
 | **REST** `/v1/*` | **Primary** | All web + mobile calls. Writes, auth, simple reads | One contract, HTTP-cachable, trivially debuggable, works identically on web and mobile. Already built and mounted |
 | **GraphQL** `/v1/graphql` | **Yes — cost control, not novelty** | Mobile read paths: opportunity feed, match list, profile, applications list | **This is the egress argument.** A Kenyan user's feed fetched at 50 KB and shaped to 6 KB saves 88% of the response — at $0.12/GB that is the single highest-leverage optimization available. Also kills N+1 waterfall on 3G. `graphql-yoga` and the schema **already exist in `app.ts:140`** |
 | **gRPC** `:50051` | **Yes — internal only** | Worker dispatch, service-to-service, bulk ingestion batches | Binary + HTTP/2 multiplexing is far cheaper than JSON for internal high-volume traffic. **Never exposed to browsers.** Already implemented |
-| **MCP** `/v1/mcp` | **Yes — growth channel, not core** | Expose Job Radar search + matching as tools for Claude / Copilot / other agents | Already implemented with OAuth-protected-resource metadata. Not a product path; a distribution path. Fly has a dedicated MCP blueprint (`fly mcp`) for hosting |
+| **MCP** `/v1/mcp` | **Yes — growth channel, not core** | Expose MboQara search + matching as tools for Claude / Copilot / other agents | Already implemented with OAuth-protected-resource metadata. Not a product path; a distribution path. Fly has a dedicated MCP blueprint (`fly mcp`) for hosting |
 | **SOAP** | **No — do not build** | — | SOAP's entire value is WS-Security + WS-* contracts with enterprise HR systems. There is no such partner. If a Kenyan employer (SAP SuccessFactors, a payroll vendor) ever mandates SOAP, add a **single thin endpoint** then. Building it now is pure cost with zero users |
 
 **The deleted-path rule:** `apps/web/src/lib/graphql.ts` is dead code — web never calls GraphQL. Per the boundary rule it gets removed, and the GraphQL endpoint becomes mobile-first.
@@ -354,7 +354,7 @@ Rules:
 
 ## 9. Caching
 
-Layer order: Netlify CDN (web static) → Fly edge → region-local Redis → Postgres.
+Layer order: Vercel CDN (web static) → Fly edge → region-local Redis → Postgres (Neon).
 
 | Cache | Key | TTL | Eviction |
 | --- | --- | --- | --- |
@@ -376,7 +376,7 @@ Layer order: Netlify CDN (web static) → Fly edge → region-local Redis → Po
 | --- | --- | --- |
 | **Tigris** (Fly) | **All production user files**: CVs, avatars, generated PDFs, document versions | Global automatic replication — *the CDN is built in*. Low latency in Africa with zero config. S3-compatible, so `@aws-sdk/client-s3` already in the stack works unchanged |
 | **Neon Object Storage** (5 GB free) | Branch-scoped fixtures and dev uploads only | Branches with the database, which is genuinely useful for testing upload flows — but only exists in 4 non-African AWS regions, so every Kenyan fetch would cross to Frankfurt |
-| **Netlify** | Web static assets | Already hosts the marketing site; edge cache included |
+| **Vercel** | Web static assets (`/media` photography, the Next.js bundle) | Hosts the app; edge cache included |
 | **Fly Volumes** | **Nothing.** | $0.15/GB/mo, region-locked, no replication. Not appropriate for user data |
 
 Private buckets + presigned PUT from the backend. The backend signs, Tigris stores, the CDN serves. **Clients never hold storage credentials.**
@@ -393,8 +393,8 @@ The deadlock was: Neon's `/sign-in/social` ignores `idToken` and always returns 
 
 ```
 1. Mobile opens a Custom Tab / ASWebAuthenticationSession to
-     https://job-radar-api-angisoft.fly.dev/v1/auth/google/start
-       ?state=<signed random>  &  redirect_uri=jobradar://auth/callback
+     https://mboqara-api-angisoft.fly.dev/v1/auth/google/start
+       ?state=<signed random>  &  redirect_uri=mboqara://auth/callback
 2. Backend: store state in Redis (10 min TTL), respond 302 →
      Neon Auth /sign-in/social   { provider: "google",
                                    callbackURL: <API origin>/v1/auth/google/callback }
@@ -403,8 +403,8 @@ The deadlock was: Neon's `/sign-in/social` ignores `idToken` and always returns 
 4. Neon 302s the browser to the backend callback with a session cookie
 5. Backend: read Set-Cookie, GET /token → Neon JWT
      → verify against NEON_AUTH_JWKS_URL → ensureLocalUserRecord()
-     → issue Job Radar access token (HS256, 15 min) + rotating refresh token (30 d)
-6. Backend 302s to jobradar://auth/callback#access_token=…&refresh_token=…
+     → issue MboQara access token (HS256, 15 min) + rotating refresh token (30 d)
+6. Backend 302s to mboqara://auth/callback#access_token=…&refresh_token=…
 7. App closes the tab, stores tokens. Done.
 ```
 
@@ -414,14 +414,14 @@ The native `idToken` endpoint (`/v1/auth/google`) stays in `routes/auth.ts` as t
 
 ### Token model (already implemented in `auth/tokens.ts`)
 
-- **Access token:** HS256 JWT, `sub` = local `users.id`, issuer/audience `job-radar`, **15 minutes**, `jti`.
+- **Access token:** HS256 JWT, `sub` = local `users.id`, issuer/audience `mboqara`, **15 minutes**, `jti`.
 - **Refresh token:** 32-byte random, stored **hashed** (SHA-256) in `auth_refresh_tokens`, **30 days**, rotated on every use.
 - **Reuse detection:** presenting an already-rotated token revokes the *entire family* — attacker and victim both forced to re-auth. This is the correct OAuth 2.1 behaviour and it is already built.
 - `JWT_SECRET` is now actually used, and refuses to start in production under 32 chars.
 
 ### Boundary (from `ARCHITECTURE_BOUNDARIES.md`)
 
-The backend owns identity. Clients receive Job Radar tokens and nothing else. `resolveIdentity` accepts **only** app-minted tokens; the Neon-JWT fallback has been removed. Mobile never touches `NEON_AUTH_BASE_URL`; web never proxies `/api/auth/*`.
+The backend owns identity. Clients receive MboQara tokens and nothing else. `resolveIdentity` accepts **only** app-minted tokens; the Neon-JWT fallback has been removed. Mobile never touches `NEON_AUTH_BASE_URL`; web never proxies `/api/auth/*`.
 
 ---
 
@@ -500,9 +500,9 @@ Extends P0–P5 in `ARCHITECTURE_BOUNDARIES.md`.
 > memory limit, and the app can only warn.
 
 ### CI gates
-1. `npm run typecheck` (API) + `@angisoft/job-radar-web` typecheck — must pass.
+1. `npm run typecheck` (API) + `@angisoft/mboqara-web` typecheck — must pass.
 2. **No client may import a Neon/provider SDK.** Failure if `apps/web/**` or `apps/mobile/**` references `neonauth`, `NEON_AUTH_BASE_URL`, `neon.tech`, or any `AWS_*` key.
-3. **No direct provider DB strings in clients.** Only `https://job-radar-api-angisoft.fly.dev/v1` (or a config-injected origin) may appear.
+3. **No direct provider DB strings in clients.** Only `https://mboqara-api-angisoft.fly.dev/v1` (or a config-injected origin) may appear.
 4. Migrations must be additive and safe on existing data (`CREATE INDEX CONCURRENTLY`, no destructive column drops in the same release as the code that stops using them).
 
 ### Acceptance checklist

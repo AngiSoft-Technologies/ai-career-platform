@@ -11,7 +11,7 @@ import {
   Loader2,
   UserCheck,
 } from "lucide-react";
-import { Button, Card, Field, Input, useToast, cx } from "@/components/ui";
+import { Button, Field, Input, Page, Panel, PanelHead, Rows, Row, useToast, cx } from "@/components/ui";
 import { api } from "@/lib/api";
 import { rememberOnboardingPath } from "@/lib/onboarding";
 
@@ -77,60 +77,72 @@ export default function OnboardingLinkedInPage() {
   const working = stage === "working";
 
   return (
-    <div className="mx-auto flex max-w-[620px] flex-col gap-6">
+    <Page className="mx-auto max-w-[700px]">
       <header className="text-center">
         <Link
           href="/onboarding"
-          className="mb-4 inline-flex items-center gap-1.5 text-[0.9rem] text-app-muted transition-colors hover:text-app-text"
+          className="mb-5 inline-flex items-center gap-1.5 text-[0.9rem] text-app-muted transition-colors hover:text-app-text"
         >
           <Link2 size={14} /> Back to options
         </Link>
-        <p className="text-[0.7rem] font-semibold tracking-[0.14em] text-app-accent uppercase">
+        <p className="inline-flex items-center gap-2 font-mono text-[0.62rem] font-semibold tracking-[0.24em] text-app-muted uppercase">
+          <span
+            aria-hidden
+            className="h-px w-8 bg-[linear-gradient(90deg,var(--accent),var(--accent-2))]"
+          />
           Import from LinkedIn
         </p>
-        <h1 className="mt-2 text-[clamp(1.6rem,4vw,2.2rem)] leading-tight font-semibold text-app-text">
+        <h1 className="mt-4 text-[clamp(1.7rem,4vw,2.5rem)] leading-[1.02] font-semibold tracking-[-0.03em] text-balance text-app-text">
           Connect your LinkedIn profile
         </h1>
-        <p className="mt-1 text-[0.92rem] leading-relaxed text-app-muted">
-          Sign in and we convert your experience, education and skills into a structured, ATS-ready
-          resume.
+        <p className="mx-auto mt-3 max-w-[50ch] text-[0.94rem] leading-relaxed text-app-muted">
+          Sign in and we convert your experience, education and skills into a
+          structured, ATS-ready resume.
         </p>
       </header>
 
-      <Card className="p-6">
-        <div className="flex flex-col items-center gap-4 text-center">
-          <div className="grid size-16 place-items-center rounded-full bg-[#0077B5]/15 text-[#0077B5]">
-            <UserCheck size={26} />
-          </div>
-          <h2 className="text-[1rem] font-semibold text-app-text">What we will import</h2>
-          <div className="grid w-full gap-2.5 text-left sm:grid-cols-2">
-            {["Profile & headline", "Work experience", "Education", "Skills"].map((item) => (
-              <div key={item} className="flex items-center gap-2 text-[0.85rem] text-app-soft">
-                <CheckCircle size={15} className="shrink-0 text-app-success" />
-                {item}
-              </div>
-            ))}
-          </div>
-        </div>
-      </Card>
+      <Panel>
+        <PanelHead
+          eyebrow="One click"
+          title="What we will import"
+          description="Everything below is read from your public profile and turned into editable fields on your resume."
+          action={
+            <span className="grid size-11 shrink-0 place-items-center rounded-app-md bg-[#0077B5]/15 text-[#0077B5]">
+              <UserCheck size={20} />
+            </span>
+          }
+        />
+        <Rows className="border-t border-app-border">
+          {[
+            "Profile & headline",
+            "Work experience",
+            "Education",
+            "Skills",
+          ].map((item) => (
+            <Row key={item} as="li" className="items-center gap-3">
+              <CheckCircle size={16} className="shrink-0 text-app-success" />
+              <span className="text-[0.88rem] text-app-soft">{item}</span>
+            </Row>
+          ))}
+        </Rows>
+      </Panel>
 
-      <Card className="border-app-info/40 bg-app-info/10 p-4">
-        <div className="flex items-start gap-2 text-[0.85rem] leading-relaxed text-app-info">
-          <AlertCircle size={16} className="mt-0.5 shrink-0" />
-          <span>
-            We only read what you authorise, we never post on your behalf, and you can revoke access
-            at any time from LinkedIn.
-          </span>
-        </div>
-      </Card>
+      <div className="flex items-start gap-2.5 rounded-app-lg border border-app-info/40 bg-app-info/10 px-4 py-3.5 text-[0.85rem] leading-relaxed text-app-info">
+        <AlertCircle size={16} className="mt-0.5 shrink-0" />
+        <span>
+          We only read what you authorise, we never post on your behalf, and
+          you can revoke access at any time from LinkedIn.
+        </span>
+      </div>
 
       {error ? (
-        <Card className="border-app-danger/40 bg-app-danger/10 p-4">
-          <div className="flex items-start gap-2 text-app-danger">
-            <AlertCircle size={16} className="mt-0.5 shrink-0" />
-            <span className="text-[0.88rem] leading-relaxed">{error}</span>
-          </div>
-        </Card>
+        <div
+          role="alert"
+          className="flex items-start gap-2.5 rounded-app-lg border border-app-danger/40 bg-app-danger/10 px-4 py-3.5 text-app-danger"
+        >
+          <AlertCircle size={16} className="mt-0.5 shrink-0" />
+          <span className="text-[0.88rem] leading-relaxed">{error}</span>
+        </div>
       ) : null}
 
       <Button
@@ -147,14 +159,14 @@ export default function OnboardingLinkedInPage() {
       </Button>
 
       {showUrlFallback ? (
-        <Card className="p-5">
+        <Panel className="p-5">
           <div className="flex flex-col gap-3">
             <h2 className="text-[0.98rem] font-semibold text-app-text">
               Paste your public profile URL
             </h2>
-            <p className="text-[0.82rem] leading-relaxed text-app-muted">
-              We read the public page and convert it. LinkedIn may block automated reads — if so,
-              upload a PDF instead.
+            <p className="max-w-[58ch] text-[0.82rem] leading-relaxed text-app-muted">
+              We read the public page and convert it. LinkedIn may block
+              automated reads — if so, upload a PDF instead.
             </p>
             <Field label="Profile URL">
               <Input
@@ -175,7 +187,7 @@ export default function OnboardingLinkedInPage() {
               </Button>
             </div>
           </div>
-        </Card>
+        </Panel>
       ) : (
         <div className="text-center">
           <Button variant="ghost" size="sm" onClick={() => setShowUrlFallback(true)}>
@@ -190,6 +202,6 @@ export default function OnboardingLinkedInPage() {
       >
         Rather type it yourself? Build it manually →
       </Link>
-    </div>
+    </Page>
   );
 }

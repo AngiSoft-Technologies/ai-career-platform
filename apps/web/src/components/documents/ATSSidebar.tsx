@@ -9,7 +9,7 @@ import {
   Sparkles,
   Wand2,
 } from "lucide-react";
-import { Badge, Button, Card, Meter, SectionTitle, cx } from "@/components/ui";
+import { Badge, Button, Meter, Panel, PanelHead, cx } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { AtsReport } from "@/lib/types";
 
@@ -178,8 +178,9 @@ export function ATSSidebar({
   const scoreTone = score >= 80 ? "text-app-success" : score >= 55 ? "text-app-warning" : "text-app-danger";
 
   return (
-    <Card className={cx("flex flex-col gap-3.5 p-4", className)}>
-      <SectionTitle
+    <Panel className={cx("flex flex-col gap-3.5 p-4", className)}>
+      <PanelHead
+        className="px-0 py-0"
         eyebrow="ATS verifier"
         title={report ? `Score ${score}/100` : "Not checked yet"}
         action={
@@ -338,7 +339,7 @@ export function ATSSidebar({
         />
         Re-check automatically while I edit
       </label>
-    </Card>
+    </Panel>
   );
 }
 

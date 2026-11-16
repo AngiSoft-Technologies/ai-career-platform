@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "**.neon.tech" },
       { protocol: "https", hostname: "**.neonbuild.com" },
       { protocol: "https", hostname: "**.amazonaws.com" },
+      { protocol: "https", hostname: "cdn.angisoft.co.ke" },
     ],
   },
   experimental: {

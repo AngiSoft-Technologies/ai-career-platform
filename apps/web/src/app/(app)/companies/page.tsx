@@ -7,15 +7,20 @@ import { Building2, ExternalLink } from "lucide-react";
 import {
   Badge,
   Button,
-  Card,
   EmptyState,
+  Page,
   PageHeader,
   Pagination,
+  Panel,
+  PanelHead,
+  Rows,
+  Row,
   SearchInput,
   Skeleton,
-  StatTile,
+  StatStrip,
   cx,
 } from "@/components/ui";
+import { CompanyMark } from "@/components/app-art";
 import { useApi, useDebounced } from "@/lib/hooks";
 import { formatSalary, titleCase } from "@/lib/format";
 
@@ -63,20 +68,16 @@ function CompaniesPageInner() {
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
+  const hiring = items.filter((item) => item.open_roles > 0).length;
+  const fresh = items.reduce((sum, item) => sum + item.new_this_week, 0);
+  const roles = items.reduce((sum, item) => sum + item.open_roles, 0);
 
   return (
-    <div className="flex flex-col gap-6">
+    <Page>
       <PageHeader
         eyebrow="Employers"
         title="Companies hiring now"
         description="Every company we have verified a live role for, ordered by how much they are hiring."
-        meta={
-          <p className="text-[0.84rem] text-app-muted">
-            {loading && items.length === 0
-              ? "Loading the register…"
-              : `${total.toLocaleString()} compan${total === 1 ? "y" : "ies"} · page ${page}`}
-          </p>
-        }
         actions={
           <SearchInput
             value={search}
@@ -90,14 +91,36 @@ function CompaniesPageInner() {
         }
       />
 
+      <StatStrip
+        items={[
+          {
+            label: "Companies",
+            value: total.toLocaleString(),
+            hint: "in the register",
+          },
+          {
+            label: "Hiring now",
+            value: hiring.toLocaleString(),
+            hint: "on this page",
+          },
+          {
+            label: "Open roles",
+            value: roles.toLocaleString(),
+            hint: "on this page",
+          },
+          {
+            label: "New this week",
+            value: fresh.toLocaleString(),
+            hint: "on this page",
+          },
+        ]}
+      />
+
       {loading && items.length === 0 ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <Skeleton height={150} />
-          <Skeleton height={150} />
-          <Skeleton height={150} />
-          <Skeleton height={150} />
-          <Skeleton height={150} />
-          <Skeleton height={150} />
+          {Array.from({ length: 6 }).map((_, index) => (
+            <Skeleton key={index} height={150} />
+          ))}
         </div>
       ) : items.length === 0 ? (
         <EmptyState
@@ -112,19 +135,35 @@ function CompaniesPageInner() {
               <li key={company.id}>
                 <Link
                   href={`/companies/${company.slug}`}
-                  className="group flex h-full flex-col rounded-app-lg border border-app-border bg-app-surface p-4 transition-[border-color,transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-app-border-strong hover:shadow-app-md"
+                  className="group flex h-full flex-col rounded-app-lg border border-app-border bg-app-surface p-4 shadow-app-card transition-[border-color,transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-app-border-strong hover:shadow-app-lift"
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <strong className="text-[1rem] text-app-text">{company.name}</strong>
-                    {company.new_this_week > 0 ? (
-                      <Badge tone="success">+{company.new_this_week} this week</Badge>
-                    ) : null}
+                  <div className="flex items-start gap-3">
+                    <CompanyMark
+                      name={company.name}
+                      size={40}
+                      className="rounded-app-md"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <strong className="text-[0.98rem] leading-snug text-app-text group-hover:text-app-accent">
+                          {company.name}
+                        </strong>
+                        {company.new_this_week > 0 ? (
+                          <Badge tone="success">+{company.new_this_week} new</Badge>
+                        ) : null}
+                      </div>
+                      <p className="mt-1 text-[0.75rem] text-app-muted">
+                        {[company.industry, company.country].filter(Boolean).join(" · ") || "—"}
+                      </p>
+                    </div>
                   </div>
-                  <p className="mt-1 text-[0.77rem] text-app-muted">
-                    {[company.industry, company.country].filter(Boolean).join(" · ") || "—"}
-                  </p>
-                  <div className="mt-auto pt-3">
-                    <StatTile label="Open roles" value={String(company.open_roles)} />
+                  <div className="mt-auto flex items-center justify-between gap-2 border-t border-app-border pt-3">
+                    <span className="font-display text-[1.5rem] leading-none font-semibold tabular-nums text-app-text">
+                      {company.open_roles}
+                    </span>
+                    <span className="font-mono text-[0.58rem] tracking-[0.16em] text-app-muted uppercase">
+                      open roles
+                    </span>
                   </div>
                 </Link>
               </li>
@@ -139,7 +178,7 @@ function CompaniesPageInner() {
           />
         </>
       )}
-    </div>
+    </Page>
   );
 }
 
@@ -182,11 +221,18 @@ export function CompanyDetail({ slug }: { slug: string }) {
   if (!company) return <EmptyState title="Company not found" />;
 
   return (
-    <div className="flex flex-col gap-6">
+    <Page>
       <PageHeader
         eyebrow="Employer"
         title={company.name}
         description={[company.industry, company.country].filter(Boolean).join(" · ")}
+        art={{
+          src: "https://cdn.angisoft.co.ke/public/images/mboqara/careers/lagos-career-story.webp",
+          alt: "A professional working on a laptop",
+          caption: `${stats?.countries ?? 0} ${
+            (stats?.countries ?? 0) === 1 ? "country" : "countries"
+          } hiring`,
+        }}
         actions={
           company.careers_url ? (
             <a href={company.careers_url} target="_blank" rel="noopener noreferrer">
@@ -199,47 +245,70 @@ export function CompanyDetail({ slug }: { slug: string }) {
       />
 
       {stats ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <StatTile label="Total roles" value={String(stats.total)} />
-          <StatTile label="Last 7 days" value={String(stats.last_7_days)} />
-          <StatTile label="Last 30 days" value={String(stats.last_30_days)} />
-          <StatTile
-            label="Avg salary"
-            value={
-              stats.avg_salary
+        <StatStrip
+          items={[
+            { label: "Total roles", value: stats.total.toLocaleString(), hint: "all time" },
+            {
+              label: "Last 7 days",
+              value: stats.last_7_days.toLocaleString(),
+              hint: "new openings",
+            },
+            {
+              label: "Last 30 days",
+              value: stats.last_30_days.toLocaleString(),
+              hint: "new openings",
+            },
+            {
+              label: "Avg salary",
+              value: stats.avg_salary
                 ? formatSalary(stats.avg_salary, stats.avg_salary, "USD")
-                : "—"
-            }
-          />
-        </div>
+                : "—",
+              hint: `${stats.countries} ${stats.countries === 1 ? "country" : "countries"}`,
+            },
+          ]}
+        />
       ) : null}
 
-      <Card className="p-4 sm:p-5">
-        <h2 className="text-[1rem] font-semibold text-app-text">Open roles</h2>
-        <ul className="mt-3 flex flex-col gap-2">
+      <Panel>
+        <PanelHead
+          eyebrow="Open roles"
+          title={`${detail.data?.roles?.length ?? 0} live openings`}
+          description="Each one is verified against the employer's own careers page."
+        />
+        <Rows className="border-t border-app-border">
           {(detail.data?.roles ?? []).map((role) => (
-            <li key={role.id}>
+            <Row key={role.id} as="li" className="items-center gap-3">
               <Link
                 href={`/opportunities/${role.id}`}
-                className={cx(
-                  "flex flex-wrap items-center gap-3 rounded-app-md border border-app-border px-3 py-2.5",
-                  "transition-colors duration-150 hover:border-app-border-strong hover:bg-app-surface-2/50",
-                )}
+                className="flex min-w-[200px] flex-1 flex-wrap items-center gap-3"
               >
-                <div className="min-w-[200px] flex-1">
-                  <p className="text-[0.89rem] font-semibold text-app-text">{role.title}</p>
+                <div className="min-w-[180px] flex-1">
+                  <p className="text-[0.9rem] font-semibold text-app-text hover:text-app-accent">
+                    {role.title}
+                  </p>
                   <p className="text-[0.75rem] text-app-muted">
                     {role.country ?? "—"} · {titleCase(role.work_mode ?? "unknown")} ·{" "}
                     {titleCase(role.seniority ?? "unspecified")} ·{" "}
-                    {formatSalary(role.salary_min ?? null, role.salary_max ?? null, role.currency ?? null)}
+                    {formatSalary(
+                      role.salary_min ?? null,
+                      role.salary_max ?? null,
+                      role.currency ?? null,
+                    )}
                   </p>
                 </div>
-                {role.apply_url ? <ExternalLink size={13} className="text-app-muted" /> : null}
+                {role.apply_url ? (
+                  <ExternalLink size={13} className="text-app-muted" />
+                ) : null}
               </Link>
-            </li>
+            </Row>
           ))}
-        </ul>
-      </Card>
-    </div>
+          {(detail.data?.roles?.length ?? 0) === 0 ? (
+            <Row as="li" className="text-[0.85rem] text-app-muted">
+              No live openings right now.
+            </Row>
+          ) : null}
+        </Rows>
+      </Panel>
+    </Page>
   );
 }

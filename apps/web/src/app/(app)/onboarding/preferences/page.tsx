@@ -6,8 +6,6 @@ import { Suspense, useEffect, useState } from "react";
 import {
   ArrowRight,
   Bell,
-  Briefcase,
-  Globe,
   MapPin,
   Plane,
   Wifi,
@@ -15,12 +13,17 @@ import {
 import {
   Badge,
   Button,
-  Card,
   Field,
   Input,
+  Page,
+  Panel,
+  PanelHead,
+  Rows,
+  Row,
   Select,
   Skeleton,
   Switch,
+  cx,
   useToast,
 } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -142,72 +145,165 @@ function OnboardingPreferencesInner() {
   };
 
   return (
-    <div className="mx-auto flex max-w-[760px] flex-col gap-6">
-      <header className="pt-6 text-center">
-        <p className="inline-flex items-center gap-1.5 text-[0.7rem] font-semibold tracking-[0.14em] text-app-accent uppercase">
-          <MapPin size={16} /> Almost there
+    <Page className="mx-auto max-w-[860px]">
+      <header className="text-center">
+        <p className="inline-flex items-center gap-2 font-mono text-[0.62rem] font-semibold tracking-[0.24em] text-app-muted uppercase">
+          <span
+            aria-hidden
+            className="h-px w-8 bg-[linear-gradient(90deg,var(--accent),var(--accent-2))]"
+          />
+          <MapPin size={13} /> Almost there
         </p>
-        <h1 className="mt-2 text-[clamp(1.8rem,5vw,2.6rem)] leading-[1.1] font-semibold tracking-[-0.02em] text-app-text">
+        <h1 className="mt-4 text-[clamp(1.8rem,5vw,2.7rem)] leading-[1.02] font-semibold tracking-[-0.03em] text-balance text-app-text">
           How should we match you?
         </h1>
-        <p className="mx-auto mt-2 max-w-[520px] text-[1.02rem] leading-relaxed text-app-muted">
-          This decides the order roles appear in — nearby first, then same country, then continent,
-          then remote.
+        <p className="mx-auto mt-3 max-w-[54ch] text-[1rem] leading-relaxed text-app-muted">
+          This decides the order roles appear in — nearby first, then same
+          country, then continent, then remote.
         </p>
+
+        {/* The stepper. Three steps, one done, one here, one to go. */}
+        <ol className="mx-auto mt-7 flex max-w-[520px] items-center justify-center gap-2 text-[0.74rem]">
+          {[
+            { label: "Resume", state: "done" },
+            { label: "Preferences", state: "current" },
+            { label: "Template", state: "next" },
+          ].map((step, index) => (
+            <li key={step.label} className="flex items-center gap-2">
+              <span
+                className={cx(
+                  "grid size-6 place-items-center rounded-full border font-mono text-[0.66rem] font-semibold",
+                  step.state === "done"
+                    ? "border-app-success/40 bg-app-success/12 text-app-success"
+                    : step.state === "current"
+                      ? "border-app-accent bg-app-accent text-app-accent-contrast"
+                      : "border-app-border text-app-muted",
+                )}
+              >
+                {step.state === "done" ? "✓" : index + 1}
+              </span>
+              <span
+                className={cx(
+                  "font-medium",
+                  step.state === "current" ? "text-app-text" : "text-app-muted",
+                )}
+              >
+                {step.label}
+              </span>
+              {index < 2 ? (
+                <span
+                  aria-hidden
+                  className="h-px w-8 bg-app-border sm:w-12"
+                />
+              ) : null}
+            </li>
+          ))}
+        </ol>
       </header>
 
       {loadFailed ? (
         <div
           role="status"
-          className="flex items-start gap-2.5 rounded-app-md border border-app-warning/40 bg-app-warning/10 px-4 py-3 text-[0.85rem] leading-relaxed text-app-soft"
+          className="flex items-start gap-2.5 rounded-app-lg border border-app-warning/40 bg-app-warning/10 px-4 py-3.5 text-[0.85rem] leading-relaxed text-app-soft"
         >
           <Bell size={15} className="mt-0.5 shrink-0 text-app-warning" />
           <span>
-            We could not read your saved preferences, so the form starts empty. Fill it in again —
-            saving now will store what you type here.
+            We could not read your saved preferences, so the form starts empty.
+            Fill it in again — saving now will store what you type here.
           </span>
         </div>
       ) : null}
 
-      <Card className="p-5 sm:p-6">
-        <div className="flex flex-col gap-5">
-          <ToggleRow
-            icon={<Wifi size={18} className="text-app-accent" />}
-            title="Remote roles only"
-            description="Hide onsite and hybrid roles. You will only ever be shown remote work."
-            checked={preferences.remoteOnly}
-            onChange={(checked) =>
-              setPreferences((previous) => ({ ...previous, remoteOnly: checked }))
-            }
-          />
-          <ToggleRow
-            icon={<Plane size={18} className="text-app-accent" />}
-            title="I am willing to relocate"
-            description="Let us surface roles in other cities and countries, not just where you are now."
-            checked={preferences.willingToRelocate}
-            onChange={(checked) =>
-              setPreferences((previous) => ({ ...previous, willingToRelocate: checked }))
-            }
-          />
-          <ToggleRow
-            icon={<Bell size={18} className="text-app-accent" />}
-            title="Job alerts"
-            description="Get notified when a role that matches your profile is discovered."
-            checked={preferences.notificationsEnabled}
-            onChange={(checked) =>
-              setPreferences((previous) => ({ ...previous, notificationsEnabled: checked }))
-            }
-          />
-        </div>
-      </Card>
+      <Panel>
+        <PanelHead
+          eyebrow="Work style"
+          title="Three switches that change what you see"
+          description="Each one filters the catalogue before ranking, so you spend your time on roles you would actually take."
+        />
+        <Rows className="border-t border-app-border">
+          <Row as="li" className="items-start gap-4">
+            <span className="grid size-10 shrink-0 place-items-center rounded-app-md border border-app-border bg-app-surface-2 text-app-accent">
+              <Wifi size={18} />
+            </span>
+            <div className="min-w-[220px] flex-1">
+              <p className="text-[0.92rem] font-semibold text-app-text">
+                Remote roles only
+              </p>
+              <p className="mt-1 max-w-[58ch] text-[0.82rem] leading-relaxed text-app-muted">
+                Hide onsite and hybrid roles. You will only ever be shown
+                remote work.
+              </p>
+            </div>
+            <Switch
+              checked={preferences.remoteOnly}
+              onChange={(checked) =>
+                setPreferences((previous) => ({ ...previous, remoteOnly: checked }))
+              }
+              label="Remote roles only"
+            />
+          </Row>
+          <Row as="li" className="items-start gap-4">
+            <span className="grid size-10 shrink-0 place-items-center rounded-app-md border border-app-border bg-app-surface-2 text-app-accent">
+              <Plane size={18} />
+            </span>
+            <div className="min-w-[220px] flex-1">
+              <p className="text-[0.92rem] font-semibold text-app-text">
+                I am willing to relocate
+              </p>
+              <p className="mt-1 max-w-[58ch] text-[0.82rem] leading-relaxed text-app-muted">
+                Let us surface roles in other cities and countries, not just
+                where you are now.
+              </p>
+            </div>
+            <Switch
+              checked={preferences.willingToRelocate}
+              onChange={(checked) =>
+                setPreferences((previous) => ({
+                  ...previous,
+                  willingToRelocate: checked,
+                }))
+              }
+              label="I am willing to relocate"
+            />
+          </Row>
+          <Row as="li" className="items-start gap-4">
+            <span className="grid size-10 shrink-0 place-items-center rounded-app-md border border-app-border bg-app-surface-2 text-app-accent">
+              <Bell size={18} />
+            </span>
+            <div className="min-w-[220px] flex-1">
+              <p className="text-[0.92rem] font-semibold text-app-text">
+                Job alerts
+              </p>
+              <p className="mt-1 max-w-[58ch] text-[0.82rem] leading-relaxed text-app-muted">
+                Get notified when a role that matches your profile is
+                discovered.
+              </p>
+            </div>
+            <Switch
+              checked={preferences.notificationsEnabled}
+              onChange={(checked) =>
+                setPreferences((previous) => ({
+                  ...previous,
+                  notificationsEnabled: checked,
+                }))
+              }
+              label="Job alerts"
+            />
+          </Row>
+        </Rows>
+      </Panel>
 
-      <Card className="p-5 sm:p-6">
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-2">
-            <Globe size={18} className="text-app-accent" />
-            <h2 className="text-[1rem] font-semibold text-app-text">Where do you want to work?</h2>
-          </div>
-          <Field label="Preferred countries" hint="Comma separated. Used for the same-country tier.">
+      <Panel>
+        <PanelHead
+          eyebrow="Geography"
+          title="Where do you want to work?"
+          description="Locations rank above countries, and countries above the continent. Type a comma-separated list in each field."
+        />
+        <div className="flex flex-col gap-5 border-t border-app-border px-5 py-5">
+          <Field
+            label="Preferred countries"
+            hint="Comma separated. Used for the same-country tier."
+          >
             <Input
               value={countriesInput}
               onChange={(event) => setCountriesInput(event.target.value)}
@@ -249,25 +345,22 @@ function OnboardingPreferencesInner() {
             </Select>
           </Field>
         </div>
-      </Card>
+      </Panel>
 
-      <Card className="p-5">
-        <div className="flex items-center gap-2">
-          <Briefcase size={18} className="text-app-accent" />
-          <h2 className="text-[1rem] font-semibold text-app-text">Employment types we cover</h2>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-1.5">
+      <Panel>
+        <PanelHead
+          eyebrow="Contract types"
+          title="Employment types we cover"
+          description="All of these are matched automatically from your profile — there is nothing to configure here."
+        />
+        <div className="flex flex-wrap gap-1.5 border-t border-app-border px-5 py-5">
           {EMPLOYMENT_TYPES.map((type) => (
             <Badge key={type.key} tone="neutral">
               {type.label}
             </Badge>
           ))}
         </div>
-        <p className="mt-2.5 text-[0.8rem] leading-relaxed text-app-muted">
-          All of these are matched automatically based on your profile — there is nothing to
-          configure here.
-        </p>
-      </Card>
+      </Panel>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Button
@@ -278,7 +371,12 @@ function OnboardingPreferencesInner() {
         >
           ← Skip, choose a template
         </Button>
-        <Button size="lg" icon={<ArrowRight size={14} />} loading={saving} onClick={() => void save()}>
+        <Button
+          size="lg"
+          icon={<ArrowRight size={14} />}
+          loading={saving}
+          onClick={() => void save()}
+        >
           Continue to templates
         </Button>
       </div>
@@ -290,32 +388,7 @@ function OnboardingPreferencesInner() {
         </Link>
         .
       </p>
-    </div>
-  );
-}
-
-function ToggleRow({
-  icon,
-  title,
-  description,
-  checked,
-  onChange,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <div className="flex flex-wrap items-start gap-3">
-      <span className="mt-0.5 shrink-0">{icon}</span>
-      <div className="min-w-[200px] flex-1">
-        <p className="text-[0.92rem] font-semibold text-app-text">{title}</p>
-        <p className="mt-1 text-[0.82rem] leading-relaxed text-app-muted">{description}</p>
-      </div>
-      <Switch checked={checked} onChange={onChange} label={title} />
-    </div>
+    </Page>
   );
 }
 
@@ -323,7 +396,7 @@ export default function OnboardingPreferencesPage() {
   return (
     <Suspense
       fallback={
-        <div className="mx-auto flex max-w-[760px] flex-col gap-4">
+        <div className="mx-auto flex max-w-[860px] flex-col gap-4">
           <Skeleton height={40} width={320} />
           <Skeleton height={280} />
         </div>

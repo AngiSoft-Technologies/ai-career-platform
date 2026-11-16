@@ -68,7 +68,7 @@ export default function ContactPage() {
           }
           media={
             <EditorialPhoto
-              src="/media/woman-laptop.webp"
+              src="https://cdn.angisoft.co.ke/public/images/mboqara/woman-laptop.webp"
               alt="A woman working at a laptop, writing"
               caption="Every message reaches the team, not a ticket queue."
               credit="Rawpixel, CC0"

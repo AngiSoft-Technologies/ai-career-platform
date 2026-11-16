@@ -2,7 +2,7 @@ import { Queue, Worker, type JobsOptions } from "bullmq";
 import IORedis from "ioredis";
 import { config } from "../config.js";
 import { logger } from "../logger.js";
-import { startDistributedInterval, type TickHandle } from "../lib/distributed-tick.js";
+import { startTicker, type TickerEntry, type TickerHandle } from "../lib/ticker.js";
 import { clearBacklog, jobPriority, registerBacklog } from "../services/engine/priority.js";
 import {
   shutdownHtmlWorkers,
@@ -46,6 +46,7 @@ const DEFAULT_JOB_OPTIONS: JobsOptions = {
 let connection: IORedis | null = null;
 let queues: Map<QueueName, Queue> | null = null;
 let workers: Worker[] = [];
+let ticker: TickerHandle | null = null;
 
 export function workerConnection(): IORedis {
   if (!connection) {
@@ -366,6 +367,8 @@ function startStallWatchdog(queueMap: Map<QueueName, Queue>): () => void {
 export interface WorkerHandle {
   queues: Map<QueueName, Queue>;
   stop: () => Promise<void>;
+  /** Stops the one-second clock that dispatches every periodic job. */
+  stopTicker: () => void;
 }
 
 /**
@@ -424,7 +427,14 @@ export async function startWorkers(): Promise<WorkerHandle> {
     logger.info({ queue: queueName }, "Background consumer started");
   }
 
-  await scheduleRecurringJobs(queueMap);
+  // Every periodic job is dispatched by one clock. The clock does not run
+  // any work itself — it hands each due job to its queue, and the queue
+  // workers above do the rest.
+  ticker = startTicker(await scheduleRecurringJobs(queueMap), {
+    intervalMs: Number(process.env.TICKER_INTERVAL_MS ?? 1_000),
+    runWhenRedisDown: config.NODE_ENV !== "production",
+    label: "mboqara-backend",
+  });
 
   const stopWatchdog = startStallWatchdog(queueMap);
 
@@ -441,6 +451,7 @@ export async function startWorkers(): Promise<WorkerHandle> {
   return {
     queues: queueMap,
     stop: async () => {
+      ticker?.stop();
       stopWatchdog();
       await shutdownHtmlWorkers();
       await Promise.all(workers.map((worker) => worker.close()));
@@ -453,39 +464,18 @@ export async function startWorkers(): Promise<WorkerHandle> {
         connection = null;
       }
     },
+    stopTicker: () => {
+      ticker?.stop();
+    },
   };
 }
 
 /**
- * Runs a single ingestion cycle and returns results.
- * Call this directly from a continuous polling loop instead of using a scheduler.
- */
-async function runIngestionCycle(): Promise<{
-  sources: number;
-  inserted: number;
-  status: string;
-}> {
-  const result = await runIngestion();
-  return {
-    sources: 1,
-    inserted: result.inserted,
-    status: result.status,
-  };
-}
-
-/**
- * Starts a continuous polling loop for the given queue.
- * The callback will be invoked every `intervalMs` milliseconds until `stop()` is called.
- */
-/**
- * Continuous polling, gated by a distributed tick.
+ * One periodic job, expressed as a ticker entry.
  *
- * A raw `setInterval` has a specific failure mode on a multi-replica deploy:
- * every replica fires the same timer and enqueues the same job N times, so a
- * 30s cadence becomes ~7s under load with duplicate work. The tick is claimed
- * with a Redis lease, so exactly one replica enqueues per interval; when
- * Redis is unreachable we fall back to running locally in development rather
- * than silently never running.
+ * The dispatch is gated by a Redis lease inside the ticker (see
+ * `lib/ticker.ts`), so on a multi-replica deploy every replica ticks but
+ * exactly one replica enqueues per cadence boundary.
  *
  * The enqueue is **deduplicated by job id**. A periodic job means "make sure
  * this runs", not "add another one every interval": the ingestion cycle
@@ -493,59 +483,34 @@ async function runIngestionCycle(): Promise<{
  * could never drain. With a fixed job id, BullMQ keeps at most one copy
  * pending, and the next tick picks up as soon as the previous run finishes.
  */
-function startContinuousPolling(
+function pollingEntry(
   queue: Queue,
   jobName: JobName,
   intervalMs: number,
-): { stop: () => Promise<void> } {
-  const tickName = `tick:{${queue.name}}:${jobName}`;
-  let tick: TickHandle | null = null;
-
-  const stop = async (): Promise<void> => {
-    tick?.stop();
-    tick = null;
-  };
-
-  tick = startDistributedInterval(
-    tickName,
+): TickerEntry {
+  return {
+    name: `dispatch:${queue.name}:${jobName}`,
     intervalMs,
-    async () => {
-      try {
-        // The worker's Redis connection retries forever (BullMQ requires
-        // it), so an unreachable Redis leaves this call pending for ever.
-        // A deadline turns that into a failed tick, which the next tick
-        // retries.
-        await withDeadline(
-          queue.add(
-            jobName,
-            {},
-            {
-              attempts: 1,
-              // BullMQ rejects a custom id that contains a colon.
-              jobId: `periodic-${jobName}`,
-              // Removed on completion so the id frees up for the next run;
-              // kept on failure would block every later tick.
-              removeOnComplete: true,
-              removeOnFail: true,
-            },
-          ),
-          10_000,
-          `enqueue:${jobName}`,
-        );
-      } catch (error) {
-        logger.error(
-          { error: error instanceof Error ? error.message : String(error) },
-          "Failed to add continuous polling job",
-        );
-      }
+    run: async () => {
+      // The worker's Redis connection retries forever (BullMQ requires
+      // it), so an unreachable Redis leaves this call pending for ever.
+      // The ticker's own deadline turns that into a failed dispatch, which
+      // the next tick retries.
+      await queue.add(
+        jobName,
+        {},
+        {
+          attempts: 1,
+          // BullMQ rejects a custom id that contains a colon.
+          jobId: `periodic-${jobName}`,
+          // Removed on completion so the id frees up for the next run;
+          // kept on failure would block every later tick.
+          removeOnComplete: true,
+          removeOnFail: true,
+        },
+      );
     },
-    {
-      label: `${queue.name}:${jobName}`,
-      runWhenRedisDown: config.NODE_ENV !== "production",
-    },
-  );
-
-  return { stop };
+  };
 }
 
 /** A promise that gives up after `ms`, so a hung call cannot wedge a loop. */
@@ -573,9 +538,20 @@ function withDeadline<T>(
   });
 }
 
+/**
+ * Builds every periodic job as a ticker entry.
+ *
+ * The clock itself is started by the caller (`startTicker`), so all six
+ * cadences share one 1-second heartbeat instead of six independent timers.
+ *
+ * Each entry is *enabled* only while its `CONTINUOUS_*` flag allows it; the
+ * flag off means "use BullMQ's own repeatable scheduler instead", which is the
+ * escape hatch for a deploy that wants Redis to own the cadence rather than
+ * this process.
+ */
 async function scheduleRecurringJobs(
   queueMap: Map<QueueName, Queue>,
-): Promise<void> {
+): Promise<TickerEntry[]> {
   const ingestionIntervalMs = Number(
     process.env.INGESTION_INTERVAL_MS ?? 30_000,
   );
@@ -598,10 +574,10 @@ async function scheduleRecurringJobs(
    * Removes a repeatable scheduler left behind by an earlier configuration.
    *
    * A job scheduler lives in Redis until it is removed, so switching a
-   * queue from scheduler mode to continuous mode leaves the old scheduler
+   * queue from scheduler mode to ticker mode leaves the old scheduler
    * running: it keeps adding jobs on its own cadence, forever, in addition
-   * to the continuous tick. The duplicate source is invisible — it shows up
-   * only as a queue that never drains.
+   * to the ticker. The duplicate source is invisible — it shows up only as
+   * a queue that never drains.
    */
   const removeStaleScheduler = async (
     queue: Queue | undefined,
@@ -625,17 +601,13 @@ async function scheduleRecurringJobs(
     }
   };
 
-  // Set up continuous polling for ingestion if enabled
+  const entries: TickerEntry[] = [];
+
+  // Ingestion — the discovery pass over every registered source.
   if (ingestionQueue && process.env.CONTINUOUS_INGESTION !== "false") {
     await removeStaleScheduler(ingestionQueue, "scheduler-ingestion");
-    await startContinuousPolling(
-      ingestionQueue,
-      JOB_NAMES.ingestSources,
-      ingestionIntervalMs,
-    );
-    logger.info(
-      { intervalMs: ingestionIntervalMs },
-      "Continuous ingestion polling started",
+    entries.push(
+      pollingEntry(ingestionQueue, JOB_NAMES.ingestSources, ingestionIntervalMs),
     );
   } else if (ingestionQueue) {
     // Fall back to scheduler if continuous is disabled
@@ -647,23 +619,13 @@ async function scheduleRecurringJobs(
       { every: ingestionMinutes * 60_000, startDate: new Date(Date.now() + 60_000) },
       { name: JOB_NAMES.ingestSources, data: {} },
     );
-    logger.info(
-      { intervalMinutes: ingestionMinutes },
-      "Scheduled ingestion job set up",
-    );
   }
 
-  // Set up continuous polling for embeddings if enabled
+  // Embeddings — semantic search only works on vectors that exist.
   if (embeddingQueue && process.env.CONTINUOUS_EMBEDDING !== "false") {
     await removeStaleScheduler(embeddingQueue, "scheduler-embeddings");
-    await startContinuousPolling(
-      embeddingQueue,
-      JOB_NAMES.refreshEmbeddings,
-      embeddingIntervalMs,
-    );
-    logger.info(
-      { intervalMs: embeddingIntervalMs },
-      "Continuous embedding polling started",
+    entries.push(
+      pollingEntry(embeddingQueue, JOB_NAMES.refreshEmbeddings, embeddingIntervalMs),
     );
   } else if (embeddingQueue) {
     const embeddingMinutes = Number(
@@ -674,39 +636,29 @@ async function scheduleRecurringJobs(
       { every: embeddingMinutes * 60_000, startDate: new Date(Date.now() + 120_000) },
       { name: JOB_NAMES.refreshEmbeddings, data: {} },
     );
-    logger.info(
-      { intervalMinutes: embeddingMinutes },
-      "Scheduled embedding job set up",
-    );
   }
 
   if (maintenanceQueue) {
     if (process.env.CONTINUOUS_MAINTENANCE !== "false") {
       await removeStaleScheduler(maintenanceQueue, "scheduler-maintenance");
       await removeStaleScheduler(maintenanceQueue, "scheduler-event-pruning");
-      await startContinuousPolling(
-        maintenanceQueue,
-        JOB_NAMES.expireOpportunities,
-        maintenanceIntervalMs,
-      );
-      logger.info(
-        { intervalMs: maintenanceIntervalMs },
-        "Continuous maintenance polling started",
+
+      entries.push(
+        pollingEntry(
+          maintenanceQueue,
+          JOB_NAMES.expireOpportunities,
+          maintenanceIntervalMs,
+        ),
       );
 
       // Event pruning used to run only through the repeatable scheduler. In
-      // continuous mode it has to be polled too, or pruning stops the
-      // moment the stale scheduler is removed.
-      await startContinuousPolling(
-        maintenanceQueue,
-        JOB_NAMES.pruneEvents,
-        pruningIntervalMs,
+      // ticker mode it has to be dispatched too, or pruning stops the moment
+      // the stale scheduler is removed.
+      entries.push(
+        pollingEntry(maintenanceQueue, JOB_NAMES.pruneEvents, pruningIntervalMs),
       );
-      logger.info(
-        { intervalMs: pruningIntervalMs },
-        "Continuous event pruning started",
-      );
-    } else {      const maintenanceHours = Number(
+    } else {
+      const maintenanceHours = Number(
         process.env.MAINTENANCE_INTERVAL_HOURS ?? 6,
       );
       await maintenanceQueue.upsertJobScheduler(
@@ -714,19 +666,11 @@ async function scheduleRecurringJobs(
         { every: maintenanceHours * 3_600_000, startDate: new Date(Date.now() + 180_000) },
         { name: JOB_NAMES.expireOpportunities, data: {} },
       );
-      logger.info(
-        { intervalHours: maintenanceHours },
-        "Scheduled maintenance job set up",
-      );
 
       await maintenanceQueue.upsertJobScheduler(
         "scheduler-event-pruning",
         { every: pruningHours * 3_600_000, startDate: new Date(Date.now() + 240_000) },
         { name: JOB_NAMES.pruneEvents, data: {} },
-      );
-      logger.info(
-        { intervalHours: pruningHours },
-        "Scheduled event pruning job set up",
       );
     }
   }
@@ -739,14 +683,8 @@ async function scheduleRecurringJobs(
     const webhookIntervalMs = Number(
       process.env.WEBHOOK_DISPATCH_INTERVAL_MS ?? 5_000,
     );
-    await startContinuousPolling(
-      maintenanceQueue,
-      JOB_NAMES.dispatchWebhooks,
-      webhookIntervalMs,
-    );
-    logger.info(
-      { intervalMs: webhookIntervalMs },
-      "Continuous webhook dispatch started",
+    entries.push(
+      pollingEntry(maintenanceQueue, JOB_NAMES.dispatchWebhooks, webhookIntervalMs),
     );
   }
 
@@ -754,19 +692,17 @@ async function scheduleRecurringJobs(
     const reaperIntervalMs = Number(
       process.env.REAPER_INTERVAL_MS ?? 3_600_000,
     );
-    await startContinuousPolling(
-      maintenanceQueue,
-      JOB_NAMES.reapStaleRows,
-      reaperIntervalMs,
-    );
-    logger.info(
-      { intervalMs: reaperIntervalMs },
-      "Continuous stale-row reaping started",
+    entries.push(
+      pollingEntry(maintenanceQueue, JOB_NAMES.reapStaleRows, reaperIntervalMs),
     );
   }
 
   logger.info(
     {
+      dispatches: entries.map((entry) => ({
+        entry: entry.name,
+        everyMs: entry.intervalMs,
+      })),
       ingestionIntervalMs,
       embeddingIntervalMs,
       maintenanceIntervalMs,
@@ -775,6 +711,8 @@ async function scheduleRecurringJobs(
       continuousEmbedding: process.env.CONTINUOUS_EMBEDDING !== "false",
       continuousMaintenance: process.env.CONTINUOUS_MAINTENANCE !== "false",
     },
-    "Recurring background jobs configured",
+    "Periodic jobs attached to the backend ticker",
   );
+
+  return entries;
 }

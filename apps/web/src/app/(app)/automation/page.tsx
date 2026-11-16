@@ -2,17 +2,20 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Bot, Cpu, RefreshCw, Workflow } from "lucide-react";
+import { Cpu, RefreshCw, Workflow } from "lucide-react";
 import {
   Badge,
   Button,
-  Card,
   DataTable,
   EmptyState,
+  Page,
   PageHeader,
-  SectionTitle,
+  Panel,
+  PanelHead,
+  Rows,
+  Row,
   Skeleton,
-  StatTile,
+  StatStrip,
   Td,
   Th,
   useToast,
@@ -92,11 +95,16 @@ export default function AutomationPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <Page>
       <PageHeader
         eyebrow="Automation"
         title="The machine behind the search"
         description="Five pipelines run continuously. You can see what is configured and trigger a check."
+        art={{
+          src: "https://cdn.angisoft.co.ke/public/images/mboqara/careers/technology-professional.webp",
+          alt: "A professional working at a laptop beside a chalkboard plan",
+          caption: "Always running",
+        }}
         actions={
           <Badge tone={ai.data?.configured ? "success" : "warning"}>
             <Cpu size={11} /> AI {ai.data?.configured ? "online" : "not configured"}
@@ -104,46 +112,57 @@ export default function AutomationPage() {
         }
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile
-          label="AI tasks"
-          value={String(stats.data?.totals.aiTasks ?? 0)}
-          icon={<Bot size={15} />}
-        />
-        <StatTile label="Sources" value={String(stats.data?.totals.sources ?? 0)} />
-        <StatTile
-          label="Live opportunities"
-          value={String(stats.data?.totals.activeOpportunities ?? 0)}
-        />
-        <StatTile label="Events / 24h" value={String(stats.data?.totals.events24h ?? 0)} />
-      </div>
+      <StatStrip
+        items={[
+          {
+            label: "AI tasks",
+            value: (stats.data?.totals.aiTasks ?? 0).toLocaleString(),
+            hint: "processed in total",
+          },
+          {
+            label: "Sources",
+            value: (stats.data?.totals.sources ?? 0).toLocaleString(),
+            hint: "boards monitored",
+          },
+          {
+            label: "Live opportunities",
+            value: (stats.data?.totals.activeOpportunities ?? 0).toLocaleString(),
+            hint: "published now",
+          },
+          {
+            label: "Events / 24h",
+            value: (stats.data?.totals.events24h ?? 0).toLocaleString(),
+            hint: "in the last day",
+          },
+        ]}
+      />
 
-      <Card className="p-4 sm:p-5">
-        <SectionTitle
+      <Panel>
+        <PanelHead
           eyebrow="Pipelines"
           title="What runs automatically"
           action={<Workflow size={16} className="text-app-muted" />}
         />
-        <ul className="mt-3 flex flex-col gap-2">
-          {PIPELINES.map((pipeline) => (
-            <li
-              key={pipeline.name}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-app-md border border-app-border px-3 py-2.5"
-            >
-              <div className="min-w-[240px] flex-1">
-                <strong className="text-[0.89rem] text-app-text">{pipeline.name}</strong>
-                <p className="mt-0.5 text-[0.79rem] leading-relaxed text-app-muted">
+        <Rows className="border-t border-app-border">
+          {PIPELINES.map((pipeline, index) => (
+            <Row key={pipeline.name} as="li" className="items-start gap-4">
+              <span className="grid size-8 shrink-0 place-items-center rounded-app-sm border border-app-border bg-app-surface-2 font-mono text-[0.68rem] font-semibold tabular-nums text-app-accent">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              <div className="min-w-[220px] flex-1">
+                <p className="text-[0.92rem] font-semibold text-app-text">{pipeline.name}</p>
+                <p className="mt-1 max-w-[62ch] text-[0.82rem] leading-relaxed text-app-muted">
                   {pipeline.detail}
                 </p>
               </div>
               <Badge tone="neutral">{pipeline.cadence}</Badge>
-            </li>
+            </Row>
           ))}
-        </ul>
-      </Card>
+        </Rows>
+      </Panel>
 
-      <Card className="p-4 sm:p-5">
-        <SectionTitle
+      <Panel>
+        <PanelHead
           eyebrow="Connectors"
           title="Registered sources"
           description="Trigger a health check on any connector without waiting for the scheduler."
@@ -162,17 +181,17 @@ export default function AutomationPage() {
             </Button>
           }
         />
-        {sources.loading && !sources.data ? (
-          <div className="mt-4">
-            <Skeleton height={160} />
-          </div>
-        ) : (sources.data?.items?.length ?? 0) === 0 ? (
-          <div className="mt-4">
-            <EmptyState title="No connectors registered" />
-          </div>
-        ) : (
-          <div className="mt-4">
-            <DataTable>
+        <div className="border-t border-app-border">
+          {sources.loading && !sources.data ? (
+            <div className="p-5">
+              <Skeleton height={160} />
+            </div>
+          ) : (sources.data?.items?.length ?? 0) === 0 ? (
+            <div className="p-5">
+              <EmptyState title="No connectors registered" />
+            </div>
+          ) : (
+            <DataTable className="rounded-none border-0 shadow-none">
               <thead>
                 <tr>
                   <Th>Connector</Th>
@@ -218,26 +237,26 @@ export default function AutomationPage() {
                 ))}
               </tbody>
             </DataTable>
-          </div>
-        )}
-      </Card>
+          )}
+        </div>
+      </Panel>
 
-      <Card className="p-4 sm:p-5">
-        <SectionTitle eyebrow="AI gateway" title="Provider status" />
-        <div className="mt-3">
+      <Panel>
+        <PanelHead eyebrow="AI gateway" title="Provider status" />
+        <div className="border-t border-app-border px-5 py-5">
           <p className="max-w-3xl text-[0.85rem] leading-relaxed text-app-muted">
             The gateway tries NVIDIA first, then Neon, then OpenAI, then your custom endpoint. It
             degrades to deterministic fallbacks so no feature ever hard-fails because a key is
             missing.
           </p>
-          <div className="mt-3 flex flex-wrap gap-1.5">
+          <div className="mt-4 flex flex-wrap gap-1.5">
             <Badge tone={ai.data?.configured ? "success" : "neutral"}>NVIDIA</Badge>
             <Badge tone={ai.data?.configured ? "success" : "neutral"}>Neon</Badge>
             <Badge tone={ai.data?.configured ? "success" : "neutral"}>OpenAI</Badge>
             <Badge tone="neutral">custom</Badge>
             <Badge tone="accent">mode: {ai.data?.mode ?? "auto"}</Badge>
           </div>
-          <div className="mt-4">
+          <div className="mt-5">
             <Link href="/settings">
               <Button variant="outline" size="sm">
                 Gateway settings
@@ -245,7 +264,7 @@ export default function AutomationPage() {
             </Link>
           </div>
         </div>
-      </Card>
-    </div>
+      </Panel>
+    </Page>
   );
 }

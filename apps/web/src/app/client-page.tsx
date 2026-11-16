@@ -258,7 +258,7 @@ export default function LandingPage({
           <video
             ref={heroVideo}
             className="jr-hero__video"
-            poster="/media/radar-poster.jpg"
+            poster="https://cdn.angisoft.co.ke/public/images/mboqara/radar-poster.jpg"
             preload="auto"
             muted
             loop
@@ -270,7 +270,7 @@ export default function LandingPage({
             tabIndex={-1}
             aria-hidden={true}
           >
-            <source src="/media/radar-loop.mp4" type="video/mp4" />
+            <source src="https://cdn.angisoft.co.ke/public/images/mboqara/radar-loop.mp4" type="video/mp4" />
           </video>
           <div className="jr-hero__scrim" />
         </div>
@@ -290,7 +290,7 @@ export default function LandingPage({
           <div className="jr-hero__visual">
             <div className="jr-hero__photo jr-glass" style={{ padding: 10 }}>
               <Image
-                src="/media/careers/lagos-career-story.webp"
+                src="https://cdn.angisoft.co.ke/public/images/mboqara/careers/lagos-career-story.webp"
                 alt="A professional working on her laptop in a Lagos café"
                 fill
                 priority

@@ -26,6 +26,8 @@ import {
   ListChecks,
   Menu,
   MessageSquare,
+  PanelLeftClose,
+  PanelLeftOpen,
   Radio,
   Search,
   Settings,
@@ -50,10 +52,10 @@ import type { Session } from "@/lib/auth";
  * typeface — and the frame reads those tokens, so a theme change never
  * changes the structure.
  *
- * The sidebar collapses by changing its own width, and because it is a flex
- * sibling of the content rather than a fixed column in a grid template, the
- * content reflows with it. (It used to be a grid whose column width was
- * hard-coded, so collapsing the sidebar moved nothing but the sidebar.)
+ * The shell is a two-track grid: a rail whose width is a custom property,
+ * and a fluid content column. Collapsing the rail animates the grid track,
+ * so the content column genuinely reclaims the width instead of merely
+ * sliding sideways under a hard max-width.
  */
 
 interface NavSubItem {
@@ -61,6 +63,15 @@ interface NavSubItem {
   label: string;
   icon: LucideIcon;
   roles: RoleKey[];
+}
+
+interface NavItem {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  roles: RoleKey[];
+  group: string;
+  subItems?: NavSubItem[];
 }
 
 /**
@@ -71,15 +82,6 @@ interface NavSubItem {
  * stored choice is never overwritten by the default.
  */
 const SIDEBAR_COLLAPSED_KEY = "mboqara.sidebar.collapsed";
-
-interface NavItem {
-  href: string;
-  label: string;
-  icon: LucideIcon;
-  roles: RoleKey[];
-  group: string;
-  subItems?: NavSubItem[];
-}
 
 const ROLE_NAV: Record<RoleKey, NavItem[]> = {
   job_seeker: [
@@ -348,10 +350,7 @@ export function AppShell({
   useEffect(() => {
     if (!collapseReady) return;
     try {
-      window.localStorage.setItem(
-        SIDEBAR_COLLAPSED_KEY,
-        String(collapsed),
-      );
+      window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
     } catch {
       // A failed preference must never break the shell.
     }
@@ -371,68 +370,77 @@ export function AppShell({
   }, [pathname]);
 
   return (
-    <div className="min-h-dvh bg-app-bg text-app-text">
-      <div className="flex min-h-dvh">
-        {/* Desktop sidebar. Its width is the flex basis, so the content
-            beside it reflows as it changes. */}
-        <aside
-          className={cx(
-            "sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-app-border bg-app-elevated/40",
-            "transition-[width] duration-200 ease-out lg:flex",
-            collapsed ? "w-[76px]" : "w-[264px]",
-          )}
-        >
-          <Sidebar
-            nav={nav}
-            pathname={pathname}
-            collapsed={collapsed}
-            session={session}
-            connected={connected}
-            pending={pending}
-            onToggleCollapse={() => setCollapsed((value) => !value)}
-          />
-        </aside>
+    <div
+      // The shell is a two-track grid. The rail's width is the grid track,
+      // so collapsing it animates the track and the content column beside
+      // it genuinely reclaims the width — instead of the page merely
+      // sliding sideways under a hard max-width.
+      //
+      // The track width is a custom property rather than a second
+      // `lg:grid-cols-*` rule: two rules for the same property would have
+      // to be ordered correctly against Tailwind's variant order, and the
+      // data variant does not win that race. One rule reading one variable
+      // has nothing to order.
+      className="grid min-h-dvh grid-cols-1 transition-[grid-template-columns] duration-200 ease-out lg:grid-cols-[var(--rail-w)_minmax(0,1fr)]"
+      style={{ "--rail-w": collapsed ? "80px" : "252px" } as React.CSSProperties}
+    >
+      {/* Desktop rail. It fills its grid track, so the track is the single
+          source of truth for how wide it is. */}
+      <aside className="sticky top-0 hidden h-dvh flex-col overflow-hidden border-r border-app-border bg-[linear-gradient(180deg,color-mix(in_srgb,var(--bg-elevated)_92%,transparent),var(--bg))] backdrop-blur-xl lg:flex">
+        <Sidebar
+          nav={nav}
+          pathname={pathname}
+          collapsed={collapsed}
+          session={session}
+          connected={connected}
+          pending={pending}
+          onToggleCollapse={() => setCollapsed((value) => !value)}
+        />
+      </aside>
 
-        {/* Mobile drawer. */}
-        {drawerOpen ? (
-          <div className="fixed inset-0 z-50 lg:hidden">
-            <button
-              type="button"
-              aria-label="Close navigation"
-              onClick={() => setDrawerOpen(false)}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+      {/* Mobile drawer. */}
+      {drawerOpen ? (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <button
+            type="button"
+            aria-label="Close navigation"
+            onClick={() => setDrawerOpen(false)}
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+          />
+          <aside className="absolute inset-y-0 left-0 flex w-[288px] max-w-[86vw] flex-col overflow-hidden border-r border-app-border bg-app-elevated shadow-app-lg">
+            <Sidebar
+              nav={nav}
+              pathname={pathname}
+              collapsed={false}
+              session={session}
+              connected={connected}
+              pending={pending}
+              onClose={() => setDrawerOpen(false)}
             />
-            <div className="absolute inset-y-0 left-0 flex w-[272px] max-w-[82vw] flex-col border-r border-app-border bg-app-elevated shadow-app-lg">
-              <Sidebar
-                nav={nav}
-                pathname={pathname}
-                collapsed={false}
-                session={session}
-                connected={connected}
-                pending={pending}
-                onClose={() => setDrawerOpen(false)}
-              />
-            </div>
-          </div>
-        ) : null}
-
-        <div className="flex min-w-0 flex-1 flex-col">
-          <TopBar
-            session={session}
-            onOpenDrawer={() => setDrawerOpen(true)}
-            events={events}
-          />
-          <main className="mx-auto w-full min-w-0 max-w-[1560px] flex-1 px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
-            {children}
-          </main>
+          </aside>
         </div>
+      ) : null}
+
+      <div className="flex min-w-0 flex-col">
+        <TopBar
+          session={session}
+          onOpenDrawer={() => setDrawerOpen(true)}
+          events={events}
+          pathname={pathname}
+        />
+        <main
+          id="main-content"
+          className="mx-auto w-full max-w-shell-content flex-1 px-4 pt-6 pb-16 sm:px-6 lg:px-8 lg:pt-8 2xl:px-10"
+        >
+          {children}
+        </main>
       </div>
     </div>
   );
 }
 
 /* ========================================================================== */
-/* Sidebar                                                                    */
+/* Rail                                                                       */
 /* ========================================================================== */
 
 function Sidebar({
@@ -465,30 +473,32 @@ function Sidebar({
     return [...map.entries()];
   }, [nav]);
 
+  const name = session?.user.name ?? session?.user.email ?? "Your account";
+
   return (
     <>
       <div
         className={cx(
-          "flex h-16 shrink-0 items-center gap-2 border-b border-app-border px-3",
+          "flex h-shell-topbar shrink-0 items-center gap-2 border-b border-app-border px-3",
           collapsed && "justify-center px-2",
         )}
       >
-        <Link href="/dashboard" className="flex min-w-0 items-center gap-2.5">
-          <img
-            src="/brand/logo-mark.png"
-            alt=""
-            width={28}
-            height={28}
-            className="size-7 shrink-0 rounded-app-sm"
-          />
+        <Link
+          href="/dashboard"
+          className="flex min-w-0 items-center gap-2.5"
+          aria-label="MboQara home"
+        >
+          <span className="relative grid size-8 shrink-0 place-items-center rounded-[10px] bg-[linear-gradient(140deg,var(--accent),var(--accent-2))] shadow-[0_6px_18px_color-mix(in_srgb,var(--accent)_38%,transparent)]">
+            <img src="/brand/logo-mark.png" alt="" width={20} height={20} className="size-5" />
+          </span>
           {collapsed ? null : (
-            <span className="truncate text-[0.95rem] font-bold tracking-[-0.01em] text-app-text">
+            <span className="truncate text-[1.02rem] font-semibold tracking-[-0.025em] text-app-text">
               MboQara
             </span>
           )}
         </Link>
 
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex items-center gap-0.5">
           {onClose ? (
             <IconButton onClick={onClose} aria-label="Close navigation">
               <X size={17} />
@@ -500,28 +510,28 @@ function Sidebar({
               aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
               className="hidden lg:inline-grid"
             >
-              {collapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}
+              {collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
             </IconButton>
           ) : null}
         </div>
       </div>
 
-      <nav className="min-h-0 flex-1 overflow-y-auto px-2.5 py-3">
+      <nav className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2.5 py-5">
         {groups.map(([group, items]) => (
-          <div key={group} className="mb-4 last:mb-0">
+          <div key={group} className="mb-6 last:mb-0">
             {collapsed ? (
-              <div className="mx-auto my-2 h-px w-6 bg-app-border" />
+              <div className="mx-auto mb-3 h-px w-6 bg-app-border" />
             ) : (
-              <p className="px-2.5 pb-1.5 text-[0.66rem] font-semibold tracking-[0.14em] text-app-muted uppercase">
+              <p className="px-2.5 pb-2 font-mono text-[0.56rem] font-semibold tracking-[0.22em] text-app-muted uppercase">
                 {group}
               </p>
             )}
-            <ul className="flex flex-col gap-0.5">
+            <ul className="flex flex-col gap-1">
               {items.map((item) => (
                 <li key={item.href}>
                   <NavLink item={item} active={pathname.startsWith(item.href)} collapsed={collapsed} />
                   {item.subItems && !collapsed ? (
-                    <ul className="mt-0.5 ml-4 flex flex-col gap-0.5 border-l border-app-border pl-2.5">
+                    <ul className="mt-1 mb-1.5 ml-[21px] flex flex-col gap-0.5 border-l border-app-border pl-3">
                       {item.subItems.map((sub) => (
                         <li key={sub.href}>
                           <NavLink
@@ -542,34 +552,48 @@ function Sidebar({
       </nav>
 
       <div className="shrink-0 border-t border-app-border p-2.5">
-        <div
-          className={cx(
-            "flex items-center gap-2.5 rounded-app-md px-2 py-2",
-            collapsed && "justify-center px-0",
-          )}
-        >
-          <span
-            className={cx(
-              "size-2 shrink-0 rounded-full",
-              connected ? "bg-app-success" : "bg-app-muted",
-            )}
-            aria-hidden
-          />
-          {collapsed ? null : (
+        {collapsed ? (
+          <div className="flex flex-col items-center gap-2 py-1">
+            <Link href="/profile" aria-label="Your profile" title={name}>
+              <Avatar name={name} size={30} />
+            </Link>
+            <span
+              className={cx("size-2 rounded-full", connected ? "bg-app-success" : "bg-app-warning")}
+              title={connected ? "Live" : "Reconnecting"}
+              aria-label={connected ? "Live" : "Reconnecting"}
+            />
+          </div>
+        ) : (
+          <Link
+            href="/profile"
+            className="group flex items-center gap-2.5 rounded-app-md border border-transparent px-2 py-2 transition-colors duration-150 hover:border-app-border hover:bg-app-surface-2"
+          >
+            <Avatar name={name} size={32} />
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-[0.78rem] font-medium text-app-soft">
-                {pending > 0
-                  ? `${pending} change${pending === 1 ? "" : "s"} queued`
-                  : connected
-                    ? "Live"
-                    : "Reconnecting"}
-              </span>
+              <span className="block truncate text-[0.82rem] font-medium text-app-text">{name}</span>
               <span className="block truncate text-[0.7rem] text-app-muted">
                 {ROLE_LABELS[role]}
               </span>
             </span>
-          )}
-        </div>
+            <span
+              className={cx(
+                "size-1.5 shrink-0 rounded-full",
+                connected ? "bg-app-success" : "bg-app-warning",
+              )}
+              aria-hidden
+            />
+          </Link>
+        )}
+        {pending > 0 ? (
+          <p
+            className={cx(
+              "mt-1.5 rounded-app-sm bg-app-warning/12 px-2 py-1 font-mono text-[0.64rem] text-app-warning",
+              collapsed && "text-center",
+            )}
+          >
+            {collapsed ? pending : `${pending} queued offline`}
+          </p>
+        ) : null}
       </div>
     </>
   );
@@ -593,15 +617,30 @@ function NavLink({
       title={collapsed ? item.label : undefined}
       aria-current={active ? "page" : undefined}
       className={cx(
-        "group flex items-center gap-2.5 rounded-app-md text-[0.83rem] font-medium transition-colors duration-150",
-        nested ? "px-2 py-1.5" : "px-2.5 py-2",
-        collapsed && "justify-center px-0",
+        "group relative flex items-center gap-2.5 rounded-app-md text-[0.83rem] transition-colors duration-150",
+        nested ? "px-2 py-1.5" : "px-2.5 py-[7px]",
+        collapsed && "justify-center px-0 py-2",
         active
-          ? "bg-app-accent-soft text-app-accent"
-          : "text-app-soft hover:bg-app-surface-2 hover:text-app-text",
+          ? "bg-[linear-gradient(90deg,color-mix(in_srgb,var(--accent)_18%,transparent),color-mix(in_srgb,var(--accent)_5%,transparent))] font-medium text-app-text"
+          : "font-normal text-app-soft hover:bg-app-surface-2 hover:text-app-text",
       )}
     >
-      <Icon size={nested ? 14 : 16} className="shrink-0" />
+      {active ? (
+        <span
+          aria-hidden
+          className={cx(
+            "absolute top-1/2 left-0 h-5 w-[2.5px] -translate-y-1/2 rounded-full bg-[linear-gradient(180deg,var(--accent),var(--accent-2))]",
+            nested && "left-[-13px] h-3.5",
+          )}
+        />
+      ) : null}
+      <Icon
+        size={nested ? 14 : 16}
+        className={cx(
+          "shrink-0 transition-colors duration-150",
+          active ? "text-app-accent" : "text-app-muted group-hover:text-app-soft",
+        )}
+      />
       {collapsed ? (
         <span className="sr-only">{item.label}</span>
       ) : (
@@ -619,17 +658,24 @@ function TopBar({
   session,
   onOpenDrawer,
   events,
+  pathname,
 }: {
   session: Session | null;
   onOpenDrawer: () => void;
   events: RealtimeEvent[];
+  pathname: string;
 }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
 
+  const segments = pathname.split("/").filter(Boolean).slice(0, 2);
+  const trail = segments.map((segment) =>
+    segment.replace(/-/g, " ").replace(/^\w/, (letter) => letter.toUpperCase()),
+  );
+
   return (
-    <header className="sticky top-0 z-40 border-b border-app-border bg-app-bg/85 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 w-full max-w-[1560px] items-center gap-2 px-4 sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-40 border-b border-app-border bg-app-bg/80 backdrop-blur-xl">
+      <div className="mx-auto flex h-shell-topbar w-full max-w-shell-content items-center gap-3 px-4 sm:px-6 lg:px-8 2xl:px-10">
         <IconButton
           onClick={onOpenDrawer}
           aria-label="Open navigation"
@@ -638,6 +684,20 @@ function TopBar({
           <Menu size={18} />
         </IconButton>
 
+        <nav aria-label="Breadcrumb" className="hidden min-w-0 items-center gap-2 md:flex">
+          <span className="font-mono text-[0.62rem] tracking-[0.18em] text-app-muted uppercase">
+            MboQara
+          </span>
+          {trail.map((segment) => (
+            <span key={segment} className="flex min-w-0 items-center gap-2">
+              <span aria-hidden className="text-app-muted/50">
+                /
+              </span>
+              <span className="truncate text-[0.8rem] font-medium text-app-soft">{segment}</span>
+            </span>
+          ))}
+        </nav>
+
         <form
           role="search"
           onSubmit={(event) => {
@@ -645,7 +705,7 @@ function TopBar({
             const q = query.trim();
             router.push(q ? `/opportunities?q=${encodeURIComponent(q)}` : "/opportunities");
           }}
-          className="relative min-w-0 flex-1 max-w-md"
+          className="relative ml-auto w-full min-w-0 max-w-md"
         >
           <Search
             size={15}
@@ -656,18 +716,21 @@ function TopBar({
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search roles, companies, skills"
             aria-label="Search"
-            className="h-9 w-full rounded-app-md border border-app-border bg-app-surface-2/50 pr-3 pl-9 text-[0.84rem] text-app-text placeholder:text-app-muted focus:border-app-accent focus:bg-app-surface-2 focus:outline-none"
+            className="h-9 w-full rounded-app-md border border-app-border bg-app-surface-2/40 pr-16 pl-9 text-[0.82rem] text-app-text transition-colors duration-150 placeholder:text-app-muted focus:border-app-accent/60 focus:bg-app-surface-2 focus:outline-none"
           />
+          <kbd className="pointer-events-none absolute top-1/2 right-2.5 hidden -translate-y-1/2 rounded-[4px] border border-app-border bg-app-surface-2 px-1.5 font-mono text-[0.6rem] text-app-muted sm:block">
+            Enter
+          </kbd>
         </form>
 
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1">
           <NotificationsBell events={events} />
           <Link
             href="/profile"
-            className="flex items-center gap-2 rounded-app-md px-1.5 py-1 transition-colors duration-150 hover:bg-app-surface-2"
+            className="ml-1 flex items-center gap-2 rounded-app-md py-1 pr-1 pl-1 transition-colors duration-150 hover:bg-app-surface-2"
           >
             <Avatar name={session?.user.name ?? session?.user.email} size={30} />
-            <span className="hidden text-[0.82rem] text-app-soft sm:block">
+            <span className="hidden max-w-[12rem] truncate text-[0.8rem] font-medium text-app-soft xl:block">
               {session?.user.name ?? session?.user.email}
             </span>
           </Link>

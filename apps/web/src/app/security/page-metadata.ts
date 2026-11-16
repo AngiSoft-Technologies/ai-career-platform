@@ -1,7 +1,7 @@
 import { SECURITY_KEYWORDS, pageMetadata } from "@/lib/seo";
 
 const OGG = {
-  url: "/media/og-cover.jpg",
+  url: "https://cdn.angisoft.co.ke/public/images/mboqara/og-cover.jpg",
   width: 1200,
   height: 630,
   alt: "MboQara security — encrypted access, private documents",

@@ -72,7 +72,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       <ScreenHold>
         <div className="rounded-app-lg border border-app-border bg-app-surface p-6 text-center">
           <p className="mb-3.5 text-[0.9rem] text-app-muted">
-            You need to sign in to open the radar.
+            You need to sign in to open MboQara.
           </p>
           <Button onClick={() => router.replace(`/login?next=${encodeURIComponent(pathname)}`)}>
             Go to sign in

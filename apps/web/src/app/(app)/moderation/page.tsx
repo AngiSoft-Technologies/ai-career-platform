@@ -2,17 +2,20 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowUpRight, Fingerprint, ShieldAlert, ShieldCheck, TriangleAlert } from "lucide-react";
+import { ArrowUpRight, ShieldAlert, ShieldCheck, TriangleAlert } from "lucide-react";
 import {
   Badge,
   Button,
-  Card,
   DataTable,
   EmptyState,
+  Page,
   PageHeader,
-  SectionTitle,
+  Panel,
+  PanelHead,
+  Rows,
+  Row,
   Skeleton,
-  StatTile,
+  StatStrip,
   Td,
   Th,
   useToast,
@@ -67,11 +70,16 @@ export default function ModerationPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <Page>
       <PageHeader
         eyebrow="Trust and safety"
         title="Keep the floor clean"
         description="Every posting is fingerprinted. This is where the corpus and the review queue live."
+        art={{
+          src: "https://cdn.angisoft.co.ke/public/images/mboqara/careers/women-in-tech.webp",
+          alt: "An engineer working in a server room",
+          caption: "Every posting fingerprinted",
+        }}
         actions={
           <Badge tone={flagged.length > 0 ? "warning" : "success"}>
             {flagged.length > 0 ? (
@@ -84,30 +92,41 @@ export default function ModerationPage() {
         }
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile label="Sources monitored" value={String(stats.data?.totals.sources ?? 0)} />
-        <StatTile
-          label="Live opportunities"
-          value={String(stats.data?.totals.activeOpportunities ?? 0)}
-        />
-        <StatTile
-          label="Fingerprints"
-          value={String(scam.data?.total ?? 0)}
-          icon={<Fingerprint size={15} />}
-        />
-        <StatTile label="Awaiting review" value={String(queue.data?.total ?? 0)} />
-      </div>
+      <StatStrip
+        items={[
+          {
+            label: "Sources monitored",
+            value: (stats.data?.totals.sources ?? 0).toLocaleString(),
+            hint: "boards we scrape",
+          },
+          {
+            label: "Live opportunities",
+            value: (stats.data?.totals.activeOpportunities ?? 0).toLocaleString(),
+            hint: "published now",
+          },
+          {
+            label: "Fingerprints",
+            value: (scam.data?.total ?? 0).toLocaleString(),
+            hint: "known scam templates",
+          },
+          {
+            label: "Awaiting review",
+            value: (queue.data?.total ?? 0).toLocaleString(),
+            hint: "sources to classify",
+          },
+        ]}
+      />
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="p-4 sm:p-5">
-          <SectionTitle
+      <div className="grid items-start gap-6 lg:grid-cols-2">
+        <Panel>
+          <PanelHead
             eyebrow="Distribution"
             title="How postings are scored"
             action={<ShieldAlert size={16} className="text-app-muted" />}
           />
-          <div className="mt-3 flex flex-col gap-2">
+          <Rows className="border-t border-app-border">
             {risk.map((row) => (
-              <div key={row.risk_action} className="flex items-center justify-between gap-3">
+              <Row key={row.risk_action} as="li" className="items-center justify-between gap-3">
                 <Badge
                   tone={
                     row.risk_action === "block"
@@ -119,31 +138,37 @@ export default function ModerationPage() {
                 >
                   {row.risk_action}
                 </Badge>
-                <span className="font-mono text-[0.78rem] tabular-nums text-app-muted">
-                  {row.count}
+                <span className="font-display text-[1.35rem] leading-none font-semibold tabular-nums text-app-text">
+                  {row.count.toLocaleString()}
                 </span>
-              </div>
+              </Row>
             ))}
             {risk.length === 0 ? (
-              <p className="text-[0.83rem] text-app-muted">No scored postings yet.</p>
+              <Row as="li" className="text-[0.83rem] text-app-muted">
+                No scored postings yet.
+              </Row>
             ) : null}
-          </div>
-        </Card>
+          </Rows>
+        </Panel>
 
-        <Card className="p-4 sm:p-5">
-          <SectionTitle eyebrow="Queue" title="Sources awaiting classification" />
-          <div className="mt-3 flex flex-col gap-2">
+        <Panel>
+          <PanelHead
+            eyebrow="Queue"
+            title="Sources awaiting classification"
+            description="Each one is verified against the scam corpus before it is allowed to publish."
+          />
+          <Rows className="border-t border-app-border">
             {(queue.data?.items ?? []).map((source) => (
-              <div
-                key={source.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-app-sm border border-app-border px-2.5 py-2"
-              >
-                <div className="min-w-[180px]">
-                  <p className="text-[0.85rem] font-semibold text-app-text">{source.name}</p>
-                  <p className="max-w-[240px] truncate text-[0.71rem] text-app-muted">
-                    {source.url}
+              <Row key={source.id} as="li" className="items-center gap-3">
+                <div className="min-w-[160px] flex-1">
+                  <p className="truncate text-[0.88rem] font-medium text-app-text">
+                    {source.name}
                   </p>
+                  <p className="truncate text-[0.72rem] text-app-muted">{source.url}</p>
                 </div>
+                <Badge tone={source.health === "ok" ? "success" : "warning"}>
+                  {source.health}
+                </Badge>
                 <Button
                   size="sm"
                   variant="outline"
@@ -152,32 +177,34 @@ export default function ModerationPage() {
                 >
                   Verify
                 </Button>
-              </div>
+              </Row>
             ))}
             {(queue.data?.items?.length ?? 0) === 0 ? (
-              <p className="text-[0.83rem] text-app-muted">The queue is clear.</p>
+              <Row as="li" className="text-[0.83rem] text-app-muted">
+                The queue is clear.
+              </Row>
             ) : null}
-          </div>
-        </Card>
+          </Rows>
+        </Panel>
       </div>
 
-      <Card className="p-4 sm:p-5">
-        <SectionTitle
+      <Panel>
+        <PanelHead
           eyebrow="Corpus"
           title={`${scam.data?.total ?? 0} scam fingerprints`}
           description="SimHash fingerprints of known fraudulent templates."
         />
         {scam.loading && !scam.data ? (
-          <div className="mt-4">
+          <div className="border-t border-app-border p-5">
             <Skeleton height={180} />
           </div>
         ) : (scam.data?.items?.length ?? 0) === 0 ? (
-          <div className="mt-4">
+          <div className="border-t border-app-border p-5">
             <EmptyState title="Corpus is empty" />
           </div>
         ) : (
-          <div className="mt-4">
-            <DataTable>
+          <div className="border-t border-app-border">
+            <DataTable className="rounded-none border-0 shadow-none">
               <thead>
                 <tr>
                   <Th>Label</Th>
@@ -214,24 +241,24 @@ export default function ModerationPage() {
             </DataTable>
           </div>
         )}
-      </Card>
+      </Panel>
 
-      <Card className="p-4 sm:p-5">
-        <SectionTitle eyebrow="Policy" title="What we remove" />
-        <ul className="mt-3 list-disc space-y-2 pl-5 text-[0.86rem] leading-relaxed text-app-soft">
+      <Panel>
+        <PanelHead eyebrow="Policy" title="What we remove" />
+        <ul className="mt-1 list-disc space-y-2 border-t border-app-border px-5 py-5 pl-9 text-[0.86rem] leading-relaxed text-app-soft">
           <li>Postings that fingerprint against a known scam template.</li>
           <li>Companies with no verifiable history and a payment or bank-detail request.</li>
           <li>Salary ranges that fall far below the local median for that profession.</li>
           <li>Duplicate postings replayed across dozens of boards to farm applications.</li>
         </ul>
-        <div className="mt-4">
+        <div className="border-t border-app-border px-5 py-4">
           <Link href="/admin">
             <Button variant="outline" size="sm">
               Open the full control room
             </Button>
           </Link>
         </div>
-      </Card>
-    </div>
+      </Panel>
+    </Page>
   );
 }

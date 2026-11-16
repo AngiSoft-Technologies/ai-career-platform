@@ -175,8 +175,8 @@ export default function DownloadPage({
             <p className="mk-lede">Saved roles, prepared documents and every next step — carried on your phone.</p>
           </header>
           <VideoHero
-            poster="/media/radar-poster.jpg"
-            videoSrc="/media/radar-loop.mp4"
+            poster="https://cdn.angisoft.co.ke/public/images/mboqara/radar-poster.jpg"
+            videoSrc="https://cdn.angisoft.co.ke/public/images/mboqara/radar-loop.mp4"
             className="mk-section-card"
           />
           <div className="mt-10">

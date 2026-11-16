@@ -7,7 +7,7 @@ export const metadata = pageMetadata({
   path: "/download",
   keywords: DOWNLOAD_KEYWORDS,
   image: {
-    url: "/media/bg-download.jpg",
+    url: "https://cdn.angisoft.co.ke/public/images/mboqara/bg-download.jpg",
     width: 1200,
     height: 630,
     alt: "MboQara Android app preview — job search, documents and application tracking",

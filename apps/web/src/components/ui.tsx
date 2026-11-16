@@ -14,8 +14,9 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from "react";
+import Image from "next/image";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Search } from "lucide-react";
 
 /**
  * The application's component kit.
@@ -34,11 +35,27 @@ export function cx(...values: Array<string | false | null | undefined>): string 
 
 const TONE_CLASS: Record<Tone, string> = {
   neutral: "bg-app-surface-2 text-app-soft border-app-border",
-  accent: "bg-app-accent-soft text-app-accent border-app-accent/30",
-  success: "bg-app-success/12 text-app-success border-app-success/30",
-  warning: "bg-app-warning/12 text-app-warning border-app-warning/30",
-  danger: "bg-app-danger/12 text-app-danger border-app-danger/30",
-  info: "bg-app-info/12 text-app-info border-app-info/30",
+  accent: "bg-app-accent-soft text-app-accent border-app-accent/25",
+  success: "bg-app-success/12 text-app-success border-app-success/25",
+  warning: "bg-app-warning/12 text-app-warning border-app-warning/25",
+  danger: "bg-app-danger/12 text-app-danger border-app-danger/25",
+  info: "bg-app-info/12 text-app-info border-app-info/25",
+};
+
+/**
+ * The pill radius is a token, not a hard-coded 999px: the editorial theme
+ * has square corners and the terminal theme is nearly square, so a badge
+ * that ignored the token would read as a sticker pasted onto the page.
+ */
+const PILL = "rounded-app-pill";
+
+const TONE_DOT: Record<Tone, string> = {
+  neutral: "bg-app-muted",
+  accent: "bg-app-accent",
+  success: "bg-app-success",
+  warning: "bg-app-warning",
+  danger: "bg-app-danger",
+  info: "bg-app-info",
 };
 
 /* ========================================================================== */
@@ -150,9 +167,9 @@ export function Card({
   return (
     <Tag
       className={cx(
-        "relative rounded-app-lg border border-app-border bg-app-surface",
+        "relative rounded-app-lg border border-app-border bg-app-surface shadow-app-card",
         hover &&
-          "transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-app-border-strong hover:shadow-app-md",
+          "transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-app-border-strong hover:shadow-app-lift",
         className,
       )}
       {...rest}
@@ -162,6 +179,10 @@ export function Card({
   );
 }
 
+/**
+ * A section heading inside a page — smaller than the page header, and
+ * optional, since most bands use `PanelHead`.
+ */
 export function SectionTitle({
   eyebrow,
   title,
@@ -177,11 +198,11 @@ export function SectionTitle({
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div className="min-w-0">
         {eyebrow ? (
-          <p className="text-[0.7rem] font-semibold tracking-[0.14em] text-app-muted uppercase">
+          <p className="font-mono text-[0.62rem] tracking-[0.18em] text-app-muted uppercase">
             {eyebrow}
           </p>
         ) : null}
-        <h2 className="mt-1 text-[1.15rem] leading-tight font-semibold text-app-text">
+        <h2 className="mt-1 text-[1.15rem] leading-tight font-semibold tracking-[-0.015em] text-app-text">
           {title}
         </h2>
         {description ? (
@@ -195,11 +216,97 @@ export function SectionTitle({
   );
 }
 
+/* ========================================================================== */
+/* Layout                                                                     */
+/* ========================================================================== */
+
+/**
+ * The page canvas.
+ *
+ * Every authenticated screen is built from the same rhythm: a header, an
+ * optional toolbar, then one or more bands of content. The bands are
+ * separated by hairlines and space rather than by putting every block in
+ * its own rounded box, which is what made the old screens read as a pile of
+ * identical cards.
+ */
+export function Page({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cx("flex flex-col gap-7 pb-16 lg:gap-9", className)}>
+      {children}
+    </div>
+  );
+}
+
+/** The words half of a page header. Shared by both header layouts. */
+function HeaderCopy({
+  eyebrow,
+  title,
+  description,
+  meta,
+  inverse = false,
+}: {
+  eyebrow?: string;
+  title: string;
+  description?: string;
+  meta?: ReactNode;
+  inverse?: boolean;
+}) {
+  return (
+    <>
+      {eyebrow ? (
+        <p
+          className={cx(
+            "mb-3 flex items-center gap-2.5 font-mono text-[0.64rem] font-semibold tracking-[0.24em] uppercase",
+            inverse ? "text-white/60" : "text-app-muted",
+          )}
+        >
+          <span
+            aria-hidden
+            className={cx(
+              "h-px w-8",
+              inverse
+                ? "bg-white/60"
+                : "bg-[linear-gradient(90deg,var(--accent),var(--accent-2))]",
+            )}
+          />
+          {eyebrow}
+        </p>
+      ) : null}
+      <h1
+        className={cx(
+          "text-[clamp(1.9rem,4vw,2.9rem)] leading-[1] font-semibold tracking-[-0.03em] text-balance",
+          inverse ? "text-white" : "text-app-text",
+        )}
+      >
+        {title}
+      </h1>
+      {description ? (
+        <p
+          className={cx(
+            "mt-3 max-w-[52rem] text-[0.95rem] leading-relaxed",
+            inverse ? "text-white/70" : "text-app-soft",
+          )}
+        >
+          {description}
+        </p>
+      ) : null}
+      {meta ? <div className="mt-4">{meta}</div> : null}
+    </>
+  );
+}
+
 /**
  * The heading every page opens with.
  *
- * One component, so every screen in the app has the same rhythm: what this
- * page is, what it is for, and the one or two actions that matter here.
+ * A small monospaced kicker, a serif title, one sentence of orientation and
+ * the actions that matter on this screen. It is deliberately not boxed: the
+ * page title belongs to the page, not to a container.
  */
 export function PageHeader({
   eyebrow,
@@ -207,35 +314,288 @@ export function PageHeader({
   description,
   actions,
   meta,
+  art,
+  inverse = false,
+  className,
 }: {
   eyebrow?: string;
   title: string;
   description?: string;
   actions?: ReactNode;
   meta?: ReactNode;
+  art?: { src: string; alt: string; caption?: string };
+  inverse?: boolean;
+  className?: string;
 }) {
+  if (art) {
+    return (
+      <header
+        className={cx(
+          "grid gap-6 border-b pb-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)] lg:items-end lg:gap-10 lg:pb-7",
+          inverse ? "border-white/15" : "border-app-border",
+          className,
+        )}
+      >
+        <div className="min-w-0">
+          <HeaderCopy
+            eyebrow={eyebrow}
+            title={title}
+            description={description}
+            meta={meta}
+            inverse={inverse}
+          />
+          {actions ? (
+            <div className="mt-5 flex flex-wrap items-center gap-2">{actions}</div>
+          ) : null}
+        </div>
+        <figure className="relative hidden aspect-[16/9] overflow-hidden rounded-app-lg border border-app-border lg:block">
+          <Image
+            src={art.src}
+            alt={art.alt}
+            fill
+            sizes="(max-width: 1024px) 0px, 380px"
+            className="object-cover object-center"
+          />
+          <div
+            aria-hidden
+            className="absolute inset-0 bg-[linear-gradient(155deg,rgba(7,7,12,0.02)_20%,rgba(7,7,12,0.62)_100%)]"
+          />
+          {art.caption ? (
+            <figcaption className="absolute inset-x-0 bottom-0 p-3 font-mono text-[0.62rem] tracking-[0.14em] text-white/75 uppercase">
+              {art.caption}
+            </figcaption>
+          ) : null}
+        </figure>
+      </header>
+    );
+  }
+
   return (
-    <header className="flex flex-wrap items-end justify-between gap-4">
+    <header
+      className={cx(
+        "flex flex-col gap-5 border-b pb-6 lg:flex-row lg:items-end lg:justify-between lg:gap-8 lg:pb-7",
+        inverse ? "border-white/15" : "border-app-border",
+        className,
+      )}
+    >
       <div className="min-w-0">
         {eyebrow ? (
-          <p className="text-[0.7rem] font-semibold tracking-[0.14em] text-app-accent uppercase">
+          <p
+            className={cx(
+              "mb-3 flex items-center gap-2.5 font-mono text-[0.64rem] font-semibold tracking-[0.24em] uppercase",
+              inverse ? "text-white/60" : "text-app-muted",
+            )}
+          >
+            <span
+              aria-hidden
+              className={cx(
+                "h-px w-8",
+                inverse
+                  ? "bg-white/60"
+                  : "bg-[linear-gradient(90deg,var(--accent),var(--accent-2))]",
+              )}
+            />
             {eyebrow}
           </p>
         ) : null}
-        <h1 className="mt-1.5 text-[clamp(1.6rem,3.4vw,2.3rem)] leading-[1.1] font-semibold tracking-[-0.02em] text-app-text">
+        <h1
+          className={cx(
+            "text-[clamp(1.9rem,4vw,2.9rem)] leading-[1] font-semibold tracking-[-0.03em] text-balance",
+            inverse ? "text-white" : "text-app-text",
+          )}
+        >
           {title}
         </h1>
         {description ? (
-          <p className="mt-2 max-w-2xl text-[0.92rem] leading-relaxed text-app-muted">
+          <p
+            className={cx(
+              "mt-3 max-w-[52rem] text-[0.95rem] leading-relaxed",
+              inverse ? "text-white/70" : "text-app-soft",
+            )}
+          >
             {description}
           </p>
         ) : null}
-        {meta ? <div className="mt-3">{meta}</div> : null}
+        {meta ? <div className="mt-4">{meta}</div> : null}
       </div>
       {actions ? (
-        <div className="flex flex-wrap items-center gap-2">{actions}</div>
+        <div className="flex flex-wrap items-center gap-2 lg:shrink-0 lg:pb-1">{actions}</div>
       ) : null}
     </header>
+  );
+}
+
+/** A titled band of content. `plain` drops the box and keeps the rule. */
+export function Panel({
+  children,
+  className,
+  variant = "outline",
+  as: Tag = "section",
+  ...rest
+}: {
+  children: ReactNode;
+  className?: string;
+  variant?: "outline" | "solid" | "plain";
+  as?: "section" | "div" | "article" | "aside";
+} & Omit<React.HTMLAttributes<HTMLElement>, "className" | "children">) {
+  return (
+    <Tag
+      className={cx(
+        "relative overflow-hidden rounded-app-lg",
+        variant === "outline" && "border border-app-border bg-app-surface shadow-app-card",
+        variant === "solid" && "border border-app-border bg-app-surface-solid",
+        variant === "plain" && "border-t border-app-border",
+        className,
+      )}
+      {...rest}
+    >
+      {children}
+    </Tag>
+  );
+}
+
+export function PanelHead({
+  title,
+  eyebrow,
+  description,
+  action,
+  className,
+}: {
+  title: ReactNode;
+  eyebrow?: string;
+  description?: string;
+  action?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cx(
+        "flex flex-wrap items-start justify-between gap-3 px-5 py-4",
+        className,
+      )}
+    >
+      <div className="min-w-0">
+        {eyebrow ? (
+          <p className="mb-1 font-mono text-[0.62rem] tracking-[0.18em] text-app-muted uppercase">
+            {eyebrow}
+          </p>
+        ) : null}
+        <h2 className="text-[1rem] leading-tight font-semibold tracking-[-0.01em] text-app-text">
+          {title}
+        </h2>
+        {description ? (
+          <p className="mt-1 max-w-prose text-[0.82rem] leading-relaxed text-app-muted">
+            {description}
+          </p>
+        ) : null}
+      </div>
+      {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
+    </div>
+  );
+}
+
+/** A hairline list. Rows own their own hover, so the list stays flat. */
+export function Rows({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return <div className={cx("divide-y divide-app-border", className)}>{children}</div>;
+}
+
+export function Row({
+  children,
+  className,
+  as: Tag = "div",
+}: {
+  children: ReactNode;
+  className?: string;
+  as?: "div" | "li" | "a";
+}) {
+  return (
+    <Tag
+      className={cx(
+        "group relative flex items-start gap-4 px-5 py-4 transition-colors duration-150",
+        className,
+      )}
+    >
+      {children}
+    </Tag>
+  );
+}
+
+/** The toolbar above a list: search on the left, refinement on the right. */
+export function Toolbar({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cx(
+        "flex flex-wrap items-center gap-2.5 border-y border-app-border py-3",
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** A compact label/value pair for metadata strips. */
+export function Meta({
+  label,
+  value,
+  className,
+}: {
+  label: string;
+  value: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cx("min-w-0", className)}>
+      <dt className="font-mono text-[0.6rem] tracking-[0.16em] text-app-muted uppercase">
+        {label}
+      </dt>
+      <dd className="mt-1 truncate text-[0.85rem] font-medium text-app-text">{value}</dd>
+    </div>
+  );
+}
+
+/**
+ * A match score as a number and a rule.
+ *
+ * The ring was five circles saying the same thing; on a list of twenty roles
+ * a compact bar carries the same information without becoming the loudest
+ * thing on the page.
+ */
+export function ScoreBar({
+  score,
+  className,
+  showValue = true,
+}: {
+  score: number;
+  className?: string;
+  showValue?: boolean;
+}) {
+  const clamped = Math.max(0, Math.min(100, Math.round(score)));
+  const tone =
+    clamped >= 80 ? "bg-app-success" : clamped >= 60 ? "bg-app-accent" : "bg-app-warning";
+  return (
+    <span className={cx("inline-flex items-center gap-2", className)}>
+      <span className="h-[3px] w-10 overflow-hidden rounded-full bg-app-surface-2" aria-hidden>
+        <span className={cx("block h-full rounded-full", tone)} style={{ width: `${clamped}%` }} />
+      </span>
+      {showValue ? (
+        <span className="font-mono text-[0.72rem] font-semibold tabular-nums text-app-soft">
+          {clamped}
+        </span>
+      ) : null}
+    </span>
   );
 }
 
@@ -247,19 +607,25 @@ export function Badge({
   tone = "neutral",
   children,
   className,
+  dot = false,
 }: {
   tone?: Tone;
   children: ReactNode;
   className?: string;
+  dot?: boolean;
 }) {
   return (
     <span
       className={cx(
-        "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[0.7rem] font-semibold whitespace-nowrap",
+        "inline-flex items-center gap-1.5 border px-2 py-[3px] text-[0.68rem] font-semibold tracking-[0.01em] whitespace-nowrap",
+        PILL,
         TONE_CLASS[tone],
         className,
       )}
     >
+      {dot ? (
+        <span className={cx("size-1.5 shrink-0 rounded-full", TONE_DOT[tone])} aria-hidden />
+      ) : null}
       {children}
     </span>
   );
@@ -282,7 +648,8 @@ export function Chip({
       onClick={onClick}
       aria-pressed={active}
       className={cx(
-        "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[0.78rem] font-medium transition-colors duration-150",
+        "inline-flex h-8 items-center gap-1.5 border px-3 text-[0.78rem] font-medium transition-colors duration-150",
+        PILL,
         active
           ? "border-app-accent/45 bg-app-accent-soft text-app-accent"
           : "border-app-border bg-app-surface-2/60 text-app-soft hover:border-app-border-strong hover:text-app-text",
@@ -305,17 +672,22 @@ export function SegmentedControl<T extends string>({
   value,
   onChange,
   label,
+  size = "md",
 }: {
-  options: Array<{ value: T; label: string }>;
+  options: Array<{ value: T; label: ReactNode }>;
   value: T;
   onChange: (value: T) => void;
   label?: string;
+  size?: "sm" | "md";
 }) {
   return (
     <div
       role="radiogroup"
       aria-label={label}
-      className="inline-flex rounded-app-md border border-app-border bg-app-surface-2/50 p-0.5"
+      className={cx(
+        "inline-flex shrink-0 items-center rounded-app-md border border-app-border bg-app-surface-2/50 p-0.5",
+        size === "sm" ? "gap-0.5" : "gap-0.5",
+      )}
     >
       {options.map((option) => {
         const active = option.value === value;
@@ -327,9 +699,10 @@ export function SegmentedControl<T extends string>({
             aria-checked={active}
             onClick={() => onChange(option.value)}
             className={cx(
-              "rounded-app-sm px-3 py-1 text-[0.78rem] font-medium transition-colors duration-150",
+              "rounded-app-sm font-medium whitespace-nowrap transition-colors duration-150",
+              size === "sm" ? "px-2.5 py-1 text-[0.74rem]" : "px-3 py-1 text-[0.78rem]",
               active
-                ? "bg-app-accent text-app-accent-contrast"
+                ? "bg-app-accent text-app-accent-contrast shadow-app-sm"
                 : "text-app-muted hover:text-app-text",
             )}
           >
@@ -338,6 +711,160 @@ export function SegmentedControl<T extends string>({
         );
       })}
     </div>
+  );
+}
+
+/**
+ * An explanation of what a number is counting.
+ *
+ * The ranked opportunity feed narrows the catalogue to what a candidate can
+ * realistically take: their employment type, their geography, and whether
+ * they only want remote work. Without saying so, a list of five roles reads
+ * as a broken platform rather than as a filtered one. This banner names the
+ * filters, and offers the way out.
+ */
+export function ScopeBanner({
+  title,
+  children,
+  constraints = [],
+  action,
+  className,
+}: {
+  title: string;
+  children?: ReactNode;
+  constraints?: Array<{ label: string; value: string }>;
+  action?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cx(
+        "flex flex-col gap-4 rounded-app-lg border border-app-accent/25 bg-[linear-gradient(120deg,color-mix(in_srgb,var(--accent)_12%,transparent),transparent_62%)] p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between",
+        className,
+      )}
+    >
+      <div className="min-w-0">
+        <p className="text-[0.9rem] font-semibold text-app-text">{title}</p>
+        {children ? (
+          <p className="mt-1 max-w-[62ch] text-[0.83rem] leading-relaxed text-app-soft">
+            {children}
+          </p>
+        ) : null}
+        {constraints.length > 0 ? (
+          <ul className="mt-3 flex flex-wrap items-center gap-1.5">
+            {constraints.map((entry) => (
+              <li
+                key={entry.label}
+                className="inline-flex items-center gap-1.5 rounded-app-pill border border-app-border bg-app-surface-2/70 px-2.5 py-1 text-[0.72rem]"
+              >
+                <span className="text-app-muted">{entry.label}</span>
+                <span className="font-semibold text-app-text">{entry.value}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+      {action ? <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div> : null}
+    </div>
+  );
+}
+
+/**
+ * The refinement rail beside a long list.
+ *
+ * It stays put while the list moves, and it collapses to a disclosure on
+ * small screens. The rail is a plain aside with a sticky position — no
+ * custom class, no extra stylesheet.
+ */
+export function FilterRail({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <aside
+      className={cx(
+        "sticky top-[calc(var(--shell-topbar)+1.5rem)] hidden max-h-[calc(100dvh-var(--shell-topbar)-3rem)] flex-col overflow-y-auto pr-1 lg:flex",
+        className,
+      )}
+    >
+      {children}
+    </aside>
+  );
+}
+
+/** A labelled group of filter options. */
+export function FilterGroup({
+  label,
+  children,
+  action,
+}: {
+  label: string;
+  children: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-mono text-[0.58rem] font-semibold tracking-[0.2em] text-app-muted uppercase">
+          {label}
+        </p>
+        {action}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * A checkable filter row.
+ *
+ * A real checkbox, so it is focusable and announces its state, with the
+ * box drawn by Tailwind rather than by a replaced element.
+ */
+export function FilterOption({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count?: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cx(
+        "group flex w-full items-center gap-2.5 rounded-app-sm px-2 py-[6px] text-left text-[0.8rem] transition-colors duration-150",
+        active
+          ? "bg-app-accent-soft font-medium text-app-text"
+          : "text-app-soft hover:bg-app-surface-2 hover:text-app-text",
+      )}
+    >
+      <span
+        className={cx(
+          "grid size-4 shrink-0 place-items-center rounded-[4px] border transition-colors duration-150",
+          active
+            ? "border-app-accent bg-app-accent text-app-accent-contrast"
+            : "border-app-border-strong group-hover:border-app-accent/50",
+        )}
+        aria-hidden
+      >
+        {active ? <Check size={11} strokeWidth={3.5} /> : null}
+      </span>
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {typeof count === "number" ? (
+        <span className="font-mono text-[0.66rem] tabular-nums text-app-muted">
+          {count.toLocaleString()}
+        </span>
+      ) : null}
+    </button>
   );
 }
 
@@ -353,19 +880,25 @@ export function EmptyState({
   icon?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center gap-3 rounded-app-lg border border-dashed border-app-border-strong bg-app-surface/40 px-6 py-14 text-center">
+    <div className="relative flex flex-col items-center gap-4 overflow-hidden rounded-app-lg border border-dashed border-app-border-strong/70 px-6 py-16 text-center">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_80%_at_50%_0%,color-mix(in_srgb,var(--accent)_10%,transparent),transparent_70%)]"
+      />
       {icon ? (
-        <span className="grid size-12 place-items-center rounded-full bg-app-surface-2 text-app-muted">
+        <span className="relative grid size-16 place-items-center rounded-app-lg border border-app-border bg-app-surface-2 text-app-accent">
           {icon}
         </span>
       ) : null}
-      <h3 className="text-[1rem] font-semibold text-app-text">{title}</h3>
+      <h3 className="relative max-w-md text-[1.35rem] leading-tight font-semibold tracking-[-0.02em] text-app-text">
+        {title}
+      </h3>
       {description ? (
-        <p className="max-w-md text-[0.87rem] leading-relaxed text-app-muted">
+        <p className="relative max-w-md text-[0.88rem] leading-relaxed text-app-muted">
           {description}
         </p>
       ) : null}
-      {action}
+      {action ? <div className="relative mt-1">{action}</div> : null}
     </div>
   );
 }
@@ -381,8 +914,9 @@ export function Skeleton({
 }) {
   return (
     <div
+      aria-hidden
       className={cx(
-        "animate-pulse rounded-app-sm bg-app-surface-2",
+        "animate-app-shimmer rounded-app-sm bg-[linear-gradient(90deg,var(--surface)_25%,var(--surface-2)_50%,var(--surface)_75%)] bg-[length:200%_100%]",
         className,
       )}
       style={{ height, width }}
@@ -536,6 +1070,7 @@ export function StatTile({
   tone = "neutral",
   hint,
   icon,
+  className,
 }: {
   label: string;
   value: ReactNode;
@@ -543,23 +1078,101 @@ export function StatTile({
   tone?: Tone;
   hint?: string;
   icon?: ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="rounded-app-lg border border-app-border bg-app-surface px-4 py-3.5">
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-[0.72rem] font-semibold tracking-[0.1em] text-app-muted uppercase">
+    <div className={cx("group relative overflow-hidden bg-app-elevated px-5 py-5", className)}>
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-mono text-[0.6rem] font-semibold tracking-[0.18em] text-app-muted uppercase">
           {label}
         </p>
-        {icon ? <span className="text-app-muted">{icon}</span> : null}
+        {icon ? (
+          <span className="grid size-8 place-items-center rounded-app-sm border border-app-border bg-app-surface-2 text-app-muted transition-colors duration-200 group-hover:border-app-accent/30 group-hover:text-app-accent">
+            {icon}
+          </span>
+        ) : null}
       </div>
-      <p className="mt-2 text-[clamp(1.35rem,2.6vw,1.8rem)] leading-none font-bold tracking-[-0.03em] tabular-nums text-app-text">
+      <p className="mt-4 font-display text-[clamp(1.7rem,2.8vw,2.3rem)] leading-none font-semibold tracking-[-0.03em] tabular-nums text-app-text">
         {value}
       </p>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        {delta ? <Badge tone={tone}>{delta}</Badge> : null}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {delta ? (
+          <Badge tone={tone} dot>
+            {delta}
+          </Badge>
+        ) : null}
         {hint ? <span className="text-[0.74rem] text-app-muted">{hint}</span> : null}
       </div>
     </div>
+  );
+}
+
+/**
+ * A hairline strip of headline numbers.
+ *
+ * Not four cards: the numbers belong to the page, and a single strip reads
+ * as a measurement rather than as four competing panels.
+ */
+export function StatStrip({
+  items,
+  className,
+}: {
+  items: Array<{
+    label: string;
+    value: ReactNode;
+    hint?: string;
+    active?: boolean;
+    onSelect?: () => void;
+  }>;
+  className?: string;
+}) {
+  return (
+    <dl
+      className={cx(
+        "grid gap-px overflow-hidden rounded-app-lg border border-app-border bg-app-border/60 shadow-app-card sm:grid-cols-2",
+        items.length === 3 ? "lg:grid-cols-3" : items.length === 4 ? "lg:grid-cols-4" : "lg:grid-cols-3",
+        className,
+      )}
+    >
+      {items.map((item) => {
+        const body = (
+          <>
+            <dt className="font-mono text-[0.58rem] font-semibold tracking-[0.18em] text-app-muted uppercase">
+              {item.label}
+            </dt>
+            <dd className="mt-2 font-display text-[1.75rem] leading-none font-semibold tracking-[-0.025em] tabular-nums text-app-text">
+              {item.value}
+            </dd>
+            {item.hint ? (
+              <dd className="mt-1.5 text-[0.72rem] text-app-muted">{item.hint}</dd>
+            ) : null}
+          </>
+        );
+
+        if (item.onSelect) {
+          return (
+            <button
+              key={item.label}
+              type="button"
+              onClick={item.onSelect}
+              aria-pressed={item.active}
+              className={cx(
+                "bg-app-elevated px-5 py-4 text-left transition-colors duration-150 hover:bg-app-surface-2",
+                item.active && "bg-app-accent-soft",
+              )}
+            >
+              {body}
+            </button>
+          );
+        }
+
+        return (
+          <div key={item.label} className="bg-app-elevated px-5 py-4">
+            {body}
+          </div>
+        );
+      })}
+    </dl>
   );
 }
 
@@ -703,7 +1316,7 @@ export function Tabs({
   return (
     <div
       role="tablist"
-      className="flex gap-1 overflow-x-auto border-b border-app-border pb-px"
+      className="flex gap-6 overflow-x-auto border-b border-app-border"
     >
       {tabs.map((tab) => {
         const selected = tab.key === active;
@@ -714,15 +1327,22 @@ export function Tabs({
             aria-selected={selected}
             onClick={() => onChange(tab.key)}
             className={cx(
-              "relative shrink-0 border-b-2 px-3 py-2 text-[0.84rem] font-medium whitespace-nowrap transition-colors duration-150",
+              "relative -mb-px shrink-0 border-b-2 pt-1 pb-2.5 text-[0.83rem] font-medium whitespace-nowrap transition-colors duration-150",
               selected
                 ? "border-app-accent text-app-text"
-                : "border-transparent text-app-muted hover:text-app-soft",
+                : "border-transparent text-app-muted hover:border-app-border-strong hover:text-app-soft",
             )}
           >
             {tab.label}
             {typeof tab.count === "number" ? (
-              <span className="ml-1.5 text-[0.75rem] text-app-muted">{tab.count}</span>
+              <span
+                className={cx(
+                  "ml-2 font-mono text-[0.7rem] tabular-nums",
+                  selected ? "text-app-accent" : "text-app-muted",
+                )}
+              >
+                {tab.count}
+              </span>
             ) : null}
           </button>
         );
@@ -767,7 +1387,7 @@ export function Th({
   return (
     <th
       className={cx(
-        "sticky top-0 z-10 border-b border-app-border bg-app-surface-solid px-4 py-2.5 text-[0.72rem] font-semibold tracking-[0.08em] text-app-muted uppercase",
+        "sticky top-0 z-10 border-b border-app-border bg-app-surface-solid px-4 py-3 font-mono text-[0.62rem] font-medium tracking-[0.14em] text-app-muted uppercase",
         className,
       )}
       {...rest}
@@ -838,7 +1458,7 @@ export function Pagination({
     <nav
       aria-label="Pagination"
       className={cx(
-        "flex flex-wrap items-center justify-between gap-3 border-t border-app-border pt-4",
+        "flex flex-wrap items-center justify-between gap-4 rounded-app-lg border border-app-border bg-app-surface px-4 py-3",
         className,
       )}
     >
@@ -854,7 +1474,7 @@ export function Pagination({
             <select
               value={pageSize}
               onChange={(event) => onPageSizeChange(Number(event.target.value))}
-              className="h-8 rounded-app-sm border border-app-border bg-app-surface-2/60 px-2 text-[0.78rem] text-app-text focus:border-app-accent focus:outline-none"
+              className="h-8 cursor-pointer rounded-app-sm border border-app-border bg-app-surface-2/60 px-2 text-[0.78rem] text-app-text focus:border-app-accent focus:outline-none"
             >
               {pageSizeOptions.map((option) => (
                 <option key={option} value={option}>
@@ -866,7 +1486,7 @@ export function Pagination({
         ) : null}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1">
           <IconButton
             aria-label="Previous page"
@@ -890,9 +1510,9 @@ export function Pagination({
                   onClick={() => onPageChange(pageNumber)}
                   aria-current={pageNumber === current ? "page" : undefined}
                   className={cx(
-                    "h-8 min-w-8 rounded-app-sm px-2 text-[0.8rem] font-medium tabular-nums transition-colors duration-150",
+                    "h-8 min-w-8 rounded-app-sm px-2 text-[0.8rem] font-semibold tabular-nums transition-colors duration-150",
                     pageNumber === current
-                      ? "bg-app-accent text-app-accent-contrast"
+                      ? "bg-app-accent text-app-accent-contrast shadow-app-sm"
                       : "text-app-soft hover:bg-app-surface-2 hover:text-app-text",
                   )}
                 >
@@ -1084,11 +1704,18 @@ export function Avatar({
   name?: string | null;
   size?: number;
 }) {
-  const label = (name ?? "?").trim().slice(0, 2).toUpperCase();
+  const label =
+    (name ?? "?")
+      .trim()
+      .split(/[\s@._-]+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((word) => word[0]?.toUpperCase() ?? "")
+      .join("") || "?";
   return (
     <span
-      className="inline-grid shrink-0 place-items-center rounded-full border border-app-border bg-app-accent-soft font-bold text-app-accent"
-      style={{ width: size, height: size, fontSize: size * 0.38 }}
+      className="inline-grid shrink-0 place-items-center rounded-full border border-app-border bg-app-accent-soft font-semibold tracking-[0.02em] text-app-accent"
+      style={{ width: size, height: size, fontSize: size * 0.36 }}
       aria-hidden
     >
       {label}

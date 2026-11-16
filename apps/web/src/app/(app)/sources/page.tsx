@@ -1,19 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { Globe, Link2, Radar, ShieldCheck } from "lucide-react";
+import { Globe, Link2, ScanSearch, ShieldCheck } from "lucide-react";
 import {
   Badge,
   Button,
-  Card,
   DataTable,
   EmptyState,
   Field,
   Input,
+  Page,
   PageHeader,
   Pagination,
-  SectionTitle,
+  Panel,
+  PanelHead,
+  Rows,
+  Row,
   Skeleton,
+  StatStrip,
   Tabs,
   Td,
   Textarea,
@@ -116,13 +120,45 @@ export default function SourcesPage() {
   };
 
   const items = sources.data?.items ?? [];
+  const healthy = items.filter((item) => item.health === "healthy").length;
+  const roles = items.reduce((sum, item) => sum + (item.job_count ?? 0), 0);
 
   return (
-    <div className="flex flex-col gap-6">
+    <Page>
       <PageHeader
         eyebrow="Coverage"
         title="Where jobs come from"
         description="We monitor hundreds of boards. If one is missing, tell us and our curators verify it."
+        art={{
+          src: "https://cdn.angisoft.co.ke/public/images/mboqara/careers/engineering-professional.webp",
+          alt: "A professional at a desk with a laptop",
+          caption: "Curated, deduplicated, scored",
+        }}
+      />
+
+      <StatStrip
+        items={[
+          {
+            label: "Registered",
+            value: (sources.data?.total ?? 0).toLocaleString(),
+            hint: "boards in the rotation",
+          },
+          {
+            label: "Healthy",
+            value: healthy.toLocaleString(),
+            hint: "on this page",
+          },
+          {
+            label: "Roles found",
+            value: roles.toLocaleString(),
+            hint: "on this page",
+          },
+          {
+            label: "In review",
+            value: (queue.data?.total ?? 0).toLocaleString(),
+            hint: "waiting for a curator",
+          },
+        ]}
       />
 
       <Tabs
@@ -154,7 +190,7 @@ export default function SourcesPage() {
           <EmptyState icon={<Globe size={26} />} title="No sources yet" />
         ) : (
           <>
-          <DataTable>
+          <DataTable className="rounded-none border-0 shadow-none">
             <thead>
               <tr>
                 <Th>Source</Th>
@@ -242,27 +278,25 @@ export default function SourcesPage() {
           />
         ) : (
           <>
-          <ul className="flex flex-col gap-2">
+          <Rows className="rounded-app-lg border border-app-border bg-app-surface shadow-app-card">
             {queue.data?.items?.map((source) => (
-              <li key={source.id}>
-                <Card className="flex flex-wrap items-center gap-4 p-4">
-                  <div className="min-w-[220px] flex-1">
-                    <p className="text-[0.9rem] font-semibold text-app-text">{source.name}</p>
-                    <p className="truncate text-[0.76rem] text-app-muted">{source.url}</p>
-                  </div>
+              <Row key={source.id} as="li" className="items-center gap-4">
+                <div className="min-w-[220px] flex-1">
+                  <p className="text-[0.9rem] font-semibold text-app-text">{source.name}</p>
+                  <p className="truncate text-[0.76rem] text-app-muted">{source.url}</p>
+                </div>
                   <Button
                     size="sm"
                     variant="outline"
-                    icon={<Radar size={13} />}
+                    icon={<ScanSearch size={13} />}
                     loading={verifying === source.id}
                     onClick={() => void verify(source.id)}
                   >
                     Verify &amp; classify
                   </Button>
-                </Card>
-              </li>
+              </Row>
             ))}
-          </ul>
+          </Rows>
           <Pagination
             page={queuePage}
             pageSize={SOURCE_PAGE_SIZE}
@@ -279,7 +313,7 @@ export default function SourcesPage() {
           <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {catalog.data?.adapters?.map((adapter) => (
               <li key={adapter.name}>
-                <Card className="h-full p-4">
+                <div className="h-full rounded-app-lg border border-app-border bg-app-surface p-4 shadow-app-card transition-[border-color,transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-app-border-strong hover:shadow-app-lift">
                   <div className="mb-1.5 flex items-center gap-2">
                     <Link2 size={15} className="text-app-accent" />
                     <strong className="text-[0.92rem] text-app-text">{adapter.name}</strong>
@@ -288,7 +322,7 @@ export default function SourcesPage() {
                   <div className="mt-2.5">
                     <Badge tone="accent">{adapter.kind}</Badge>
                   </div>
-                </Card>
+                </div>
               </li>
             ))}
           </ul>
@@ -296,13 +330,13 @@ export default function SourcesPage() {
       ) : null}
 
       {tab === "submit" ? (
-        <Card className="p-4 sm:p-5">
-          <SectionTitle
+        <Panel>
+          <PanelHead
             eyebrow="Contribution"
             title="Submit a job board"
             description="We fetch it safely from our own servers, classify the layout and add it to the rotation."
           />
-          <div className="mt-4 flex max-w-2xl flex-col gap-3">
+          <div className="flex max-w-2xl flex-col gap-3 border-t border-app-border px-5 py-5">
             <Field label="Board URL">
               <Input
                 value={url}
@@ -327,8 +361,8 @@ export default function SourcesPage() {
               </Button>
             </div>
           </div>
-        </Card>
+        </Panel>
       ) : null}
-    </div>
+    </Page>
   );
 }

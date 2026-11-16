@@ -18,10 +18,11 @@ import {
 import {
   Badge,
   Button,
-  Card,
   Field,
   Input,
   Meter,
+  Page,
+  Panel,
   Select,
   Textarea,
   cx,
@@ -232,8 +233,18 @@ export default function OnboardingManualPage() {
   const progress = (stepIndex / (STEPS.length - 1)) * 100;
 
   return (
-    <div className="mx-auto flex max-w-[720px] flex-col gap-6">
-      <Card className="p-4 sm:p-5">
+    <Page className="mx-auto max-w-[860px]">
+      {/* The stepper. Each step is a real button — a person who has already
+          answered a step should be able to jump back to it. */}
+      <Panel className="p-4 sm:p-5">
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <p className="font-mono text-[0.6rem] font-semibold tracking-[0.2em] text-app-muted uppercase">
+            Resume builder
+          </p>
+          <p className="font-mono text-[0.7rem] tabular-nums text-app-muted">
+            Step {stepIndex + 1} of {STEPS.length}
+          </p>
+        </div>
         <div className="flex gap-1 overflow-x-auto pb-2.5">
           {STEPS.map((step, index) => {
             const Icon = step.icon;
@@ -256,15 +267,15 @@ export default function OnboardingManualPage() {
               >
                 <span
                   className={cx(
-                    "grid size-6 place-items-center rounded-full",
+                    "grid size-7 place-items-center rounded-full border",
                     isDone
-                      ? "bg-app-accent text-app-accent-contrast"
+                      ? "border-transparent bg-app-accent text-app-accent-contrast"
                       : isCurrent
-                        ? "bg-app-accent-soft text-app-accent"
-                        : "bg-app-border text-app-muted",
+                        ? "border-app-accent bg-app-accent-soft text-app-accent"
+                        : "border-app-border bg-app-surface-2 text-app-muted",
                   )}
                 >
-                  {isDone ? <Check size={12} /> : <Icon size={12} />}
+                  {isDone ? <Check size={13} strokeWidth={3} /> : <Icon size={13} />}
                 </span>
                 {step.label}
               </button>
@@ -272,18 +283,18 @@ export default function OnboardingManualPage() {
           })}
         </div>
         <Meter value={progress} />
-      </Card>
+      </Panel>
 
-      <Card className="p-5 sm:p-7">
-        <div className="mb-6 flex items-center gap-3">
-          <span className="grid size-[34px] shrink-0 place-items-center rounded-full bg-app-accent-soft text-app-accent">
-            <StepIcon size={16} />
+      <Panel className="p-5 sm:p-7">
+        <div className="mb-6 flex items-center gap-3 border-b border-app-border pb-5">
+          <span className="grid size-11 shrink-0 place-items-center rounded-app-md border border-app-accent/30 bg-app-accent-soft text-app-accent">
+            <StepIcon size={19} />
           </span>
-          <div>
-            <p className="text-[0.7rem] font-semibold tracking-[0.14em] text-app-accent uppercase">
+          <div className="min-w-0">
+            <p className="font-mono text-[0.6rem] font-semibold tracking-[0.2em] text-app-muted uppercase">
               Step {stepIndex + 1} of {STEPS.length}
             </p>
-            <h2 className="mt-0.5 text-[1.3rem] font-semibold text-app-text">
+            <h2 className="mt-1 text-[1.35rem] leading-tight font-semibold tracking-[-0.015em] text-app-text">
               {STEPS[stepIndex].label}
             </h2>
           </div>
@@ -431,7 +442,7 @@ export default function OnboardingManualPage() {
               <EmptyHint text='No experience added yet. Click "Add role" to start.' />
             ) : (
               experiences.map((entry, index) => (
-                <Card key={entry.id} className="p-4">
+                <Panel key={entry.id} className="p-4">
                   <div className="mb-4 flex items-center justify-between gap-2">
                     <Badge tone="accent">Role {index + 1}</Badge>
                     <Button
@@ -536,7 +547,7 @@ export default function OnboardingManualPage() {
                       </Field>
                     </div>
                   </div>
-                </Card>
+                </Panel>
               ))
             )}
           </div>
@@ -572,7 +583,7 @@ export default function OnboardingManualPage() {
               <EmptyHint text='No education added yet. Click "Add entry" to start.' />
             ) : (
               education.map((entry, index) => (
-                <Card key={entry.id} className="p-4">
+                <Panel key={entry.id} className="p-4">
                   <div className="mb-4 flex items-center justify-between gap-2">
                     <Badge tone="neutral">Entry {index + 1}</Badge>
                     <Button
@@ -639,7 +650,7 @@ export default function OnboardingManualPage() {
                       />
                     </Field>
                   </div>
-                </Card>
+                </Panel>
               ))
             )}
           </div>
@@ -699,7 +710,7 @@ export default function OnboardingManualPage() {
               <EmptyHint text='No projects added yet. Click "Add project" to start.' />
             ) : (
               projects.map((entry, index) => (
-                <Card key={entry.id} className="p-4">
+                <Panel key={entry.id} className="p-4">
                   <div className="mb-4 flex items-center justify-between gap-2">
                     <Badge tone="neutral">Project {index + 1}</Badge>
                     <Button
@@ -758,7 +769,7 @@ export default function OnboardingManualPage() {
                       </Field>
                     </div>
                   </div>
-                </Card>
+                </Panel>
               ))
             )}
           </div>
@@ -794,7 +805,7 @@ export default function OnboardingManualPage() {
             </Button>
           )}
         </div>
-      </Card>
+      </Panel>
 
       <Link
         href="/onboarding"
@@ -802,7 +813,7 @@ export default function OnboardingManualPage() {
       >
         ← Choose a different method
       </Link>
-    </div>
+    </Page>
   );
 }
 

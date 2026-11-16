@@ -1,4 +1,4 @@
-# Job Radar — Algorithms & Data Structures
+# MboQara — Algorithms & Data Structures
 
 Design targets: 10M+ active users, ~5M active opportunities, global multi-source ingestion,
 sub-second search, real-time monitoring. Every choice below is derived from an expected

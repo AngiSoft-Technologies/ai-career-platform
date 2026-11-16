@@ -11,26 +11,30 @@ import {
   ExternalLink,
   FileText,
   Mail,
-  Radar,
+  ScanSearch,
   ShieldCheck,
 } from "lucide-react";
 import {
   Badge,
   Button,
-  Card,
   DataTable,
   EmptyState,
   Field,
   Input,
-  SectionTitle,
+  Meta,
+  Page,
+  Panel,
+  PanelHead,
+  Rows,
+  Row,
   Skeleton,
   Tabs,
   Td,
   Textarea,
   Th,
-  cx,
   useToast,
 } from "@/components/ui";
+import { CompanyMark } from "@/components/app-art";
 import { useApi } from "@/lib/hooks";
 import { api } from "@/lib/api";
 import { formatDateTime, titleCase } from "@/lib/format";
@@ -339,34 +343,61 @@ function ApplicationWorkspaceInner() {
   const allChecked = checklist.every(([key]) => guideChecks[key]);
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <Link href="/applications">
-            <Button variant="ghost" size="sm" icon={<ArrowLeft size={14} />}>
-              Back
-            </Button>
+    <Page>
+      <div className="flex flex-col gap-5 border-b border-app-border pb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Link
+            href="/applications"
+            className="inline-flex items-center gap-1.5 font-mono text-[0.66rem] tracking-[0.14em] text-app-muted uppercase transition-colors hover:text-app-soft"
+          >
+            <ArrowLeft size={13} />
+            All applications
           </Link>
-          <div className="min-w-0">
-            <p className="text-[0.7rem] font-semibold tracking-[0.14em] text-app-accent uppercase">
-              Application workspace
-            </p>
-            <h1 className="mt-0.5 truncate text-[clamp(1.3rem,3vw,1.9rem)] leading-tight font-semibold text-app-text">
-              {opportunity?.title ?? "Application"}
-            </h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone={application.status === "OFFER" ? "success" : "accent"} dot>
+              {titleCase(application.status)}
+            </Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              icon={<ScanSearch size={14} />}
+              loading={analysing || startingGuide}
+              onClick={() => void startGuidedApplication()}
+            >
+              {analysis ? "Continue application" : "Start guided application"}
+            </Button>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge tone="accent">{titleCase(application.status)}</Badge>
-          <Button
-            variant="outline"
-            size="sm"
-            icon={<Radar size={14} />}
-            loading={analysing || startingGuide}
-            onClick={() => void startGuidedApplication()}
-          >
-            {analysis ? "Continue application" : "Start guided application"}
-          </Button>
+
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="flex min-w-0 items-start gap-4">
+            <CompanyMark name={opportunity?.companyName} size={52} className="mt-1 hidden sm:grid" />
+            <div className="min-w-0">
+              <p className="font-mono text-[0.64rem] tracking-[0.18em] text-app-muted uppercase">
+                Application workspace
+              </p>
+              <h1 className="mt-2 max-w-[34ch] text-[clamp(1.7rem,3.6vw,2.6rem)] leading-[1.05] font-semibold tracking-[-0.025em] text-app-text text-balance">
+                {opportunity?.title ?? "Application"}
+              </h1>
+              <p className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[0.82rem] text-app-muted">
+                <span className="text-app-soft">{opportunity?.companyName ?? "—"}</span>
+                <span aria-hidden>·</span>
+                <span>Started {formatDateTime(application.createdAt)}</span>
+                {application.appliedAt ? (
+                  <>
+                    <span aria-hidden>·</span>
+                    <span>Submitted {formatDateTime(application.appliedAt)}</span>
+                  </>
+                ) : null}
+              </p>
+            </div>
+          </div>
+
+          <Link href={`/opportunities/${application.opportunityId}`} className="shrink-0">
+            <Button variant="ghost" size="sm" icon={<ExternalLink size={13} />}>
+              View the role
+            </Button>
+          </Link>
         </div>
       </div>
 
@@ -382,68 +413,94 @@ function ApplicationWorkspaceInner() {
       />
 
       {tab === "overview" ? (
-        <div className="grid items-start gap-4 lg:grid-cols-2">
-          <Card className="p-4 sm:p-5">
-            <SectionTitle eyebrow="Record" title="Application details" />
-            <div className="mt-4 flex flex-col gap-2.5">
-              <Detail label="Status" value={titleCase(application.status)} />
-              <Detail label="Created" value={formatDateTime(application.createdAt)} />
-              <Detail label="Last updated" value={formatDateTime(application.updatedAt)} />
-              <Detail label="Version" value={String(application.version)} />
-              <Detail label="Employer" value={opportunity?.companyName ?? "—"} />
-              <Detail label="Role" value={opportunity?.title ?? "—"} />
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)]">
+          <Panel>
+            <PanelHead
+              eyebrow="How it works"
+              title="Four steps, and you control each one"
+              description="MboQara does the drafting. Nothing leaves until you approve it."
+            />
+            <Rows className="border-t border-app-border">
+              {[
+                "MboQara prepares the documents and the field answers.",
+                "You review every suggestion and correct anything.",
+                "You approve, then submit on the employer’s own page.",
+                "We track the outcome and remind you to follow up.",
+              ].map((line, index) => (
+                <Row key={line} as="li" className="items-start gap-4">
+                  <span className="font-mono text-[0.7rem] font-semibold tabular-nums text-app-accent">
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                  <span className="max-w-[54ch] text-[0.9rem] leading-relaxed text-app-soft">
+                    {line}
+                  </span>
+                </Row>
+              ))}
+            </Rows>
+          </Panel>
+
+          <div className="flex flex-col gap-6">
+            <Panel>
+              <PanelHead eyebrow="Record" title="Where this application is" />
+              <Rows className="border-t border-app-border">
+                <Row as="li" className="items-center justify-between gap-3">
+                  <Meta label="Status" value={titleCase(application.status)} />
+                </Row>
+                <Row as="li" className="items-center justify-between gap-3">
+                  <Meta label="Created" value={formatDateTime(application.createdAt)} />
+                </Row>
+                <Row as="li" className="items-center justify-between gap-3">
+                  <Meta label="Last updated" value={formatDateTime(application.updatedAt)} />
+                </Row>
+                <Row as="li" className="items-center justify-between gap-3">
+                  <Meta label="Revision" value={String(application.version)} />
+                </Row>
+                <Row as="li" className="items-center justify-between gap-3">
+                  <Meta label="Employer" value={opportunity?.companyName ?? "—"} />
+                </Row>
+              </Rows>
+            </Panel>
+
+            <div className="flex items-start gap-2.5 rounded-app-lg border border-app-success/25 bg-app-success/8 px-4 py-3 text-[0.84rem] leading-relaxed text-app-soft">
+              <ShieldCheck size={15} className="mt-0.5 shrink-0 text-app-success" />
+              No application is ever sent without your explicit action.
             </div>
-          </Card>
-          <Card className="p-4 sm:p-5">
-            <SectionTitle eyebrow="Promise" title="How this works" />
-            <ul className="mt-4 list-disc space-y-1.5 pl-5 text-[0.88rem] leading-relaxed text-app-soft">
-              <li>MboQara prepares the documents and the field answers.</li>
-              <li>You review every suggestion and correct anything.</li>
-              <li>You approve, then submit on the employer&apos;s own page.</li>
-              <li>We track the outcome and remind you to follow up.</li>
-            </ul>
-            <div className="mt-4 flex items-start gap-2 rounded-app-md bg-app-success/10 px-3 py-2.5 text-[0.83rem] leading-relaxed text-app-soft">
-              <ShieldCheck size={14} className="mt-0.5 shrink-0 text-app-success" /> No application
-              is ever sent without your explicit action.
-            </div>
-          </Card>
+          </div>
         </div>
       ) : null}
 
       {tab === "apply" ? (
-        <div className="flex flex-col gap-4">
-          <Card className="p-4 sm:p-5">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="min-w-[240px] flex-1">
-                <p className="text-[0.7rem] font-semibold tracking-[0.14em] text-app-accent uppercase">
-                  Your application, step by step
-                </p>
-                <h2 className="mt-1.5 text-[1.2rem] leading-snug font-semibold text-app-text">
-                  {application.status === "APPLIED"
-                    ? "Submission recorded"
-                    : opportunity?.applicationMethod === "email"
-                      ? "Prepare and send your email"
-                      : "Complete the employer’s application"}
-                </h2>
-                <p className="mt-1.5 max-w-2xl text-[0.85rem] leading-relaxed text-app-muted">
-                  {application.status === "APPLIED"
-                    ? `You marked this application as submitted${
-                        application.appliedAt ? ` on ${formatDateTime(application.appliedAt)}` : ""
-                      }.`
-                    : opportunity?.applicationMethod === "email"
-                      ? "We'll prepare the details and documents. You review everything, then send it from your email app."
-                      : "Keep these instructions beside the employer's form. MboQara will never submit the form for you."}
-                </p>
-              </div>
-              <Badge tone="success">
-                <CheckCircle2 size={12} /> {titleCase(application.status)}
-              </Badge>
+        <div className="flex flex-col gap-7">
+          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-app-border pb-5">
+            <div className="min-w-[240px] flex-1">
+              <p className="font-mono text-[0.62rem] tracking-[0.18em] text-app-muted uppercase">
+                Your application, step by step
+              </p>
+              <h2 className="mt-2 max-w-[30ch] text-[clamp(1.35rem,2.6vw,1.85rem)] leading-tight font-semibold tracking-[-0.02em] text-app-text">
+                {application.status === "APPLIED"
+                  ? "Submission recorded"
+                  : opportunity?.applicationMethod === "email"
+                    ? "Prepare and send your email"
+                    : "Complete the employer’s application"}
+              </h2>
+              <p className="mt-2 max-w-[62ch] text-[0.88rem] leading-relaxed text-app-muted">
+                {application.status === "APPLIED"
+                  ? `You marked this application as submitted${
+                      application.appliedAt ? ` on ${formatDateTime(application.appliedAt)}` : ""
+                    }.`
+                  : opportunity?.applicationMethod === "email"
+                    ? "We'll prepare the details and documents. You review everything, then send it from your email app."
+                    : "Keep these instructions beside the employer's form. MboQara will never submit the form for you."}
+              </p>
             </div>
-          </Card>
+            <Badge tone="success" dot>
+              {titleCase(application.status)}
+            </Badge>
+          </div>
 
           {analysis ? (
-            <Card className="p-4 sm:p-5">
-              <SectionTitle
+            <Panel>
+              <PanelHead
                 eyebrow="Employer instructions"
                 title={
                   analysis.method === "email"
@@ -455,6 +512,7 @@ function ApplicationWorkspaceInner() {
                     ? `Instructions prepared from ${analysis.rawTitle}.`
                     : "Review the requirements, prepare your materials, and follow the employer’s steps."
                 }
+                className="border-b border-app-border"
                 action={
                   <Button
                     size="sm"
@@ -467,7 +525,7 @@ function ApplicationWorkspaceInner() {
                 }
               />
 
-              <div className="mt-5 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
+              <div className="grid items-start gap-8 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,290px)]">
                 <div className="flex min-w-0 flex-col gap-5">
                   <div className="flex flex-wrap gap-1.5">
                     <Badge tone="accent">{titleCase(analysis.platform)}</Badge>
@@ -711,19 +769,21 @@ function ApplicationWorkspaceInner() {
                   ) : null}
                 </div>
 
-                <aside className="flex flex-col gap-2 rounded-app-md border border-app-border bg-app-surface-2/40 p-4 lg:sticky lg:top-20">
-                  <h3 className="text-[0.98rem] font-semibold text-app-text">Before you submit</h3>
-                  <p className="text-[0.8rem] leading-relaxed text-app-muted">
+                <aside className="flex flex-col gap-2 rounded-app-md border border-app-border bg-app-surface-2/40 p-4 lg:sticky lg:top-[92px]">
+                  <h3 className="font-mono text-[0.6rem] tracking-[0.18em] text-app-muted uppercase">
+                    Before you submit
+                  </h3>
+                  <p className="mb-2 text-[0.8rem] leading-relaxed text-app-muted">
                     Use these checks as you move through the employer’s process.
                   </p>
                   {checklist.map(([key, label]) => (
                     <label
                       key={key}
-                      className="flex cursor-pointer items-start gap-2.5 text-[0.83rem] leading-relaxed text-app-soft"
+                      className="flex cursor-pointer items-start gap-2.5 rounded-app-sm py-1 text-[0.83rem] leading-relaxed text-app-soft"
                     >
                       <input
                         type="checkbox"
-                        className="mt-0.5 accent-[var(--accent)]"
+                        className="mt-0.5 size-4 shrink-0 accent-[var(--accent)]"
                         checked={Boolean(guideChecks[key])}
                         onChange={(event) => setGuideCheck(key, event.target.checked)}
                       />
@@ -792,81 +852,128 @@ function ApplicationWorkspaceInner() {
                   ) : null}
                 </aside>
               </div>
-            </Card>
+            </Panel>
           ) : (
-            <Card className="p-4 sm:p-5">
-              <EmptyState
-                icon={<Radar size={26} />}
-                title="Not analysed yet"
-                description="Analyse the employer's page to extract the form fields and screen questions."
-                action={
-                  <Button
-                    size="sm"
-                    loading={analysing || startingGuide}
-                    onClick={() => void startGuidedApplication()}
-                  >
-                    Prepare my application
-                  </Button>
-                }
-              />
-            </Card>
+            <EmptyState
+              icon={<ScanSearch size={26} />}
+              title="Not analysed yet"
+              description="Analyse the employer's page to extract the form fields and screen questions."
+              action={
+                <Button
+                  size="sm"
+                  loading={analysing || startingGuide}
+                  onClick={() => void startGuidedApplication()}
+                >
+                  Prepare my application
+                </Button>
+              }
+            />
           )}
         </div>
       ) : null}
 
       {tab === "followup" ? (
-        <Card className="p-4 sm:p-5">
-          <SectionTitle
-            eyebrow="Nudge"
-            title="Schedule a follow-up"
-            description="We will remind you. We never contact the employer without you."
-          />
-          <div className="mt-4 flex flex-wrap items-end gap-3">
-            <Field label="Due date" className="w-[190px]">
-              <Input
-                type="date"
-                value={followupDate}
-                onChange={(event) => setFollowupDate(event.target.value)}
-              />
-            </Field>
-            <Button
-              icon={<CalendarClock size={15} />}
-              loading={savingFollowup}
-              onClick={() => void scheduleFollowup()}
-            >
-              Schedule
-            </Button>
-          </div>
-        </Card>
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,320px)]">
+          <Panel>
+            <PanelHead
+              eyebrow="Nudge"
+              title="Schedule a follow-up"
+              description="We will remind you. We never contact the employer without you."
+            />
+            <div className="flex flex-wrap items-end gap-3 border-t border-app-border px-5 py-5">
+              <Field label="Due date" className="w-[190px]">
+                <Input
+                  type="date"
+                  value={followupDate}
+                  onChange={(event) => setFollowupDate(event.target.value)}
+                />
+              </Field>
+              <Button
+                icon={<CalendarClock size={15} />}
+                loading={savingFollowup}
+                onClick={() => void scheduleFollowup()}
+              >
+                Schedule
+              </Button>
+            </div>
+          </Panel>
+
+          <Panel as="aside" className="lg:sticky lg:top-[92px]">
+            <PanelHead eyebrow="The record" title="Where it stands" />
+            <Rows className="border-t border-app-border">
+              <Row className="items-center justify-between gap-3">
+                <span className="text-[0.82rem] text-app-muted">Status</span>
+                <span className="text-[0.84rem] font-medium text-app-text">
+                  {titleCase(application.status)}
+                </span>
+              </Row>
+              <Row className="items-center justify-between gap-3">
+                <span className="text-[0.82rem] text-app-muted">Last updated</span>
+                <span className="text-[0.84rem] font-medium text-app-text">
+                  {formatDateTime(application.updatedAt)}
+                </span>
+              </Row>
+            </Rows>
+            <div className="border-t border-app-border px-5 py-4">
+              <Link href="/followups">
+                <Button variant="outline" size="sm" className="w-full">
+                  All follow-ups
+                </Button>
+              </Link>
+            </div>
+          </Panel>
+        </div>
       ) : null}
 
       {tab === "documents" ? (
-        <Card className="p-4 sm:p-5">
-          <SectionTitle eyebrow="Kit" title="Documents for this role" />
-          <div className="mt-4 flex max-w-md flex-col gap-2">
-            <Link href={`/documents?opportunityId=${application.opportunityId}`}>
-              <Button variant="outline" className="w-full" icon={<FileText size={15} />}>
-                Open document editor
-              </Button>
-            </Link>
-            <Link href={`/opportunities/${application.opportunityId}`}>
-              <Button variant="ghost" className="w-full">
-                View the opportunity
-              </Button>
-            </Link>
-          </div>
-        </Card>
-      ) : null}
-    </div>
-  );
-}
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,320px)]">
+          <Panel>
+            <PanelHead
+              eyebrow="Tailored for this role"
+              title="Documents for this role"
+              description="A CV and a cover letter generated from your profile and this posting. Everything is editable before you export it."
+            />
+            <div className="flex max-w-md flex-col gap-2 border-t border-app-border px-5 py-5">
+              <Link href={`/documents?opportunityId=${application.opportunityId}`}>
+                <Button variant="outline" className="w-full" icon={<FileText size={15} />}>
+                  Open document editor
+                </Button>
+              </Link>
+              <Link href="/documents">
+                <Button variant="ghost" className="w-full">
+                  All documents
+                </Button>
+              </Link>
+            </div>
+          </Panel>
 
-function Detail({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-start justify-between gap-4">
-      <span className="text-[0.82rem] text-app-muted">{label}</span>
-      <span className="text-right text-[0.86rem] font-semibold text-app-text">{value}</span>
-    </div>
+          <Panel as="aside" className="lg:sticky lg:top-[92px]">
+            <PanelHead eyebrow="The role" title={opportunity?.title ?? "This opportunity"} />
+            <Rows className="border-t border-app-border">
+              <Row className="items-center justify-between gap-3">
+                <span className="text-[0.82rem] text-app-muted">Employer</span>
+                <span className="text-[0.84rem] font-medium text-app-text">
+                  {opportunity?.companyName ?? "—"}
+                </span>
+              </Row>
+              <Row className="items-center justify-between gap-3">
+                <span className="text-[0.82rem] text-app-muted">Role</span>
+                <span className="truncate text-[0.84rem] font-medium text-app-text">
+                  {opportunity?.title ?? "—"}
+                </span>
+              </Row>
+            </Rows>
+            <div className="border-t border-app-border px-5 py-4">
+              <Link href={`/opportunities/${application.opportunityId}`}>
+                <Button variant="outline" size="sm" className="w-full">
+                  View the opportunity
+                </Button>
+              </Link>
+            </div>
+          </Panel>
+        </div>
+      ) : null}
+    </Page>
   );
 }
 
