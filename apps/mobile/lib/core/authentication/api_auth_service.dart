@@ -112,7 +112,10 @@ class ApiAuthService {
     return _resultFromCallback(uri);
   }
 
-  /// Waits for the deep link that carries the completed session.
+  /// The callback carries either a single-use handoff code (current API) or,
+  /// for an older API, the session tokens directly in the fragment.
+
+  /// Waits for the deep link that carries the completed sign-in.
   Future<Uri> _awaitCallback() {
     final appLinks = AppLinks();
 
@@ -140,8 +143,25 @@ class ApiAuthService {
   bool _isAuthCallback(Uri uri) =>
       uri.scheme == kAuthCallbackScheme && uri.host == 'auth';
 
-  AuthResult _resultFromCallback(Uri uri) {
+  Future<AuthResult> _resultFromCallback(Uri uri) async {
     final fragment = Uri.splitQueryString(uri.fragment);
+
+    final failure = fragment['error'];
+    if (failure != null && failure.isNotEmpty) {
+      final reason = fragment['reason'];
+      throw AuthException(
+        reason != null && reason.isNotEmpty
+            ? reason
+            : 'The sign-in did not complete',
+        code: failure,
+      );
+    }
+
+    final handoffCode = fragment['code'];
+    if (handoffCode != null && handoffCode.isNotEmpty) {
+      return _post('/auth/exchange', {'code': handoffCode});
+    }
+
     final token = fragment['access_token'] ?? '';
     final refreshToken = fragment['refresh_token'] ?? '';
     if (token.isEmpty || refreshToken.isEmpty) {

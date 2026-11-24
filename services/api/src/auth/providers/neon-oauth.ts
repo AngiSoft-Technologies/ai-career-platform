@@ -327,6 +327,30 @@ export async function completeOAuthFlow(options: {
     );
   }
 
+  try {
+    return await redeemAuthorizationCode(options.code, stored);
+  } catch (error) {
+    // The caller needs the app's redirect URI even on failure so a mobile
+    // sign-in can be sent back to the app instead of dead-ending on the
+    // web sign-in page while the app waits for its deep link.
+    if (error instanceof Error) {
+      (error as Error & { appRedirectUri?: string }).appRedirectUri =
+        stored.app_redirect_uri;
+    }
+    throw error;
+  }
+}
+
+async function redeemAuthorizationCode(
+  code: string,
+  stored: StoredState,
+): Promise<{
+  identity: OAuthIdentity;
+  appRedirectUri: string;
+  mode: string;
+  userId: string | null;
+}> {
+
   // A confidential client proves who it is at the token endpoint with
   // HTTP Basic, and the API's client is registered for exactly that
   // (`token_endpoint_auth_method: client_secret_basic`). Sending the
@@ -340,7 +364,7 @@ export async function completeOAuthFlow(options: {
   };
   const body = new URLSearchParams({
     grant_type: "authorization_code",
-    code: options.code,
+    code,
     redirect_uri: oauthCallbackUrl(),
     client_id: clientId(),
     code_verifier: stored.code_verifier,

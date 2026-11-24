@@ -782,14 +782,30 @@ authRouter.get(
  * The sign-in page carries the code and says what happened.
  */
 function appFailureRedirect(error: unknown): string | null {
-  const base = (config.WEB_ORIGIN ?? "").split(",")[0]?.trim();
-  if (!base) return null;
   const code =
     error instanceof AuthProviderError || error instanceof AuthTokenError
       ? error.code
       : "SIGN_IN_FAILED";
   const message =
     error instanceof Error ? error.message : "The sign-in did not complete";
+
+  // A native app registered a custom-scheme redirect URI. Sending it back
+  // through that scheme returns the failure to the app, which is still
+  // waiting on its deep link; the web sign-in page would leave it hanging.
+  const appRedirectUri =
+    error instanceof Error
+      ? (error as Error & { appRedirectUri?: string }).appRedirectUri
+      : undefined;
+  if (appRedirectUri && !/^https?:/i.test(appRedirectUri)) {
+    const fragment = new URLSearchParams({
+      error: code,
+      reason: message,
+    });
+    return `${appRedirectUri}#${fragment.toString()}`;
+  }
+
+  const base = (config.WEB_ORIGIN ?? "").split(",")[0]?.trim();
+  if (!base) return null;
   const query = new URLSearchParams({ google_error: code, reason: message });
   return `${base}/login?${query.toString()}`;
 }
