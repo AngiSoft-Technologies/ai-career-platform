@@ -40,11 +40,7 @@ import {
   completeOAuthFlow,
   createLinkTicket,
   GOOGLE_PROVIDER,
-} from "../auth/providers/neon-oauth.js";
-import {
-  isAllowedNeonPath,
-  relayToNeon,
-} from "../auth/providers/neon-gateway.js";
+} from "../auth/providers/google-oauth.js";
 import { AuthProviderError } from "../auth/providers/errors.js";
 import { randomUUID } from "node:crypto";
 import { config } from "../config.js";
@@ -121,38 +117,6 @@ function tooManyRequests(
     retry_after_seconds: Number.isFinite(retryAfter) ? retryAfter : 60,
   });
 }
-
-/**
- * The provider relay carries the calls a sign-in needs: a session check, the
- * sign-in request, the step to the provider, and the resume. Those are four
- * calls for one sign-in, and the session check also happens on ordinary page
- * loads.
- *
- * Counting all of them against one budget of ten a quarter of an hour was a
- * limit on the *traffic*, not on the attempts, and it answered 429 to people
- * who had done nothing wrong. The two buckets below are separate: the relay
- * as a whole has room, and the calls that actually start a sign-in have their
- * own, tighter budget.
- */
-const neonRelayLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 300,
-  standardHeaders: "draft-8",
-  legacyHeaders: false,
-  handler: tooManyRequests,
-  // A session check is not an attempt. It happens on every page load and on
-  // every sign-in, so counting it against a sign-in budget punishes people
-  // for using the app.
-  skip: (request) => request.path.endsWith("/get-session"),
-});
-
-const neonSignInLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 30,
-  standardHeaders: "draft-8",
-  legacyHeaders: false,
-  handler: tooManyRequests,
-});
 
 const signInLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -809,118 +773,6 @@ function appFailureRedirect(error: unknown): string | null {
   const query = new URLSearchParams({ google_error: code, reason: message });
   return `${base}/login?${query.toString()}`;
 }
-
-/**
- * Relay to Neon Auth.
- *
- * Two steps of the social sign-in flow have to run inside the browser session
- * that Neon created: starting the provider sign-in and resuming the
- * authorization request once the provider returns. The API relays those calls
- * so the web and mobile apps never address Neon directly and never hold a
- * provider credential.
- *
- * Only the paths in the allowlist are reachable and the session cookie is
- * passed through untouched in both directions.
- */
-async function relayNeon(
-  request: {
-    method: string;
-    originalUrl: string;
-    header: (name: string) => string | undefined;
-    body?: unknown;
-  },
-  response: Response,
-): Promise<void> {
-  const parsed = new URL(request.originalUrl, "http://localhost");
-  const pathname = parsed.pathname
-    .replace(/^\/v1\/auth\/neon\/?/, "")
-    .replace(/\/+$/, "");
-
-  if (!isAllowedNeonPath(pathname)) {
-    noStore(response);
-    response.status(404).json({ error: "Not found", code: "NOT_FOUND" });
-    return;
-  }
-
-  // The query string is part of the request: the social sign-in carries its
-  // token in one, and dropping it leaves the provider answering
-  // "[query.token] Invalid input" with nothing to work from.
-  const path = `${pathname}${parsed.search}`;
-
-  const headers: Record<string, string> = {};
-  const cookie = request.header("cookie");
-  if (cookie) headers.cookie = cookie;
-  const contentType = request.header("content-type");
-  if (contentType) headers["content-type"] = contentType;
-  const accept = request.header("accept");
-  if (accept) headers.accept = accept;
-  // The provider rejects requests without an origin, and it only accepts
-  // origins it trusts. The API's own origin is always trusted.
-  headers.origin = request.header("origin") ?? config.API_URL;
-
-  const result = await relayToNeon(path, {
-    method: request.method,
-    headers,
-    body:
-      request.method === "GET" || request.method === "HEAD"
-        ? undefined
-        : typeof request.body === "string"
-          ? request.body
-          : JSON.stringify(request.body ?? {}),
-  });
-
-  // Each cookie has to arrive separately: the provider sets more than one
-  // (the session token and the data that goes with it), and a second
-  // `setHeader` for the same name replaces the first rather than adding to
-  // it. The browser would then be left with half the session.
-  for (const [name, value] of result.headers) {
-    if (name.toLowerCase() === "set-cookie") {
-      response.append(name, value);
-      continue;
-    }
-    response.setHeader(name, value);
-  }
-  noStore(response);
-  response.status(result.status).end(Buffer.from(result.body));
-}
-
-/**
- * The provider relay.
- *
- * Two budgets, not one: the relay itself is roomy, and the calls that start
- * or resume a sign-in have their own. They are counted separately so that
- * ordinary traffic through the relay cannot exhaust the sign-in budget, and
- * so that a sign-in cannot exhaust the relay.
- */
-const NEON_SIGN_IN_PATHS = new Set([
-  "sign-in/social",
-  "sign-in/social/init",
-  "oauth2/continue",
-  "oauth2/consent",
-]);
-
-authRouter.all(
-  "/neon/*path",
-  neonRelayLimiter,
-  (request, response, next) => {
-    const path = new URL(request.originalUrl, "http://localhost").pathname
-      .replace(/^\/v1\/auth\/neon\/?/, "")
-      .replace(/\/+$/, "");
-    if (NEON_SIGN_IN_PATHS.has(path)) {
-      neonSignInLimiter(request, response, next);
-      return;
-    }
-    next();
-  },
-  async (request, response, next) => {
-    try {
-      await relayNeon(request, response);
-    } catch (error) {
-      next(error);
-    }
-  },
-);
-
 
 authRouter.get("/session", async (request, response, next) => {
   try {

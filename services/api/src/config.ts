@@ -54,21 +54,14 @@ const schema = z.object({
   AWS_REGION: z.string().optional(),
   AWS_ACCESS_KEY_ID: z.string().optional(),
   AWS_SECRET_ACCESS_KEY: z.string().optional(),
-  NEON_AUTH_BASE_URL: z.string().url().optional(),
-  NEON_AUTH_JWKS_URL: z.string().url().optional(),
   GOOGLE_WEB_CLIENT_ID: z.string().optional(),
   /**
-   * OAuth client id the API uses when it acts as an OAuth client of Neon Auth.
-   * Neon Auth is an OAuth 2.1 authorization server, so the API can run the
-   * social sign-in flow itself with PKCE instead of relying on a provider
-   * session cookie that would never reach this origin.
+   * Secret for the web OAuth client the API uses in the Google
+   * authorization-code flow. Server-side only — it must never reach a
+   * client bundle.
    */
-  NEON_AUTH_OAUTH_CLIENT_ID: z.string().optional(),
-  NEON_AUTH_OAUTH_CLIENT_SECRET: z.string().optional(),
-  NEON_AUTH_OAUTH_CLIENT_ID_PRODUCTION: z.string().optional(),
-  NEON_AUTH_OAUTH_CLIENT_SECRET_PRODUCTION: z.string().optional(),
-  NEON_AUTH_GOOGLE_CLIENT_ID: z.string().optional(),
-  NEON_AUTH_GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_CLIENT_SECRET_PRODUCTION: z.string().optional(),
   /**
    * Where the API may send the browser once a social sign-in completes.
    * Comma separated. Entries are exact origins (web) or app schemes such as
@@ -201,13 +194,8 @@ export const config = {
     parsed.DEMO_MODE === undefined
       ? parsed.NODE_ENV !== "production"
       : parsed.DEMO_MODE !== "false",
-  // Use production OAuth credentials in production
-  NEON_AUTH_OAUTH_CLIENT_ID:
-    parsed.NODE_ENV === "production" && parsed.NEON_AUTH_OAUTH_CLIENT_ID_PRODUCTION
-      ? parsed.NEON_AUTH_OAUTH_CLIENT_ID_PRODUCTION
-      : parsed.NEON_AUTH_OAUTH_CLIENT_ID,
-  NEON_AUTH_OAUTH_CLIENT_SECRET:
-    parsed.NODE_ENV === "production" && parsed.NEON_AUTH_OAUTH_CLIENT_SECRET_PRODUCTION
-      ? parsed.NEON_AUTH_OAUTH_CLIENT_SECRET_PRODUCTION
-      : parsed.NEON_AUTH_OAUTH_CLIENT_SECRET,
+  GOOGLE_CLIENT_SECRET:
+    parsed.NODE_ENV === "production" && parsed.GOOGLE_CLIENT_SECRET_PRODUCTION
+      ? parsed.GOOGLE_CLIENT_SECRET_PRODUCTION
+      : parsed.GOOGLE_CLIENT_SECRET,
 };

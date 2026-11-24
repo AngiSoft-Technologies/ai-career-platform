@@ -27,7 +27,6 @@ import { contentRouter } from "./routes/content.js";
 import { invitationRouter } from "./routes/invitations.js";
 import { v1Router } from "./routes/v1.js";
 import { authRouter } from "./routes/auth.js";
-import { webhookRouter } from "./routes/webhooks.js";
 import { webhookEndpointRouter } from "./routes/webhook-endpoints.js";
 import { n8nRouter } from "./routes/n8n.js";
 import { agentRouter } from "./routes/agent.js";
@@ -51,8 +50,6 @@ app.use(
     credentials: true,
   }),
 );
-app.use("/v1/webhooks", webhookRouter);
-app.use("/api/v1/webhooks", webhookRouter);
 app.use(express.json({ limit: "2mb" }));
 app.use((_request, response, next) => {
   response.setHeader(API_VERSION_HEADER, API_VERSION);
@@ -163,11 +160,10 @@ app.use("/graphql", buildYoga("/graphql"));
 const mcpResourcePath = "/v1/mcp";
 const mcpResource = `${config.API_URL.replace(/\/$/, "")}${mcpResourcePath}`;
 const mcpResourceMetadata = `${config.API_URL.replace(/\/$/, "")}/.well-known/oauth-protected-resource${mcpResourcePath}`;
-const mcpAuthorizationServer = config.NEON_AUTH_BASE_URL?.replace(/\/$/, "");
 
 const protectedResource = (resource: string) => ({
   resource,
-  authorization_servers: mcpAuthorizationServer ? [mcpAuthorizationServer] : [],
+  authorization_servers: [],
   scopes_supported: ["openid", "profile", "email", "offline_access"],
   bearer_methods_supported: ["header"],
   resource_name: "mboqara",

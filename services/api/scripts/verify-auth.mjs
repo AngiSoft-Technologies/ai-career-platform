@@ -226,11 +226,13 @@ async function main() {
     `status ${missingRedirect.status}`,
   );
 
-  // --- provider relay ------------------------------------------------------
+  // --- retired provider relay ----------------------------------------------
+  // Neon Auth is no longer part of the sign-in path; the relay is gone and
+  // the route must answer 404 like any other unknown path.
   const blocked = await call("GET", "/auth/neon/admin/users");
   check(
-    "the provider relay only allows the known paths",
-    blocked.status === 404 && blocked.payload?.code === "NOT_FOUND",
+    "the retired provider relay is gone",
+    blocked.status === 404,
     `status ${blocked.status}`,
   );
 

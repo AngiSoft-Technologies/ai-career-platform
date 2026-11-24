@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { query } from "../db/pool.js";
 import { AuthProviderError } from "./providers/errors.js";
-import { ensureLocalUserRecord } from "./neon-auth.js";
+import { ensureLocalUserRecord } from "./local-user.js";
 import { checkPasswordPolicy, hashPassword, verifyPassword } from "./passwords.js";
 
 /**
@@ -121,7 +121,6 @@ export async function createPasswordAccount(input: {
     userId: randomUUID(),
     email: input.email,
     name: input.name,
-    neonRole: null,
   });
 
   await storeCredential(userId, input.password);

@@ -24,7 +24,7 @@ Corollaries, in priority order:
 1. **One network ingress per client.** `https://mboqara-api-angisoft.fly.dev/v1` plus the
    realtime endpoints mounted under it (`/v1/ws`, `/v1/stream`). Nothing else.
 2. **No client holds a credential that belongs to a provider.** A JWT minted *by MboQara* is
-   fine. A Neon Auth session cookie, a provider URL, or a third-party secret is not.
+   fine. A provider session cookie, a provider URL, or a third-party secret is not.
 3. **No client owns a business rule.** Status machines, permission checks, quota rules, pricing,
    matching, scoring, initial state, defaults, and transition validity live in `services/api`
    and are *published* to clients as data (`availableTransitions`, `permissions`, `limits`) or
@@ -49,7 +49,7 @@ are REST (canonical, both clients), WebSocket/SSE (realtime, through the API), a
 |---|---|---|---|---|
 | `mboqara-api-angisoft.fly.dev/v1/*` | yes | yes | ✅ | Only via `apps/web/src/lib/api.ts` / `apps/mobile/lib/core/networking/api_client.dart` |
 | `/v1/ws`, `/v1/stream` (same host) | yes | yes | ✅ | Bearer token, through the API |
-| Neon Auth (`*.neonauth.*.neon.tech`) | ❌ | ❌ | ⛔ | Backend only |
+| Neon Auth (`*.neonauth.*.neon.tech`) | ❌ | ❌ | ⛔ | Retired — no longer used |
 | Neon Postgres | ❌ | ❌ | ⛔ | Backend only |
 | Redis | ❌ | ❌ | ⛔ | Backend only |
 | S3 / object storage | ❌ direct | ❌ direct | ⚠️ | Only a short-lived presigned URL issued by `POST /v1/documents/upload-url` |
@@ -63,25 +63,25 @@ are REST (canonical, both clients), WebSocket/SSE (realtime, through the API), a
 Rule of thumb: if a destination appears in a client bundle or a mobile binary, it must be on this
 table with a ✅.
 
-### 2.1 The one exception, and why it is not one
+### 2.1 There is no exception
 
-The web app keeps a same-origin route at `/api/auth/[...path]`. It is **not** a second auth backend:
-it is a transport relay with no identity logic. It forwards to `GET|POST /v1/auth/neon/*` on the
-API, and the API forwards to the identity provider.
+The web app previously kept a same-origin `/api/auth/[...path]` relay and the API a
+`/v1/auth/neon/*` relay so a hosted auth provider (Neon Auth / Better Auth) could broker the
+social sign-in. Both are **removed**: the hosted provider proved unreliable (state mismatches,
+session challenges lost across redirects), so the API now runs the Google authorization-code +
+PKCE flow itself (`services/api/src/auth/providers/google-oauth.ts`) and verifies Google ID
+tokens directly (`providers/google.ts`). LinkedIn sign-in was already direct.
 
-It exists because two steps of the OAuth authorization flow have to run inside the session the
-provider created (`/sign-in/social` and `/oauth2/continue`). Relaying through the app's own origin
-keeps the provider cookie a **first-party** cookie instead of a third-party one, which browsers
-block. The rules still hold:
+The rules still hold, and are now simpler:
 
-- the browser never addresses the provider host;
-- the browser never sees a provider token — only the API redeems the authorization code;
-- the relay accepts a fixed allowlist of provider paths
-  (`services/api/src/auth/providers/neon-gateway.ts`) and rejects everything else with `404`;
-- the provider host is not in the client bundle: the relay resolves the API from
-  `NEXT_PUBLIC_API_URL`.
+- the browser never addresses Google or LinkedIn — it only visits the API's
+  `/v1/auth/google/start` and `/v1/auth/google/callback` routes;
+- the browser never sees a provider token — only the API redeems the authorization code and
+  verifies the ID token against the provider's published keys;
+- no provider host, SDK or environment variable exists anywhere under `apps/web/src` or
+  `apps/mobile/lib`.
 
-`npm run check:boundaries` fails if the provider host, a provider SDK or a provider environment
+`npm run check:boundaries` fails if a provider host, a provider SDK or a provider environment
 variable reappears anywhere under `apps/web/src` or `apps/mobile/lib`.
 
 ---
@@ -130,15 +130,20 @@ the assumption in the client.
 │  routes/         v1.ts  (profile, opportunities, applications, …)   │
 │                  auth.ts  (sign-in, sign-up, google, refresh, reset)│
 │  auth/           tokens · passwords · credentials · identities       │
-│                  providers/ (neon-oauth, neon-gateway, google)       │
+│                  local-user · providers/ (google-oauth, google,     │
+│                  linkedin)                                          │
 │  db/             pool · redis · migrations                          │
 │  realtime/       hub · ws · sse                                     │
 │  grpc/           internal matching surface                          │
 └───────┬──────────────────────┬──────────────────────┬───────────────┘
         │                      │                      │
         ▼                      ▼                      ▼
-  Neon Postgres            Neon Auth              S3 · LLM · n8n
-  (data, credentials)      (OAuth 2.1 server)      (server-to-server only)
+  Neon Postgres                                S3 · LLM · n8n
+  (data, credentials)                          (server-to-server only)
+
+  Social sign-in is brokered by Google/LinkedIn directly: the API runs the
+  authorization-code + PKCE flow itself (auth/providers/google-oauth.ts,
+  linkedin.ts). There is no hosted auth provider in the path.
 ```
 
 ### Ownership matrix
@@ -147,7 +152,7 @@ the assumption in the client.
 |---|---|---|
 | Credential exchange, session issuance, refresh, revocation | `services/api/src/routes/auth.ts` | call `/v1/auth/*` |
 | Password hashing and verification | `services/api/src/auth/passwords.ts` | never see a hash |
-| Identity → app user mapping, roles, permissions | `auth/identities.ts`, `auth/neon-auth.ts` | read `GET /v1/me` |
+| Identity → app user mapping, roles, permissions | `auth/identities.ts`, `auth/local-user.ts` | read `GET /v1/me` |
 | Application state machine & versioning | `packages/contracts` + `services/applications.ts` | read `availableTransitions`, write `{status, version}` |
 | Validation of every write | zod schemas in `routes/*` | send the documented shape |
 | Matching / scoring | `services/matching.ts` | read `/v1/matches` |
@@ -218,8 +223,8 @@ Cache and outbox are legitimate client concerns. Inventing server state is not.
    `POST /auth/sign-up`, `POST /auth/sign-in`, `POST /auth/google`, `POST /auth/refresh`,
    `POST /auth/sign-out`, `GET /auth/session`, `POST /auth/invitations/:token/accept`.
 2. **Provider adapters.** `services/api/src/auth/providers/` — one module per identity source.
-   Neon Auth and Google ID-token verification are adapters behind an interface; `resolve-identity`
-   depends on the interface, not the vendor.
+   Google (authorization-code + PKCE, and ID-token verification) and LinkedIn are adapters
+   behind an interface; `resolve-identity` depends on the interface, not the vendor.
 3. **State machines as data.** Application payloads include `availableTransitions` so clients
    render options without owning the table. The canonical table stays in
    `packages/contracts/src/index.ts:23-41`.
@@ -257,7 +262,6 @@ POST /v1/auth/password/reset     { token, password }           → 200 AuthSessi
 POST /v1/auth/refresh            { refreshToken }              → 200 AuthSession
 POST /v1/auth/sign-out           { refreshToken? }             → 204
 GET  /v1/auth/session            (Bearer)                      → 200 session state
-ANY  /v1/auth/neon/*             (allowlisted provider paths)  → relayed
 ```
 
 `AuthSession` is `{ token, tokenType, expiresAt, refreshToken, refreshExpiresAt, user, roles,
@@ -277,67 +281,47 @@ shape is published in `packages/contracts/openapi.yaml` and
 `resolve-identity.ts` accepts exactly one token path: a MboQara access token verified locally.
 The provider-JWT fallback was removed — there is no backward-compatibility branch.
 
-### 7.3 The identity provider, as verified
+### 7.3 Social providers, as implemented
 
-Probed against production on 2026-10-29 and re-verified on 2026-10-30:
+There is no hosted auth provider. Each social sign-in is an adapter in
+`services/api/src/auth/providers/`:
 
-- The provider publishes `/.well-known/openid-configuration`: it is a full **OAuth 2.1 / OIDC
-  authorization server** with `/oauth2/authorize`, `/oauth2/token`, PKCE `S256`, public clients
-  (`token_endpoint_auth_method: none`) and **dynamic client registration** at `/oauth2/register`.
-- `POST /sign-in/social` returns `200 {"url":".../sign-in/social/init?token=…","redirect":true}` and
-  **ignores an `idToken` in the body** — the ID token is not exchanged for a session.
-- `GET /token` with only the returned challenge cookie returns `401 UNAUTHORIZED`.
-- The provider's email/password path issues **no session until the address is verified**:
-  `POST /sign-up/email` returns `{"token":null}` and `POST /sign-in/email` answers
-  `403 EMAIL_NOT_VERIFIED`.
-- The Google OAuth client registered to the provider is the only one whose redirect URI is
-  accepted by Google. A direct `accounts.google.com` authorization request from the API's own
-  redirect URI is rejected with `redirect_uri_mismatch`.
+- **Google** (`google-oauth.ts` + `google.ts`): the API builds the
+  `accounts.google.com/o/oauth2/v2/auth` URL itself with a PKCE `S256` challenge, persists the
+  verifier in `auth_oauth_states` (ten-minute expiry, single use), receives the authorization
+  code at `GET /v1/auth/google/callback`, redeems it at `oauth2.googleapis.com/token`, and
+  verifies the returned ID token against Google's JWKS with this client's id as the audience.
+  `POST /v1/auth/google` still accepts a native ID token for clients that can produce one.
+- **LinkedIn** (`linkedin.ts`): direct authorization-code flow, already API-owned.
 
-Three consequences, all of which shaped the implementation:
+Two consequences:
 
-1. **Passwords are owned by the API.** The provider's credential store cannot issue a usable
-   session without a verified email address, so the API hashes and verifies passwords itself
-   (`services/api/src/auth/passwords.ts`, `auth_password_credentials`). This also removes the
+1. **Passwords are owned by the API.** The API hashes and verifies passwords itself
+   (`services/api/src/auth/passwords.ts`, `auth_password_credentials`). There is no
    "check your inbox before you can sign in" dead end.
-2. **Google is owned by the API through the provider's OAuth server.** The API registers itself as
-   a PKCE public client and runs the authorization-code flow. No Google client id is needed in the
-   app, no `google-services.json`, no iOS `GIDClientID`, no Android Gradle plugin.
-3. **The provider session never reaches a client.** The API redeems the authorization code and
-   mints MboQara tokens; the browser only receives a redirect.
+2. **Provider sessions never reach a client.** The API redeems the authorization code and
+   mints MboQara tokens; the browser only receives a redirect carrying a single-use handoff
+   code, exchanged at `POST /v1/auth/exchange`.
 
 ### 7.4 The Google flow, end to end
 
 ```
-client                     API                          provider                Google
+client                     API                                    Google
   │  GET /auth/google/start?redirect_uri=mboqara://auth/callback
   │ ─────────────────────►│
-  │                         │  GET /oauth2/authorize (PKCE, client_id, redirect_uri=API callback)
-  │                         │ ──────────────────────────►│
-  │                         │                             │  302 login page + signed request
-  │  302 ──────────────────│◄─────────────────────────────│
-  │ ──────────────────────►│ (browser follows the redirect to the login page)
-
-login page (web)           API                          provider
-  │  POST /api/auth/sign-in/social { provider, oauth_query }
-  │ ──────────────────────►│  POST /neon/sign-in/social  │ ──────────►│
-  │                         │ ◄───────────────────────── │  init url  │
-  │  ◄──── { url } ────────│                            │             │
-  │  browser follows the init url ───────────────────────────────────────►│
-  │                                                    ◄── consent ─────│
-  │                                                    │  callback/google
-  │  ◄── 302 login page + signed request (provider session now set) ────│
-  │  POST /api/auth/oauth2/continue { oauth_query }
-  │ ──────────────────────►│  POST /neon/oauth2/continue│
-  │                         │ ◄──── { url: API callback?code=…&state=… } │
-  │  browser follows it ──────────────────────────────────────────────►│
-  │                         │  GET /auth/google/callback
-  │                         │  POST /oauth2/token (code + PKCE verifier)
-  │                         │ ──────────────────────────►│
-  │                         │ ◄──── { id_token } ─────────│
-  │                         │  verify against provider JWKS
-  │                         │  map identity → app user, mint MboQara tokens
-  │  302 mboqara://auth/callback#access_token=…&refresh_token=…
+  │                         │  store state + PKCE verifier (auth_oauth_states)
+  │  302 accounts.google.com/o/oauth2/v2/auth?…&code_challenge=…&state=…
+  │ ◄──────────────────────│
+  │ ──────────────────────────────────────────────────────────────►│ consent
+  │                         │  GET /auth/google/callback?code=…&state=…
+  │                         │  POST oauth2.googleapis.com/token (code + verifier)
+  │                         │ ◄──── { id_token }
+  │                         │  verify ID token against Google JWKS
+  │                         │  map identity → app user (auth_identities)
+  │                         │  mint single-use handoff code
+  │  302 <appRedirectUri>#code=<handoff>
+  │ ◄──────────────────────│
+  │  POST /auth/exchange { code }  → 200 AuthSession
   │ ◄──────────────────────│
 ```
 
@@ -427,7 +411,7 @@ review in one sitting, and the failure message points at the exact file and line
 | **P0 — freeze** | Document §2; add the boundary gate | ✅ done |
 | **P1 — backend auth** | `routes/auth.ts`, token module, refresh-token store, identity mapping, `resolve-identity` accepts app tokens only | ✅ done |
 | **P2 — mobile cutover** | Delete `neon_auth_service.dart`; add `api_auth_service.dart`; drop the provider cookie from `token_storage.dart`; remove `google_sign_in` | ✅ done |
-| **P3 — web cutover** | `lib/auth.ts` calls `/v1/auth/*`; the `/api/auth` route becomes a relay to the API; remove `NEXT_PUBLIC_NEON_AUTH_URL`; add `/auth/callback` and `/reset-password` pages | ✅ done |
+| **P3 — web cutover** | `lib/auth.ts` calls `/v1/auth/*`; the `/api/auth` route becomes a relay to the API; remove `NEXT_PUBLIC_NEON_AUTH_URL`; add `/auth/callback` and `/reset-password` pages | ✅ done (relay and `/api/auth` later removed entirely) |
 | **P4 — remove bypass** | Provider-JWT acceptance removed; provider credential store removed from the sign-in path; `graphql.ts` deleted | ✅ done |
 | **P5 — enforce** | Blocking CI gate, CI workflow, OpenAPI covers `/v1/auth/*` | ✅ done (except the Dart generator) |
 
@@ -503,11 +487,10 @@ The boundary is clean when all of the following are true:
 | Provider ignores `idToken` in `POST /sign-in/social` | live probe, 2026-10-29 |
 | Provider issues no session until the email is verified | `POST /sign-up/email` → `{"token":null}`, `POST /sign-in/email` → `403 EMAIL_NOT_VERIFIED` |
 | Google's registered redirect URI belongs to the provider only | `accounts.google.com/o/oauth2/v2/auth` answers `redirect_uri_mismatch` for the API callback |
-| The provider path allowlist | `services/api/src/auth/providers/neon-gateway.ts` |
-| The relay holds no identity logic | `apps/web/src/app/api/auth/[...path]/route.ts` |
+| The web app holds no provider logic | `apps/web/src/lib/auth.ts` (API calls only) |
 | Client-only transports | `apps/web/src/lib/api.ts`, `apps/mobile/lib/core/networking/api_client.dart` |
 | API-owned password verification | `services/api/src/auth/passwords.ts`, `services/api/src/auth/credentials.ts` |
-| PKCE verifier stays on the API | `db/migrations/013_auth_oauth_states.sql`, `services/api/src/auth/providers/neon-oauth.ts` |
+| PKCE verifier stays on the API | `db/migrations/013_auth_oauth_states.sql`, `services/api/src/auth/providers/google-oauth.ts` |
 | Redirect allowlist | `services/api/src/config.ts` → `AUTH_OAUTH_REDIRECT_ALLOWLIST` |
 | One token path | `services/api/src/auth/resolve-identity.ts` |
 | Canonical status machine | `packages/contracts/src/index.ts` |

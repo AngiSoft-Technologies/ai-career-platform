@@ -10,7 +10,7 @@ mboqara is an AI-powered career intelligence platform. The mobile app lets job s
 - **Follow-ups & Reminders** — Schedule follow-ups, get local notifications, never miss a deadline.
 - **Career Intelligence** — AI-powered profile analysis: strengths, gaps, salary benchmarks, next-step recommendations.
 - **Offline-First** — Full read/write access offline. Changes sync automatically when connectivity returns.
-- **Google Sign-In** — One-tap sign-in with your Google account (Neon Auth).
+- **Google Sign-In** — One-tap sign-in with your Google account (API-brokered OAuth).
 - **Email/Password** — Traditional sign-in with secure password handling.
 - **Invitation Flow** — Accept team invites with a one-time link, set your password, and join instantly.
 
@@ -19,7 +19,7 @@ mboqara is an AI-powered career intelligence platform. The mobile app lets job s
 ```
 lib/
 ├── core/
-│   ├── authentication/     # Neon Auth (email/password + Google), token storage, refresh
+│   ├── authentication/     # API auth (email/password + Google), token storage, refresh
 │   ├── configuration/      # AppSettings (base URL, demo mode)
 │   ├── networking/         # ApiClient (JWT auth, 401 auto-refresh, retry)
 │   ├── routing/            # go_router + deep links (app_links)
@@ -61,17 +61,15 @@ lib/
    flutter pub get
    ```
 
-2. **Configure Google Sign-In**
-   - Create OAuth 2.0 client IDs in Google Cloud Console for Android (`co.angisoft.mboqara`) and iOS (`co.angisoft.mboqara`).
-   - Add them to `android/app/build.gradle.kts` (already configured via `google_sign_in` defaults).
-   - For iOS, add `CFBundleURLTypes` with scheme `mboqara` (already in Info.plist).
+2. **Configure the API**
+   - The app authenticates entirely through the MboQara API (`/v1/auth/*`). There is no
+     hosted auth provider: the API runs the Google authorization-code + PKCE flow itself.
+   - The Google OAuth client used by the API must list the API callback
+     (`https://<api-host>/v1/auth/google/callback`) and the app redirect
+     (`mboqara://auth/callback`) in its authorized redirect URIs.
+   - `AUTH_OAUTH_REDIRECT_ALLOWLIST` on the API must include `mboqara://`.
 
-3. **Configure Neon Auth**
-   - The app uses Neon Auth (Managed Better Auth) at `https://ep-mute-glitter-b5uefleh.neonauth.c-7.us-east-2.aws.neon.tech/neondb/auth`.
-   - Ensure the Google provider is enabled in the Neon Auth console.
-   - Add `mboqara://` as a trusted origin for deep links.
-
-4. **Run the app**
+3. **Run the app**
    ```bash
    flutter run
    ```

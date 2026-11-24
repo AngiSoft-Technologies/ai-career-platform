@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { query } from "../db/pool.js";
 import { logger } from "../logger.js";
-import { ensureLocalUserRecord } from "./neon-auth.js";
+import { ensureLocalUserRecord } from "./local-user.js";
 import { AuthProviderError } from "./providers/errors.js";
 import type { GoogleIdentity } from "./providers/google.js";
 
@@ -65,7 +65,6 @@ export async function resolveGoogleUser(
       userId: randomUUID(),
       email: identity.email,
       name: identity.name,
-      neonRole: null,
     }));
 
   await upsertIdentity({

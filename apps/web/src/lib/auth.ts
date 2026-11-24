@@ -14,15 +14,6 @@ export const API_URL = (
 
 export const WS_URL = API_URL.replace(/\/v1$/, "") + "/v1/ws";
 
-/**
- * Same-origin relay for the identity provider.
- *
- * Two steps of the OAuth authorization flow have to run inside the session the
- * provider created. The relay keeps the provider cookie on this origin (a
- * first-party cookie) while the request itself is handled by the API.
- */
-export const AUTH_RELAY_URL = "/api/auth";
-
 const TOKEN_KEY = "mboqara.auth.token";
 const REFRESH_TOKEN_KEY = "mboqara.auth.refresh";
 const SESSION_KEY = "mboqara.auth.session";

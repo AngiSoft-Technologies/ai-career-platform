@@ -120,7 +120,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   auth.isDemoMode
                       ? 'Demo mode uses the seeded candidate and skips authentication.'
                       : auth.isAuthenticated
-                      ? 'Authenticated with your Neon Auth account.'
+                      ? 'Authenticated with your MboQara account.'
                       : 'Sign in to use a real account.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,

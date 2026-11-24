@@ -8,7 +8,6 @@ import { SITE } from "@/lib/seo";
 const PRIVATE_PATHS = [
   "/api",
   "/auth",
-  "/consent",
   "/login",
   "/signup",
   "/reset-password",

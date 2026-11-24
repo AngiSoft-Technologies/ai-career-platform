@@ -2,18 +2,11 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { ArrowRight, KeyRound, ShieldCheck, Sparkles } from "lucide-react";
 import { Button, Field, Input, useToast } from "@/components/ui";
 import { useSession } from "@/components/session";
 import { signInWithGoogle } from "@/lib/auth";
-import {
-  continueAuthorization,
-  hasProviderSession,
-  OAuthRateLimitError,
-  readSignedRequest,
-  startProviderSignIn,
-} from "@/lib/oauth";
 import { ROLE_HOME } from "@/components/theme";
 import type { RoleKey } from "@/lib/types";
 
@@ -52,46 +45,11 @@ function GoogleMark() {
   );
 }
 
-/**
- * A loop guard for the signed authorization request.
- *
- * The provider sends the browser back to this page while it has no session;
- * if the session never arrives, this page sends it to the provider again and
- * the visitor is trapped in a bounce they cannot see or stop. Counting the
- * attempts per `state` converts that into one clear message.
- */
-const ATTEMPT_PREFIX = "mboqara.oauth.attempts:";
-
-function attemptKey(oauthQuery: string): string | null {
-  const state = new URLSearchParams(oauthQuery).get("state");
-  return state ? `${ATTEMPT_PREFIX}${state}` : null;
-}
-
-function attemptsFor(oauthQuery: string): number {
-  if (typeof window === "undefined") return 0;
-  const key = attemptKey(oauthQuery);
-  if (!key) return 0;
-  return Number(window.sessionStorage.getItem(key) ?? "0") || 0;
-}
-
-function recordAttempt(oauthQuery: string): void {
-  if (typeof window === "undefined") return;
-  const key = attemptKey(oauthQuery);
-  if (!key) return;
-  window.sessionStorage.setItem(key, String(attemptsFor(oauthQuery) + 1));
-}
-
-function forgetAttempts(oauthQuery: string): void {
-  if (typeof window === "undefined") return;
-  const key = attemptKey(oauthQuery);
-  if (key) window.sessionStorage.removeItem(key);
-}
-
 function LoginInner() {
   const router = useRouter();
   const params = useSearchParams();
   const toast = useToast();
-  const { signIn, signUp, session, loading } = useSession();
+  const { signIn, signUp, session } = useSession();
 
   const authError = params.get("error");
   const [mode, setMode] = useState<"signin" | "signup">(
@@ -127,105 +85,10 @@ function LoginInner() {
       ? requestedNext
       : "/dashboard";
 
-  /**
-   * The signed authorization request.
-   *
-   * The provider redirects the browser here with the authorization request
-   * as query parameters. The query is signed and expires, so it is handed
-   * back exactly as received.
-   */
-  const oauthQuery = useMemo(() => readSignedRequest(params), [params]);
-
-  const provider = useMemo(() => {
-    if (!oauthQuery) return "";
-    const signed = new URLSearchParams(oauthQuery);
-    return signed.get("provider") ?? "";
-  }, [oauthQuery]);
-
-  const resumeAuthorization = useCallback(async () => {
-    if (!oauthQuery) return false;
-    const url = await continueAuthorization(oauthQuery);
-    if (!url) return false;
-    window.location.assign(url);
-    return true;
-  }, [oauthQuery]);
-
-  /**
-   * Drives the provider sign-in for a pending authorization request.
-   *
-   * The provider verifies the signed query, signs the user in and resumes the
-   * authorization request once the provider returns. The browser comes back
-   * here with a session, and the flow continues from there.
-   */
-  const beginProviderSignIn = useCallback(async () => {
-    if (!oauthQuery || !provider) return false;
-    const url = await startProviderSignIn(provider, oauthQuery);
-    if (!url) return false;
-    window.location.assign(url);
-    return true;
-  }, [oauthQuery, provider]);
-
-  const flowStarted = useRef(false);
-
-  useEffect(() => {
-    if (loading || !oauthQuery || flowStarted.current) return;
-    flowStarted.current = true;
-
-    void (async () => {
-      try {
-        // With a provider session the authorization request can be resumed.
-        if (await hasProviderSession()) {
-          // A session means the round trip worked; a previous failure count
-          // must not block the next legitimate attempt.
-          forgetAttempts(oauthQuery);
-          if (await resumeAuthorization()) return;
-        }
-
-        // Without one the provider has to sign the user in first. Bound the
-        // number of times the browser is sent to the provider: an unbounded
-        // bounce is the difference between a broken flow and a loop the
-        // visitor cannot escape.
-        if (attemptsFor(oauthQuery) >= 2) {
-          setOauthError(
-            "Google sign-in could not be completed. Please try again, or sign in with your email and password.",
-          );
-          return;
-        }
-        recordAttempt(oauthQuery);
-
-        if (await beginProviderSignIn()) return;
-
-        setOauthError("We could not start the sign-in. Please try again.");
-      } catch (error) {
-        // A rate limit is not a broken sign-in, and saying so would send
-        // somebody round in circles. It says how long to wait instead.
-        if (error instanceof OAuthRateLimitError) {
-          const seconds = Math.max(1, Math.round(error.retryAfterSeconds));
-          const minutes = Math.max(1, Math.round(seconds / 60));
-          setOauthError(
-            `Too many sign-in attempts. Please wait about ${minutes} minute${
-              minutes === 1 ? "" : "s"
-            } and try again.`,
-          );
-          return;
-        }
-        setOauthError("We could not start the sign-in. Please try again.");
-      }
-    })();
-  }, [
-    loading,
-    oauthQuery,
-    resumeAuthorization,
-    beginProviderSignIn,
-  ]);
-
   const continueWithGoogle = async () => {
     setGoogleBusy(true);
     try {
-      const returnTo = oauthQuery
-        ? `${window.location.pathname}${window.location.search}`
-        : next;
-      const started = await signInWithGoogle(returnTo);
+      const started = await signInWithGoogle(next);
       if (!started) {
         toast.push("Google sign-in is not available right now", "danger");
       }
@@ -264,7 +127,6 @@ function LoginInner() {
         );
         return;
       }
-      if (await resumeAuthorization()) return;
       toast.push(mode === "signin" ? "Welcome back" : "Account created", "success");
       const home = getRoleHome(session?.roles ?? []);
       router.replace(home);

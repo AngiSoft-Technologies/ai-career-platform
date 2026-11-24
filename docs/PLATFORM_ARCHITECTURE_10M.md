@@ -387,30 +387,32 @@ Private buckets + presigned PUT from the backend. The backend signs, Tigris stor
 
 ### The blocked question, resolved
 
-The deadlock was: Neon's `/sign-in/social` ignores `idToken` and always returns a redirect URL (verified by four probe payload shapes against the live deployment — all four returned `200 {"url": ".../sign-in/social/init?token=...","redirect":true}`), while Better Auth documents an `idToken` path that skips redirection. So the documented native flow does not work on this deployment.
-
-**Resolution: use the redirect flow as the primary path. It requires no Google client ID from the user.**
+**Resolution: the API runs the Google authorization-code + PKCE flow itself. Neon Auth is
+no longer in the sign-in path at all** (removed after repeated production failures —
+state mismatches and lost session challenges).
 
 ```
 1. Mobile opens a Custom Tab / ASWebAuthenticationSession to
      https://mboqara-api-angisoft.fly.dev/v1/auth/google/start
-       ?state=<signed random>  &  redirect_uri=mboqara://auth/callback
-2. Backend: store state in Redis (10 min TTL), respond 302 →
-     Neon Auth /sign-in/social   { provider: "google",
-                                   callbackURL: <API origin>/v1/auth/google/callback }
-     with Origin: <API origin>   ← the API's trusted origin, never the client's
-3. Neon → Google (Neon's OWN shared OAuth credentials) → Neon callback
-4. Neon 302s the browser to the backend callback with a session cookie
-5. Backend: read Set-Cookie, GET /token → Neon JWT
-     → verify against NEON_AUTH_JWKS_URL → ensureLocalUserRecord()
-     → issue MboQara access token (HS256, 15 min) + rotating refresh token (30 d)
-6. Backend 302s to mboqara://auth/callback#access_token=…&refresh_token=…
-7. App closes the tab, stores tokens. Done.
+       ?redirect_uri=mboqara://auth/callback
+2. Backend: store state + PKCE verifier in auth_oauth_states (10 min TTL), respond 302 ->
+     accounts.google.com/o/oauth2/v2/auth (client_id, redirect_uri=<API>/v1/auth/google/callback,
+     code_challenge, state, prompt=select_account)
+3. Google consent -> Google 302s the browser to the API callback with code + state
+4. Backend: POST oauth2.googleapis.com/token (code + verifier)
+     -> verify id_token against Google JWKS (audience = GOOGLE_WEB_CLIENT_ID)
+     -> map identity -> app user (auth_identities) -> create handoff code
+5. Backend 302s to mboqara://auth/callback#code=<handoff>
+6. App POSTs /v1/auth/exchange { code } -> MboQara access token (15 min) +
+   rotating refresh token (30 d). Done.
 ```
 
 This is exactly how LinkedIn, X and GitHub do native social sign-in. **No `google-services.json`, no iOS `GIDClientID`, no Google client ID from the user, no Gradle plugin.** The mobile app needs only a Custom Tab and a deep-link handler — `flutter_web_auth`-style, not `google_sign_in`.
 
-The native `idToken` endpoint (`/v1/auth/google`) stays in `routes/auth.ts` as the fast path for **later**, once the project has its own OAuth web client ID for branded consent screens and Android/iOS. It is not required to ship.
+The Google OAuth client needs the API callback
+(`https://<api-host>/v1/auth/google/callback`) as an authorized redirect URI;
+the app redirect (`mboqara://auth/callback`) is where the browser lands *after* the API
+finishes, and is allowed by `AUTH_OAUTH_REDIRECT_ALLOWLIST` on the API.
 
 ### Token model (already implemented in `auth/tokens.ts`)
 
@@ -421,7 +423,7 @@ The native `idToken` endpoint (`/v1/auth/google`) stays in `routes/auth.ts` as t
 
 ### Boundary (from `ARCHITECTURE_BOUNDARIES.md`)
 
-The backend owns identity. Clients receive MboQara tokens and nothing else. `resolveIdentity` accepts **only** app-minted tokens; the Neon-JWT fallback has been removed. Mobile never touches `NEON_AUTH_BASE_URL`; web never proxies `/api/auth/*`.
+The backend owns identity end to end — passwords, sessions, refresh tokens, and the social sign-in handshake with Google/LinkedIn. Clients receive MboQara tokens and nothing else. `resolveIdentity` accepts **only** app-minted tokens. Mobile and web never address a provider or a hosted auth service.
 
 ---
 

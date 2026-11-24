@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ArrowRight, KeyRound, ShieldCheck, UserPlus } from "lucide-react";
 import { Button, Field, Input, useToast } from "@/components/ui";
-import { API_URL } from "@/lib/auth";
+import { API_URL, signIn } from "@/lib/auth";
 
 interface InvitationDetails {
   email: string;
@@ -92,13 +92,8 @@ function InviteInner({ token }: { token: string }) {
       }
 
       const email = payload?.email ?? invitation?.email;
-      const signIn = await fetch("/api/auth/sign-in/email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ email, password }),
-      });
-      if (!signIn.ok) {
+      const signedIn = await signIn(email, password);
+      if (!signedIn) {
         toast.push("Your password is set. Please sign in.", "success");
         router.replace("/login");
         return;

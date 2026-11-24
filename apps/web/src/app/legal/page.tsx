@@ -62,11 +62,6 @@ const LEGAL_DOCUMENTS: Array<{ href: string; title: string; description: string 
     title: "Accessibility statement",
     description: "Our WCAG target, what is in place today, and how to report a barrier.",
   },
-  {
-    href: "/consent",
-    title: "App connection consent",
-    description: "The screen you use when another app asks to connect to your MboQara account.",
-  },
 ];
 
 export default function LegalIndexPage() {
@@ -77,7 +72,7 @@ export default function LegalIndexPage() {
           webPageSchema({
             name: "Legal and policies — MboQara",
             description:
-              "MboQara legal index: Terms, Privacy Policy, Consent choices, Acceptable use, Cookie notice, Security, Accessibility and App connection consent.",
+              "MboQara legal index: Terms, Privacy Policy, Consent choices, Acceptable use, Cookie notice, Security, Accessibility.",
             path: "/legal",
           }),
           breadcrumbSchema([
