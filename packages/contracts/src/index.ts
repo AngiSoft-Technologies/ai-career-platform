@@ -40,7 +40,7 @@ export const APPLICATION_STATUS_TRANSITIONS: Partial<
   SHORTLISTED: ["ANALYZED", "WITHDRAWN"],
   ANALYZED: ["APPLICATION_PREPARATION", "WITHDRAWN"],
   APPLICATION_PREPARATION: ["READY_TO_APPLY", "WITHDRAWN"],
-  READY_TO_APPLY: ["APPLIED", "WITHDRAWN"],
+  READY_TO_APPLY: ["APPLIED", "APPLICATION_PREPARATION", "WITHDRAWN"],
   APPLIED: ["ACKNOWLEDGED", "NO_RESPONSE", "REJECTED", "WITHDRAWN"],
   ACKNOWLEDGED: ["SCREENING", "REJECTED", "NO_RESPONSE", "WITHDRAWN"],
   SCREENING: ["ASSESSMENT", "INTERVIEW", "REJECTED", "WITHDRAWN"],
@@ -65,6 +65,10 @@ export interface CandidateProfile {
   summary: string;
   location: string;
   country: string;
+  phone?: string;
+  website?: string;
+  linkedin?: string;
+  github?: string;
   yearsExperience: number;
   seniority: Seniority;
   desiredRoles: string[];
@@ -144,6 +148,111 @@ export interface ApplicationBlueprint {
   questions: string[];
   instructions: string;
   generatedAt: string;
+}
+
+export type ApplicationPreparationStatus =
+  | "QUEUED"
+  | "RUNNING"
+  | "NEEDS_INPUT"
+  | "AWAITING_REVIEW"
+  | "READY"
+  | "BLOCKED"
+  | "FAILED"
+  | "STALE";
+
+export interface ApplicationMissingInput {
+  key: string;
+  label: string;
+  type: "text" | "email" | "tel" | "number" | "date" | "select" | "textarea" | "file" | "boolean";
+  reason: string;
+  required: boolean;
+  suggestedValue?: string;
+  options?: string[];
+  /**
+   * True when the candidate must complete this step personally on the
+   * employer's page. The server never stores or auto-fills the value.
+   */
+  requiresManualAction?: boolean;
+}
+
+export interface ApplicationPreparationDocumentIds {
+  cv?: string;
+  coverLetter?: string;
+  email?: string;
+  answers?: string;
+}
+
+export interface ApplicationPreparation {
+  id: string;
+  userId: string;
+  opportunityId: string;
+  applicationId?: string;
+  status: ApplicationPreparationStatus;
+  phase: string;
+  version: number;
+  sourceFingerprint: string;
+  analysis: Record<string, unknown>;
+  requirements: Record<string, unknown>;
+  employerIntelligence: Record<string, unknown>;
+  documentIds: ApplicationPreparationDocumentIds;
+  missingInputs: ApplicationMissingInput[];
+  userInputs: Record<string, string>;
+  approvedAt?: string;
+  approvedFingerprint?: string;
+  preparedDocumentIds?: string[];
+  preparedAt?: string;
+  errorCode?: string;
+  errorDetail?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ApplicationSubmissionStatus =
+  | "REQUESTED"
+  | "CLAIMED"
+  | "RUNNING"
+  | "WAITING_FOR_INPUT"
+  | "WAITING_FOR_HUMAN"
+  | "SUCCEEDED"
+  | "FAILED"
+  | "EXPIRED"
+  | "CANCELLED";
+
+export type ApplicationSubmissionMethod = "browser" | "manual_email";
+
+export interface ApplicationSubmissionField {
+  key: string;
+  label: string;
+  type: string;
+  required: boolean;
+  value?: string;
+  options?: string[];
+}
+
+export interface ApplicationSubmissionRun {
+  id: string;
+  userId: string;
+  applicationId: string;
+  preparationId: string;
+  status: ApplicationSubmissionStatus;
+  method: ApplicationSubmissionMethod;
+  currentStep: string;
+  targetUrl: string;
+  allowedHosts: string[];
+  fields: ApplicationSubmissionField[];
+  result: Record<string, unknown>;
+  errorCode?: string;
+  errorDetail?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BrowserAgentDevice {
+  id: string;
+  name: string;
+  status: "PENDING" | "ACTIVE" | "REVOKED";
+  lastSeenAt?: string;
+  createdAt: string;
 }
 
 export interface Application {

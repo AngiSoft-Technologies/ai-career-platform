@@ -394,6 +394,7 @@ paths:
                 remoteOnly: { type: boolean }
                 willingToRelocate: { type: boolean }
                 notificationsEnabled: { type: boolean }
+                autoPrepareEnabled: { type: boolean }
       responses:
         "200": { description: Saved preferences }
   /opportunities:
