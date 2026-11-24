@@ -55,7 +55,7 @@ export default function TermsPage({
             {!h && (
               <Reveal delay={0}>
                 <h1 id="terms-title" className="mk-legal__section-title">Terms of Service</h1>
-                <p className="mk-legal__text"><strong>Effective:</strong> October 2026. <strong>Provider:</strong> AngiSoft Technologies, Nairobi, Kenya.</p>
+                <p className="mk-legal__text"><strong>Last updated:</strong> 23 November 2026. <strong>Provider:</strong> AngiSoft Technologies, Nairobi, Kenya.</p>
               </Reveal>
             )}
 

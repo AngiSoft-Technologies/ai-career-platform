@@ -55,7 +55,7 @@ export default function PrivacyPage({
             {!h && (
               <Reveal delay={0}>
                 <h1 id="privacy-title" className="mk-legal__section-title">Privacy Policy</h1>
-                <p className="mk-legal__text"><strong>Effective:</strong> October 2026. <strong>Controller:</strong> AngiSoft Technologies, Nairobi, Kenya.</p>
+                <p className="mk-legal__text"><strong>Last updated:</strong> 23 November 2026. <strong>Controller:</strong> AngiSoft Technologies, Nairobi, Kenya.</p>
               </Reveal>
             )}
 

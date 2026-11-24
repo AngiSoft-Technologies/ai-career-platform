@@ -20,6 +20,8 @@ import {
   Cookie,
   Accessibility,
   KeyRound,
+  Scale,
+  ScrollText,
 } from "lucide-react";
 
 const FOOTER_LINKS = {
@@ -42,8 +44,11 @@ const FOOTER_LINKS = {
     { href: "https://www.angisoft.co.ke", label: "AngiSoft Technologies", icon: ArrowRight, external: true },
   ],
   Legal: [
+    { href: "/legal", label: "Legal centre", icon: Scale },
     { href: "/privacy", label: "Privacy", icon: Lock },
     { href: "/terms", label: "Terms", icon: FileText },
+    { href: "/legal/consent-choices", label: "Consent choices", icon: ShieldCheck },
+    { href: "/legal/acceptable-use", label: "Acceptable use", icon: ScrollText },
     { href: "/cookies", label: "Cookie notice", icon: Cookie },
     { href: "/consent", label: "App permissions", icon: KeyRound },
   ],

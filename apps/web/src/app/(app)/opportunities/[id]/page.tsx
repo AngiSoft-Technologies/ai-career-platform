@@ -2,16 +2,16 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ArrowLeft,
   ArrowUpRight,
+  CheckCircle2,
   FileText,
-  ScanSearch,
-  ShieldCheck,
-  TriangleAlert,
-  Sparkles,
   RefreshCw,
+  ShieldCheck,
+  Sparkles,
+  TriangleAlert,
 } from "lucide-react";
 import {
   Badge,
@@ -22,12 +22,15 @@ import {
   Page,
   Panel,
   PanelHead,
+  Rows,
+  Row,
   Skeleton,
-  Tabs,
   useToast,
 } from "@/components/ui";
 import { CompanyMark, HeroSplit } from "@/components/app-art";
 import { JobDescription } from "@/components/job-description";
+import { EmployerFrame } from "@/components/application/employer-frame";
+import { PreparationPanel } from "@/components/application/preparation-panel";
 import { useApi } from "@/lib/hooks";
 import { api } from "@/lib/api";
 import {
@@ -38,7 +41,7 @@ import {
   relativeTime,
   titleCase,
 } from "@/lib/format";
-import type { ApplicationAnalysis, Opportunity } from "@/lib/types";
+import type { ApplicationPreparation, Opportunity } from "@/lib/types";
 
 interface OpportunityDetail extends Omit<Opportunity, "match"> {
   match?: {
@@ -53,112 +56,84 @@ interface OpportunityDetail extends Omit<Opportunity, "match"> {
   riskScore?: number;
 }
 
-interface TailoredDocuments {
-  cv: { content: string; changes: string[]; matchedRequirements: string[]; uncoveredRequirements: string[] };
-  coverLetter: { content: string; changes: string[]; matchedRequirements: string[]; uncoveredRequirements: string[] };
-  generatedAt: string;
-}
-
-interface EmployerIntelligence {
-  companyName: string;
-  techStack: string[];
-  cultureSignals: string[];
-  interviewProcess: string[];
-  recentNews: string[];
-  glassdoorRating: number | null;
-  employeeCount: number | null;
-  fundingStage: string | null;
-}
-
-interface PreparationResponse {
-  analysis: ApplicationAnalysis;
-  documents: TailoredDocuments;
-  employerIntel: EmployerIntelligence;
-  ready: boolean;
-}
-
 function OpportunityDetailInner() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const toast = useToast();
-  const [tab, setTab] = useState("overview");
-  const [generating, setGenerating] = useState(false);
-  const [preparing, setPreparing] = useState(true);
-  const [analysis, setAnalysis] = useState<ApplicationAnalysis | null>(null);
-  const [documents, setDocuments] = useState<TailoredDocuments | null>(null);
-  const [employerIntel, setEmployerIntel] = useState<EmployerIntelligence | null>(null);
-  const [applicationId, setApplicationId] = useState<string | null>(null);
+  const opportunityId = params.id;
+  const [preparation, setPreparation] = useState<ApplicationPreparation | null>(null);
+  const [preparationLoading, setPreparationLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [starting, setStarting] = useState(false);
 
-  const { data, loading, error } = useApi<OpportunityDetail>(`/opportunities/${params.id}`);
+  const { data, loading, error } = useApi<OpportunityDetail>(
+    `/opportunities/${opportunityId}`,
+  );
   const matches = useApi<{ match: OpportunityDetail["match"] }>(
-    params.id ? `/matches/${params.id}` : null,
+    opportunityId ? `/matches/${opportunityId}` : null,
     undefined,
   );
 
-  const item = data;
-
-  // PROACTIVE: Fetch preparation on mount - no user click needed
-  const fetchPreparation = useCallback(async () => {
-    if (!item) return;
-    setPreparing(true);
+  const refreshPreparation = useCallback(async () => {
     try {
-      const response = await api.post<PreparationResponse>(`/analysis/prepare/${item.id}`);
-      setAnalysis(response.analysis);
-      setDocuments(response.documents);
-      setEmployerIntel(response.employerIntel);
-    } catch (caught) {
-      console.warn("Preparation fetch failed:", caught);
-    } finally {
-      setPreparing(false);
+      const response = await api.get<{ preparation: ApplicationPreparation }>(
+        `/applications/prepare/${opportunityId}`,
+      );
+      setPreparation(response.preparation);
+    } catch {
+      // A missing preparation is normal before the first queue request.
     }
-  }, [item, api]);
+  }, [opportunityId]);
+
+  const queuePreparation = useCallback(async (refresh = false) => {
+    setPreparationLoading(true);
+    if (refresh) setRefreshing(true);
+    try {
+      const path = `/applications/prepare/${opportunityId}${refresh ? "/refresh" : ""}`;
+      const response = await api.post<{ preparation: ApplicationPreparation }>(path, {});
+      setPreparation(response.preparation);
+      if (refresh) toast.push("The agent is rebuilding this role’s package", "success");
+    } catch (caught) {
+      toast.push(
+        caught instanceof Error ? caught.message : "Could not start application preparation",
+        "danger",
+      );
+    } finally {
+      setPreparationLoading(false);
+      setRefreshing(false);
+    }
+  }, [opportunityId, toast]);
 
   useEffect(() => {
-    if (item && !preparing && !analysis) {
-      fetchPreparation();
-    }
-  }, [item, preparing, analysis, fetchPreparation]);
+    if (!opportunityId) return;
+    void queuePreparation();
+  }, [opportunityId, queuePreparation]);
 
-  const startApplication = async () => {
-    if (!item) return;
-    setGenerating(true);
+  useEffect(() => {
+    if (!preparation || !["QUEUED", "RUNNING"].includes(preparation.status)) return;
+    const timer = window.setInterval(() => void refreshPreparation(), 2_500);
+    return () => window.clearInterval(timer);
+  }, [preparation, refreshPreparation]);
+
+  const openApplicationDesk = async () => {
+    if (!data) return;
+    setStarting(true);
     try {
       const response = await api.post<{ application: { id: string } }>("/applications", {
-        opportunityId: item.id,
+        opportunityId: data.id,
       });
-      setApplicationId(response.application.id);
-      toast.push("Opening your guided application", "success");
-      router.push(`/applications/${response.application.id}?guided=1`);
+      router.push(`/applications/${response.application.id}`);
     } catch (caught) {
       toast.push(
-        caught instanceof Error ? caught.message : "Could not create the application",
+        caught instanceof Error ? caught.message : "Could not open the application desk",
         "danger",
       );
     } finally {
-      setGenerating(false);
+      setStarting(false);
     }
   };
 
-  const refreshPreparation = async () => {
-    if (!item) return;
-    setPreparing(true);
-    try {
-      const response = await api.post<PreparationResponse>(`/analysis/prepare/${item.id}/refresh`);
-      setAnalysis(response.analysis);
-      setDocuments(response.documents);
-      setEmployerIntel(response.employerIntel);
-      toast.push("Application package refreshed", "success");
-    } catch (caught) {
-      toast.push(
-        caught instanceof Error ? caught.message : "Could not refresh preparation",
-        "danger",
-      );
-    } finally {
-      setPreparing(false);
-    }
-  };
-
-  if (loading && !item) {
+  if (loading && !data) {
     return (
       <Page>
         <Skeleton height={30} width={220} />
@@ -168,9 +143,7 @@ function OpportunityDetailInner() {
     );
   }
 
-  // A failed request is not a missing posting: the two were rendered
-  // identically, so an expired session looked like a deleted role.
-  if (error && !item) {
+  if (error && !data) {
     return (
       <EmptyState
         icon={<ShieldCheck size={26} />}
@@ -190,7 +163,7 @@ function OpportunityDetailInner() {
     );
   }
 
-  if (!item) {
+  if (!data) {
     return (
       <EmptyState
         title="Opportunity not found"
@@ -204,10 +177,15 @@ function OpportunityDetailInner() {
     );
   }
 
-  const match = matches.data?.match ?? item.match;
-  const riskFlags = item.riskFlags ?? [];
-  const flagged = item.riskAction && item.riskAction !== "publish";
+  const match = matches.data?.match ?? data.match;
+  const riskFlags = data.riskFlags ?? [];
+  const flagged = data.riskAction && data.riskAction !== "publish";
   const score = Math.round(match?.score ?? 0);
+  const applicationAction = (
+    <Button loading={starting} onClick={() => void openApplicationDesk()}>
+      Open application desk
+    </Button>
+  );
 
   return (
     <Page>
@@ -222,24 +200,14 @@ function OpportunityDetailInner() {
         </button>
       </div>
 
-      {/* The role's identity is the page, so it is set as a masthead rather
-          than as a card that happens to contain a title. */}
       <HeroSplit
         src="https://cdn.angisoft.co.ke/public/images/mboqara/careers/technology-professional.webp"
         alt="A professional at work"
         priority
-        eyebrow={`${item.companyName} · ${item.city ? `${item.city}, ` : ""}${item.country} · ${relativeTime(item.postedAt)}`}
-        title={item.title}
-        description={item.skills?.length ? item.skills.slice(0, 10).join(" · ") : undefined}
-        actions={
-          <>
-            <Button loading={generating} onClick={() => void startApplication()}>
-              {item.applicationMethod === "email"
-                ? "Prepare application email"
-                : "Start application"}
-            </Button>
-          </>
-        }
+        eyebrow={`${data.companyName} · ${data.city ? `${data.city}, ` : ""}${data.country} · ${relativeTime(data.postedAt)}`}
+        title={data.title}
+        description={data.skills?.length ? data.skills.slice(0, 10).join(" · ") : undefined}
+        actions={applicationAction}
         stats={
           <>
             <div>
@@ -258,7 +226,7 @@ function OpportunityDetailInner() {
                 Seniority
               </dt>
               <dd className="mt-1 text-[0.92rem] font-medium text-app-text">
-                {titleCase(item.seniority)}
+                {titleCase(data.seniority)}
               </dd>
             </div>
             <div>
@@ -266,7 +234,7 @@ function OpportunityDetailInner() {
                 Mode
               </dt>
               <dd className="mt-1 text-[0.92rem] font-medium text-app-text">
-                {titleCase(item.workMode)}
+                {titleCase(data.workMode)}
               </dd>
             </div>
             <div>
@@ -274,428 +242,188 @@ function OpportunityDetailInner() {
                 Salary
               </dt>
               <dd className="mt-1 text-[0.92rem] font-medium text-app-text">
-                {formatSalary(item.salaryMin, item.salaryMax, item.currency)}
+                {formatSalary(data.salaryMin, data.salaryMax, data.currency)}
               </dd>
             </div>
           </>
         }
         badge={
           flagged ? (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <Badge tone="danger" dot>
-                {titleCase(item.riskAction ?? "")} by risk engine
-              </Badge>
-            </div>
+            <Badge tone="danger" dot>
+              {titleCase(data.riskAction ?? "")} by risk engine
+            </Badge>
           ) : undefined
         }
       />
 
-      <Tabs
-        tabs={[
-          { key: "overview", label: "The role" },
-          { key: "match", label: "Your fit" },
-          { key: "apply", label: "Application" },
-          { key: "risk", label: "Trust" },
-        ]}
-        active={tab}
-        onChange={setTab}
+      <PreparationPanel
+        preparation={preparation}
+        loading={preparationLoading}
+        onRefresh={() => void queuePreparation(true)}
+        action={applicationAction}
       />
 
-      {tab === "overview" ? (
-        <div className="grid items-start gap-9 lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
+      <div className="grid items-start gap-9 lg:grid-cols-[minmax(0,1fr)_minmax(0,320px)]">
+        <div className="flex min-w-0 flex-col gap-8">
           <article className="min-w-0">
+            <div className="mb-4 flex flex-wrap items-end justify-between gap-3 border-b border-app-border pb-3">
+              <div>
+                <p className="font-mono text-[0.62rem] tracking-[0.18em] text-app-muted uppercase">
+                  The role
+                </p>
+                <h2 className="mt-1 text-[1.15rem] leading-tight font-semibold tracking-[-0.015em] text-app-text">
+                  What the employer is asking for
+                </h2>
+              </div>
+              <span className="text-[0.75rem] text-app-muted">
+                Posted {formatDate(data.postedAt)}
+              </span>
+            </div>
             <JobDescription
-              text={item.description || "No description was provided by the source."}
+              text={data.description || "No description was provided by the source."}
             />
           </article>
 
-          <aside className="flex flex-col gap-4 lg:sticky lg:top-[92px]">
-            <Panel>
-              <PanelHead eyebrow="The facts" title="At a glance" />
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-4 border-t border-app-border px-5 py-4">
-                <Meta label="Salary" value={formatSalary(item.salaryMin, item.salaryMax, item.currency)} />
-                <Meta label="Location" value={item.city ? `${item.city}, ${item.country}` : item.country} />
-                <Meta label="Mode" value={titleCase(item.workMode)} />
-                <Meta label="Method" value={titleCase(item.applicationMethod)} />
-                <Meta label="Posted on" value={item.sourceKind ?? titleCase(item.platform)} />
-                <Meta
-                  label="Expires"
-                  value={item.expiresAt ? formatDate(item.expiresAt) : "Not stated"}
-                />
-              </dl>
-            </Panel>
-
-            <Panel>
-              <PanelHead eyebrow="Can you hold it" title="Eligibility" />
-              <div className="border-t border-app-border px-5 py-4">
-                <Badge tone={eligibilityTone(item.eligibility)}>
-                  {eligibilityLabel(item.eligibility)}
-                </Badge>
-                <p className="mt-2 text-[0.8rem] leading-relaxed text-app-muted">
-                  Read from what the posting itself says about location and work authorisation — not
-                  from the country it happens to name.
-                </p>
-                {(item.eligibilityReasons ?? []).slice(0, 4).map((reason) => (
-                  <p key={reason} className="mt-1.5 text-[0.78rem] leading-relaxed text-app-soft">
-                    · {reason}
-                  </p>
-                ))}
-              </div>
-            </Panel>
-
-            <Panel>
-              <PanelHead eyebrow="Company" title={item.companyName} />
-              <div className="border-t border-app-border px-5 py-4">
-                <div className="flex items-center gap-2.5">
-                  <CompanyMark name={item.companyName} size={36} />
-                  <div className="min-w-0">
-                    <p className="truncate text-[0.86rem] font-medium text-app-text">
-                      {item.companyName}
-                    </p>
-                    <p className="truncate text-[0.72rem] text-app-muted">
-                      {item.companyWebsite ?? "No website listed"}
-                    </p>
-                  </div>
-                </div>
-                <Link href={`/companies/${item.companySlug}`} className="mt-3 block">
-                  <Button variant="ghost" size="sm" icon={<ArrowUpRight size={13} />} className="w-full">
-                    Company intelligence
-                  </Button>
-                </Link>
-              </div>
-            </Panel>
-          </aside>
-        </div>
-      ) : null}
-
-      {tab === "match" ? (
-        <div className="grid items-start gap-9 lg:grid-cols-[minmax(0,1fr)_minmax(0,320px)]">
-          <div className="min-w-0">
-            <h2 className="text-[1.15rem] leading-tight font-semibold tracking-[-0.015em] text-app-text">
-              Why this role scores {score}
-            </h2>
-            {match?.explanation ? (
-              <p className="mt-2 max-w-[62ch] text-[0.9rem] leading-relaxed text-app-soft">
-                {match.explanation}
+          <section>
+            <div className="mb-4 border-b border-app-border pb-3">
+              <p className="font-mono text-[0.62rem] tracking-[0.18em] text-app-muted uppercase">
+                Employer page
               </p>
-            ) : null}
-
-            <div className="mt-6 flex flex-col gap-4">
-              {match
-                ? Object.entries(match.factors ?? {}).map(([key, value]) => (
-                    <div key={key} className="grid grid-cols-[minmax(0,150px)_minmax(0,1fr)_48px] items-center gap-4">
-                      <span className="text-[0.82rem] text-app-soft">{titleCase(key)}</span>
-                      <Meter value={Math.max(0, Math.min(100, value))} />
-                      <span className="text-right font-mono text-[0.76rem] tabular-nums text-app-muted">
-                        {Math.round(value)}
-                      </span>
-                    </div>
-                  ))
-                : null}
+              <h2 className="mt-1 text-[1.15rem] leading-tight font-semibold tracking-[-0.015em] text-app-text">
+                The application stays inside MboQara
+              </h2>
+              <p className="mt-1.5 max-w-[62ch] text-[0.82rem] leading-relaxed text-app-muted">
+                The agent has already read this page. You can see it here while
+                you review the package, answer anything missing, and approve the
+                application.
+              </p>
             </div>
-          </div>
-
-          <aside className="flex flex-col gap-4 lg:sticky lg:top-[92px]">
-            <Panel>
-              <PanelHead eyebrow="What is missing" title="Gaps in your profile" />
-              <div className="border-t border-app-border px-5 py-4">
-                <div className="flex flex-wrap gap-1.5">
-                  {(match?.gaps ?? []).length === 0 ? (
-                    <p className="text-[0.84rem] leading-relaxed text-app-muted">
-                      Nothing significant is missing from your profile.
-                    </p>
-                  ) : (
-                    (match?.gaps ?? []).map((gap) => (
-                      <Badge key={gap} tone="warning">
-                        {gap}
-                      </Badge>
-                    ))
-                  )}
-                </div>
-                <Link href="/profile" className="mt-4 block">
-                  <Button variant="outline" size="sm" className="w-full">
-                    Update profile
-                  </Button>
-                </Link>
-              </div>
-            </Panel>
-          </aside>
+            <EmployerFrame url={data.applyUrl} title={data.title} defaultOpen />
+          </section>
         </div>
-      ) : null}
 
-      {tab === "apply" ? (
-        <div className="grid items-start gap-9 lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-end justify-between gap-3 border-b border-app-border pb-3">
-              <div>
-                <h2 className="text-[1.15rem] leading-tight font-semibold tracking-[-0.015em] text-app-text">
-                  The employer&rsquo;s form
-                </h2>
-                <p className="mt-1 max-w-[56ch] text-[0.84rem] leading-relaxed text-app-muted">
-                  We&rsquo;ve already analysed the application page. Your tailored CV and cover letter are ready.
+        <aside className="flex flex-col gap-4 lg:sticky lg:top-[92px]">
+          <Panel>
+            <PanelHead eyebrow="Your position" title="Fit and gaps" />
+            <div className="border-t border-app-border px-5 py-4">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-[0.84rem] text-app-soft">Match score</span>
+                <span className="font-display text-[1.55rem] font-semibold tabular-nums text-app-text">
+                  {score}
+                </span>
+              </div>
+              <div className="mt-2">
+                <Meter value={Math.max(0, Math.min(100, score))} />
+              </div>
+              {match?.explanation ? (
+                <p className="mt-3 text-[0.79rem] leading-relaxed text-app-muted">
+                  {match.explanation}
                 </p>
-              </div>
-              {preparing ? (
-                <Button size="sm" variant="outline" disabled>
-                  <ScanSearch size={14} className="animate-spin" /> Preparing&hellip;
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  icon={<RefreshCw size={14} />}
-                  onClick={() => void refreshPreparation()}
-                >
-                  Refresh
-                </Button>
-              )}
-            </div>
-
-            {preparing ? (
-              <div className="mt-5 flex items-center justify-center gap-3 py-8">
-                <ScanSearch size={20} className="animate-spin text-app-accent" />
-                <p className="text-[0.9rem] text-app-muted">Preparing your application package&hellip;</p>
-              </div>
-            ) : analysis ? (
-              <div className="mt-5 flex flex-col gap-6">
-                <div className="flex flex-wrap gap-1.5">
-                  <Badge tone="accent">{titleCase(analysis.platform)}</Badge>
-                  <Badge tone="neutral">{titleCase(analysis.method)}</Badge>
-                  <Badge tone="info">{analysis.fields.length} fields</Badge>
-                  <Badge tone={analysis.requiresUserInput.length ? "warning" : "success"}>
-                    {analysis.requiresUserInput.length} need you
-                  </Badge>
-                </div>
-
-                {analysis.requiresUserInput.length > 0 ? (
-                  <div>
-                    <p className="font-mono text-[0.6rem] tracking-[0.18em] text-app-muted uppercase">
-                      Requires your input
-                    </p>
-                    <ul className="mt-2 divide-y divide-app-border border-y border-app-border">
-                      {analysis.requiresUserInput.map((entry) => (
-                        <li key={entry} className="py-2.5">
-                          <strong className="text-[0.86rem] font-medium text-app-text">{entry}</strong>
-                          <p className="mt-0.5 text-[0.78rem] text-app-muted">
-                            Enter or confirm this value on the employer&rsquo;s form.
-                          </p>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-
-                {analysis.questions.length > 0 ? (
-                  <div>
-                    <p className="font-mono text-[0.6rem] tracking-[0.18em] text-app-muted uppercase">
-                      Screening questions
-                    </p>
-                    <ol className="mt-2 flex flex-col gap-2">
-                      {analysis.questions.map((question, index) => (
-                        <li
-                          key={index}
-                          className="flex gap-3 text-[0.86rem] leading-relaxed text-app-soft"
-                        >
-                          <span className="font-mono text-[0.7rem] text-app-muted">
-                            {String(index + 1).padStart(2, "0")}
-                          </span>
-                          <span>
-                            {question.question}
-                            {question.required ? (
-                              <Badge tone="danger" className="ml-1.5">
-                                required
-                              </Badge>
-                            ) : null}
-                          </span>
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
-                ) : null}
-
-                {analysis.requiredDocuments.length > 0 ? (
-                  <div>
-                    <p className="font-mono text-[0.6rem] tracking-[0.18em] text-app-muted uppercase">
-                      Documents required
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {analysis.requiredDocuments.map((doc) => (
-                        <Badge key={doc} tone="neutral">
-                          {doc}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-
-                <div className="flex flex-col gap-1.5">
-                  {analysis.instructions.map((instruction, index) => (
-                    <p key={index} className="text-[0.84rem] leading-relaxed text-app-muted">
-                      {instruction}
-                    </p>
+              ) : null}
+              {(match?.gaps ?? []).length ? (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {(match?.gaps ?? []).slice(0, 6).map((gap) => (
+                    <Badge key={gap} tone="warning">
+                      {gap}
+                    </Badge>
                   ))}
                 </div>
-              </div>
-            ) : (
-              <EmptyState
-                icon={<TriangleAlert size={26} />}
-                title="Could not prepare application"
-                description="The employer&rsquo;s page could not be analysed. You can still apply manually."
-              />
-            )}
-          </div>
-
-          <aside className="flex flex-col gap-4 lg:sticky lg:top-[92px]">
-            <Panel>
-              <PanelHead eyebrow="Documents" title="Your tailored kit" />
-              <div className="flex flex-col gap-2 border-t border-app-border px-5 py-4">
-                <Link href={`/documents?opportunityId=${item.id}`}>
-                  <Button variant="outline" className="w-full" icon={<FileText size={15} />}>
-                    Open document editor
-                  </Button>
-                </Link>
-                <Button loading={generating} onClick={() => void startApplication()} className="w-full">
-                  {item.applicationMethod === "email"
-                    ? "Prepare application email"
-                    : "Start guided application"}
-                </Button>
-              </div>
-            </Panel>
-
-            {documents ? (
-              <Panel>
-                <PanelHead eyebrow="Ready to review" title="Tailored for this role" />
-                <div className="flex flex-col gap-2 border-t border-app-border px-5 py-4">
-                  <div className="rounded-app-md border border-app-border bg-app-surface-2/40 p-3">
-                    <p className="font-mono text-[0.6rem] tracking-[0.16em] text-app-accent uppercase">
-                      CV &mdash; {documents.cv.matchedRequirements.length} requirements matched
-                    </p>
-                    <p className="mt-1 text-[0.8rem] text-app-soft">
-                      {documents.cv.changes[0] || "Tailored from your base CV"}
-                    </p>
-                  </div>
-                  <div className="rounded-app-md border border-app-border bg-app-surface-2/40 p-3">
-                    <p className="font-mono text-[0.6rem] tracking-[0.16em] text-app-accent uppercase">
-                      Cover Letter &mdash; {documents.coverLetter.matchedRequirements.length} points addressed
-                    </p>
-                    <p className="mt-1 text-[0.8rem] text-app-soft">
-                      {documents.coverLetter.changes[0] || "Generated for this role"}
-                    </p>
-                  </div>
-                  <Link href={`/documents?opportunityId=${item.id}`} className="mt-2 block">
-                    <Button variant="outline" size="sm" className="w-full">
-                      Review & edit documents
-                    </Button>
-                  </Link>
-                </div>
-              </Panel>
-            ) : null}
-
-            {employerIntel ? (
-              <Panel>
-                <PanelHead eyebrow="Employer intelligence" title="What we know about them" />
-                <div className="flex flex-col gap-3 border-t border-app-border px-5 py-4">
-                  {employerIntel.techStack.length > 0 && (
-                    <div>
-                      <p className="font-mono text-[0.6rem] tracking-[0.16em] text-app-muted uppercase">
-                        Tech stack
-                      </p>
-                      <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        {employerIntel.techStack.slice(0, 8).map((tech) => (
-                          <Badge key={tech} tone="neutral">{tech}</Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {employerIntel.cultureSignals.length > 0 && (
-                    <div>
-                      <p className="font-mono text-[0.6rem] tracking-[0.16em] text-app-muted uppercase">
-                        Culture signals
-                      </p>
-                      <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        {employerIntel.cultureSignals.map((signal) => (
-                          <Badge key={signal} tone="info">{signal}</Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {employerIntel.interviewProcess.length > 0 && (
-                    <div>
-                      <p className="font-mono text-[0.6rem] tracking-[0.16em] text-app-muted uppercase">
-                        Interview process
-                      </p>
-                      <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        {employerIntel.interviewProcess.map((step) => (
-                          <Badge key={step} tone="warning">{step}</Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </Panel>
-            ) : null}
-
-            <div className="rounded-app-lg border border-app-success/25 bg-app-success/8 p-4">
-              <p className="font-mono text-[0.6rem] tracking-[0.16em] text-app-success uppercase">
-                Your control
-              </p>
-              <p className="mt-1.5 text-[0.82rem] leading-relaxed text-app-soft">
-                Every answer is suggested from your own profile. Nothing is invented, and nothing is
-                sent until you approve it.
-              </p>
+              ) : null}
             </div>
-          </aside>
-        </div>
-      ) : null}
+          </Panel>
 
-      {tab === "risk" ? (
-        <div className="grid items-start gap-9 lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
-          <div className="min-w-0">
-            <h2 className="text-[1.15rem] leading-tight font-semibold tracking-[-0.015em] text-app-text">
-              How we scored this posting
-            </h2>
-            <p className="mt-1 max-w-[56ch] text-[0.84rem] leading-relaxed text-app-muted">
-              Every listing is checked before publication. This is the reasoning behind the decision.
-            </p>
-            <div className="mt-5 flex flex-col gap-1.5">
-              {riskFlags.length === 0 ? (
-                <p className="text-[0.88rem] leading-relaxed text-app-muted">
-                  No risk signals fired. The listing passed every check.
+          <Panel>
+            <PanelHead eyebrow="The facts" title="At a glance" />
+            <Rows className="border-t border-app-border">
+              <Row className="grid grid-cols-2 gap-4 px-5 py-3">
+                <Meta label="Salary" value={formatSalary(data.salaryMin, data.salaryMax, data.currency)} />
+                <Meta label="Location" value={data.city ? `${data.city}, ${data.country}` : data.country} />
+                <Meta label="Mode" value={titleCase(data.workMode)} />
+                <Meta label="Method" value={titleCase(data.applicationMethod)} />
+                <Meta label="Posted on" value={data.sourceKind ?? titleCase(data.platform)} />
+                <Meta
+                  label="Expires"
+                  value={data.expiresAt ? formatDate(data.expiresAt) : "Not stated"}
+                />
+              </Row>
+            </Rows>
+          </Panel>
+
+          <Panel>
+            <PanelHead eyebrow="Can you hold it" title="Eligibility" />
+            <div className="border-t border-app-border px-5 py-4">
+              <Badge tone={eligibilityTone(data.eligibility)}>
+                {eligibilityLabel(data.eligibility)}
+              </Badge>
+              <p className="mt-2 text-[0.8rem] leading-relaxed text-app-muted">
+                Read from what the posting itself says about location and work authorisation.
+              </p>
+              {(data.eligibilityReasons ?? []).slice(0, 4).map((reason) => (
+                <p key={reason} className="mt-1.5 text-[0.78rem] leading-relaxed text-app-soft">
+                  {reason}
                 </p>
-              ) : (
-                riskFlags.map((flag, index) => (
-                  <div
-                    key={index}
-                    className="flex gap-2.5 rounded-app-sm border border-app-warning/25 bg-app-warning/8 px-3 py-2 text-[0.85rem] leading-relaxed text-app-soft"
-                  >
-                    <TriangleAlert size={14} className="mt-0.5 shrink-0 text-app-warning" aria-hidden />
-                    {flag}
-                  </div>
-                ))
-              )}
+              ))}
             </div>
-          </div>
+          </Panel>
 
-          <aside className="flex flex-col gap-4 lg:sticky lg:top-[92px]">
-            <Panel>
-              <PanelHead eyebrow="Verdict" title="Trust assessment" />
-              <dl className="flex flex-col gap-4 border-t border-app-border px-5 py-4">
-                <Meta label="Risk score" value={`${Math.round(item.riskScore ?? 0)} / 100`} />
-                <Meta label="Decision" value={titleCase(item.riskAction ?? "publish")} />
-                <Meta label="Signals" value={String(riskFlags.length)} />
-              </dl>
-            </Panel>
-          </aside>
-        </div>
-      ) : null}
+          <Panel>
+            <PanelHead eyebrow="Employer" title={data.companyName} />
+            <div className="border-t border-app-border px-5 py-4">
+              <div className="flex items-center gap-2.5">
+                <CompanyMark name={data.companyName} size={36} />
+                <div className="min-w-0">
+                  <p className="truncate text-[0.86rem] font-medium text-app-text">
+                    {data.companyName}
+                  </p>
+                  <p className="truncate text-[0.72rem] text-app-muted">
+                    {data.companyWebsite ?? "No website listed"}
+                  </p>
+                </div>
+              </div>
+              <Link href={`/companies/${data.companySlug}`} className="mt-3 block">
+                <Button variant="ghost" size="sm" icon={<ArrowUpRight size={13} />} className="w-full">
+                  Company intelligence
+                </Button>
+              </Link>
+            </div>
+          </Panel>
+
+          <Panel>
+            <PanelHead eyebrow="Trust" title="Posting assessment" />
+            <div className="border-t border-app-border px-5 py-4">
+              <div className="flex items-center gap-2">
+                {riskFlags.length ? (
+                  <TriangleAlert size={15} className="text-app-warning" />
+                ) : (
+                  <CheckCircle2 size={15} className="text-app-success" />
+                )}
+                <span className="text-[0.82rem] font-medium text-app-text">
+                  {riskFlags.length ? `${riskFlags.length} signal${riskFlags.length === 1 ? "" : "s"}` : "No risk signals"}
+                </span>
+              </div>
+              <p className="mt-2 text-[0.76rem] leading-relaxed text-app-muted">
+                Risk score {Math.round(data.riskScore ?? 0)}/100 · decision {titleCase(data.riskAction ?? "publish")}
+              </p>
+              {riskFlags.slice(0, 3).map((flag) => (
+                <p key={flag} className="mt-1.5 text-[0.75rem] leading-relaxed text-app-soft">
+                  {flag}
+                </p>
+              ))}
+            </div>
+          </Panel>
+
+          <Link href="/documents" className="block">
+            <Button variant="outline" className="w-full" icon={<FileText size={14} />}>
+              Your source documents
+            </Button>
+          </Link>
+        </aside>
+      </div>
     </Page>
   );
 }
 
 export default function OpportunityDetailPage() {
   const params = useParams<{ id: string }>();
-  // Keyed by id: the App Router keeps this route mounted when only the id
-  // changes, and without the key the analysis, the tracked application and
-  // the tab of the previous role stayed on screen under the new one.
   return <OpportunityDetailInner key={params.id} />;
 }

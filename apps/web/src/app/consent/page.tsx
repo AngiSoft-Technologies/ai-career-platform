@@ -227,6 +227,29 @@ function ConsentInner() {
             Cancel
           </button>
         </div>
+
+        <div
+          style={{
+            marginTop: "0.8rem",
+            paddingTop: "0.8rem",
+            borderTop: "1px solid var(--border)",
+            fontSize: "0.78rem",
+            color: "var(--text-muted)",
+            lineHeight: 1.55,
+          }}
+        >
+          <p style={{ margin: 0 }}>
+            This is account-connection consent. It lets the app above use the MboQara information it
+            asked for; it does not by itself share your documents unless a scope says so.
+          </p>
+          <p style={{ margin: "0.45rem 0 0" }}>
+            Read the{" "}
+            <Link href="/legal/consent-choices">consent choices</Link>, the{" "}
+            <Link href="/privacy">privacy policy</Link>, the{" "}
+            <Link href="/terms">terms of service</Link>, or the{" "}
+            <Link href="/cookies">cookie notice</Link>.
+          </p>
+        </div>
       </div>
     </main>
   );
