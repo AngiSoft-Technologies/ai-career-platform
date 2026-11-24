@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MboQara Application Agent</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        min-width: 34rem;
+        padding: 2rem;
+        background: Canvas;
+        color: CanvasText;
+      }
+      h1 {
+        margin: 0 0 0.35rem;
+        font-size: 1.35rem;
+      }
+      p {
+        margin: 0 0 1.5rem;
+        color: color-mix(in srgb, CanvasText 68%, transparent);
+        line-height: 1.55;
+      }
+      label {
+        display: grid;
+        gap: 0.45rem;
+        margin-bottom: 1rem;
+        font-weight: 650;
+      }
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid color-mix(in srgb, CanvasText 24%, transparent);
+        border-radius: 0.55rem;
+        padding: 0.75rem 0.8rem;
+        background: Field;
+        color: FieldText;
+        font: inherit;
+      }
+      button {
+        border: 0;
+        border-radius: 0.55rem;
+        padding: 0.75rem 1rem;
+        background: #14532d;
+        color: white;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      #status {
+        min-height: 1.4rem;
+        margin-top: 1rem;
+        color: color-mix(in srgb, CanvasText 72%, transparent);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Connect the application agent</h1>
+    <p>
+      Open your application in MboQara, choose <strong>Connect browser agent</strong>,
+      and paste the one-time pairing code here. The agent can then operate the
+      employer form that is already open inside MboQara.
+    </p>
+    <form id="pairing-form">
+      <label>
+        API address
+        <input id="api-base" name="apiBase" type="url" required />
+      </label>
+      <label>
+        One-time pairing code
+        <input id="pairing-code" name="pairingCode" type="password" required autocomplete="off" />
+      </label>
+      <button type="submit">Pair this browser</button>
+    </form>
+    <p id="status" role="status"></p>
+    <script src="options.js"></script>
+  </body>
+</html>
