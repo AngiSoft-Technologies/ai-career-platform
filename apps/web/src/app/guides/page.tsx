@@ -6,7 +6,7 @@ import { BackdropVideo } from "@/components/marketing/backdrop-video";
 import { VideoEmbed } from "@/components/marketing/video-embed";
 import { StatBand } from "@/components/marketing/stat-band";
 import { Faq, CtaBand } from "@/components/marketing/faq";
-import { ArrowRight, BookOpen, PlayCircle, ShieldAlert, Sparkles } from "lucide-react";
+import { ArrowRight, Banknote, BookOpen, FileText, PlayCircle, ShieldAlert, Sparkles, WifiOff } from "lucide-react";
 import { pageMetadata, SITE } from "@/lib/seo";
 import { JsonLd, breadcrumbSchema, webPageSchema } from "@/components/seo/json-ld";
 
@@ -96,6 +96,30 @@ const GUIDES = [
     minutes: 7,
     body:
       "AI is good at turning your messy history into the shape a posting asks for, and bad at inventing experience you do not have — which is exactly what an interview will expose. Use it to draft and to tighten. Never to claim. The story you tell in the room has to be the one on the page.",
+  },
+  {
+    id: "ats-cv",
+    icon: <FileText aria-hidden="true" />,
+    title: "Writing a CV the screening software can read",
+    minutes: 6,
+    body:
+      "Most applications are filtered by software before a person sees them, and it matches on words, not intentions. Use the job title the posting used, the tools it named, and plain section headings like Experience and Education. Skip tables, text boxes, columns and graphics — they parse as noise. One page for under ten years of experience, two beyond that, PDF unless the employer asks for something else.",
+  },
+  {
+    id: "salary-talk",
+    icon: <Banknote aria-hidden="true" />,
+    title: "Talking about money before you have the offer",
+    minutes: 5,
+    body:
+      "Salary expectations come up earlier than most candidates expect — sometimes in the application form itself. Research the range for the role and country before you need it, state a range rather than a single figure, and anchor on the market rather than your current pay. If a posting publishes a band, stay inside it; if it does not, ask early rather than late, because a mismatch discovered at the end costs everyone a week.",
+  },
+  {
+    id: "offline-search",
+    icon: <WifiOff aria-hidden="true" />,
+    title: "Job hunting when the connection is not",
+    minutes: 4,
+    body:
+      "In this market the search does not stop when the data bundle does. Save the roles worth applying to while you have signal, draft documents offline, and let the app queue your changes for when you reconnect — an application marked as sent should never depend on a bar of reception at the exact wrong minute. Check what synced before you rely on it.",
   },
 ];
 
@@ -223,7 +247,7 @@ export default function GuidesPage() {
             <SectionHeading
               eyebrow="Read"
               eyebrowTone="verified"
-              title={<span id="written-heading">Six guides, each a few minutes</span>}
+              title={<span id="written-heading">Nine guides, each a few minutes</span>}
               lede="Written for this market. Short, specific, and checkable against your own experience."
             />
             <div className="grid gap-5 grid-cols-[repeat(auto-fit,minmax(320px,1fr))]">

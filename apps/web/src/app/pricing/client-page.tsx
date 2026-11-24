@@ -176,6 +176,75 @@ export default function PricingPage({
         </section>
       ) : null}
 
+      {/* --- why the beta is free, said plainly -------------------------------- */}
+      <section className="mk-section" aria-labelledby="why-free-heading">
+        <div className="mk-container">
+          <SectionHeading
+            eyebrow="The honest version"
+            eyebrowTone="verified"
+            title={<span id="why-free-heading">Why everything is free right now</span>}
+            lede="Free is not a funnel. It is the product strategy, and it has an end date we are honest about."
+          />
+          <div className="grid gap-5 grid-cols-[repeat(auto-fit,minmax(280px,1fr))]">
+            {[
+              {
+                title: "The trust engine needs real traffic",
+                body: "A scam detector is only as good as the postings it has seen. Every additional candidate makes the verification stronger for everyone — that is worth more to us right now than a subscription.",
+              },
+              {
+                title: "We are still learning what to charge for",
+                body: "Charging before we know which features people actually rely on would be guessing at your expense. Founding members help us find out — and keep free access for it.",
+              },
+              {
+                title: "A job search should not start with a paywall",
+                body: "The people this product is built for are exactly the ones a paywall filters out first: early in their career, between roles, or job hunting on a budget. The barrier to entry is the enemy.",
+              },
+            ].map((item, i) => (
+              <InView key={item.title} className="mk-reveal" delay={i * 90}>
+                <div className="mk-panel h-full p-6 lg:px-6.5">
+                  <h3 className="m-0 mb-2.5 text-[1.02rem] font-bold tracking-[-0.01em] text-text">
+                    {item.title}
+                  </h3>
+                  <p className="m-0 text-[0.9rem] leading-[1.65] text-text-soft">{item.body}</p>
+                </div>
+              </InView>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* --- what stays free, stated as commitments ---------------------------- */}
+      <section className="mk-section pt-0" aria-labelledby="stays-free-heading">
+        <div className="mk-container">
+          <div className="mk-panel grid gap-4 p-[clamp(24px,4vw,40px)]">
+            <span className="mk-eyebrow mk-eyebrow--signal">
+              <span className="mk-eyebrow__rule" aria-hidden="true" />
+              Our commitments
+            </span>
+            <h2 id="stays-free-heading" className="mk-display mk-display--sm" style={{ fontSize: "clamp(1.5rem, 3vw, 2.1rem)" }}>
+              What we will not put behind a paywall
+            </h2>
+            <ul className="m-0 grid gap-3 p-0 list-none max-w-prose-wide">
+              {[
+                "Your documents and the data behind them — export is how you keep them, not a premium feature",
+                "Cancelling — closing your account and deleting your data is free, always",
+                "The scam and eligibility checks — a candidate who cannot afford the product should still be protected from fake postings",
+                "Founding access itself — members who joined during beta keep free access for life",
+              ].map((item) => (
+                <li key={item} className="flex items-start gap-3 text-[0.95rem] leading-[1.6] text-text-soft">
+                  <Check className="mt-1 w-4 h-4 shrink-0 text-verified" aria-hidden="true" />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="m-0 max-w-prose-wide text-[0.9rem] leading-[1.65] text-text-muted">
+              When paid plans do launch, the pricing page will say exactly what they cost and what they include
+              before anyone is asked to pay — and nothing above will be on the list.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* --- the statement ----------------------------------------------------- */}
       <section className="mk-statement">
         <div className="mk-container">
@@ -211,6 +280,14 @@ export default function PricingPage({
                 {
                   q: "Will you sell my data instead of charging me?",
                   a: "No. The privacy page states it in full: your information is not sold, and not used to train other companies' models.",
+                },
+                {
+                  q: "Do I need a card or a subscription to start?",
+                  a: "No. Create an account with an email address and you are in — no card, no trial timer, nothing that converts on its own.",
+                },
+                {
+                  q: "What if I stop using the app — do I lose anything?",
+                  a: "Your profile, saved roles and documents stay yours. Export them at any time, and delete your account whenever you want; both are free.",
                 },
               ]}
             />
