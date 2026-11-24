@@ -361,8 +361,15 @@ export function AppShell({
   useEffect(() => {
     if (!drawerOpen) return;
     const close = () => setDrawerOpen(false);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
     window.addEventListener("resize", close);
-    return () => window.removeEventListener("resize", close);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("resize", close);
+      window.removeEventListener("keydown", onKeyDown);
+    };
   }, [drawerOpen]);
 
   useEffect(() => {

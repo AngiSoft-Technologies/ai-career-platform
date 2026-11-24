@@ -376,7 +376,7 @@ export default function OnboardingManualPage() {
                 rows={4}
                 value={form.summary}
                 onChange={(event) => setField({ summary: event.target.value })}
-                placeholder="Backend engineer specialising in payment systems..."
+                placeholder="Backend engineer specialising in payment systems…"
               />
             </Field>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -764,7 +764,7 @@ export default function OnboardingManualPage() {
                               description: event.target.value,
                             })
                           }
-                          placeholder="Integrated Stripe billing and cut payment failures by 25%..."
+                          placeholder="Integrated Stripe billing and cut payment failures by 25%…"
                         />
                       </Field>
                     </div>

@@ -103,6 +103,7 @@ export function Button({
       className={cx(
         "inline-flex shrink-0 items-center justify-center border font-semibold whitespace-nowrap",
         "transition-[background,border-color,color,transform] duration-150 active:translate-y-px",
+        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent",
         "disabled:pointer-events-none disabled:opacity-50",
         BUTTON_VARIANT[variant],
         BUTTON_SIZE[size],
@@ -127,6 +128,7 @@ export function IconButton({
       className={cx(
         "inline-grid size-9 place-items-center rounded-app-md border border-transparent text-app-soft",
         "transition-colors duration-150 hover:bg-app-surface-2 hover:text-app-text",
+        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent",
         "disabled:pointer-events-none disabled:opacity-50",
         className,
       )}
@@ -1203,7 +1205,7 @@ export function Field({
 const CONTROL =
   "w-full rounded-app-md border border-app-border bg-app-surface-2/60 px-3 text-[0.875rem] text-app-text " +
   "placeholder:text-app-muted transition-colors duration-150 focus:border-app-accent focus:bg-app-surface-2 " +
-  "focus:outline-none disabled:opacity-60";
+  "focus-visible:ring-2 focus-visible:ring-app-accent/40 focus:outline-none disabled:opacity-60";
 
 export function Input({
   className,

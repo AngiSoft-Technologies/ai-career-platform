@@ -6,6 +6,12 @@
 html {
   text-size-adjust: 100%;
   -webkit-text-size-adjust: 100%;
+  /* Off-canvas panels (the mobile menu sits at translateX(100%) while
+     hidden) still extend the page's scrollable area. Clip keeps the page
+     from scrolling sideways without creating a scroll container, so
+     position: sticky keeps working. */
+  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 /* ==========================================================================

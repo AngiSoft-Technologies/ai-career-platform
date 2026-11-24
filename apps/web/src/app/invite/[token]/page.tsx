@@ -177,7 +177,7 @@ function InviteInner({ token }: { token: string }) {
               }}
             >
               {loading
-                ? "Checking your invitation..."
+                ? "Checking your invitation…"
                 : "We could not open that invitation. Ask the person who invited you to send a new link."}
             </p>
           )}
