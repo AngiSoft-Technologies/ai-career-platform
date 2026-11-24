@@ -42,7 +42,32 @@ import {
   looksLikeJobUrl,
 } from "../services/api/src/services/engine/job-url.js";
 import { startDistributedInterval } from "../services/api/src/lib/distributed-tick.js";
-import { withJobDeadline } from "../services/api/src/worker/index.js";
+import {
+  applicationPreparationJobOptions,
+  preparationJobDisposition,
+  preparationJobId,
+  remainingPreparationAttempts,
+  withJobDeadline,
+} from "../services/api/src/worker/index.js";
+import {
+  automaticPreparationFailureState,
+  automaticPreparationRetryDelayMs,
+} from "../services/api/src/services/application/retry-policy.js";
+import { approvedDocumentSetFingerprint } from "../services/api/src/services/application/approval-fingerprint.js";
+import {
+  boundedPreparationReconciliationOptions,
+  partitionPreparationDispatchBatches,
+} from "../services/api/src/services/application/application-queue-policy.js";
+import { mergePreparationInputUpdates } from "../services/api/src/services/application/preparation-inputs.js";
+import {
+  selectSubmissionSnapshotDocument,
+  submissionSnapshotFingerprint,
+} from "../services/api/src/services/application/submission-snapshot.js";
+import {
+  ACTIVE_SUBMISSION_CONFLICT_SQL,
+  ACTIVE_SUBMISSION_STATUSES,
+  isActiveSubmissionStatus,
+} from "../services/api/src/services/application/submission-run-policy.js";
 import {
   MAX_MARKDOWN_CHARS,
   extractMetadata,
@@ -372,6 +397,193 @@ console.log("\n[12] job deadlines");
     timedOut = error instanceof Error && error.name === "JobTimeoutError";
   }
   check("a job that never settles is failed", timedOut);
+}
+
+console.log("\n[12b] application preparation queue policy");
+{
+  const firstId = preparationJobId("preparation-1", 4);
+  const secondId = preparationJobId("preparation-1", 5);
+  check("preparation job ids are deterministic", firstId === preparationJobId("preparation-1", 4));
+  check("a new preparation version gets a new job id", firstId !== secondId);
+
+  const options = applicationPreparationJobOptions();
+  check("preparation attempts are bounded", (options.attempts ?? 0) >= 1 && (options.attempts ?? 0) <= 10);
+  check(
+    "preparation retries use exponential backoff",
+    typeof options.backoff === "object" && options.backoff?.type === "exponential" &&
+      (options.backoff.delay ?? 0) > 0,
+    JSON.stringify(options.backoff),
+  );
+  check("completed preparation jobs are removable", options.removeOnComplete === true);
+  check("failed preparation jobs are removable", options.removeOnFail === true);
+
+  const fullBudget = remainingPreparationAttempts(0, 3);
+  check("a fresh preparation has the full retry budget", fullBudget === 3);
+  check("spent attempts reduce the retry budget", remainingPreparationAttempts(2, 3) === 1);
+  check("an exhausted preparation has no retry budget", remainingPreparationAttempts(3, 3) === 0);
+  check(
+    "a replacement job receives only the remaining budget",
+    applicationPreparationJobOptions(remainingPreparationAttempts(2, 3)).attempts === 1,
+  );
+
+  check("a retained completed job must be replaced", preparationJobDisposition("completed") === "replace");
+  check("a retained failed job must be replaced", preparationJobDisposition("failed") === "replace");
+  check("an unknown job is treated as missing", preparationJobDisposition("unknown") === "missing");
+  check("a waiting job is left in place", preparationJobDisposition("waiting") === "existing");
+  check("an active job is left in place", preparationJobDisposition("active") === "existing");
+
+  const firstSetupRetry = automaticPreparationRetryDelayMs(1, 1_000);
+  const secondSetupRetry = automaticPreparationRetryDelayMs(2, 1_000);
+  const cappedSetupRetry = automaticPreparationRetryDelayMs(20, 1_000);
+  check("automatic setup retries use exponential backoff", secondSetupRetry === firstSetupRetry * 2);
+  check("automatic setup retries are capped", cappedSetupRetry === 60 * 60_000);
+
+  const approvedFingerprint = approvedDocumentSetFingerprint([
+    {
+      id: "document-1",
+      type: "cv",
+      title: "Resume",
+      template: "ats-modern",
+      content: "Summary|Experience",
+    },
+  ]);
+  const changedApprovedFingerprint = approvedDocumentSetFingerprint([
+    {
+      id: "document-1",
+      type: "cv",
+      title: "Resume",
+      template: "ats-modern",
+      content: "Summary|Changed Experience",
+    },
+  ]);
+  check(
+    "approved document fingerprints change with the exact content",
+    approvedFingerprint !== changedApprovedFingerprint,
+  );
+
+  const snapshot = [{
+    documentId: "document-1",
+    type: "cv",
+    title: "Approved Resume",
+    template: "ats-modern",
+    content: "Approved bytes|exactly",
+  }];
+  const snapshotFingerprint = submissionSnapshotFingerprint(snapshot);
+  check(
+    "a submission snapshot selects the approved document bytes",
+    selectSubmissionSnapshotDocument(snapshot, snapshotFingerprint, "document-1")
+      ?.content === "Approved bytes|exactly",
+  );
+  check(
+    "a tampered submission snapshot is rejected",
+    selectSubmissionSnapshotDocument(
+      [{ ...snapshot[0], content: "Changed bytes" }],
+      snapshotFingerprint,
+      "document-1",
+    ) === null,
+  );
+  check(
+    "a submission without an approval fingerprint is rejected",
+    selectSubmissionSnapshotDocument(snapshot, null, "document-1") === null,
+  );
+
+  let mergedInputs = mergePreparationInputUpdates(
+    {},
+    ["portfolio_url", "linkedin_url"],
+    [{ key: "portfolio_url", value: " https://portfolio.example.test " }],
+  );
+  mergedInputs = mergePreparationInputUpdates(
+    mergedInputs,
+    ["portfolio_url", "linkedin_url"],
+    [{ key: "linkedin_url", value: "https://linkedin.example.test" }],
+  );
+  check(
+    "serialized input updates merge instead of overwriting",
+    mergedInputs.portfolio_url === "https://portfolio.example.test" &&
+      mergedInputs.linkedin_url === "https://linkedin.example.test",
+    JSON.stringify(mergedInputs),
+  );
+  let disallowedInputRejected = false;
+  try {
+    mergePreparationInputUpdates(
+      mergedInputs,
+      ["portfolio_url", "linkedin_url"],
+      [{ key: "salary", value: "1000000" }],
+    );
+  } catch (error) {
+    disallowedInputRejected = String(error).includes(
+      "PREPARATION_INPUT_NOT_ALLOWED:salary",
+    );
+  }
+  check("an input outside the preparation policy is rejected", disallowedInputRejected);
+
+  const reconciliationBounds = boundedPreparationReconciliationOptions(
+    { limit: 10_000, maxAttempts: 100, leaseMs: 1 },
+    {},
+  );
+  check(
+    "reconciliation limits are bounded",
+    reconciliationBounds.limit === 500 &&
+      reconciliationBounds.maxAttempts === 10 &&
+      reconciliationBounds.leaseMs === 1_000,
+    JSON.stringify(reconciliationBounds),
+  );
+  const dispatchRows = Array.from({ length: 53 }, (_, index) => index);
+  const dispatchBatches = partitionPreparationDispatchBatches(dispatchRows, 25);
+  check(
+    "reconciliation dispatch is split into bounded batches",
+    dispatchBatches.length === 3 &&
+      dispatchBatches.every((batch) => batch.length <= 25) &&
+      dispatchBatches.flat().length === dispatchRows.length,
+    JSON.stringify(dispatchBatches.map((batch) => batch.length)),
+  );
+
+  const quarantineNow = new Date("2026-01-01T00:00:00.000Z");
+  const firstFailure = automaticPreparationFailureState({
+    previousAttemptCount: 0,
+    now: quarantineNow,
+    maxAttempts: 3,
+    baseDelayMs: 1_000,
+    quarantineMs: 60 * 60_000,
+  });
+  const finalFailure = automaticPreparationFailureState({
+    previousAttemptCount: 2,
+    now: quarantineNow,
+    maxAttempts: 3,
+    baseDelayMs: 1_000,
+    quarantineMs: 60 * 60_000,
+  });
+  const afterQuarantine = automaticPreparationFailureState({
+    previousAttemptCount: 3,
+    previousQuarantinedUntil: new Date(quarantineNow.getTime() - 1),
+    now: quarantineNow,
+    maxAttempts: 3,
+    baseDelayMs: 1_000,
+    quarantineMs: 60 * 60_000,
+  });
+  check(
+    "an automatic setup failure consumes a bounded attempt",
+    firstFailure.attemptCount === 1 && firstFailure.quarantinedUntil === null,
+  );
+  check(
+    "an exhausted automatic candidate is quarantined",
+    finalFailure.attemptCount === 3 && finalFailure.quarantinedUntil !== null,
+  );
+  check(
+    "an expired quarantine starts a fresh automatic generation",
+    afterQuarantine.attemptCount === 1 && afterQuarantine.quarantinedUntil === null,
+  );
+
+  check(
+    "active submission statuses are kept in one policy",
+    ACTIVE_SUBMISSION_STATUSES.length === 5 &&
+      ACTIVE_SUBMISSION_STATUSES.every(isActiveSubmissionStatus),
+  );
+  check(
+    "concurrent submission creation uses the active-run conflict target",
+    ACTIVE_SUBMISSION_CONFLICT_SQL.includes("ON CONFLICT (application_id)") &&
+      ACTIVE_SUBMISSION_CONFLICT_SQL.includes("DO NOTHING"),
+  );
 }
 
 console.log("\n[13] bounded HTML processing");

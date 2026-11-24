@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Queue, Worker, type JobsOptions } from "bullmq";
 import IORedis from "ioredis";
 import { config } from "../config.js";
@@ -11,6 +12,7 @@ import {
 import { runIngestion } from "../services/ingestion/run.js";
 import { refreshOpportunityEmbeddings } from "../services/ai/embeddings.js";
 import { query } from "../db/pool.js";
+import { partitionPreparationDispatchBatches } from "../services/application/application-queue-policy.js";
 import {
   dispatchDueWebhooks,
   reapStuckWebhookDeliveries,
@@ -21,6 +23,7 @@ export const QUEUE_NAMES = {
   ingestion: "jr-ingestion",
   embeddings: "jr-embeddings",
   maintenance: "jr-maintenance",
+  applications: "jr-applications",
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -32,6 +35,10 @@ export const JOB_NAMES = {
   pruneEvents: "prune-events",
   dispatchWebhooks: "dispatch-webhooks",
   reapStaleRows: "reap-stale-rows",
+  prepareApplication: "prepare-application",
+  scheduleApplicationPreparations: "schedule-application-preparations",
+  reconcileApplicationPreparations: "reconcile-application-preparations",
+  expireApplicationSubmissionLeases: "expire-application-submission-leases",
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
@@ -42,6 +49,36 @@ const DEFAULT_JOB_OPTIONS: JobsOptions = {
   removeOnComplete: 100,
   removeOnFail: 200,
 };
+
+function boundedEnvInteger(
+  value: string | undefined,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+): number {
+  const parsed = Number(value ?? fallback);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(Math.max(Math.trunc(parsed), minimum), maximum);
+}
+
+const APPLICATION_PREPARATION_MAX_ATTEMPTS = boundedEnvInteger(
+  process.env.APPLICATION_PREPARATION_MAX_ATTEMPTS,
+  3,
+  1,
+  10,
+);
+const APPLICATION_PREPARATION_BACKOFF_MS = boundedEnvInteger(
+  process.env.APPLICATION_PREPARATION_BACKOFF_MS,
+  30_000,
+  1_000,
+  10 * 60_000,
+);
+const QUEUE_OPERATION_TIMEOUT_MS = boundedEnvInteger(
+  process.env.QUEUE_OPERATION_TIMEOUT_MS,
+  5_000,
+  250,
+  30_000,
+);
 
 let connection: IORedis | null = null;
 let queues: Map<QueueName, Queue> | null = null;
@@ -84,11 +121,184 @@ export async function enqueue(
   queueName: QueueName,
   jobName: JobName,
   data: Record<string, unknown> = {},
+  options: JobsOptions = {},
 ): Promise<string> {
   const queue = getQueues().get(queueName);
   if (!queue) throw new Error(`Unknown queue: ${queueName}`);
-  const job = await queue.add(jobName, data, DEFAULT_JOB_OPTIONS);
+  const job = await queue.add(jobName, data, {
+    ...DEFAULT_JOB_OPTIONS,
+    ...options,
+  });
   return job.id ?? "";
+}
+
+export function preparationJobId(preparationId: string, version: number): string {
+  return `prepare-${preparationId}-${version}`;
+}
+
+export function applicationPreparationJobOptions(
+  attempts = APPLICATION_PREPARATION_MAX_ATTEMPTS,
+): JobsOptions {
+  return {
+    attempts: boundedEnvInteger(
+      String(attempts),
+      APPLICATION_PREPARATION_MAX_ATTEMPTS,
+      1,
+      APPLICATION_PREPARATION_MAX_ATTEMPTS,
+    ),
+    backoff: {
+      type: "exponential",
+      delay: APPLICATION_PREPARATION_BACKOFF_MS,
+    },
+    removeOnComplete: true,
+    removeOnFail: true,
+  };
+}
+
+export function remainingPreparationAttempts(
+  attemptCount: number,
+  limit = APPLICATION_PREPARATION_MAX_ATTEMPTS,
+): number {
+  const maximum = boundedEnvInteger(
+    String(limit),
+    APPLICATION_PREPARATION_MAX_ATTEMPTS,
+    1,
+    10,
+  );
+  const spent = Number.isFinite(attemptCount) ? Math.max(0, Math.trunc(attemptCount)) : 0;
+  return Math.max(0, maximum - spent);
+}
+
+export function preparationJobDisposition(
+  state: string,
+): "existing" | "replace" | "missing" {
+  if (state === "completed" || state === "failed") return "replace";
+  if (state === "unknown") return "missing";
+  return "existing";
+}
+
+/**
+ * Adds one preparation job without stepping on a retained terminal job.
+ *
+ * BullMQ custom ids are queue-scoped and a retained completed/failed job
+ * blocks a new job with the same id. Removing and adding that id therefore
+ * needs a short distributed lock: without one, two replicas can remove each
+ * other's newly-added replacement. Preparation jobs remove themselves on
+ * completion/failure, so this path is only needed for jobs retained by an
+ * older deployment or by an explicit queue policy.
+ */
+export async function enqueuePreparationJob(
+  preparationId: string,
+  version: number,
+  options: { attemptCount?: number; notBefore?: Date } = {},
+): Promise<boolean> {
+  const queue = getQueues().get(QUEUE_NAMES.applications);
+  if (!queue) throw new Error(`Unknown queue: ${QUEUE_NAMES.applications}`);
+
+  const attemptCount = Math.max(0, options.attemptCount ?? 0);
+  const remainingAttempts = remainingPreparationAttempts(attemptCount);
+  if (remainingAttempts <= 0) return false;
+
+  const jobId = preparationJobId(preparationId, version);
+  const lockKey = `bull:${QUEUE_NAMES.applications}:dispatch:${jobId}`;
+  const lockToken = randomUUID();
+  const acquired = await withDeadline(
+    workerConnection().set(lockKey, lockToken, "PX", 60_000, "NX"),
+    3_000,
+    `preparation-dispatch-lock:${jobId}`,
+  );
+  if (acquired !== "OK") return false;
+
+  const renewLock = setInterval(() => {
+    void workerConnection().eval(
+      "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('pexpire', KEYS[1], 60000) else return 0 end",
+      1,
+      lockKey,
+      lockToken,
+    ).catch(() => 0);
+  }, 20_000);
+  renewLock.unref?.();
+
+  try {
+    const existing = await withDeadline(
+      queue.getJob(jobId),
+      QUEUE_OPERATION_TIMEOUT_MS,
+      `preparation-get-job:${jobId}`,
+    );
+    if (existing) {
+      const state = await withDeadline(
+        existing.getState(),
+        QUEUE_OPERATION_TIMEOUT_MS,
+        `preparation-get-job-state:${jobId}`,
+      );
+      const disposition = preparationJobDisposition(state);
+      if (disposition === "existing") {
+        // Waiting, delayed, active, or waiting for children: the existing job
+        // still owns this preparation and BullMQ's id deduplication is enough.
+        return true;
+      }
+      if (disposition === "replace") {
+        const removed = await withDeadline(
+          queue.remove(jobId),
+          QUEUE_OPERATION_TIMEOUT_MS,
+          `preparation-remove-job:${jobId}`,
+        );
+        if (!removed) return false;
+      } else if (disposition === "missing") {
+        // BullMQ can report "unknown" while a stale job hash still blocks a
+        // duplicate id. Remove it when present; a zero result means the hash
+        // was already gone and the add below is safe.
+        await withDeadline(
+          queue.remove(jobId),
+          QUEUE_OPERATION_TIMEOUT_MS,
+          `preparation-remove-stale-job:${jobId}`,
+        ).catch(() => 0);
+      }
+    }
+
+    if (options.notBefore && options.notBefore.getTime() > Date.now()) {
+      return false;
+    }
+
+    const added = await withDeadline(
+      queue.add(
+        JOB_NAMES.prepareApplication,
+        {
+          preparationId,
+          version,
+          attemptLimit: APPLICATION_PREPARATION_MAX_ATTEMPTS,
+          attemptNumber: attemptCount + 1,
+          retryDelayMs: APPLICATION_PREPARATION_BACKOFF_MS,
+        },
+        {
+          ...applicationPreparationJobOptions(remainingAttempts),
+          jobId,
+        },
+      ),
+      QUEUE_OPERATION_TIMEOUT_MS,
+      `preparation-add-job:${jobId}`,
+    );
+    const addedState = await withDeadline(
+      added.getState(),
+      QUEUE_OPERATION_TIMEOUT_MS,
+      `preparation-add-job-state:${jobId}`,
+    );
+    return addedState !== "unknown" &&
+      addedState !== "completed" &&
+      addedState !== "failed";
+  } finally {
+    clearInterval(renewLock);
+    await withDeadline(
+      workerConnection().eval(
+        "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+        1,
+        lockKey,
+        lockToken,
+      ),
+      3_000,
+      `preparation-dispatch-unlock:${jobId}`,
+    ).catch(() => 0);
+  }
 }
 
 async function handleIngest(): Promise<{
@@ -223,6 +433,120 @@ async function handleReapStaleRows(): Promise<Record<string, number>> {
   };
 }
 
+interface QueuedPreparationForDispatch {
+  preparationId: string;
+  version: number;
+  attemptCount: number;
+  nextAttemptAt?: string;
+}
+
+async function dispatchQueuedPreparations(
+  preparations: QueuedPreparationForDispatch[],
+): Promise<number> {
+  let dispatched = 0;
+  for (const batch of partitionPreparationDispatchBatches(preparations)) {
+    const results = await Promise.all(batch.map(async (preparation) => {
+      try {
+        return await enqueuePreparationJob(
+          preparation.preparationId,
+          preparation.version,
+          {
+            attemptCount: preparation.attemptCount,
+            notBefore: preparation.nextAttemptAt
+              ? new Date(preparation.nextAttemptAt)
+              : undefined,
+          },
+        );
+      } catch (error) {
+        logger.warn(
+          {
+            preparationId: preparation.preparationId,
+            version: preparation.version,
+            error: error instanceof Error ? error.message : String(error),
+          },
+          "Preparation queue handoff failed",
+        );
+        return false;
+      }
+    }));
+    dispatched += results.filter(Boolean).length;
+  }
+  return dispatched;
+}
+
+async function handleScheduleApplicationPreparations(): Promise<{
+  scheduled: number;
+}> {
+  const { listQueuedPreparations, scheduleAutomaticPreparations } = await import(
+    "../services/application/scheduler.js"
+  );
+  await scheduleAutomaticPreparations();
+  const preparations = await listQueuedPreparations();
+  const dispatched = await dispatchQueuedPreparations(preparations);
+  return { scheduled: dispatched };
+}
+
+async function handleReconcileApplicationPreparations(): Promise<{
+  recovered: number;
+  queued: number;
+  dispatched: number;
+}> {
+  const { recoverStalePreparations } = await import(
+    "../services/application/preparation.js"
+  );
+  const { listQueuedPreparations } = await import(
+    "../services/application/scheduler.js"
+  );
+  const recovered = await recoverStalePreparations();
+  const preparations = await listQueuedPreparations();
+  const dispatched = await dispatchQueuedPreparations(preparations);
+  return {
+    recovered: recovered.length,
+    queued: preparations.length,
+    dispatched,
+  };
+}
+
+async function handleExpireApplicationSubmissionLeases(): Promise<{
+  expired: number;
+}> {
+  const { expireStaleSubmissionRuns } = await import(
+    "../services/application/submission.js"
+  );
+  return { expired: await expireStaleSubmissionRuns() };
+}
+
+async function handlePrepareApplication(data: Record<string, unknown>): Promise<{
+  preparationId: string;
+  status: string;
+}> {
+  const { runPreparation } = await import(
+    "../services/application/preparation.js"
+  );
+  const preparationId = typeof data.preparationId === "string" ? data.preparationId : "";
+  if (!preparationId) throw new Error("PREPARATION_ID_REQUIRED");
+  const preparation = await runPreparation(preparationId, {
+    expectedVersion: typeof data.version === "number" ? data.version : undefined,
+    finalAttempt: data.finalAttempt === true,
+    attemptLimit: typeof data.attemptLimit === "number"
+      ? data.attemptLimit
+      : undefined,
+    attemptNumber: typeof data.attemptNumber === "number"
+      ? data.attemptNumber
+      : undefined,
+    retryAttempt: typeof data.retryAttempt === "number"
+      ? data.retryAttempt
+      : undefined,
+    retryDelayMs: typeof data.retryDelayMs === "number"
+      ? data.retryDelayMs
+      : undefined,
+  });
+  return {
+    preparationId,
+    status: preparation?.status ?? "UNKNOWN",
+  };
+}
+
 function describeError(error: unknown): Record<string, unknown> {
   if (error instanceof Error) {
     return {
@@ -252,6 +576,10 @@ const JOB_TIMEOUTS: Record<JobName, number> = {
   [JOB_NAMES.pruneEvents]: 5 * 60_000,
   [JOB_NAMES.dispatchWebhooks]: 2 * 60_000,
   [JOB_NAMES.reapStaleRows]: 5 * 60_000,
+  [JOB_NAMES.prepareApplication]: 15 * 60_000,
+  [JOB_NAMES.scheduleApplicationPreparations]: 5 * 60_000,
+  [JOB_NAMES.reconcileApplicationPreparations]: 5 * 60_000,
+  [JOB_NAMES.expireApplicationSubmissionLeases]: 60_000,
 };
 
 class JobTimeoutError extends Error {
@@ -309,13 +637,17 @@ export function withJobDeadline<T>(
   });
 }
 
-const handlers: Record<JobName, () => Promise<unknown>> = {
+const handlers: Record<JobName, (data: Record<string, unknown>) => Promise<unknown>> = {
   [JOB_NAMES.ingestSources]: handleIngest,
   [JOB_NAMES.refreshEmbeddings]: handleEmbeddings,
   [JOB_NAMES.expireOpportunities]: handleExpireOpportunities,
   [JOB_NAMES.pruneEvents]: handlePruneEvents,
   [JOB_NAMES.dispatchWebhooks]: handleDispatchWebhooks,
   [JOB_NAMES.reapStaleRows]: handleReapStaleRows,
+  [JOB_NAMES.prepareApplication]: handlePrepareApplication,
+  [JOB_NAMES.scheduleApplicationPreparations]: handleScheduleApplicationPreparations,
+  [JOB_NAMES.reconcileApplicationPreparations]: handleReconcileApplicationPreparations,
+  [JOB_NAMES.expireApplicationSubmissionLeases]: handleExpireApplicationSubmissionLeases,
 };
 
 /** Last time a job finished on each queue, for the stall watchdog. */
@@ -389,7 +721,19 @@ export async function startWorkers(): Promise<WorkerHandle> {
         }
         const startedAt = Date.now();
         try {
-          const result = await withJobDeadline(job.name as JobName, handler);
+          const attempts = job.opts.attempts ?? 1;
+          const finalAttempt = job.attemptsMade + 1 >= attempts;
+          const data = job.name === JOB_NAMES.prepareApplication
+            ? {
+                ...job.data,
+                finalAttempt,
+                attemptNumber: typeof job.data.attemptNumber === "number"
+                  ? job.data.attemptNumber + job.attemptsMade
+                  : job.attemptsMade + 1,
+                retryAttempt: job.attemptsMade + 1,
+              }
+            : job.data;
+          const result = await withJobDeadline(job.name as JobName, () => handler(data));
           lastCompletion.set(queueName, Date.now());
           logger.info(
             { queue: queueName, job: job.name, durationMs: Date.now() - startedAt },
@@ -569,6 +913,7 @@ async function scheduleRecurringJobs(
   const ingestionQueue = queueMap.get(QUEUE_NAMES.ingestion);
   const embeddingQueue = queueMap.get(QUEUE_NAMES.embeddings);
   const maintenanceQueue = queueMap.get(QUEUE_NAMES.maintenance);
+  const applicationQueue = queueMap.get(QUEUE_NAMES.applications);
 
   /**
    * Removes a repeatable scheduler left behind by an earlier configuration.
@@ -582,6 +927,7 @@ async function scheduleRecurringJobs(
   const removeStaleScheduler = async (
     queue: Queue | undefined,
     schedulerId: string,
+    options: { required?: boolean } = {},
   ): Promise<void> => {
     if (!queue) return;
     try {
@@ -598,6 +944,7 @@ async function scheduleRecurringJobs(
         { error, scheduler: schedulerId },
         "Could not remove a stale job scheduler",
       );
+      if (options.required) throw error;
     }
   };
 
@@ -675,6 +1022,95 @@ async function scheduleRecurringJobs(
     }
   }
 
+  // The preparation scheduler turns strong matches into durable per-role
+  // preparation jobs. Keep it on the application queue: maintenance has its
+  // own short-cadence expiry and webhook work, and application preparation
+  // must not queue behind those unrelated jobs. A separate reconciliation job
+  // repairs PostgreSQL-to-BullMQ handoff failures independently of the
+  // automatic-match scheduler.
+  if (applicationQueue) {
+    const applicationPreparationIntervalMs = boundedEnvInteger(
+      process.env.APPLICATION_PREPARATION_INTERVAL_MS,
+      15 * 60_000,
+      1_000,
+      24 * 60 * 60_000,
+    );
+    const applicationReconciliationIntervalMs = boundedEnvInteger(
+      process.env.APPLICATION_RECONCILIATION_INTERVAL_MS,
+      60_000,
+      1_000,
+      24 * 60 * 60_000,
+    );
+    if (process.env.CONTINUOUS_APPLICATION_PREPARATION !== "false") {
+      await removeStaleScheduler(
+        applicationQueue,
+        "scheduler-application-preparations",
+        { required: true },
+      );
+      await removeStaleScheduler(
+        applicationQueue,
+        "scheduler-application-reconciliation",
+        { required: true },
+      );
+      await removeStaleScheduler(
+        maintenanceQueue,
+        "scheduler-application-reconciliation",
+        { required: true },
+      );
+
+      entries.push(
+        pollingEntry(
+          applicationQueue,
+          JOB_NAMES.scheduleApplicationPreparations,
+          applicationPreparationIntervalMs,
+        ),
+      );
+      if (maintenanceQueue) {
+        // Reconciliation must not sit behind long preparation jobs on the
+        // application queue. It is a short control-plane job and belongs on
+        // the maintenance queue even though it dispatches work to the
+        // application queue.
+        entries.push(
+          pollingEntry(
+            maintenanceQueue,
+            JOB_NAMES.reconcileApplicationPreparations,
+            applicationReconciliationIntervalMs,
+          ),
+        );
+      }
+    } else {
+      // Fall back to BullMQ's own scheduler when the process ticker is
+      // disabled. This keeps both automatic selection and handoff
+      // reconciliation alive in Redis-owned cadence mode.
+      await applicationQueue.upsertJobScheduler(
+        "scheduler-application-preparations",
+        {
+          every: applicationPreparationIntervalMs,
+          startDate: new Date(Date.now() + 60_000),
+        },
+        {
+          name: JOB_NAMES.scheduleApplicationPreparations,
+          data: {},
+          opts: { attempts: 1, removeOnComplete: true, removeOnFail: true },
+        },
+      );
+      if (maintenanceQueue) {
+        await maintenanceQueue.upsertJobScheduler(
+          "scheduler-application-reconciliation",
+          {
+            every: applicationReconciliationIntervalMs,
+            startDate: new Date(Date.now() + 30_000),
+          },
+          {
+            name: JOB_NAMES.reconcileApplicationPreparations,
+            data: {},
+            opts: { attempts: 1, removeOnComplete: true, removeOnFail: true },
+          },
+        );
+      }
+    }
+  }
+
   // Webhook delivery runs on its own short cadence: a tenant waiting on an
   // `application.status_changed` notification must not wait for the hourly
   // maintenance pass. An idle queue costs one indexed query per tick, and the
@@ -685,6 +1121,26 @@ async function scheduleRecurringJobs(
     );
     entries.push(
       pollingEntry(maintenanceQueue, JOB_NAMES.dispatchWebhooks, webhookIntervalMs),
+    );
+  }
+
+  // Submission leases are not tied to application preparation. A browser
+  // companion can disappear while preparation scheduling is disabled or slow,
+  // so the lease expiry runs on its own short cadence in the maintenance
+  // queue.
+  if (maintenanceQueue && process.env.CONTINUOUS_SUBMISSION_LEASES !== "false") {
+    const submissionLeaseExpiryIntervalMs = boundedEnvInteger(
+      process.env.SUBMISSION_LEASE_EXPIRY_INTERVAL_MS,
+      30_000,
+      1_000,
+      60 * 60_000,
+    );
+    entries.push(
+      pollingEntry(
+        maintenanceQueue,
+        JOB_NAMES.expireApplicationSubmissionLeases,
+        submissionLeaseExpiryIntervalMs,
+      ),
     );
   }
 

@@ -1,197 +1,218 @@
 import { Router } from "express";
+import { z } from "zod";
 import { getProfile } from "../services/profile.js";
 import { getOpportunity } from "../services/opportunities.js";
 import { analyseApplicationPage } from "../services/application/analyzer.js";
-import { getOrGenerateTailoredDocuments, generateTailoredDocuments } from "../services/documents/tailor.js";
+import {
+  approvePreparation,
+  ensurePreparation,
+  getPreparationByApplication,
+  getPreparationByOpportunity,
+  savePreparationInputs,
+} from "../services/application/preparation.js";
+import {
+  cancelSubmissionRun,
+  createSubmissionRun,
+  getLatestSubmission,
+  resumeSubmissionRun,
+} from "../services/application/submission.js";
+import { ensureBlueprint } from "../services/applications.js";
 import { query } from "../db/pool.js";
 import { broadcast } from "../realtime/hub.js";
+import { enqueuePreparationJob } from "../worker/index.js";
 
 export const analysisRouter = Router();
 
+const preparationSchema = z.object({
+  sourceCvDocumentId: z.string().uuid().optional(),
+  sourceCoverLetterDocumentId: z.string().uuid().optional(),
+});
+
+async function enqueuePreparation(
+  preparationId: string,
+  version: number,
+  attemptCount = 0,
+  nextAttemptAt?: string,
+): Promise<void> {
+  await enqueuePreparationJob(preparationId, version, {
+    attemptCount,
+    notBefore: nextAttemptAt ? new Date(nextAttemptAt) : undefined,
+  });
+}
+
 /**
- * PROACTIVE: Prepares complete application package when user views an opportunity.
- * Called automatically by the web app on opportunity detail page load.
- * Returns analysis + tailored CV + cover letter + employer intelligence.
+ * Queues a complete, job-specific application package.
+ *
+ * The request is deliberately cheap: research, form analysis, and document
+ * generation happen in the worker. The browser can therefore keep the
+ * opportunity page useful while the package is being prepared.
  */
 analysisRouter.post("/prepare/:opportunityId", async (request, response, next) => {
   try {
-    const opportunityId = request.params.opportunityId;
+    const opportunityId = z.string().uuid().parse(request.params.opportunityId);
     const userId = response.locals.userId as string;
+    const input = preparationSchema.parse(request.body ?? {});
 
-    // Verify user has access to this opportunity (it exists and is active)
-    const oppResult = await query(
-      `SELECT id, title, company_name, apply_url, application_method, description,
-              skills, seniority, employment_type, city, country, company_website
-         FROM opportunities
-        WHERE id = $1 AND status = 'active'`,
-      [opportunityId],
-    );
-
-    const opportunity = oppResult.rows[0];
-    if (!opportunity) {
-      response.status(404).json({ error: "Opportunity not found" });
-      return;
+    const result = await ensurePreparation(userId, opportunityId, input);
+    if (result.shouldQueue) {
+      await enqueuePreparation(
+        result.preparation.id,
+        result.preparation.version,
+        result.attemptCount,
+        result.nextAttemptAt,
+      );
     }
-
-    const profile = await getProfile(userId);
-    if (!profile) {
-      response.status(404).json({ error: "Profile not found" });
-      return;
-    }
-
-    // Run the full preparation pipeline in parallel
-    const [analysis, documents] = await Promise.all([
-      analyseApplicationPage({
-        applyUrl: opportunity.apply_url,
-        applicationMethod: opportunity.application_method,
-        profile,
-      }),
-      getOrGenerateTailoredDocuments({
-        userId,
-        opportunityId,
-        profile,
-        opportunity,
-      }),
-    ]);
-
-    // Get employer intelligence (cached)
-    const employerIntel = await getEmployerIntelligence(opportunity);
-
-    // Store analysis in blueprint for the apply tab
-    await query(
-      `UPDATE application_blueprints
-          SET method = $2,
-              platform = $3,
-              application_url = $4,
-              required_documents = $5,
-              field_map = $6,
-              user_input_required = $7,
-              email_recipient = $8,
-              email_subject = $9,
-              instructions = $10,
-              analyzed_at = now()
-        WHERE opportunity_id = $1`,
-      [
-        opportunityId,
-        analysis.method === "ats" ? "ats" : analysis.method === "email" ? "email" : "website",
-        analysis.platform,
-        analysis.analysisUrl,
-        analysis.requiredDocuments,
-        JSON.stringify(
-          analysis.fields
-            .filter((field) => field.suggestedValue)
-            .map((field) => ({ key: field.key, label: field.label, value: field.suggestedValue })),
-        ),
-        analysis.requiresUserInput,
-        analysis.emailRecipient ?? null,
-        analysis.emailSubject ?? null,
-        analysis.instructions,
-      ],
-    );
-
-    response.json({
-      analysis,
-      documents,
-      employerIntel,
-      ready: true,
+    response.status(result.shouldQueue ? 202 : 200).json({
+      preparation: result.preparation,
     });
   } catch (error) {
     next(error);
   }
 });
 
-/**
- * Forces a refresh of the preparation (user clicked "Regenerate").
- */
-analysisRouter.post("/prepare/:opportunityId/refresh", async (request, response, next) => {
+analysisRouter.get("/prepare/:opportunityId", async (request, response, next) => {
   try {
-    const opportunityId = request.params.opportunityId;
+    const opportunityId = z.string().uuid().parse(request.params.opportunityId);
     const userId = response.locals.userId as string;
-
-    const oppResult = await query(
-      `SELECT * FROM opportunities WHERE id = $1 AND status = 'active'`,
-      [opportunityId],
-    );
-    const opportunity = oppResult.rows[0];
-    if (!opportunity) {
-      response.status(404).json({ error: "Opportunity not found" });
+    const preparation = await getPreparationByOpportunity(userId, opportunityId);
+    if (!preparation) {
+      response.status(404).json({ error: "Preparation not found" });
       return;
     }
-
-    const profile = await getProfile(userId);
-    if (!profile) {
-      response.status(404).json({ error: "Profile not found" });
-      return;
-    }
-
-    // Force refresh - bypass cache
-    const [analysis, documents] = await Promise.all([
-      analyseApplicationPage({
-        applyUrl: opportunity.apply_url,
-        applicationMethod: opportunity.application_method,
-        profile,
-      }),
-      generateTailoredDocuments({ profile, opportunity }),
-    ]);
-
-    const employerIntel = await getEmployerIntelligence(opportunity);
-
-    await query(
-      `UPDATE application_blueprints
-          SET method = $2, platform = $3, application_url = $4,
-              required_documents = $5, field_map = $6, user_input_required = $7,
-              email_recipient = $8, email_subject = $9, instructions = $10,
-              analyzed_at = now()
-        WHERE opportunity_id = $1`,
-      [
-        opportunityId,
-        analysis.method === "ats" ? "ats" : analysis.method === "email" ? "email" : "website",
-        analysis.platform,
-        analysis.analysisUrl,
-        analysis.requiredDocuments,
-        JSON.stringify(
-          analysis.fields
-            .filter((f) => f.suggestedValue)
-            .map((f) => ({ key: f.key, label: f.label, value: f.suggestedValue })),
-        ),
-        analysis.requiresUserInput,
-        analysis.emailRecipient ?? null,
-        analysis.emailSubject ?? null,
-        analysis.instructions,
-      ],
-    );
-
-    response.json({ analysis, documents, employerIntel, ready: true });
+    response.json({ preparation });
   } catch (error) {
     next(error);
   }
 });
 
-async function getEmployerIntelligence(opportunity: any): Promise<any> {
-  // Check cache first (7 days)
-  const cached = await query(
-    `SELECT payload FROM employer_intelligence_cache
-     WHERE company_name = $1 AND cached_at > now() - interval '7 days'
-     ORDER BY cached_at DESC LIMIT 1`,
-    [opportunity.company_name],
-  );
-  if (cached.rows[0]?.payload) {
-    return cached.rows[0].payload;
+analysisRouter.post("/prepare/:opportunityId/refresh", async (request, response, next) => {
+  try {
+    const opportunityId = z.string().uuid().parse(request.params.opportunityId);
+    const userId = response.locals.userId as string;
+    const input = preparationSchema.parse(request.body ?? {});
+    const result = await ensurePreparation(userId, opportunityId, {
+      ...input,
+      refresh: true,
+    });
+    if (result.shouldQueue) {
+      await enqueuePreparation(
+        result.preparation.id,
+        result.preparation.version,
+        result.attemptCount,
+        result.nextAttemptAt,
+      );
+    }
+    response.status(202).json({ preparation: result.preparation });
+  } catch (error) {
+    next(error);
   }
+});
 
-  // Return minimal for now - full crawl runs async via background job
-  return {
-    companyName: opportunity.company_name,
-    techStack: [],
-    cultureSignals: [],
-    interviewProcess: [],
-    recentNews: [],
-    glassdoorRating: null,
-    employeeCount: null,
-    fundingStage: null,
-  };
-}
+analysisRouter.get("/:id/preparation", async (request, response, next) => {
+  try {
+    const applicationId = z.string().uuid().parse(request.params.id);
+    const userId = response.locals.userId as string;
+    const preparation = await getPreparationByApplication(userId, applicationId);
+    if (!preparation) {
+      response.status(404).json({ error: "Preparation not found" });
+      return;
+    }
+    response.json({ preparation });
+  } catch (error) {
+    next(error);
+  }
+});
 
+analysisRouter.put("/:id/preparation/inputs", async (request, response, next) => {
+  try {
+    const applicationId = z.string().uuid().parse(request.params.id);
+    const userId = response.locals.userId as string;
+    const input = z.object({
+      inputs: z.array(z.object({
+        key: z.string().min(1).max(240),
+        value: z.string().max(20_000),
+      })).max(100),
+    }).parse(request.body);
+
+    const preparation = await savePreparationInputs(
+      userId,
+      applicationId,
+      input.inputs,
+    );
+    if (preparation.status === "QUEUED") {
+      await enqueuePreparation(preparation.id, preparation.version);
+    }
+    response.json({ preparation });
+  } catch (error) {
+    next(error);
+  }
+});
+
+analysisRouter.post("/:id/preparation/approve", async (request, response, next) => {
+  try {
+    const applicationId = z.string().uuid().parse(request.params.id);
+    const userId = response.locals.userId as string;
+    const preparation = await approvePreparation(userId, applicationId);
+    response.json({ preparation });
+  } catch (error) {
+    next(error);
+  }
+});
+
+analysisRouter.post("/:id/submission", async (request, response, next) => {
+  try {
+    const applicationId = z.string().uuid().parse(request.params.id);
+    const userId = response.locals.userId as string;
+    const consent = z.object({ consent: z.literal(true) }).parse(request.body);
+    if (!consent.consent) throw new Error("SUBMISSION_CONSENT_REQUIRED");
+    const run = await createSubmissionRun(userId, applicationId);
+    response.status(202).json({ run });
+  } catch (error) {
+    next(error);
+  }
+});
+
+analysisRouter.get("/:id/submission", async (request, response, next) => {
+  try {
+    const applicationId = z.string().uuid().parse(request.params.id);
+    const userId = response.locals.userId as string;
+    const run = await getLatestSubmission(userId, applicationId);
+    response.json({ run });
+  } catch (error) {
+    next(error);
+  }
+});
+
+analysisRouter.post("/:id/submission/resume", async (request, response, next) => {
+  try {
+    const applicationId = z.string().uuid().parse(request.params.id);
+    const userId = response.locals.userId as string;
+    const input = z.object({
+      values: z.record(z.string(), z.string()).optional(),
+    }).parse(request.body ?? {});
+    const run = await resumeSubmissionRun(userId, applicationId, input);
+    response.json({ run });
+  } catch (error) {
+    next(error);
+  }
+});
+
+analysisRouter.post("/:id/submission/cancel", async (request, response, next) => {
+  try {
+    const applicationId = z.string().uuid().parse(request.params.id);
+    const userId = response.locals.userId as string;
+    const cancelled = await cancelSubmissionRun(userId, applicationId);
+    response.json({ cancelled });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Compatibility endpoint for analysis-only callers. The durable preparation
+ * workflow above is the primary path; this keeps the old request available
+ * without pretending it generated a complete application package.
+ */
 analysisRouter.post("/:id/analyze", async (request, response, next) => {
   try {
     const applicationId = request.params.id;
@@ -217,17 +238,22 @@ analysisRouter.post("/:id/analyze", async (request, response, next) => {
       return;
     }
 
-    const [profile] = await Promise.all([
+    const [profile, opportunity] = await Promise.all([
       getProfile(userId),
-      Promise.resolve(row),
+      getOpportunity(row.opportunity_id),
     ]);
+    if (!profile || !opportunity) {
+      response.status(404).json({ error: "Profile or opportunity not found" });
+      return;
+    }
 
     const analysis = await analyseApplicationPage({
-      applyUrl: row.apply_url,
-      applicationMethod: row.application_method,
+      applyUrl: opportunity.applyUrl,
+      applicationMethod: opportunity.applicationMethod,
       profile,
     });
 
+    await ensureBlueprint(opportunity.id);
     await query(
       `UPDATE application_blueprints
           SET method = $2,
@@ -242,20 +268,18 @@ analysisRouter.post("/:id/analyze", async (request, response, next) => {
               analyzed_at = now()
         WHERE opportunity_id = $1`,
       [
-        row.opportunity_id,
+        opportunity.id,
         analysis.method === "ats" ? "ats" : analysis.method === "email" ? "email" : "website",
         analysis.platform,
         analysis.analysisUrl,
         analysis.requiredDocuments,
-        JSON.stringify(
-          analysis.fields
-            .filter((field) => field.suggestedValue)
-            .map((field) => ({ key: field.key, label: field.label, value: field.suggestedValue })),
-        ),
-        analysis.requiresUserInput,
+        JSON.stringify(Object.fromEntries(
+          analysis.fields.map((field) => [field.key, field.suggestedValue ?? ""]),
+        )),
+        JSON.stringify(analysis.fields.filter((field) => field.required && !field.suggestedValue)),
         analysis.emailRecipient ?? null,
         analysis.emailSubject ?? null,
-        analysis.instructions,
+        analysis.instructions.join("\n"),
       ],
     );
 

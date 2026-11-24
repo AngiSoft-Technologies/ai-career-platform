@@ -74,7 +74,6 @@ export class ApplicationPreparationAgent extends BaseDiscoveryAgent {
     const documents = await generateTailoredDocuments({
       profile,
       opportunity,
-      analysis,
     });
 
     // Step 3: Crawl employer site for intelligence (runs async, cached)

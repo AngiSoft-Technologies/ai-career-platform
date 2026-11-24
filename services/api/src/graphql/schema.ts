@@ -17,6 +17,7 @@ import {
   rankedOpportunities,
 } from "../services/matching.js";
 import { getProfile, updateProfile } from "../services/profile.js";
+import { updateDocumentAndInvalidatePreparation } from "../services/application/preparation.js";
 import { query } from "../db/pool.js";
 
 export interface GraphQLContext {
@@ -167,17 +168,12 @@ export const schema = createSchema<GraphQLContext>({
         args: { id: string; title?: string; content?: string },
         context,
       ) => {
-        const result = await query(
-          `UPDATE documents
-              SET title = COALESCE($3, title),
-                  content = COALESCE($4, content),
-                  updated_at = now()
-            WHERE id = $1 AND user_id = $2
-            RETURNING id, opportunity_id, type, title, content, created_at`,
-          [args.id, context.userId, args.title ?? null, args.content ?? null],
-        );
-        const row = result.rows[0];
-        if (!row) throw new Error("Document not found");
+        const row = await updateDocumentAndInvalidatePreparation({
+          userId: context.userId,
+          documentId: args.id,
+          title: args.title,
+          content: args.content,
+        });
         return {
           id: row.id,
           opportunityId: row.opportunity_id,

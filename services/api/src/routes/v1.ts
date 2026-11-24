@@ -15,6 +15,7 @@ import { meRouter } from "./me.js";
 import { notificationsRouter } from "./notifications.js";
 import { streamRouter } from "./stream.js";
 import { userLocationRouter } from "./user-location.js";
+import { browserRouter } from "./browser.js";
 
 export const v1Router = Router();
 
@@ -28,6 +29,7 @@ v1Router.use("/opportunities", opportunitiesRouter);
 v1Router.use("/applications", applicationsRouter);
 v1Router.use("/applications", analysisRouter);
 v1Router.use("/applications", applicationFollowupsRouter);
+v1Router.use("/agent/browser", browserRouter);
 v1Router.use("/documents", documentsRouter);
 v1Router.use("/ai", aiRouter);
 v1Router.use("/sources", sourcesRouter);

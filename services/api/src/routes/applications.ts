@@ -12,6 +12,11 @@ import {
 import { humanizeStatus, notify } from "../services/notifications.js";
 import { query } from "../db/pool.js";
 import { getUserPermissions } from "../services/rbac/index.js";
+import {
+  attachPreparationToApplication,
+  getPreparationByApplication,
+} from "../services/application/preparation.js";
+import { getLatestSubmission } from "../services/application/submission.js";
 
 const statuses = [
   "DISCOVERED",
@@ -93,6 +98,7 @@ applicationsRouter.post("/", async (request, response) => {
     input.opportunityId,
     input.status as ApplicationStatus | undefined,
   );
+  await attachPreparationToApplication(userId, input.opportunityId, application.id);
   await cacheDelByPrefix(`opportunities:${userId}:`);
   await notify(userId, {
     type: "application",
@@ -158,6 +164,11 @@ applicationsRouter.get("/:id/workspace", async (request, response, next) => {
       [userId, applicationId],
     );
 
+    const [preparation, submission] = await Promise.all([
+      getPreparationByApplication(userId, applicationId),
+      getLatestSubmission(userId, applicationId),
+    ]);
+
     response.json({
       workspace: {
         // The application's own row travels with the workspace: the page
@@ -172,6 +183,8 @@ applicationsRouter.get("/:id/workspace", async (request, response, next) => {
         opportunityId: row.opportunity_id,
         opportunity: opportunity.rows[0] ?? null,
         blueprint,
+        preparation,
+        submission,
         documents: documents.rows,
         followups: followups.rows,
       },

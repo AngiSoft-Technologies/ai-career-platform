@@ -11,6 +11,10 @@ interface ProfileRow {
   summary: string;
   location: string;
   country: string;
+  phone: string;
+  website: string;
+  linkedin_url: string;
+  github_url: string;
   years_experience: number;
   seniority: string;
   desired_roles: string[];
@@ -83,6 +87,10 @@ export async function getProfile(
     summary: row.summary,
     location: row.location,
     country: row.country,
+    phone: row.phone || undefined,
+    website: row.website || undefined,
+    linkedin: row.linkedin_url || undefined,
+    github: row.github_url || undefined,
     yearsExperience: row.years_experience,
     seniority: row.seniority as CandidateProfile["seniority"],
     // Preferences hold the role the candidate is targeting right now and

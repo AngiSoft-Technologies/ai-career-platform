@@ -1,6 +1,10 @@
 import { safeFetch } from "../sources/http.js";
 import { stripHtml } from "../sources/connectors/html.js";
 import type { CandidateProfile } from "@angisoft/mboqara-contracts";
+import {
+  humanActionForField,
+  type HumanAction,
+} from "./policy.js";
 
 export type ApplicationPlatform =
   | "greenhouse"
@@ -18,12 +22,15 @@ export type ApplicationPlatform =
 export interface DetectedField {
   key: string;
   label: string;
-  type: "text" | "email" | "tel" | "select" | "radio" | "checkbox" | "textarea" | "file";
+  type: "text" | "email" | "tel" | "password" | "select" | "radio" | "checkbox" | "textarea" | "file";
   required: boolean;
   options?: string[];
   mapped: boolean;
   suggestedValue?: string;
   reason?: string;
+  /** The candidate must complete this field personally on the employer page. */
+  humanOnly?: boolean;
+  humanAction?: HumanAction;
 }
 
 export interface ApplicationAnalysis {
@@ -112,7 +119,7 @@ function extractFields(html: string): DetectedField[] {
       let type: DetectedField["type"] = pattern.type;
       if (typeMatch?.[1]) {
         const raw = typeMatch[1].toLowerCase();
-        if (raw === "email" || raw === "tel") type = raw;
+        if (raw === "email" || raw === "tel" || raw === "password") type = raw;
         if (raw === "file") type = "file";
         if (raw === "checkbox") type = "checkbox";
         if (raw === "radio") type = "radio";
@@ -232,10 +239,10 @@ function suggestValue(
     return { value: profile.fullName };
   }
   if (/e-?mail/.test(haystack)) {
-    return { reason: "USER_INPUT_REQUIRED" };
+    return profile.email ? { value: profile.email } : { reason: "USER_INPUT_REQUIRED" };
   }
   if (/phone|mobile|telephone|whatsapp/.test(haystack)) {
-    return { reason: "USER_INPUT_REQUIRED" };
+    return profile.phone ? { value: profile.phone } : { reason: "USER_INPUT_REQUIRED" };
   }
   if (/country|nation/.test(haystack)) {
     return { value: profile.country };
@@ -250,10 +257,13 @@ function suggestValue(
     return { value: profile.seniority };
   }
   if (/linkedin/.test(haystack)) {
-    return { reason: "USER_INPUT_REQUIRED" };
+    return profile.linkedin ? { value: profile.linkedin } : { reason: "USER_INPUT_REQUIRED" };
   }
   if (/portfolio|website|github/.test(haystack)) {
-    return { reason: "USER_INPUT_REQUIRED" };
+    const value = /github/.test(haystack)
+      ? profile.github
+      : profile.website;
+    return value ? { value } : { reason: "USER_INPUT_REQUIRED" };
   }
   if (/salary|expected pay|compensation/.test(haystack)) {
     return { reason: "USER_INPUT_REQUIRED" };
@@ -336,12 +346,17 @@ export async function analyseApplicationPage(input: {
   const text = stripHtml(html);
 
   const mapped = fields.map((field) => {
-    const suggestion = suggestValue(field, input.profile);
+    const humanAction = humanActionForField(field);
+    const suggestion = humanAction
+      ? { reason: "USER_ACTION_REQUIRED" }
+      : suggestValue(field, input.profile);
     const mappedField: DetectedField = {
       ...field,
       mapped: Boolean(suggestion.value),
       suggestedValue: suggestion.value,
       reason: suggestion.reason,
+      humanOnly: Boolean(humanAction),
+      humanAction: humanAction ?? undefined,
     };
     return mappedField;
   });

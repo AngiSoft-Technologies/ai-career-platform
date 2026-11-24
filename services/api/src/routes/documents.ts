@@ -13,6 +13,7 @@ import {
   prepareDocumentTailoring,
 } from "../services/documents.js";
 import { createUploadTarget } from "../services/storage.js";
+import { updateDocumentAndInvalidatePreparation } from "../services/application/preparation.js";
 import { humanizeStatus, notify } from "../services/notifications.js";
 import {
   DEFAULT_COVER_LETTER_TEMPLATE_KEY,
@@ -226,6 +227,48 @@ const updateSchema = z.object({
 
 const tailorSchema = z.object({ opportunityId: z.string().uuid() });
 
+documentsRouter.post("/:id/primary", async (request, response, next) => {
+  try {
+    const documentId = z.string().uuid().parse(request.params.id);
+    const userId = response.locals.userId as string;
+    const owned = await query<{
+      id: string;
+      type: string;
+      title: string;
+      opportunity_id: string | null;
+    }>(
+      `SELECT id, type, title, opportunity_id FROM documents
+        WHERE id = $1 AND user_id = $2`,
+      [documentId, userId],
+    );
+    const document = owned.rows[0];
+    if (!document) {
+      response.status(404).json({ error: "Document not found" });
+      return;
+    }
+    if (document.type !== "cv" && document.type !== "cover_letter") {
+      response.status(400).json({ error: "Only a resume or cover letter can be the primary source" });
+      return;
+    }
+    if (document.opportunity_id) {
+      response.status(400).json({ error: "A tailored role document cannot be the primary source" });
+      return;
+    }
+    await query(
+      `UPDATE documents SET is_base = false
+        WHERE user_id = $1 AND type = $2 AND is_base = true`,
+      [userId, document.type],
+    );
+    await query(
+      `UPDATE documents SET is_base = true WHERE id = $1 AND user_id = $2`,
+      [documentId, userId],
+    );
+    response.json({ document: { ...document, isBase: true } });
+  } catch (error) {
+    next(error);
+  }
+});
+
 documentsRouter.post("/:id/tailor", async (request, response, next) => {
   try {
     const sourceDocumentId = z.string().uuid().parse(request.params.id);
@@ -273,27 +316,13 @@ documentsRouter.patch("/:id", async (request, response, next) => {
   try {
     const documentId = z.string().uuid().parse(request.params.id);
     const input = updateSchema.parse(request.body);
-    const result = await query(
-      `UPDATE documents
-          SET title = COALESCE($3, title),
-              content = COALESCE($4, content),
-              template = COALESCE($5, template)
-        WHERE id = $1 AND user_id = $2
-        RETURNING id, opportunity_id, type, title, content, template, created_at`,
-      [
-        documentId,
-        response.locals.userId as string,
-        input.title ?? null,
-        input.content ?? null,
-        input.template ?? null,
-      ],
-    );
-    const row = result.rows[0];
-    if (!row) {
-      response.status(404).json({ error: "Document not found" });
-      return;
-    }
-    broadcast("document.updated", { documentId }, response.locals.userId as string);
+    const row = await updateDocumentAndInvalidatePreparation({
+      userId: response.locals.userId as string,
+      documentId,
+      title: input.title,
+      content: input.content,
+      template: input.template,
+    });
     if (input.content !== undefined) {
       void runAtsVerification({
         userId: response.locals.userId as string,
@@ -477,6 +506,18 @@ documentsRouter.post("/import", async (request, response, next) => {
       filename: input.filename,
       contentType: input.contentType,
     });
+
+    // The newest imported resume becomes the source the agent tailors from.
+    // Older source resumes stay intact and remain selectable explicitly.
+    await query(
+      `UPDATE documents SET is_base = false
+        WHERE user_id = $1 AND type = 'cv' AND is_base = true`,
+      [userId],
+    );
+    await query(
+      `UPDATE documents SET is_base = true WHERE id = $1 AND user_id = $2`,
+      [result.document.id, userId],
+    );
 
     broadcast(
       "document.generated",

@@ -64,6 +64,10 @@ function rejectUnsupportedNumbers(content: string, evidence: string): void {
   if (unsupported) throw new Error("TAILORING_INVALID_RESPONSE");
 }
 
+function normalizedDocument(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
 export async function runDocumentTailoringAgent(input: {
   source: TailoringSource;
   profile: CandidateProfile;
@@ -136,6 +140,10 @@ export async function runDocumentTailoringAgent(input: {
     },
     draftSchema,
   );
+
+  if (normalizedDocument(draft.content) === normalizedDocument(input.source.content)) {
+    throw new Error("TAILORING_UNCHANGED");
+  }
 
   const review = await runJsonAgent(
     "tailored_document_grounding_review_agent",

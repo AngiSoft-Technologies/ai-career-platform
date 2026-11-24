@@ -27,6 +27,7 @@ const preferencesSchema = z.object({
   remoteOnly: z.boolean().optional(),
   willingToRelocate: z.boolean().optional(),
   notificationsEnabled: z.boolean().optional(),
+  autoPrepareEnabled: z.boolean().optional(),
   employmentTypes: z
     .array(z.enum(EMPLOYMENT_TYPES))
     .min(1)
@@ -41,6 +42,7 @@ preferencesRouter.get("/", async (request, response, next) => {
       `SELECT preferred_countries, preferred_locations, preferred_roles,
               desired_seniority, min_salary, currency, remote_only,
               willing_to_relocate, notifications_enabled,
+              auto_prepare_enabled,
               COALESCE(employment_types, '{}') AS employment_types, updated_at
          FROM candidate_preferences WHERE user_id = $1`,
       [userId],
@@ -58,6 +60,7 @@ preferencesRouter.get("/", async (request, response, next) => {
           remoteOnly: false,
           willingToRelocate: false,
           notificationsEnabled: true,
+          autoPrepareEnabled: true,
           employmentTypes: ["full_time"],
           updatedAt: null,
         },
@@ -75,6 +78,7 @@ preferencesRouter.get("/", async (request, response, next) => {
         remoteOnly: row.remote_only,
         willingToRelocate: row.willing_to_relocate,
         notificationsEnabled: row.notifications_enabled,
+        autoPrepareEnabled: row.auto_prepare_enabled,
         employmentTypes: row.employment_types.length
           ? row.employment_types
           : ["full_time"],
@@ -95,13 +99,14 @@ preferencesRouter.put("/", async (request, response, next) => {
       `INSERT INTO candidate_preferences (
          user_id, preferred_countries, preferred_locations, preferred_roles,
          desired_seniority, min_salary, currency, remote_only,
-         willing_to_relocate, notifications_enabled, employment_types, updated_at
+         willing_to_relocate, notifications_enabled,
+         auto_prepare_enabled, employment_types, updated_at
        )
        VALUES ($1,
          COALESCE($2, '{}'), COALESCE($3, '{}'), COALESCE($4, '{}'),
          COALESCE($5, 'junior'), $6, COALESCE($7, 'KES'),
          COALESCE($8, false), COALESCE($9, false), COALESCE($10, true),
-         COALESCE($11, '{full_time}'), now())
+         COALESCE($11, true), COALESCE($12, '{full_time}'), now())
        ON CONFLICT (user_id) DO UPDATE SET
          preferred_countries = COALESCE($2, candidate_preferences.preferred_countries),
          preferred_locations = COALESCE($3, candidate_preferences.preferred_locations),
@@ -112,11 +117,13 @@ preferencesRouter.put("/", async (request, response, next) => {
          remote_only = COALESCE($8, candidate_preferences.remote_only),
          willing_to_relocate = COALESCE($9, candidate_preferences.willing_to_relocate),
          notifications_enabled = COALESCE($10, candidate_preferences.notifications_enabled),
-         employment_types = COALESCE($11, candidate_preferences.employment_types),
+         auto_prepare_enabled = COALESCE($11, candidate_preferences.auto_prepare_enabled),
+         employment_types = COALESCE($12, candidate_preferences.employment_types),
          updated_at = now()
        RETURNING preferred_countries, preferred_locations, preferred_roles,
               desired_seniority, min_salary, currency, remote_only,
               willing_to_relocate, notifications_enabled,
+              auto_prepare_enabled,
               COALESCE(employment_types, '{}') AS employment_types, updated_at`,
       [
         userId,
@@ -129,6 +136,7 @@ preferencesRouter.put("/", async (request, response, next) => {
         input.remoteOnly ?? null,
         input.willingToRelocate ?? null,
         input.notificationsEnabled ?? null,
+        input.autoPrepareEnabled ?? null,
         input.employmentTypes ?? null,
       ],
     );
@@ -159,6 +167,7 @@ preferencesRouter.put("/", async (request, response, next) => {
         remoteOnly: row.remote_only,
         willingToRelocate: row.willing_to_relocate,
         notificationsEnabled: row.notifications_enabled,
+        autoPrepareEnabled: row.auto_prepare_enabled,
         employmentTypes: row.employment_types.length
           ? row.employment_types
           : ["full_time"],

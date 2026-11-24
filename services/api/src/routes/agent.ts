@@ -12,6 +12,17 @@ import { getSkills, renderSkillCatalogue } from "../services/engine/skills.js";
 import { fetchFreeJobs } from "../services/engine/sources.js";
 import { fetchAtsBoard, detectAts } from "../services/engine/discover.js";
 import { logger } from "../logger.js";
+import {
+  authenticateBrowserAgent,
+  claimBrowserAgent,
+} from "../services/application/browser.js";
+import {
+  claimNextSubmissionRun,
+  heartbeatSubmissionRun,
+  nextBrowserCommand,
+  renderSubmissionDocument,
+  reportSubmissionRun,
+} from "../services/application/submission.js";
 
 /**
  * Agent API — the HTTP face of the discovery engine.
@@ -79,6 +90,17 @@ function authorisedOrUser(request: {
     authorised(request) ||
     Boolean(request.header("authorization")?.startsWith("Bearer "))
   );
+}
+
+async function browserDevice(request: {
+  header(name: string): string | undefined;
+}) {
+  const authorization = request.header("authorization");
+  const token = authorization?.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length).trim()
+    : "";
+  if (!token) return null;
+  return authenticateBrowserAgent(token);
 }
 
 agentRouter.post("/browse", async (request, response) => {
@@ -399,6 +421,140 @@ agentRouter.post("/diff", async (request, response) => {
   });
 
   response.json({ success: true, diff, judgement });
+});
+
+/**
+ * Browser-agent pairing and application-run protocol.
+ *
+ * The extension authenticates with a device token, not the candidate's web
+ * session. A run is scoped to one candidate and one approved application, so
+ * the extension can act on the employer's form without gaining access to the
+ * candidate's document library.
+ */
+agentRouter.post("/browser/devices/claim", async (request, response) => {
+  const parsed = z.object({
+    pairingCode: z.string().min(20).max(200),
+  }).safeParse(request.body);
+  if (!parsed.success) {
+    response.status(400).json({ error: "Invalid pairing request" });
+    return;
+  }
+  try {
+    const result = await claimBrowserAgent(parsed.data.pairingCode);
+    response.json(result);
+  } catch {
+    response.status(401).json({ error: "Pairing code is invalid or expired" });
+  }
+});
+
+agentRouter.post("/browser/runs/next", async (request, response) => {
+  const device = await browserDevice(request);
+  if (!device) {
+    response.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const claimed = await claimNextSubmissionRun(device.userId);
+  if (!claimed) {
+    response.status(204).end();
+    return;
+  }
+  response.json({ runId: claimed.run.id, command: claimed.command });
+});
+
+agentRouter.get("/browser/runs/:id/next", async (request, response) => {
+  const device = await browserDevice(request);
+  if (!device) {
+    response.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const runId = z.string().uuid().parse(request.params.id);
+  const command = await nextBrowserCommand(device.userId, runId);
+  if (!command) {
+    response.status(204).end();
+    return;
+  }
+  response.json({ command });
+});
+
+agentRouter.post("/browser/runs/:id/heartbeat", async (request, response) => {
+  const device = await browserDevice(request);
+  if (!device) {
+    response.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const runId = z.string().uuid().parse(request.params.id);
+  const alive = await heartbeatSubmissionRun(device.userId, runId);
+  response.json({ alive });
+});
+
+agentRouter.post("/browser/runs/:id/report", async (request, response) => {
+  const device = await browserDevice(request);
+  if (!device) {
+    response.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const parsed = z.object({
+    idempotencyKey: z.string().min(1).max(200),
+    step: z.enum([
+      "INSPECT_FORM",
+      "FILL_FIELDS",
+      "UPLOAD_DOCUMENTS",
+      "PREPARE_SUBMISSION",
+      "SUBMIT",
+    ]),
+    status: z.enum(["ok", "failed", "needs_input", "blocked"]),
+    url: z.string().url().optional(),
+    fields: z.union([
+      z.record(z.string(), z.unknown()),
+      z.array(z.record(z.string(), z.unknown())),
+    ]).optional(),
+    result: z.record(z.string(), z.unknown()).optional(),
+    error: z.string().max(2_000).optional(),
+  }).safeParse(request.body);
+  if (!parsed.success) {
+    response.status(400).json({ error: "Invalid report", issues: parsed.error.issues });
+    return;
+  }
+  try {
+    const result = await reportSubmissionRun(
+      device.userId,
+      z.string().uuid().parse(request.params.id),
+      parsed.data,
+    );
+    response.json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message.startsWith("SUBMISSION_STEP_MISMATCH")) {
+      response.status(409).json({ error: "The browser report is for a stale step", code: "SUBMISSION_STEP_MISMATCH" });
+      return;
+    }
+    response.status(404).json({ error: "Submission run not found" });
+  }
+});
+
+agentRouter.get("/browser/runs/:id/documents/:documentId", async (request, response) => {
+  const device = await browserDevice(request);
+  if (!device) {
+    response.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const rendered = await renderSubmissionDocument({
+    userId: device.userId,
+    runId: z.string().uuid().parse(request.params.id),
+    documentId: z.string().uuid().parse(request.params.documentId),
+  });
+  if (!rendered) {
+    response.status(404).json({ error: "Document not found" });
+    return;
+  }
+  response
+    .status(200)
+    .set({
+      "content-type": rendered.mimeType,
+      "content-disposition": `attachment; filename="${rendered.filename}"`,
+      "cache-control": "private, no-store",
+    })
+    .send(rendered.buffer);
 });
 
 /**
