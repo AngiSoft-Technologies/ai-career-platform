@@ -35,6 +35,12 @@ import { API_VERSION, API_VERSION_HEADER } from "./version.js";
 
 export const app = express();
 
+// Vercel's zero-config Express support requires a default export of the
+// app (see src/app.ts entry detection). The standalone server entry stays
+// src/index.ts, which also starts gRPC, workers and the ticker — none of
+// which can run inside a serverless function.
+export default app;
+
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
 app.use(helmet());
