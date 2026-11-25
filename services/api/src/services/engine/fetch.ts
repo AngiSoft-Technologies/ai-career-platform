@@ -17,7 +17,7 @@
  */
 
 import { createHash } from "node:crypto";
-import robotsParser, { type Robot } from "robots-parser";
+import robotsParser from "robots-parser";
 import pdfParse from "pdf-parse";
 
 import { logger } from "../../logger.js";
@@ -40,6 +40,8 @@ import {
   type JsonLdJobPosting,
   type PageMetadata,
 } from "./html.js";
+
+type Robot = ReturnType<typeof robotsParser>;
 
 export interface ScrapeResult {
   url: string;

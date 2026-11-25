@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import "./ambient-types.js";
 import dotenv from "dotenv";
 import { z } from "zod";
 
