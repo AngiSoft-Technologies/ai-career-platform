@@ -160,6 +160,36 @@ app.get(["/health", "/v1/health"], async (_request, response) => {
   }
 });
 
+app.get("/", async (_request, response) => {
+  let database = false;
+  try {
+    database = await healthCheck();
+  } catch {
+    database = false;
+  }
+  const ok = database;
+  const rows: Array<[string, string]> = [
+    ["Service", "mboqara-api"],
+    ["Status", ok ? "operational" : "degraded"],
+    ["Database", database ? "connected" : "unreachable"],
+    ["Cache", redis.status],
+    ["API version", API_VERSION],
+    ["Time", new Date().toISOString()],
+  ];
+  const body = rows
+    .map(
+      ([key, value]) =>
+        `<tr><th style="text-align:left;padding:4px 16px 4px 0">${key}</th><td>${value}</td></tr>`,
+    )
+    .join("");
+  response
+    .status(ok ? 200 : 503)
+    .type("html")
+    .send(
+      `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>mboqara-api</title><style>body{font-family:system-ui,sans-serif;max-width:34rem;margin:4rem auto;padding:0 1rem;color:#111}h1{font-size:1.4rem}table{border-collapse:collapse;font-size:.95rem}th{font-weight:600;color:#555}</style></head><body><h1>MboQara API</h1><table>${body}</table><p><a href="/v1/health">/v1/health</a> · <a href="/live">/live</a></p></body></html>`,
+    );
+});
+
 app.use("/v1/graphql", buildYoga("/v1/graphql"));
 app.use("/graphql", buildYoga("/graphql"));
 
