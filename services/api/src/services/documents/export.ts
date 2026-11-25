@@ -1,6 +1,6 @@
+import { createRequire } from "node:module";
 import PDFDocument from "pdfkit";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from "docx";
-import PptxGenJS from "pptxgenjs";
 import sharp from "sharp";
 import { DEFAULT_RESUME_TEMPLATE_KEY } from "@angisoft/mboqara-contracts";
 
@@ -230,6 +230,12 @@ export async function renderDocx(
 export async function renderPptx(
   document: ExportableDocument,
 ): Promise<Buffer> {
+  // pptxgenjs's "import" condition resolves to dist/pptxgen.es.js, an ESM
+  // file in a package that isn't marked "type": "module" — Node refuses to
+  // load it. The CJS build behind the "require" condition works, so go
+  // through createRequire. Types still come from the package's .d.ts.
+  const require = createRequire(import.meta.url);
+  const PptxGenJS = require("pptxgenjs") as typeof import("pptxgenjs").default;
   const presentation = new PptxGenJS();
   presentation.title = document.title;
 
