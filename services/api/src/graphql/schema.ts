@@ -1,6 +1,5 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { createSchema } from "graphql-yoga";
+import { SCHEMA_SDL } from "./schema-sdl.js";
 import {
   createApplication,
   getApplicationBlueprint,
@@ -24,10 +23,7 @@ export interface GraphQLContext {
   userId: string;
 }
 
-const typeDefs = readFileSync(
-  resolve(process.cwd(), "../../packages/contracts/graphql/schema.graphql"),
-  "utf8",
-);
+const typeDefs = SCHEMA_SDL;
 
 async function getDocument(
   userId: string,

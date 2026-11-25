@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/index.ts",
-    "build": "npm run build -w @angisoft/mboqara-contracts && tsup",
+    "build": "npm run build -w @angisoft/mboqara-contracts && node scripts/embed-graphql.mjs && tsup",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "db:migrate": "tsx src/db/migrate.ts",
