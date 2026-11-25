@@ -8,7 +8,8 @@ import pinoHttp from "pino-http";
 import { resolveIdentity } from "./auth/resolve-identity.js";
 import { config } from "./config.js";
 import { healthCheck } from "./db/pool.js";
-import { redis } from "./db/redis.js";
+import { redis, startRedis, waitForRedis } from "./db/redis.js";
+import { ensureRedisQueuePolicy } from "./db/redis-policy.js";
 import { schema } from "./graphql/schema.js";
 import { logger } from "./logger.js";
 import { tickerStatus } from "./lib/ticker.js";
@@ -40,6 +41,14 @@ export const app = express();
 // src/index.ts, which also starts gRPC, workers and the ticker — none of
 // which can run inside a serverless function.
 export default app;
+
+// index.ts owns process startup (gRPC, workers, ticker), which never runs on
+// serverless. The shared cache client still has to connect here or every
+// cacheGet stays a no-op and /health reports "wait" forever.
+startRedis();
+void waitForRedis().then((connected) => {
+  if (connected) void ensureRedisQueuePolicy(redis).catch(() => {});
+});
 
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
