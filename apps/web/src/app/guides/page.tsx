@@ -174,8 +174,8 @@ export default function GuidesPage() {
         <section className="mk-video-hero" aria-labelledby="guides-title">
           <div className="mk-video-hero__media" aria-hidden="true">
             <BackdropVideo
-              src="https://cdn.angisoft.co.ke/public/images/mboqara/motion-guides.mp4"
-              poster="https://cdn.angisoft.co.ke/public/images/mboqara/nairobi-at-night.webp"
+              src="https://cdn1.angisoft.co.ke/mboqara/images/mboqara/motion-guides.mp4"
+              poster="https://cdn1.angisoft.co.ke/mboqara/images/mboqara/nairobi-at-night.webp"
             />
             <span className="mk-video-hero__veil" />
             <span className="mk-aurora" />

@@ -32,7 +32,7 @@ const PATHS: StartPath[] = [
     description:
       "PDF, DOCX, or an image. Our agent reads it, pulls out the facts, and rebuilds it as a clean, ATS-ready document.",
     highlights: ["AI extraction", "Auto-formatting", "ATS check"],
-    image: "https://cdn.angisoft.co.ke/public/images/mboqara/careers/technology-professional.webp",
+    image: "https://cdn1.angisoft.co.ke/mboqara/images/mboqara/careers/technology-professional.webp",
     alt: "A professional reviewing a document on a laptop",
     primary: true,
   },
@@ -43,7 +43,7 @@ const PATHS: StartPath[] = [
     description:
       "Connect your profile and we convert your experience, education and skills into a structured resume.",
     highlights: ["One-click import", "Skills mapped", "Editable after"],
-    image: "https://cdn.angisoft.co.ke/public/images/mboqara/woman-laptop.webp",
+    image: "https://cdn1.angisoft.co.ke/mboqara/images/mboqara/woman-laptop.webp",
     alt: "A woman working on her laptop",
   },
   {
@@ -53,7 +53,7 @@ const PATHS: StartPath[] = [
     description:
       "Prefer to type it yourself? A guided builder walks you through basics, experience, education and skills.",
     highlights: ["Guided steps", "Live preview", "Full control"],
-    image: "https://cdn.angisoft.co.ke/public/images/mboqara/careers/women-in-tech.webp",
+    image: "https://cdn1.angisoft.co.ke/mboqara/images/mboqara/careers/women-in-tech.webp",
     alt: "A woman working at a desk",
   },
 ];
@@ -97,7 +97,7 @@ export default function OnboardingPage() {
       <section className="relative isolate overflow-hidden rounded-app-xl border border-app-border">
         <div className="relative min-h-[380px] lg:min-h-[440px]">
           <Image
-            src="https://cdn.angisoft.co.ke/public/images/mboqara/career-fair.webp"
+            src="https://cdn1.angisoft.co.ke/mboqara/images/mboqara/career-fair.webp"
             alt="People talking to employers at a careers fair"
             fill
             priority

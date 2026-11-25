@@ -385,7 +385,7 @@ function DocumentEditorInner() {
       </div>
 
       <PhotoBand
-        src="https://cdn.angisoft.co.ke/public/images/mboqara/careers/engineering-professional.webp"
+        src="https://cdn1.angisoft.co.ke/mboqara/images/mboqara/careers/engineering-professional.webp"
         alt="A person working on a document"
         priority
         height="clamp(210px, 24vw, 280px)"

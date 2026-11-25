@@ -80,7 +80,7 @@ function MatchesPageInner() {
   return (
     <Page>
       <HeroSplit
-        src="https://cdn.angisoft.co.ke/public/images/mboqara/careers/engineering-professional.webp"
+        src="https://cdn1.angisoft.co.ke/mboqara/images/mboqara/careers/engineering-professional.webp"
         alt="An engineer working at a laptop"
         eyebrow="Ranking"
         priority

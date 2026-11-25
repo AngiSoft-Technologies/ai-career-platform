@@ -61,7 +61,7 @@ export default function PricingPage({
       {/* --- hero: the motion film runs behind the price --------------------- */}
       <section className="mk-video-hero" aria-labelledby="pricing-title">
         <div className="mk-video-hero__media" aria-hidden="true">
-          <BackdropVideo src="https://cdn.angisoft.co.ke/public/images/mboqara/motion-pricing.mp4" poster="https://cdn.angisoft.co.ke/public/images/mboqara/radar-poster.jpg" />
+          <BackdropVideo src="https://cdn1.angisoft.co.ke/mboqara/images/mboqara/motion-pricing.mp4" poster="https://cdn1.angisoft.co.ke/mboqara/images/mboqara/radar-poster.jpg" />
           <span className="mk-video-hero__veil" />
           <span className="mk-aurora" />
         </div>

@@ -104,7 +104,7 @@ export default function FollowUpsPage() {
   return (
     <Page>
       <HeroSplit
-        src="https://cdn.angisoft.co.ke/public/images/mboqara/mobile-worker.webp"
+        src="https://cdn1.angisoft.co.ke/mboqara/images/mboqara/mobile-worker.webp"
         alt="A professional working from a phone"
         eyebrow="Follow-ups"
         priority

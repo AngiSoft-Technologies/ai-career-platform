@@ -41,7 +41,7 @@ export default function SettingsPage() {
         title="How the workspace behaves"
         description="Appearance, access and the account this device is signed in with. Everything here is per-device unless it says otherwise."
         art={{
-          src: "https://cdn.angisoft.co.ke/public/images/mboqara/careers/technology-professional.webp",
+          src: "https://cdn1.angisoft.co.ke/mboqara/images/mboqara/careers/technology-professional.webp",
           alt: "A professional working at a laptop",
           caption: "Five themes, one workspace",
         }}

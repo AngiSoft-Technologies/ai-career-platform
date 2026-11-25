@@ -214,7 +214,7 @@ export default function FeaturesPage({
       {/* --- hero: the motion film runs behind it ---------------------------- */}
       <section className="mk-video-hero" aria-labelledby="features-title">
         <div className="mk-video-hero__media" aria-hidden="true">
-          <BackdropVideo src="https://cdn.angisoft.co.ke/public/images/mboqara/motion-features.mp4" poster="https://cdn.angisoft.co.ke/public/images/mboqara/radar-poster.jpg" />
+          <BackdropVideo src="https://cdn1.angisoft.co.ke/mboqara/images/mboqara/motion-features.mp4" poster="https://cdn1.angisoft.co.ke/mboqara/images/mboqara/radar-poster.jpg" />
           <span className="mk-video-hero__veil" />
           <span className="mk-aurora" />
         </div>
@@ -326,7 +326,7 @@ export default function FeaturesPage({
         <div className="mk-container">
           <div className="mk-split">
             <div className="mk-split__media">
-              <Image src="https://cdn.angisoft.co.ke/public/images/mboqara/woman-laptop.webp" alt="A candidate writing an application at a laptop" fill sizes="(max-width: 960px) 100vw, 52vw" />
+              <Image src="https://cdn1.angisoft.co.ke/mboqara/images/mboqara/woman-laptop.webp" alt="A candidate writing an application at a laptop" fill sizes="(max-width: 960px) 100vw, 52vw" />
             </div>
             <InView className="mk-split__copy mk-reveal mk-reveal--right">
               <div className="mk-glass p-7 lg:p-10 grid gap-4">
@@ -367,7 +367,7 @@ export default function FeaturesPage({
       {/* --- the scam shield, over imagery ----------------------------------- */}
       <section className="mk-feature-hero" aria-labelledby="shield-heading">
         <div className="mk-feature-hero__media" aria-hidden="true">
-          <Image src="https://cdn.angisoft.co.ke/public/images/mboqara/career-fair.webp" alt="" fill sizes="100vw" priority />
+          <Image src="https://cdn1.angisoft.co.ke/mboqara/images/mboqara/career-fair.webp" alt="" fill sizes="100vw" priority />
           <span className="mk-feature-hero__veil" />
         </div>
         <div className="mk-container" style={{ position: "relative" }}>
@@ -455,7 +455,7 @@ export default function FeaturesPage({
       {/* --- the caption band — a photograph and one line of type ------------ */}
       <section className="mk-caption-band" aria-label="Where the roles come from">
         <div className="mk-caption-band__media">
-          <Image src="https://cdn.angisoft.co.ke/public/images/mboqara/nairobi-skyline.webp" alt="The Nairobi skyline" fill sizes="100vw" />
+          <Image src="https://cdn1.angisoft.co.ke/mboqara/images/mboqara/nairobi-skyline.webp" alt="The Nairobi skyline" fill sizes="100vw" />
           <span className="mk-caption-band__veil" />
         </div>
         <div className="mk-caption-band__text">

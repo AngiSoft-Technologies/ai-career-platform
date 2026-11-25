@@ -1,7 +1,7 @@
 import { FAQ_KEYWORDS, pageMetadata } from "@/lib/seo";
 
 const OGG = {
-  url: "https://cdn.angisoft.co.ke/public/images/mboqara/og-cover.jpg",
+  url: "https://cdn1.angisoft.co.ke/mboqara/images/mboqara/og-cover.jpg",
   width: 1200,
   height: 630,
   alt: "MboQara FAQ — questions about job discovery, documents and tracking",

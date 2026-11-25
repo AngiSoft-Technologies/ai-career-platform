@@ -197,7 +197,7 @@ export default function ProfilePage() {
   return (
     <Page>
       <HeroSplit
-        src="https://cdn.angisoft.co.ke/public/images/mboqara/woman-laptop.webp"
+        src="https://cdn1.angisoft.co.ke/mboqara/images/mboqara/woman-laptop.webp"
         alt="A professional working at a laptop"
         eyebrow="Your profile"
         priority

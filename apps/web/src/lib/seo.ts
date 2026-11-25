@@ -40,7 +40,7 @@ export const SITE = {
     "MboQara is the all-in-one career platform for job seekers in Kenya, Africa and worldwide. It discovers live jobs, employment opportunities, internships, attachments, graduate trainee and remote roles from job boards and company career pages, scores every role against your skills, experience, location and work-mode preferences, drafts role-specific CVs, resumes and cover letters from your own information, and tracks each application through to offer. You review every document and submit every application yourself. The Android app keeps saved roles and application details available offline. An application agent that can apply on your behalf is on the roadmap.",
   foundingYear: 2024,
   ogImage: {
-    url: "https://cdn.angisoft.co.ke/public/images/mboqara/og-cover.jpg",
+    url: "https://cdn1.angisoft.co.ke/mboqara/images/mboqara/og-cover.jpg",
     width: 1200,
     height: 630,
     alt: "MboQara — AI career platform for job search, tailored CVs and application tracking",

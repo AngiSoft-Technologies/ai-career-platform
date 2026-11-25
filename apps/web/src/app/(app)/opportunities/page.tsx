@@ -385,7 +385,7 @@ function OpportunitiesPageInner() {
         title="Opportunities"
         description="Every opening we monitor, ranked against your profile. Narrow the catalogue with filters, then work through it a page at a time."
         art={{
-          src: "https://cdn.angisoft.co.ke/public/images/mboqara/careers/lagos-career-story.webp",
+          src: "https://cdn1.angisoft.co.ke/mboqara/images/mboqara/careers/lagos-career-story.webp",
           alt: "A candidate researching roles from a cafe table",
           caption: "Ranked against your profile",
         }}

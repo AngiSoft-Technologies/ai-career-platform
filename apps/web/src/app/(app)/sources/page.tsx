@@ -130,7 +130,7 @@ export default function SourcesPage() {
         title="Where jobs come from"
         description="We monitor hundreds of boards. If one is missing, tell us and our curators verify it."
         art={{
-          src: "https://cdn.angisoft.co.ke/public/images/mboqara/careers/engineering-professional.webp",
+          src: "https://cdn1.angisoft.co.ke/mboqara/images/mboqara/careers/engineering-professional.webp",
           alt: "A professional at a desk with a laptop",
           caption: "Curated, deduplicated, scored",
         }}

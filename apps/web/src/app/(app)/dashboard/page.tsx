@@ -177,7 +177,7 @@ function SeekerDashboard() {
   return (
     <Page>
       <HeroSplit
-        src="https://cdn.angisoft.co.ke/public/images/mboqara/careers/technology-professional.webp"
+        src="https://cdn1.angisoft.co.ke/mboqara/images/mboqara/careers/technology-professional.webp"
         alt="A professional working at a laptop in a studio"
         eyebrow="MboQara · live"
         priority
@@ -474,7 +474,7 @@ function AnalystDashboard() {
           </Button>
         </Link>
       }
-      image={{ src: "https://cdn.angisoft.co.ke/public/images/mboqara/nairobi-skyline.webp", alt: "The Nairobi skyline at dusk" }}
+      image={{ src: "https://cdn1.angisoft.co.ke/mboqara/images/mboqara/nairobi-skyline.webp", alt: "The Nairobi skyline at dusk" }}
     >
       <StatGrid>
         <StatTile

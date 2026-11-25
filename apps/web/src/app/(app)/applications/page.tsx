@@ -80,7 +80,7 @@ export default function ApplicationsPage() {
   return (
     <Page>
       <HeroSplit
-        src="https://cdn.angisoft.co.ke/public/images/mboqara/team-meeting.webp"
+        src="https://cdn1.angisoft.co.ke/mboqara/images/mboqara/team-meeting.webp"
         alt="A team in a working meeting"
         eyebrow="Pipeline"
         priority

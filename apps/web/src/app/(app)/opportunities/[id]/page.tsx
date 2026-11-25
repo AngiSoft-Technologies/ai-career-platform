@@ -201,7 +201,7 @@ function OpportunityDetailInner() {
       </div>
 
       <HeroSplit
-        src="https://cdn.angisoft.co.ke/public/images/mboqara/careers/technology-professional.webp"
+        src="https://cdn1.angisoft.co.ke/mboqara/images/mboqara/careers/technology-professional.webp"
         alt="A professional at work"
         priority
         eyebrow={`${data.companyName} · ${data.city ? `${data.city}, ` : ""}${data.country} · ${relativeTime(data.postedAt)}`}

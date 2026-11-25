@@ -96,7 +96,7 @@ export default function ConnectionsPage() {
         title="Connected accounts"
         description="Connect the channels you already use. We read them to find roles you saved or were sent. We never post as you, and revoking a channel takes effect immediately."
         art={{
-          src: "https://cdn.angisoft.co.ke/public/images/mboqara/handshake.webp",
+          src: "https://cdn1.angisoft.co.ke/mboqara/images/mboqara/handshake.webp",
           alt: "A handshake painted on a sign",
           caption: "Read-only access",
         }}

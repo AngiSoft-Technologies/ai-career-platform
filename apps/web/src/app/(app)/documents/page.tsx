@@ -121,7 +121,7 @@ function DocumentsPageInner() {
   return (
     <Page>
       <HeroSplit
-        src="https://cdn.angisoft.co.ke/public/images/mboqara/handshake.webp"
+        src="https://cdn1.angisoft.co.ke/mboqara/images/mboqara/handshake.webp"
         alt="A handshake after an interview"
         eyebrow="Documents"
         priority

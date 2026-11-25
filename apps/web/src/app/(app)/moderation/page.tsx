@@ -76,7 +76,7 @@ export default function ModerationPage() {
         title="Keep the floor clean"
         description="Every posting is fingerprinted. This is where the corpus and the review queue live."
         art={{
-          src: "https://cdn.angisoft.co.ke/public/images/mboqara/careers/women-in-tech.webp",
+          src: "https://cdn1.angisoft.co.ke/mboqara/images/mboqara/careers/women-in-tech.webp",
           alt: "An engineer working in a server room",
           caption: "Every posting fingerprinted",
         }}

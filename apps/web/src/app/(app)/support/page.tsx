@@ -100,7 +100,7 @@ export default function SupportPage() {
         title="Help people get unstuck"
         description="Look up a user, read their application state, draft a reply. You send it."
         art={{
-          src: "https://cdn.angisoft.co.ke/public/images/mboqara/careers/healthcare-professional.webp",
+          src: "https://cdn1.angisoft.co.ke/mboqara/images/mboqara/careers/healthcare-professional.webp",
           alt: "A professional at a desk ready to help",
           caption: "You send every reply",
         }}

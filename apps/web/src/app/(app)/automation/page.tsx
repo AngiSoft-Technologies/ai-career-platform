@@ -101,7 +101,7 @@ export default function AutomationPage() {
         title="The machine behind the search"
         description="Five pipelines run continuously. You can see what is configured and trigger a check."
         art={{
-          src: "https://cdn.angisoft.co.ke/public/images/mboqara/careers/technology-professional.webp",
+          src: "https://cdn1.angisoft.co.ke/mboqara/images/mboqara/careers/technology-professional.webp",
           alt: "A professional working at a laptop beside a chalkboard plan",
           caption: "Always running",
         }}

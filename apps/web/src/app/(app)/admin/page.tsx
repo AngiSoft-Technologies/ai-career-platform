@@ -169,7 +169,7 @@ export default function AdminPage() {
         title="Control room"
         description="Platform health, people and the knowledge that makes matching work."
         art={{
-          src: "https://cdn.angisoft.co.ke/public/images/mboqara/nairobi-skyline.webp",
+          src: "https://cdn1.angisoft.co.ke/mboqara/images/mboqara/nairobi-skyline.webp",
           alt: "The Nairobi skyline over a park",
           caption: "Platform operations",
         }}

@@ -227,7 +227,7 @@ export function CompanyDetail({ slug }: { slug: string }) {
         title={company.name}
         description={[company.industry, company.country].filter(Boolean).join(" · ")}
         art={{
-          src: "https://cdn.angisoft.co.ke/public/images/mboqara/careers/lagos-career-story.webp",
+          src: "https://cdn1.angisoft.co.ke/mboqara/images/mboqara/careers/lagos-career-story.webp",
           alt: "A professional working on a laptop",
           caption: `${stats?.countries ?? 0} ${
             (stats?.countries ?? 0) === 1 ? "country" : "countries"

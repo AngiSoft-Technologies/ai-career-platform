@@ -96,7 +96,7 @@ export default function NotificationsPage() {
         title="What changed"
         description="Application moves, generated documents and scheduled follow-ups. Read on one device, read everywhere."
         art={{
-          src: "https://cdn.angisoft.co.ke/public/images/mboqara/careers/lagos-career-story.webp",
+          src: "https://cdn1.angisoft.co.ke/mboqara/images/mboqara/careers/lagos-career-story.webp",
           alt: "A candidate reading updates on a laptop",
           caption: "Read everywhere",
         }}
