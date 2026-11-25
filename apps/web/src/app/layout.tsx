@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
+import { Analytics } from "@vercel/analytics/next";
 import { Archivo_Black, Fraunces, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme";
@@ -163,6 +164,7 @@ export default function RootLayout({
             softwareApplicationSchema(),
           ]}
         />
+        <Analytics />
       </body>
     </html>
   );
