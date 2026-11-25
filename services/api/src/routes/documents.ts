@@ -12,7 +12,10 @@ import {
   listDocuments,
   prepareDocumentTailoring,
 } from "../services/documents.js";
-import { createUploadTarget } from "../services/storage.js";
+import {
+  createUploadTarget,
+  userObjectPrefix,
+} from "../services/storage.js";
 import { updateDocumentAndInvalidatePreparation } from "../services/application/preparation.js";
 import { humanizeStatus, notify } from "../services/notifications.js";
 import {
@@ -495,7 +498,7 @@ documentsRouter.post("/import", async (request, response, next) => {
     const userId = response.locals.userId as string;
     const input = importSchema.parse(request.body);
 
-    if (!input.storageKey.startsWith(`users/${userId}/`)) {
+    if (!input.storageKey.startsWith(userObjectPrefix(userId))) {
       response.status(403).json({ error: "Forbidden" });
       return;
     }

@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { ArrowRight, KeyRound, ShieldCheck, UserPlus } from "lucide-react";
 import { Button, Field, Input, useToast } from "@/components/ui";
 import { API_URL, signIn } from "@/lib/auth";
+import { CDN_URL } from "@/lib/cdn";
 
 interface InvitationDetails {
   email: string;
@@ -117,7 +118,7 @@ function InviteInner({ token }: { token: string }) {
       <nav className="landing-nav">
         <Link href="/" className="landing-brand" aria-label="MboQara home">
           <img
-            src="/brand/logo-wordmark-light.png"
+            src={`${CDN_URL}/brand/logo-wordmark-light.png`}
             alt="MboQara"
             width={146}
             height={41}

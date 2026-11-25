@@ -43,6 +43,7 @@ import { useTheme, ROLE_LABELS, THEMES, type RoleKey } from "@/components/theme"
 import { Avatar, IconButton, cx } from "@/components/ui";
 import { useWebSocket, type RealtimeEvent } from "@/lib/realtime";
 import { api, outboxSize } from "@/lib/api";
+import { CDN_URL } from "@/lib/cdn";
 import type { Session } from "@/lib/auth";
 
 /**
@@ -496,7 +497,7 @@ function Sidebar({
           aria-label="MboQara home"
         >
           <span className="relative grid size-8 shrink-0 place-items-center rounded-[10px] bg-[linear-gradient(140deg,var(--accent),var(--accent-2))] shadow-[0_6px_18px_color-mix(in_srgb,var(--accent)_38%,transparent)]">
-            <img src="/brand/logo-mark.png" alt="" width={20} height={20} className="size-5" />
+            <img src={`${CDN_URL}/brand/logo-mark.png`} alt="" width={20} height={20} className="size-5" />
           </span>
           {collapsed ? null : (
             <span className="truncate text-[1.02rem] font-semibold tracking-[-0.025em] text-app-text">

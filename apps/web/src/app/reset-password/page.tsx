@@ -6,6 +6,7 @@ import { Suspense, useState } from "react";
 import { KeyRound } from "lucide-react";
 import { Button, Field, Input } from "@/components/ui";
 import { requestPasswordReset, resetPassword } from "@/lib/auth";
+import { CDN_URL } from "@/lib/cdn";
 
 /**
  * Password reset.
@@ -61,7 +62,7 @@ function ResetPasswordInner() {
       <nav className="landing-nav">
         <Link href="/" className="landing-brand" aria-label="MboQara home">
           <img
-            src="/brand/logo-wordmark-light.png"
+            src={`${CDN_URL}/brand/logo-wordmark-light.png`}
             alt="MboQara"
             width={146}
             height={41}

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
+import { CDN_URL } from "@/lib/cdn";
 
 const NAV_LINKS = [
   { href: "/features", label: "Features", icon: Sparkles },
@@ -49,7 +50,7 @@ export function MarketingNav() {
       <header className={clsx("mk-nav", scrolled && "mk-nav--scrolled")} role="banner">
         <div className="mk-nav__inner">
           <Link href="/" className="mk-nav__logo" aria-label="MboQara — Home">
-            <img src="/brand/logo-wordmark-light.png" alt="" width={128} height={36} loading="eager" />
+            <img src={`${CDN_URL}/brand/logo-wordmark-light.png`} alt="" width={128} height={36} loading="eager" />
           </Link>
 
           <nav className="mk-nav__primary" role="navigation" aria-label="Main navigation">

@@ -34,13 +34,18 @@ export interface UploadTarget {
   expiresIn: number;
 }
 
+/** Prefix every user-owned object key carries inside the shared bucket. */
+export function userObjectPrefix(userId: string): string {
+  return `${config.S3_KEY_PREFIX}/users/${userId}/`;
+}
+
 export async function createUploadTarget(input: {
   userId: string;
   filename: string;
   contentType: string;
 }): Promise<UploadTarget> {
   const safeName = input.filename.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const key = `users/${input.userId}/documents/${randomUUID()}${extname(safeName)}`;
+  const key = `${userObjectPrefix(input.userId)}documents/${randomUUID()}${extname(safeName)}`;
 
   const command = new PutObjectCommand({
     Bucket: config.S3_BUCKET,

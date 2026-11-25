@@ -45,6 +45,11 @@ const schema = z.object({
   S3_ENDPOINT: z.string().optional(),
   S3_REGION: z.string().default("auto"),
   S3_BUCKET: z.string().default("uploads"),
+  /**
+   * Key prefix inside the shared bucket. The bucket hosts several projects,
+   * so every object this API writes lives under `mboqara/`.
+   */
+  S3_KEY_PREFIX: z.string().default("mboqara"),
   S3_ACCESS_KEY_ID: z.string().optional(),
   S3_SECRET_ACCESS_KEY: z.string().optional(),
   S3_FORCE_PATH_STYLE: z

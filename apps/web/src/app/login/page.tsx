@@ -7,6 +7,7 @@ import { ArrowRight, KeyRound, ShieldCheck, Sparkles } from "lucide-react";
 import { Button, Field, Input, useToast } from "@/components/ui";
 import { useSession } from "@/components/session";
 import { signInWithGoogle } from "@/lib/auth";
+import { CDN_URL } from "@/lib/cdn";
 import { ROLE_HOME } from "@/components/theme";
 import type { RoleKey } from "@/lib/types";
 
@@ -141,7 +142,7 @@ function LoginInner() {
       <nav className="landing-nav">
         <Link href="/" className="landing-brand" aria-label="MboQara home">
           <img
-            src="/brand/logo-wordmark-light.png"
+            src={`${CDN_URL}/brand/logo-wordmark-light.png`}
             alt="MboQara"
             width={146}
             height={41}

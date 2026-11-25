@@ -22,6 +22,7 @@ import {
   Scale,
   ScrollText,
 } from "lucide-react";
+import { CDN_URL } from "@/lib/cdn";
 
 const FOOTER_LINKS = {
   Product: [
@@ -65,7 +66,7 @@ export function MarketingFooter() {
       <div className="mk-footer__grid">
         <div className="mk-footer__brand">
           <Link href="/" className="mk-footer__logo" aria-label="MboQara — Home">
-            <img src="/brand/logo-wordmark-light.png" alt="" width={148} height={41} />
+            <img src={`${CDN_URL}/brand/logo-wordmark-light.png`} alt="" width={148} height={41} />
           </Link>
           <p className="mk-footer__tagline">
             AI prepares. You decide. You submit.
