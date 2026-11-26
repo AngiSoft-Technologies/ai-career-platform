@@ -36,7 +36,7 @@ class _SavedSearchesScreenState extends State<SavedSearchesScreen> {
         actions: [
           IconButton(
             tooltip: 'Refresh saved searches',
-            
+
             onPressed: () => controller.load(refresh: true),
             icon: const Icon(Icons.refresh_rounded),
           ),
@@ -289,13 +289,13 @@ class _SavedSearchCard extends StatelessWidget {
                   ),
                 IconButton(
                   tooltip: 'Edit saved search',
-                  
+
                   onPressed: onEdit,
                   icon: const Icon(Icons.edit_outlined),
                 ),
                 IconButton(
                   tooltip: 'Delete saved search',
-                  
+
                   onPressed: onDelete,
                   icon: const Icon(Icons.delete_outline_rounded),
                 ),
@@ -308,19 +308,16 @@ class _SavedSearchCard extends StatelessWidget {
               children: [
                 if (search.country != null)
                   Chip(
-                    
                     label: Text(search.country!),
                     visualDensity: VisualDensity.compact,
                   ),
                 if (search.workMode != null)
                   Chip(
-                    
                     label: Text(search.workMode!),
                     visualDensity: VisualDensity.compact,
                   ),
                 if (search.seniority != null)
                   Chip(
-                    
                     label: Text(search.seniority!),
                     visualDensity: VisualDensity.compact,
                   ),

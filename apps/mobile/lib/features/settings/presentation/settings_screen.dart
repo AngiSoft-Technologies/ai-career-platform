@@ -759,13 +759,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
     if (confirmed != true) return;
+    if (!context.mounted) return;
     try {
       await context.read<ApiClient>().delete('/v1/me');
-      if (!mounted) return;
+      if (!context.mounted) return;
       await context.read<AuthSession>().signOut();
       context.go('/onboarding');
     } catch (error) {
-      if (!mounted) return;
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not delete the account: $error')),
       );

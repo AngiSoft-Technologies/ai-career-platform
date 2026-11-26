@@ -36,7 +36,6 @@ class RecentQueryChips extends StatelessWidget {
               children: [
                 for (final query in queries)
                   ActionChip(
-                    
                     avatar: const Icon(Icons.history_rounded, size: 16),
                     label: Text(query),
                     onPressed: () => onSelected(query),

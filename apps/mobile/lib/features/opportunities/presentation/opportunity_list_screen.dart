@@ -105,7 +105,7 @@ class _OpportunityListScreenState extends State<OpportunityListScreen> {
                   prefixIcon: const Icon(Icons.search_rounded),
                   suffixIcon: IconButton(
                     tooltip: 'Search',
-                    
+
                     onPressed: () =>
                         _search(context, controller, _searchController.text),
                     icon: const Icon(Icons.arrow_forward_rounded),
@@ -539,7 +539,7 @@ class _OpportunityCard extends StatelessWidget {
                           ),
                           IconButton(
                             tooltip: 'Share opportunity link',
-                            
+
                             onPressed: onShare,
                             icon: const Icon(Icons.share_outlined),
                           ),
@@ -547,7 +547,7 @@ class _OpportunityCard extends StatelessWidget {
                             tooltip: isSaved
                                 ? 'Remove bookmark'
                                 : 'Save opportunity',
-                            
+
                             onPressed: onSave,
                             icon: Icon(
                               isSaved

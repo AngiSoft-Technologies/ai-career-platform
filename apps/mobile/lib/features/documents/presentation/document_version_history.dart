@@ -56,7 +56,7 @@ class _DocumentVersionHistoryState extends State<DocumentVersionHistory> {
       ),
     );
     if (confirmed != true) return;
-    if (!context.mounted) return;
+    if (!mounted) return;
     await context.read<DocumentController>().restoreVersion(
       widget.documentId,
       version,

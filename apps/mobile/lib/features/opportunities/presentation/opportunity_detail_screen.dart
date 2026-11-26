@@ -90,7 +90,7 @@ class _OpportunityDetailScreenState extends State<OpportunityDetailScreen> {
             ),
             IconButton.filledTonal(
               tooltip: 'Share job link',
-              
+
               onPressed: () => Share.share(
                 '${opportunity.title} at ${opportunity.companyName}\n'
                 '${opportunity.shareUrl}',
@@ -100,7 +100,7 @@ class _OpportunityDetailScreenState extends State<OpportunityDetailScreen> {
             ),
             IconButton.filledTonal(
               tooltip: isSaved ? 'Remove bookmark' : 'Save opportunity',
-              
+
               onPressed: () => controller.toggleSaved(opportunity),
               icon: Icon(
                 isSaved
