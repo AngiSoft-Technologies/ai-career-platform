@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "express",
+  "schedules": {
+    "discovery-ingestion": {
+      "schedule": "*/30 * * * *",
+      "path": "/internal/ingest",
+      "requestMethod": "POST"
+    }
+  }
+}

@@ -1,10 +1,11 @@
-import { Router } from "express";
+import { Router, type Request } from "express";
 import { z } from "zod";
 import { assertPublicUrl } from "../services/engine/fetch.js";
 import { directFetch } from "../services/engine/egress.js";
 import { runIngestion } from "../services/ingestion/run.js";
 import { DeduplicationAgent } from "../services/agents/dedup-agent.js";
 import { query } from "../db/pool.js";
+import { redis } from "../db/redis.js";
 import { logger } from "../logger.js";
 
 /**
@@ -71,48 +72,101 @@ internalRouter.post("/egress", async (request, response) => {
   }
 });
 
+const SCHEDULE_LOCK_KEY = "discovery:schedule:lock";
+const SCHEDULE_LAST_RUN_KEY = "discovery:schedule:last-run";
+
 /**
- * Runs one discovery cycle on demand.
+ * Two callers may trigger ingestion: a Vercel Schedule (which sends
+ * `Authorization: Bearer $CRON_SECRET`) and an operator with the internal
+ * token. A scheduled call always runs synchronously, because a detached
+ * promise dies when a serverless function returns.
+ */
+function ingestAuthorisation(request: Request): { ok: boolean; scheduled: boolean } {
+  const cronSecret = process.env.CRON_SECRET;
+  const authorization = request.header("authorization");
+  if (cronSecret && authorization === `Bearer ${cronSecret}`) {
+    return { ok: true, scheduled: true };
+  }
+
+  const internalToken = process.env.EGRESS_TOKEN ?? process.env.INTERNAL_API_KEY;
+  if (internalToken && request.header("x-egress-token") === internalToken) {
+    return { ok: true, scheduled: false };
+  }
+
+  return { ok: false, scheduled: false };
+}
+
+/**
+ * Runs one discovery cycle.
  *
- * The scheduler normally fires this every 30 minutes; this endpoint exists so
- * an operator (or a CI check) can force a cycle. A full cycle walks many
- * employers and can take minutes, so it runs detached: the caller gets a 202
- * immediately and reads the outcome from `/internal/discovery-status` or the
- * logs. It is guarded by the same shared token as the egress hop.
+ * On serverless the platform schedule is the clock: Vercel Schedules POSTs here
+ * every 30 minutes with CRON_SECRET. The standalone worker still dispatches the
+ * same work through its own ticker, so this route is the only discovery entry
+ * point both topologies share.
+ *
+ * Function targets are not retried and runs can overlap after an outage, so a
+ * scheduled cycle takes a short Redis lease. If Redis is down the cycle still
+ * runs — discovery deduplicates by source URL, so an occasional overlap is
+ * safe — but the lease is skipped rather than blocking the only clock we have.
  */
 internalRouter.post("/ingest", async (request, response) => {
-  const expected = process.env.EGRESS_TOKEN ?? process.env.INTERNAL_API_KEY;
-  const supplied = request.header("x-egress-token");
-  if (!expected || supplied !== expected) {
+  const auth = ingestAuthorisation(request);
+  if (!auth.ok) {
     response.status(401).json({ error: "Unauthorized" });
     return;
   }
 
-  const wait = request.query.wait === "1" || request.query.wait === "true";
+  const wait =
+    auth.scheduled ||
+    request.query.wait === "1" ||
+    request.query.wait === "true";
   const started = Date.now();
 
-  const run = async (): Promise<void> => {
+  let releaseLock: (() => Promise<void>) | null = null;
+  if (auth.scheduled) {
+    let acquired = false;
+    try {
+      acquired =
+        (await redis.set(SCHEDULE_LOCK_KEY, "1", "EX", 1_500, "NX")) === "OK";
+    } catch {
+      // No Redis means no lease; never let that stop the scheduled cycle.
+      acquired = true;
+    }
+    if (!acquired) {
+      response.status(202).json({ success: true, skipped: "cycle already running" });
+      return;
+    }
+    releaseLock = async () => {
+      await redis.del(SCHEDULE_LOCK_KEY).catch(() => undefined);
+    };
+  }
+
+  const execute = async () => {
     try {
       const result = await runIngestion();
       logger.info(
-        { ingest: result, elapsedMs: Date.now() - started },
-        "On-demand ingestion cycle finished",
+        { ingest: result, elapsedMs: Date.now() - started, scheduled: auth.scheduled },
+        "Ingestion cycle finished",
       );
+      if (auth.scheduled) {
+        await redis
+          .set(SCHEDULE_LAST_RUN_KEY, new Date().toISOString())
+          .catch(() => undefined);
+      }
+      return result;
     } catch (error) {
       logger.error(
         { error: error instanceof Error ? error.message : String(error) },
-        "On-demand ingestion cycle failed",
+        "Ingestion cycle failed",
       );
+      return { error: error instanceof Error ? error.message : String(error) };
+    } finally {
+      if (releaseLock) await releaseLock();
     }
   };
 
   if (wait) {
-    // Bound the synchronous path so a slow cycle cannot hold the request
-    // open past the proxy limit; the detached path is the default.
-    const result = await runIngestion().catch((error) => ({
-      error: error instanceof Error ? error.message : String(error),
-    }));
-    response.json({ success: true, result });
+    response.json({ success: true, result: await execute() });
     return;
   }
 
@@ -122,8 +176,8 @@ internalRouter.post("/ingest", async (request, response) => {
     message: "Ingestion cycle started. Poll /internal/discovery-status.",
   });
 
-  // Deliberately not awaited: the response has already been sent.
-  void run();
+  // Deliberately not awaited: only used by operators on a persistent host.
+  void execute();
 });
 
 /**
