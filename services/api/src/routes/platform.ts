@@ -1,7 +1,13 @@
+import type { SavedOpportunity } from "@angisoft/mboqara-contracts";
 import { createHash } from "node:crypto";
 import { Router, type Request, type RequestHandler, type Response } from "express";
 import { z } from "zod";
 import { query } from "../db/pool.js";
+import {
+  mapOpportunity,
+  opportunitySelectFrom,
+  type OpportunityRow,
+} from "../services/opportunities.js";
 import { logger } from "../logger.js";
 import { broadcast } from "../realtime/hub.js";
 import { API_VERSION } from "../version.js";
@@ -852,9 +858,15 @@ platformRouter.post(
                  CASE WHEN $4 THEN now() END, CASE WHEN $5 THEN now() END)
          ON CONFLICT (user_id, opportunity_id) DO UPDATE SET
            seen_at = COALESCE(feed_state.seen_at, EXCLUDED.seen_at),
-           saved_at = COALESCE(feed_state.saved_at, EXCLUDED.saved_at),
+           -- Seen and applied are monotonic; saving is reversible. An explicit
+           -- saved:false clears saved_at; an omitted saved leaves it be.
+           saved_at = CASE
+             WHEN $4::boolean IS NULL THEN feed_state.saved_at
+             WHEN $4::boolean THEN COALESCE(feed_state.saved_at, now())
+             ELSE NULL
+           END,
            applied_at = COALESCE(feed_state.applied_at, EXCLUDED.applied_at)`,
-        [owner(response), item.opportunityId, item.seen === true, item.saved === true, item.applied === true],
+        [owner(response), item.opportunityId, item.seen === true, item.saved ?? null, item.applied === true],
       );
     }
     response.json({ ok: true, updated: items.length });
@@ -867,6 +879,42 @@ interface FeedStateRow {
   saved_at: Date | null;
   applied_at: Date | null;
 }
+
+/**
+ * The wish list. This reads the full role through the catalogue mapper so a
+ * saved row renders exactly as it did in the feed, newest save first.
+ */
+platformRouter.get(
+  "/feed/state/saved",
+  route(async (request, response) => {
+    const filters = z
+      .object({
+        limit: z.coerce.number().int().min(1).max(200).default(50),
+      })
+      .parse(request.query);
+
+    const result = await query<OpportunityRow & { saved_at: Date }>(
+      `${opportunitySelectFrom(`
+         FROM feed_state fs
+         JOIN opportunities o ON o.id = fs.opportunity_id
+         JOIN companies c ON c.id = o.company_id
+         LEFT JOIN opportunity_skills os ON os.opportunity_id = o.id
+       `)}
+        WHERE fs.user_id = $1
+          AND fs.saved_at IS NOT NULL
+        GROUP BY o.id, c.id, fs.saved_at
+        ORDER BY fs.saved_at DESC, o.id ASC
+        LIMIT $2`,
+      [owner(response), filters.limit],
+    );
+
+    const items: SavedOpportunity[] = result.rows.flatMap((row) => {
+      const savedAt = iso(row.saved_at);
+      return savedAt ? [{ opportunity: mapOpportunity(row), savedAt }] : [];
+    });
+    response.json({ items });
+  }),
+);
 
 platformRouter.get(
   "/feed/state",

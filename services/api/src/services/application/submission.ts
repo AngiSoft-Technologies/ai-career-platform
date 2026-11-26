@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import type {
   ApplicationStatus,
   ApplicationSubmissionField,
-  ApplicationSubmissionMethod,
   ApplicationSubmissionRun,
   ApplicationSubmissionStatus,
 } from "@angisoft/mboqara-contracts";
@@ -11,8 +10,12 @@ import { query, withTransaction } from "../../db/pool.js";
 import { assertPublicUrl } from "../../lib/net-guard.js";
 import { logger } from "../../logger.js";
 import { broadcast } from "../../realtime/hub.js";
-import { updateApplicationStatus } from "../applications.js";
+import {
+  getApplicationBlueprint,
+  updateApplicationStatus,
+} from "../applications.js";
 import { renderPdf, contentToExportSections } from "../documents/export.js";
+import { submissionMethodForBlueprint } from "./submission-method.js";
 import { selectSubmissionSnapshotDocument } from "./submission-snapshot.js";
 import {
   ACTIVE_SUBMISSION_CONFLICT_SQL,
@@ -52,6 +55,8 @@ interface SubmissionRow {
   error_code: string | null;
   error_detail: string | null;
   lease_expires_at: Date | null;
+  /** Optional for rows created before migration 042. */
+  method?: string | null;
   lease_expired?: boolean;
   created_at: Date;
   updated_at: Date;
@@ -70,8 +75,6 @@ interface SubmissionPreparationRow {
 }
 
 export type SubmissionField = ApplicationSubmissionField;
-
-const SUBMISSION_METHOD: ApplicationSubmissionMethod = "browser";
 
 export interface SubmissionDocument {
   documentId: string;
@@ -139,7 +142,7 @@ function mapRun(row: SubmissionRow): ApplicationSubmissionRun {
     applicationId: row.application_id,
     preparationId: row.preparation_id,
     status: row.status as ApplicationSubmissionStatus,
-    method: SUBMISSION_METHOD,
+    method: submissionMethodForBlueprint(row.method),
     currentStep: row.current_step,
     targetUrl: row.target_url,
     allowedHosts: row.allowed_hosts,
@@ -342,6 +345,7 @@ async function latestActiveRun(
 export async function createSubmissionRun(
   userId: string,
   applicationId: string,
+  options: { guidedSession?: boolean } = {},
 ): Promise<ApplicationSubmissionRun> {
   const active = await latestActiveRun(userId, applicationId);
   if (active) return mapRun(active);
@@ -357,9 +361,18 @@ export async function createSubmissionRun(
   if (!(await verifyPreparationApproval(preparation))) {
     throw new Error("PREPARATION_APPROVAL_STALE");
   }
-  if (!(await hasActiveBrowserAgent(userId))) {
+  // The extension agent is required only for its own command channel. The
+  // guided browser workspace has already authenticated and owns a live
+  // guidance session, so it does not need a second agent to open the run.
+  if (!options.guidedSession && !(await hasActiveBrowserAgent(userId))) {
     throw new Error("BROWSER_AGENT_REQUIRED");
   }
+
+  // The approved blueprint, not a constant, decides whether this is an email
+  // compose or a browser form. Only the run's metadata changes; the browser
+  // command protocol below is identical for both methods.
+  const blueprint = await getApplicationBlueprint(userId, applicationId);
+  const submissionMethod = submissionMethodForBlueprint(blueprint.method);
 
   const initialAnalysis = analysisOf(preparation);
   let targetUrl = initialAnalysis.analysisUrl;
@@ -447,10 +460,10 @@ export async function createSubmissionRun(
       `INSERT INTO application_submission_runs (
          id, user_id, application_id, preparation_id, status, current_step,
          consent_at, target_url, allowed_hosts, fields, documents,
-         document_snapshot, approved_fingerprint, answers
+         document_snapshot, approved_fingerprint, answers, method
        ) VALUES (
          $1, $2, $3, $4, 'REQUESTED', 'INSPECT_FORM', now(), $5, $6,
-         $7, $8, $9, $10, $11
+         $7, $8, $9, $10, $11, $12
        )
        ${ACTIVE_SUBMISSION_CONFLICT_SQL}
        RETURNING *`,
@@ -466,6 +479,7 @@ export async function createSubmissionRun(
         JSON.stringify(documentSnapshot),
         snapshot.fingerprint,
         JSON.stringify(current.requirements),
+        submissionMethod,
       ],
     );
     const row = inserted.rows[0];
@@ -825,6 +839,80 @@ export async function reportSubmissionRun(
     ? await nextBrowserCommand(userId, runId)
     : null;
   return { status: result.status, nextCommand };
+}
+
+/**
+ * The guided browser workspace has no extension agent to report a run, so the
+ * candidate's explicit confirmation completes the run here. The session must
+ * still be live, and the run must belong to the same user and application.
+ */
+export async function completeGuidedSubmission(
+  userId: string,
+  applicationId: string,
+  guidanceSessionId: string,
+  url?: string,
+  runId?: string,
+): Promise<ApplicationSubmissionRun> {
+  const row = await withTransaction(async (client) => {
+    const session = await client.query<{ id: string }>(
+      `SELECT id FROM application_guidance_sessions
+        WHERE id = $1 AND user_id = $2 AND application_id = $3
+          AND status = ANY($4::text[]) AND ended_at IS NULL
+        FOR UPDATE`,
+      [guidanceSessionId, userId, applicationId, ["ACTIVE", "WAITING_FOR_HUMAN"]],
+    );
+    if (!session.rows[0]) throw new Error("GUIDANCE_SESSION_NOT_FOUND");
+
+    const updated = await client.query<SubmissionRow>(
+      `UPDATE application_submission_runs
+          SET status = 'SUCCEEDED',
+              current_step = 'SUBMIT',
+              result = result || $1
+        WHERE id = COALESCE(
+          $4::uuid,
+          (SELECT id FROM application_submission_runs
+            WHERE user_id = $2 AND application_id = $3
+              AND status NOT IN ('SUCCEEDED', 'FAILED', 'EXPIRED', 'CANCELLED')
+            ORDER BY created_at DESC LIMIT 1)
+        )
+          AND user_id = $2
+          AND application_id = $3
+          AND status NOT IN ('SUCCEEDED', 'FAILED', 'EXPIRED', 'CANCELLED')
+        RETURNING *`,
+      [
+        JSON.stringify({
+          confirmedBy: "guided_browser",
+          url: url ?? null,
+          completedAt: new Date().toISOString(),
+        }),
+        userId,
+        applicationId,
+        runId ?? null,
+      ],
+    );
+    const run = updated.rows[0];
+    if (!run) throw new Error("SUBMISSION_NOT_FOUND");
+    await client.query(
+      `UPDATE application_guidance_sessions
+          SET submission_run_id = $2
+        WHERE id = $1`,
+      [guidanceSessionId, run.id],
+    );
+    return run;
+  });
+
+  await advanceApplicationToApplied(userId, applicationId);
+  await query(
+    `INSERT INTO events (type, aggregate_type, aggregate_id, payload)
+     VALUES ('application.submitted', 'application', $1, $2)`,
+    [applicationId, JSON.stringify({ runId: row.id, url: url ?? null, guided: true })],
+  );
+  broadcast(
+    "application.submission.updated",
+    { applicationId, runId: row.id, status: "SUCCEEDED" },
+    userId,
+  );
+  return mapRun(row);
 }
 
 export async function resumeSubmissionRun(

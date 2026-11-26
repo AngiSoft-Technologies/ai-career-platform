@@ -26,6 +26,7 @@ class MatchExplanationCard extends StatelessWidget {
     final match = explanation.match;
     return SectionCard(
       child: Semantics(
+        container: true,
         label: 'Match explanation, ${match.score.round()} percent',
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -44,6 +45,7 @@ class MatchExplanationCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Semantics(
+              container: true,
               label: 'Confidence: ${explanation.confidence}',
               child: Chip(
                 avatar: const Icon(Icons.verified_outlined, size: 16),
@@ -76,6 +78,7 @@ class MatchExplanationCard extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Semantics(
+                  container: true,
                   label: '${row.$1}: ${row.$2}',
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -115,6 +118,7 @@ class MatchExplanationCard extends StatelessWidget {
                 children: [
                   for (final gap in explanation.missingSkills)
                     Semantics(
+                      container: true,
                       label: 'Missing skill $gap',
                       child: Chip(
                         avatar: const Icon(Icons.add_rounded, size: 16),
@@ -157,6 +161,7 @@ class _FactorBar extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final percent = (factor.value * 100).round().clamp(0, 100);
     return Semantics(
+      container: true,
       label: '${factor.label} contribution $percent percent. ${factor.reason}',
       child: Padding(
         padding: const EdgeInsets.only(bottom: 12),

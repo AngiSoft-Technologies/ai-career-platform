@@ -23,6 +23,8 @@ import {
   useToast,
   cx,
 } from "@/components/ui";
+import { SceneBackdrop } from "@/components/app-scene";
+import { sceneForPath } from "@/lib/app-scenes";
 import { api } from "@/lib/api";
 import { rememberOnboardingPath } from "@/lib/onboarding";
 
@@ -145,18 +147,27 @@ export default function OnboardingUploadPage() {
   if (stage === "done") {
     return (
       <Page className="mx-auto max-w-[620px]">
+        <SceneBackdrop
+          scene={sceneForPath("/onboarding")}
+          priority
+          minHeight="clamp(180px, 20vw, 230px)"
+        >
+          <p className="flex items-center gap-2.5 font-mono text-[0.62rem] font-semibold tracking-[0.18em] text-white/65 uppercase">
+            <ShieldCheck size={13} aria-hidden />
+            Import complete
+          </p>
+          <h1 className="mt-3 max-w-[24ch] text-[clamp(1.7rem,3.4vw,2.3rem)] leading-[1] font-semibold tracking-[-0.03em] text-white text-balance">
+            Your resume is ready
+          </h1>
+        </SceneBackdrop>
         <Panel className="relative overflow-hidden">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 bg-[radial-gradient(70%_90%_at_50%_0%,color-mix(in_srgb,var(--success)_16%,transparent),transparent_70%)]"
-          />
           <div className="relative flex flex-col items-center gap-5 px-6 py-14 text-center">
             <span className="grid size-[76px] place-items-center rounded-app-lg border border-app-success/30 bg-app-success/12 text-app-success">
               <ShieldCheck size={32} />
             </span>
-            <h1 className="text-[1.85rem] leading-tight font-semibold tracking-[-0.025em] text-app-text">
-              Your resume is ready
-            </h1>
+            <h2 className="text-[1.6rem] leading-tight font-semibold tracking-[-0.025em] text-app-text">
+              What we extracted
+            </h2>
             <p className="max-w-[46ch] text-[0.9rem] leading-relaxed text-app-muted">
               We extracted your details, rebuilt the document and ran an ATS
               check. Next, tell us how you want to be matched to roles.
@@ -200,28 +211,29 @@ export default function OnboardingUploadPage() {
 
   return (
     <Page className="mx-auto max-w-[760px]">
-      <header className="text-center">
+      <SceneBackdrop
+        scene={sceneForPath("/onboarding")}
+        priority
+        minHeight="clamp(210px, 23vw, 280px)"
+      >
         <Link
           href="/onboarding"
-          className="mb-5 inline-flex items-center gap-1.5 text-[0.9rem] text-app-muted transition-colors hover:text-app-text"
+          className="mb-4 inline-flex items-center gap-1.5 text-[0.82rem] text-white/70 transition-colors hover:text-white"
         >
           <X size={14} /> Back to options
         </Link>
-        <p className="flex items-center justify-center gap-2 font-mono text-[0.62rem] font-semibold tracking-[0.24em] text-app-muted uppercase">
-          <span
-            aria-hidden
-            className="h-px w-8 bg-[linear-gradient(90deg,var(--accent),var(--accent-2))]"
-          />
+        <p className="flex items-center gap-2.5 font-mono text-[0.62rem] font-semibold tracking-[0.18em] text-white/65 uppercase">
+          <span aria-hidden className="h-px w-7 bg-white/60" />
           Upload resume
         </p>
-        <h1 className="mt-4 text-[clamp(1.7rem,4vw,2.5rem)] leading-[1.02] font-semibold tracking-[-0.03em] text-balance text-app-text">
+        <h1 className="mt-3 max-w-[26ch] text-[clamp(1.8rem,4vw,2.5rem)] leading-[1.02] font-semibold tracking-[-0.03em] text-balance text-white">
           Upload your existing resume
         </h1>
-        <p className="mx-auto mt-3 max-w-[46ch] text-[0.94rem] leading-relaxed text-app-muted">
+        <p className="mt-3 max-w-[46ch] text-[0.9rem] leading-relaxed text-white/75">
           PDF, DOCX, or an image. Maximum 10MB. We read it, rebuild it and
           score it before you ever see it.
         </p>
-      </header>
+      </SceneBackdrop>
 
       <Panel
         className="relative"

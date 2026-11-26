@@ -375,6 +375,26 @@ html {
   color-scheme: light;
 }
 
+/*
+ * Photographic scenes are their own little dark surface. Every app utility
+ * reads a runtime token, so remapping those tokens here is enough to keep
+ * buttons, badges and eyebrow rules legible on the image — without asking
+ * each page to pass an "inverse" prop through the whole tree.
+ */
+.app-scene {
+  --bg: #07070c;
+  --bg-elevated: #07070c;
+  --surface: rgba(255, 255, 255, 0.1);
+  --surface-2: rgba(255, 255, 255, 0.16);
+  --surface-solid: #07070c;
+  --border: rgba(255, 255, 255, 0.22);
+  --border-strong: rgba(255, 255, 255, 0.5);
+  --text: #ffffff;
+  --text-soft: rgba(255, 255, 255, 0.78);
+  --text-muted: rgba(255, 255, 255, 0.62);
+  --accent-soft: rgba(255, 255, 255, 0.14);
+}
+
 body {
   background: var(--bg);
   color: var(--text);
@@ -467,11 +487,7 @@ a {
 }
 
 .glass {
-  background: linear-gradient(
-    145deg,
-    color-mix(in srgb, var(--accent) 16%, transparent),
-    transparent 58%
-  );
+  background: color-mix(in srgb, var(--bg-elevated) 88%, transparent);
   border: 1px solid var(--border);
   backdrop-filter: blur(calc(var(--blur) * 1.4)) saturate(180%);
   -webkit-backdrop-filter: blur(calc(var(--blur) * 1.4)) saturate(180%);
@@ -952,59 +968,9 @@ a {
   }
 }
 
-/* ==========================================================================
-   Theme backgrounds
-   ========================================================================== */
-
-[data-theme="aurora"] body {
-  background-image:
-    radial-gradient(
-      60rem 34rem at 50% -18%,
-      color-mix(in srgb, var(--accent) 13%, transparent),
-      transparent 70%
-    ),
-    linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px);
-  background-size: auto, 72px 72px, 72px 72px;
-  background-attachment: fixed;
-}
-
-[data-theme="terminal"] body {
-  background-image: repeating-linear-gradient(
-    0deg,
-    rgba(92, 255, 157, 0.028) 0px,
-    rgba(92, 255, 157, 0.028) 1px,
-    transparent 1px,
-    transparent 3px
-  );
-}
-
-[data-theme="atlas"] body {
-  background-image: radial-gradient(
-      80rem 50rem at 80% -10%,
-      color-mix(in srgb, var(--accent) 14%, transparent),
-      transparent 60%
-    ),
-    linear-gradient(rgba(53, 195, 214, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(53, 195, 214, 0.045) 1px, transparent 1px);
-  background-size: auto, 44px 44px, 44px 44px;
-  background-attachment: fixed;
-}
-
-[data-theme="editorial"] body {
-  background-image: radial-gradient(circle at 1px 1px, rgba(26, 23, 18, 0.07) 1px, transparent 0);
-  background-size: 22px 22px;
-}
-
-[data-theme="kinetic"] body {
-  background-image: linear-gradient(
-    90deg,
-    transparent 0 49.8%,
-    rgba(20, 18, 14, 0.045) 49.8% 50.2%,
-    transparent 50.2%
-  );
-  background-size: 64px 64px;
-}
+/* Page backgrounds are deliberately plain: the app shell uses the solid
+   theme surface so content stays readable. Imagery lives in dedicated hero
+   and feature regions, not behind every page. */
 
 /* ==========================================================================
    Data table
@@ -1068,7 +1034,7 @@ a {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  background: var(--accent);
   transition: width 600ms var(--ease);
 }
 
@@ -1219,23 +1185,14 @@ a {
 }
 
 .skeleton {
-  background: linear-gradient(
-    90deg,
-    var(--surface) 25%,
-    var(--surface-2) 50%,
-    var(--surface) 75%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.4s infinite;
+  background: var(--surface-2);
+  animation: app-pulse 1.4s ease-in-out infinite;
   border-radius: var(--radius-sm);
 }
 
-@keyframes shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
+@keyframes app-pulse {
+  50% {
+    opacity: 0.45;
   }
 }
 

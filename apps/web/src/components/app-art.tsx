@@ -1,7 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import type { ReactNode } from "react";
+import { SceneBackdrop } from "@/components/app-scene";
 import { cx } from "@/components/ui";
 
 /**
@@ -49,7 +49,7 @@ export function CompanyMark({
       .slice(0, 2)
       .map((word) => word[0]?.toUpperCase() ?? "")
       .join("") || "?";
-  const [from, to] = MARK_TONES[hash(label) % MARK_TONES.length];
+  const [from] = MARK_TONES[hash(label) % MARK_TONES.length];
 
   return (
     <span
@@ -62,7 +62,7 @@ export function CompanyMark({
         width: size,
         height: size,
         fontSize: Math.round(size * 0.36),
-        backgroundImage: `linear-gradient(140deg, ${from}, ${to})`,
+        backgroundColor: from,
       }}
     >
       {initials}
@@ -93,47 +93,24 @@ export function PhotoBand({
   className?: string;
 }) {
   return (
-    <section
-      className={cx(
-        "relative isolate overflow-hidden rounded-app-lg border border-app-border",
-        className,
-      )}
-      style={{ minHeight: height }}
+    <SceneBackdrop
+      scene={{ src, alt }}
+      priority={priority}
+      minHeight={height}
+      className={cx("rounded-app-lg", className)}
     >
-      <Image
-        src={src}
-        alt={alt}
-        fill
-        priority={priority}
-        sizes="(max-width: 1024px) 100vw, 70vw"
-        className="object-cover object-center"
-      />
-      <div
-        aria-hidden
-        className="absolute inset-0 bg-[linear-gradient(100deg,rgba(7,7,12,0.94)_0%,rgba(7,7,12,0.78)_30%,rgba(7,7,12,0.38)_62%,rgba(7,7,12,0.18)_100%)]"
-      />
-      <div
-        aria-hidden
-        className="absolute inset-0 bg-[radial-gradient(70%_120%_at_0%_0%,rgba(124,147,255,0.26),transparent_62%)]"
-      />
-      <div
-        aria-hidden
-        className="absolute inset-x-0 bottom-0 h-1/2 bg-[linear-gradient(to_top,rgba(7,7,12,0.92),rgba(7,7,12,0.4)_55%,transparent)]"
-      />
-      <div className="relative flex h-full flex-col justify-end p-6 sm:p-8 lg:p-10">
-        {children}
-      </div>
-    </section>
+      {children}
+    </SceneBackdrop>
   );
 }
 
 /**
- * A split hero: the message on the left, a photograph on the right.
+ * The opening scene of a workspace page.
  *
- * A full-bleed band puts the photograph behind the type, which reads as a
- * poster and fights the words for attention. Splitting them gives the type
- * a calm field and gives the picture a frame, so neither has to be veiled
- * into illegibility.
+ * The old split hero boxed the words into a panel and put a faint, gridded
+ * wash behind them. This version commits to the photograph: a solid scrim,
+ * white type, and the numbers or actions that matter sitting directly on the
+ * image. One scene per page is enough to give the workspace a sense of place.
  */
 export function HeroSplit({
   src,
@@ -144,6 +121,8 @@ export function HeroSplit({
   actions,
   stats,
   badge,
+  video,
+  poster,
   priority = false,
   className,
 }: {
@@ -155,85 +134,47 @@ export function HeroSplit({
   actions?: ReactNode;
   stats?: ReactNode;
   badge?: ReactNode;
+  video?: string;
+  poster?: string;
   priority?: boolean;
   className?: string;
 }) {
   return (
-    <section
-      className={cx(
-        "grid overflow-hidden rounded-app-xl border border-app-border bg-app-surface shadow-app-card lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]",
-        className,
-      )}
+    <SceneBackdrop
+      scene={{ src, alt, video, poster }}
+      priority={priority}
+      minHeight="clamp(268px, 30vw, 368px)"
+      className={className}
     >
-      <div className="relative flex flex-col justify-center gap-5 p-6 sm:p-8 lg:p-10">
-        {/* The accent wash and the grid, drawn with utilities so the hero
-            still follows the theme tokens. */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(90%_120%_at_0%_0%,color-mix(in_srgb,var(--accent)_18%,transparent),transparent_62%)]"
-        />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 bg-[linear-gradient(color-mix(in_srgb,var(--text)_4%,transparent)_1px,transparent_1px),linear-gradient(90deg,color-mix(in_srgb,var(--text)_4%,transparent)_1px,transparent_1px)] bg-[length:34px_34px] [mask-image:radial-gradient(80%_90%_at_0%_0%,black,transparent_72%)]"
-        />
-
-        <div className="relative flex flex-col gap-5">
-          {eyebrow ? (
-            <p className="flex items-center gap-2.5 font-mono text-[0.62rem] font-semibold tracking-[0.24em] text-app-muted uppercase">
-              <span
-                aria-hidden
-                className="h-px w-8 bg-[linear-gradient(90deg,var(--accent),var(--accent-2))]"
-              />
-              {eyebrow}
-            </p>
-          ) : null}
-
-          <h1 className="max-w-[22ch] text-[clamp(1.9rem,3.6vw,3rem)] leading-[1] font-semibold tracking-[-0.03em] text-balance text-app-text">
-            {title}
-          </h1>
-
-          {description ? (
-            <p className="max-w-[54ch] text-[0.95rem] leading-relaxed text-app-soft">
-              {description}
-            </p>
-          ) : null}
-
-          {actions ? (
-            <div className="flex flex-wrap items-center gap-2.5">{actions}</div>
-          ) : null}
-
-          {stats ? (
-            <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-app-border pt-6 sm:grid-cols-4">
-              {stats}
-            </dl>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="relative min-h-[200px] overflow-hidden lg:min-h-[340px]">
-        <Image
-          src={src}
-          alt={alt}
-          fill
-          priority={priority}
-          sizes="(max-width: 1024px) 100vw, 40vw"
-          className="object-cover object-center"
-        />
-        <div
-          aria-hidden
-          className="absolute inset-0 bg-[linear-gradient(90deg,var(--surface-solid)_0%,transparent_38%)] lg:bg-[linear-gradient(90deg,color-mix(in_srgb,var(--surface-solid)_82%,transparent)_0%,transparent_42%)]"
-        />
-        <div
-          aria-hidden
-          className="absolute inset-0 bg-[radial-gradient(80%_90%_at_80%_100%,color-mix(in_srgb,var(--accent)_26%,transparent),transparent_70%)] mix-blend-overlay"
-        />
-        {badge ? (
-          <div className="absolute right-4 bottom-4 left-4 lg:right-6 lg:bottom-6 lg:left-auto">
-            {badge}
-          </div>
+      <div className="flex flex-col gap-5">
+        {eyebrow ? (
+          <p className="flex items-center gap-2.5 font-mono text-[0.62rem] font-semibold tracking-[0.18em] text-white/65 uppercase">
+            <span aria-hidden className="h-px w-7 bg-white/60" />
+            {eyebrow}
+          </p>
         ) : null}
+
+        <h1 className="max-w-[24ch] text-[clamp(1.9rem,3.6vw,3rem)] leading-[1] font-semibold tracking-[-0.03em] text-balance text-white">
+          {title}
+        </h1>
+
+        {description ? (
+          <p className="max-w-[58ch] text-[0.95rem] leading-relaxed text-white/75">
+            {description}
+          </p>
+        ) : null}
+
+        {actions ? <div className="flex flex-wrap items-center gap-2.5">{actions}</div> : null}
+
+        {stats ? (
+          <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-white/20 pt-6 sm:grid-cols-4">
+            {stats}
+          </dl>
+        ) : null}
+
+        {badge ? <div className="mt-4 flex justify-end">{badge}</div> : null}
       </div>
-    </section>
+    </SceneBackdrop>
   );
 }
 
@@ -242,10 +183,7 @@ export function SignalRule({ className }: { className?: string }) {
   return (
     <div
       aria-hidden
-      className={cx(
-        "h-px w-full bg-[linear-gradient(90deg,transparent,var(--border-strong),transparent)]",
-        className,
-      )}
+      className={cx("h-px w-full bg-app-border-strong", className)}
     />
   );
 }

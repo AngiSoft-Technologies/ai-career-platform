@@ -1,5 +1,6 @@
 import { scrapeUrl } from "../engine/fetch.js";
 import { query } from "../../db/pool.js";
+import { makeBaseDocument } from "../documents.js";
 import { runAtsVerification } from "./ats-agent.js";
 import { structureResumeText } from "./extract.js";
 import { buildResumeContent, saveStructuredResume } from "./structured.js";
@@ -46,6 +47,7 @@ export async function importLinkedInByUrl(input: {
   );
   const document = inserted.rows[0];
   if (!document) throw new Error("DOCUMENT_CREATE_FAILED");
+  await makeBaseDocument(input.userId, document.id, "cv");
 
   void runAtsVerification({
     userId: input.userId,

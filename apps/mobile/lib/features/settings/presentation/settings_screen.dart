@@ -21,6 +21,7 @@ import '../data/privacy_repository.dart';
 import '../data/settings_repository.dart';
 import '../domain/settings_state.dart';
 import 'privacy_controller.dart';
+import 'privacy_settings_section.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key, this.privacyController, this.biometricLock});
@@ -534,127 +535,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               const SizedBox(height: 14),
-              Semantics(
-                label: 'Privacy controls',
-                child: SectionCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Privacy',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 8),
-                      SwitchListTile.adaptive(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Share anonymous analytics'),
-                        subtitle: const Text(
-                          'Helps us improve rankings and reliability.',
-                        ),
-                        value: _privacy.settings.allowAnalytics,
-                        onChanged: (value) => _privacy.update(
-                          _privacy.settings.copyWith(allowAnalytics: value),
-                        ),
-                      ),
-                      SwitchListTile.adaptive(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Personalised recommendations'),
-                        subtitle: const Text(
-                          'Use your profile and history to rank roles.',
-                        ),
-                        value: _privacy.settings.personalisation,
-                        onChanged: (value) => _privacy.update(
-                          _privacy.settings.copyWith(personalisation: value),
-                        ),
-                      ),
-                      SwitchListTile.adaptive(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Hide screen previews'),
-                        subtitle: const Text(
-                          'Blur the app switcher preview on supported devices.',
-                        ),
-                        value: _privacy.settings.screenshotProtection,
-                        onChanged: (value) => _privacy.update(
-                          _privacy.settings.copyWith(
-                            screenshotProtection: value,
-                          ),
-                        ),
-                      ),
-                      SwitchListTile.adaptive(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Background sync'),
-                        subtitle: const Text(
-                          'Replay queued changes while the app is in the background.',
-                        ),
-                        value: _privacy.backgroundSync,
-                        onChanged: _privacy.setBackgroundSync,
-                      ),
-                      if (_privacy.errorMessage != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Text(
-                            'Privacy settings could not be saved: '
-                            '${_privacy.errorMessage}',
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
-                            ),
-                          ),
-                        ),
-                      if (_privacy.devices.isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          'Signed-in devices',
-                          style: Theme.of(context).textTheme.labelLarge,
-                        ),
-                        for (final device in _privacy.devices)
-                          ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: const Icon(Icons.devices_other_outlined),
-                            title: Text(
-                              '${device.label.isEmpty ? 'Device' : device.label}'
-                              '${device.current ? ' (this device)' : ''}',
-                            ),
-                            subtitle: Text(
-                              device.lastActiveAt == null
-                                  ? 'Last active unknown'
-                                  : 'Last active '
-                                        '${AppFormatters.dateTime(device.lastActiveAt)}',
-                            ),
-                          ),
-                      ],
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          OutlinedButton.icon(
-                            onPressed: _exporting ? null : _exportData,
-                            icon: const Icon(Icons.download_outlined),
-                            label: Text(
-                              _exporting
-                                  ? 'Preparing export…'
-                                  : 'Export my data',
-                            ),
-                          ),
-                          OutlinedButton.icon(
-                            onPressed: _deleteAccount,
-                            icon: Icon(
-                              Icons.delete_forever_outlined,
-                              color: Theme.of(context).colorScheme.error,
-                            ),
-                            label: Text(
-                              'Delete account',
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.error,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
+              PrivacySettingsSection(
+                controller: _privacy,
+                exporting: _exporting,
+                onExport: _exportData,
+                onDeleteAccount: _deleteAccount,
               ),
               const SizedBox(height: 14),
               OutlinedButton.icon(
@@ -690,7 +575,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
     if (resolution == null) return;
-    if (!context.mounted) return;
+    if (!mounted) return;
     await context.read<SyncController>().resolveConflict(
       conflict.idempotencyKey as String,
       resolution,
@@ -759,14 +644,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
     if (confirmed != true) return;
-    if (!context.mounted) return;
+    if (!mounted) return;
     try {
       await context.read<ApiClient>().delete('/v1/me');
-      if (!context.mounted) return;
+      if (!mounted) return;
       await context.read<AuthSession>().signOut();
+      if (!mounted) return;
       context.go('/onboarding');
     } catch (error) {
-      if (!context.mounted) return;
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not delete the account: $error')),
       );

@@ -14,9 +14,11 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from "react";
-import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { createPortal } from "react-dom";
 import { Check, ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { SceneBackdrop } from "@/components/app-scene";
+import { sceneForPath } from "@/lib/app-scenes";
 
 /**
  * The application's component kit.
@@ -245,60 +247,35 @@ export function Page({
   );
 }
 
-/** The words half of a page header. Shared by both header layouts. */
+/** The words half of a page header, always set on the photographic plate. */
 function HeaderCopy({
   eyebrow,
   title,
   description,
   meta,
-  inverse = false,
 }: {
   eyebrow?: string;
   title: string;
   description?: string;
   meta?: ReactNode;
-  inverse?: boolean;
 }) {
   return (
     <>
       {eyebrow ? (
-        <p
-          className={cx(
-            "mb-3 flex items-center gap-2.5 font-mono text-[0.64rem] font-semibold tracking-[0.24em] uppercase",
-            inverse ? "text-white/60" : "text-app-muted",
-          )}
-        >
-          <span
-            aria-hidden
-            className={cx(
-              "h-px w-8",
-              inverse
-                ? "bg-white/60"
-                : "bg-[linear-gradient(90deg,var(--accent),var(--accent-2))]",
-            )}
-          />
+        <p className="flex items-center gap-2.5 font-mono text-[0.62rem] font-semibold tracking-[0.18em] text-white/65 uppercase">
+          <span aria-hidden className="h-px w-7 bg-white/60" />
           {eyebrow}
         </p>
       ) : null}
-      <h1
-        className={cx(
-          "text-[clamp(1.9rem,4vw,2.9rem)] leading-[1] font-semibold tracking-[-0.03em] text-balance",
-          inverse ? "text-white" : "text-app-text",
-        )}
-      >
+      <h1 className="mt-3 max-w-[30ch] text-[clamp(1.9rem,4vw,2.9rem)] leading-[1] font-semibold tracking-[-0.03em] text-balance text-white">
         {title}
       </h1>
       {description ? (
-        <p
-          className={cx(
-            "mt-3 max-w-[52rem] text-[0.95rem] leading-relaxed",
-            inverse ? "text-white/70" : "text-app-soft",
-          )}
-        >
+        <p className="mt-3 max-w-[58ch] text-[0.95rem] leading-relaxed text-white/75">
           {description}
         </p>
       ) : null}
-      {meta ? <div className="mt-4">{meta}</div> : null}
+      {meta ? <div className="mt-4 text-white/80">{meta}</div> : null}
     </>
   );
 }
@@ -317,7 +294,6 @@ export function PageHeader({
   actions,
   meta,
   art,
-  inverse = false,
   className,
 }: {
   eyebrow?: string;
@@ -326,104 +302,22 @@ export function PageHeader({
   actions?: ReactNode;
   meta?: ReactNode;
   art?: { src: string; alt: string; caption?: string };
-  inverse?: boolean;
   className?: string;
 }) {
-  if (art) {
-    return (
-      <header
-        className={cx(
-          "grid gap-6 border-b pb-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)] lg:items-end lg:gap-10 lg:pb-7",
-          inverse ? "border-white/15" : "border-app-border",
-          className,
-        )}
-      >
-        <div className="min-w-0">
-          <HeaderCopy
-            eyebrow={eyebrow}
-            title={title}
-            description={description}
-            meta={meta}
-            inverse={inverse}
-          />
-          {actions ? (
-            <div className="mt-5 flex flex-wrap items-center gap-2">{actions}</div>
-          ) : null}
-        </div>
-        <figure className="relative hidden aspect-[16/9] overflow-hidden rounded-app-lg border border-app-border lg:block">
-          <Image
-            src={art.src}
-            alt={art.alt}
-            fill
-            sizes="(max-width: 1024px) 0px, 380px"
-            className="object-cover object-center"
-          />
-          <div
-            aria-hidden
-            className="absolute inset-0 bg-[linear-gradient(155deg,rgba(7,7,12,0.02)_20%,rgba(7,7,12,0.62)_100%)]"
-          />
-          {art.caption ? (
-            <figcaption className="absolute inset-x-0 bottom-0 p-3 font-mono text-[0.62rem] tracking-[0.14em] text-white/75 uppercase">
-              {art.caption}
-            </figcaption>
-          ) : null}
-        </figure>
-      </header>
-    );
-  }
+  const pathname = usePathname();
+  const scene = art
+    ? { src: art.src, alt: art.alt, caption: art.caption }
+    : sceneForPath(pathname);
 
   return (
-    <header
-      className={cx(
-        "flex flex-col gap-5 border-b pb-6 lg:flex-row lg:items-end lg:justify-between lg:gap-8 lg:pb-7",
-        inverse ? "border-white/15" : "border-app-border",
-        className,
-      )}
-    >
-      <div className="min-w-0">
-        {eyebrow ? (
-          <p
-            className={cx(
-              "mb-3 flex items-center gap-2.5 font-mono text-[0.64rem] font-semibold tracking-[0.24em] uppercase",
-              inverse ? "text-white/60" : "text-app-muted",
-            )}
-          >
-            <span
-              aria-hidden
-              className={cx(
-                "h-px w-8",
-                inverse
-                  ? "bg-white/60"
-                  : "bg-[linear-gradient(90deg,var(--accent),var(--accent-2))]",
-              )}
-            />
-            {eyebrow}
-          </p>
+    <SceneBackdrop scene={scene} priority className={className}>
+      <div className="flex flex-col gap-4">
+        <HeaderCopy eyebrow={eyebrow} title={title} description={description} meta={meta} />
+        {actions ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2">{actions}</div>
         ) : null}
-        <h1
-          className={cx(
-            "text-[clamp(1.9rem,4vw,2.9rem)] leading-[1] font-semibold tracking-[-0.03em] text-balance",
-            inverse ? "text-white" : "text-app-text",
-          )}
-        >
-          {title}
-        </h1>
-        {description ? (
-          <p
-            className={cx(
-              "mt-3 max-w-[52rem] text-[0.95rem] leading-relaxed",
-              inverse ? "text-white/70" : "text-app-soft",
-            )}
-          >
-            {description}
-          </p>
-        ) : null}
-        {meta ? <div className="mt-4">{meta}</div> : null}
       </div>
-      {actions ? (
-        <div className="flex flex-wrap items-center gap-2 lg:shrink-0 lg:pb-1">{actions}</div>
-      ) : null}
-    </header>
+    </SceneBackdrop>
   );
 }
 
@@ -741,7 +635,7 @@ export function ScopeBanner({
   return (
     <div
       className={cx(
-        "flex flex-col gap-4 rounded-app-lg border border-app-accent/25 bg-[linear-gradient(120deg,color-mix(in_srgb,var(--accent)_12%,transparent),transparent_62%)] p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between",
+        "flex flex-col gap-4 rounded-app-lg border border-app-accent/25 bg-app-surface p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between",
         className,
       )}
     >
@@ -882,11 +776,7 @@ export function EmptyState({
   icon?: ReactNode;
 }) {
   return (
-    <div className="relative flex flex-col items-center gap-4 overflow-hidden rounded-app-lg border border-dashed border-app-border-strong/70 px-6 py-16 text-center">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_80%_at_50%_0%,color-mix(in_srgb,var(--accent)_10%,transparent),transparent_70%)]"
-      />
+    <div className="relative flex flex-col items-center gap-4 overflow-hidden rounded-app-lg border border-dashed border-app-border-strong/70 bg-app-surface px-6 py-16 text-center">
       {icon ? (
         <span className="relative grid size-16 place-items-center rounded-app-lg border border-app-border bg-app-surface-2 text-app-accent">
           {icon}
@@ -918,7 +808,7 @@ export function Skeleton({
     <div
       aria-hidden
       className={cx(
-        "animate-app-shimmer rounded-app-sm bg-[linear-gradient(90deg,var(--surface)_25%,var(--surface-2)_50%,var(--surface)_75%)] bg-[length:200%_100%]",
+        "animate-pulse rounded-app-sm bg-app-surface-2",
         className,
       )}
       style={{ height, width }}

@@ -2,15 +2,13 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   ArrowUpRight,
   CheckCircle2,
   FileText,
-  RefreshCw,
   ShieldCheck,
-  Sparkles,
   TriangleAlert,
 } from "lucide-react";
 import {
@@ -27,12 +25,26 @@ import {
   Skeleton,
   useToast,
 } from "@/components/ui";
-import { CompanyMark, HeroSplit } from "@/components/app-art";
+import { HeroSplit } from "@/components/app-art";
 import { JobDescription } from "@/components/job-description";
-import { EmployerFrame } from "@/components/application/employer-frame";
-import { PreparationPanel } from "@/components/application/preparation-panel";
-import { useApi } from "@/lib/hooks";
+import {
+  FitAssessment,
+  HiringCompany,
+  ResumeImprovements,
+  RoleCriteriaSection,
+} from "@/components/discovery/role-sections";
+import {
+  findDefaultResume,
+  fitSummary,
+  resumeSuggestions,
+  roleCriteria,
+  type FitSummary,
+  type RoleCriteria,
+} from "@/components/discovery/role-analysis";
+import { SaveToggle } from "@/components/discovery/save-toggle";
+import { sceneForPath } from "@/lib/app-scenes";
 import { api } from "@/lib/api";
+import { useApi } from "@/lib/hooks";
 import {
   eligibilityLabel,
   eligibilityTone,
@@ -41,20 +53,41 @@ import {
   relativeTime,
   titleCase,
 } from "@/lib/format";
-import type { ApplicationPreparation, Opportunity } from "@/lib/types";
+import type {
+  ApplicationPreparation,
+  JobDocument,
+  Opportunity,
+  Profile,
+} from "@/lib/types";
+import type { SavedOpportunity } from "@angisoft/mboqara-contracts";
 
-interface OpportunityDetail extends Omit<Opportunity, "match"> {
-  match?: {
-    opportunityId?: string;
-    score: number;
-    factors: Record<string, number>;
-    explanation: string;
-    gaps: string[];
-  };
-  riskFlags?: string[];
-  riskAction?: string | null;
-  riskScore?: number;
+interface MatchResponse {
+  match?: Opportunity["match"];
 }
+
+interface ProfileResponse {
+  profile: Profile;
+}
+
+interface DocumentsResponse {
+  documents: JobDocument[];
+}
+
+interface SavedResponse {
+  items: SavedOpportunity[];
+}
+
+const EMPTY_CRITERIA: RoleCriteria = {
+  responsibilities: [],
+  requirements: [],
+  prepared: { responsibilities: false, requirements: false },
+};
+
+const EMPTY_FIT: FitSummary = {
+  strengths: [],
+  weaknesses: [],
+  resume: null,
+};
 
 function OpportunityDetailInner() {
   const params = useParams<{ id: string }>();
@@ -63,16 +96,19 @@ function OpportunityDetailInner() {
   const opportunityId = params.id;
   const [preparation, setPreparation] = useState<ApplicationPreparation | null>(null);
   const [preparationLoading, setPreparationLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [canGoBack, setCanGoBack] = useState(false);
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
 
-  const { data, loading, error } = useApi<OpportunityDetail>(
-    `/opportunities/${opportunityId}`,
+  const { data, loading, error } = useApi<Opportunity>(
+    opportunityId ? `/opportunities/${opportunityId}` : null,
   );
-  const matches = useApi<{ match: OpportunityDetail["match"] }>(
+  const matches = useApi<MatchResponse>(
     opportunityId ? `/matches/${opportunityId}` : null,
-    undefined,
   );
+  const profile = useApi<ProfileResponse>("/profile");
+  const documents = useApi<DocumentsResponse>("/documents", { limit: 100 });
+  const savedQuery = useApi<SavedResponse>("/feed/state/saved", { limit: 200 });
 
   const refreshPreparation = useCallback(async () => {
     try {
@@ -80,34 +116,39 @@ function OpportunityDetailInner() {
         `/applications/prepare/${opportunityId}`,
       );
       setPreparation(response.preparation);
+      return true;
     } catch {
       // A missing preparation is normal before the first queue request.
+      return false;
     }
   }, [opportunityId]);
 
-  const queuePreparation = useCallback(async (refresh = false) => {
-    setPreparationLoading(true);
-    if (refresh) setRefreshing(true);
+  const queuePreparation = useCallback(async () => {
     try {
-      const path = `/applications/prepare/${opportunityId}${refresh ? "/refresh" : ""}`;
-      const response = await api.post<{ preparation: ApplicationPreparation }>(path, {});
-      setPreparation(response.preparation);
-      if (refresh) toast.push("The agent is rebuilding this role’s package", "success");
-    } catch (caught) {
-      toast.push(
-        caught instanceof Error ? caught.message : "Could not start application preparation",
-        "danger",
+      const response = await api.post<{ preparation: ApplicationPreparation }>(
+        `/applications/prepare/${opportunityId}`,
+        {},
       );
-    } finally {
-      setPreparationLoading(false);
-      setRefreshing(false);
+      setPreparation(response.preparation);
+      return true;
+    } catch {
+      return false;
     }
-  }, [opportunityId, toast]);
+  }, [opportunityId]);
 
   useEffect(() => {
-    if (!opportunityId) return;
-    void queuePreparation();
-  }, [opportunityId, queuePreparation]);
+    let cancelled = false;
+    const load = async () => {
+      setPreparationLoading(true);
+      const found = await refreshPreparation();
+      if (!found && !cancelled) await queuePreparation();
+      if (!cancelled) setPreparationLoading(false);
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [opportunityId, refreshPreparation, queuePreparation]);
 
   useEffect(() => {
     if (!preparation || !["QUEUED", "RUNNING"].includes(preparation.status)) return;
@@ -115,7 +156,73 @@ function OpportunityDetailInner() {
     return () => window.clearInterval(timer);
   }, [preparation, refreshPreparation]);
 
-  const openApplicationDesk = async () => {
+  useEffect(() => {
+    // Next.js records its own position in history.state. A bare length check
+    // is fooled by a fresh tab, where "back" would leave the app entirely.
+    const state = window.history.state as { idx?: unknown } | null;
+    const idx = state?.idx;
+    setCanGoBack(typeof idx === "number" ? idx > 0 : window.history.length > 1);
+  }, []);
+
+  useEffect(() => {
+    if (savedQuery.data) {
+      setSavedIds(
+        new Set(savedQuery.data.items.map((entry) => entry.opportunity.id)),
+      );
+    }
+  }, [savedQuery.data]);
+
+  const setSaved = useCallback((id: string, saved: boolean) => {
+    setSavedIds((previous) => {
+      const next = new Set(previous);
+      if (saved) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const resume = useMemo(
+    () => findDefaultResume(documents.data?.documents ?? []),
+    [documents.data],
+  );
+
+  const criteria = useMemo(
+    () => (data ? roleCriteria(data, preparation) : EMPTY_CRITERIA),
+    [data, preparation],
+  );
+
+  const fit = useMemo(
+    () =>
+      data
+        ? fitSummary({
+            profile: profile.data?.profile ?? null,
+            resume,
+            opportunity: data,
+            preparation,
+          })
+        : EMPTY_FIT,
+    [data, profile.data, resume, preparation],
+  );
+
+  const suggestions = useMemo(
+    () =>
+      data
+        ? resumeSuggestions({
+            profile: profile.data?.profile ?? null,
+            resume,
+            opportunity: data,
+            preparation,
+          })
+        : [],
+    [data, profile.data, resume, preparation],
+  );
+
+  const goBack = () => {
+    if (canGoBack) router.back();
+    else router.push("/opportunities");
+  };
+
+  const apply = async () => {
     if (!data) return;
     setStarting(true);
     try {
@@ -178,49 +285,51 @@ function OpportunityDetailInner() {
   }
 
   const match = matches.data?.match ?? data.match;
+  const score = typeof match?.score === "number" ? Math.round(match.score) : null;
   const riskFlags = data.riskFlags ?? [];
   const flagged = data.riskAction && data.riskAction !== "publish";
-  const score = Math.round(match?.score ?? 0);
-  const applicationAction = (
-    <Button loading={starting} onClick={() => void openApplicationDesk()}>
-      Open application desk
-    </Button>
-  );
+  const scene = sceneForPath("/opportunities");
+  const insightsLoading = preparationLoading || profile.loading || documents.loading;
 
   return (
     <Page>
-      <div>
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="inline-flex items-center gap-1.5 font-mono text-[0.66rem] tracking-[0.14em] text-app-muted uppercase transition-colors hover:text-app-soft"
-        >
-          <ArrowLeft size={13} />
-          Back
-        </button>
-      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        icon={<ArrowLeft size={14} />}
+        onClick={goBack}
+        className="self-start"
+      >
+        Go back
+      </Button>
 
       <HeroSplit
-        src="https://cdn1.angisoft.co.ke/mboqara/images/mboqara/careers/technology-professional.webp"
-        alt="A professional at work"
+        src={scene.src}
+        alt={scene.alt}
         priority
         eyebrow={`${data.companyName} · ${data.city ? `${data.city}, ` : ""}${data.country} · ${relativeTime(data.postedAt)}`}
         title={data.title}
-        description={data.skills?.length ? data.skills.slice(0, 10).join(" · ") : undefined}
-        actions={applicationAction}
+        description={
+          data.skills?.length
+            ? `Listed skills: ${data.skills.slice(0, 10).join(" · ")}`
+            : undefined
+        }
+        actions={
+          <>
+            <SaveToggle
+              opportunityId={data.id}
+              saved={savedIds.has(data.id)}
+              onChange={(value) => setSaved(data.id, value)}
+              label={savedIds.has(data.id) ? "Saved" : "Add to wish list"}
+            />
+            <Button loading={starting} onClick={() => void apply()} icon={<ArrowUpRight size={15} />}>
+              Apply
+            </Button>
+          </>
+        }
         stats={
           <>
-            <div>
-              <dt className="font-mono text-[0.6rem] tracking-[0.16em] text-app-muted uppercase">
-                Match
-              </dt>
-              <dd className="mt-1 flex items-baseline gap-1 font-display text-[2.1rem] leading-none font-semibold tracking-[-0.03em] tabular-nums text-app-text">
-                {score}
-                <span className="font-mono text-[0.66rem] font-normal tracking-normal text-app-muted">
-                  /100
-                </span>
-              </dd>
-            </div>
             <div>
               <dt className="font-mono text-[0.6rem] tracking-[0.16em] text-app-muted uppercase">
                 Seniority
@@ -239,10 +348,18 @@ function OpportunityDetailInner() {
             </div>
             <div>
               <dt className="font-mono text-[0.6rem] tracking-[0.16em] text-app-muted uppercase">
-                Salary
+                Eligibility
               </dt>
               <dd className="mt-1 text-[0.92rem] font-medium text-app-text">
-                {formatSalary(data.salaryMin, data.salaryMax, data.currency)}
+                {eligibilityLabel(data.eligibility)}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-mono text-[0.6rem] tracking-[0.16em] text-app-muted uppercase">
+                Posted
+              </dt>
+              <dd className="mt-1 text-[0.92rem] font-medium text-app-text">
+                {formatDate(data.postedAt)}
               </dd>
             </div>
           </>
@@ -256,89 +373,68 @@ function OpportunityDetailInner() {
         }
       />
 
-      <PreparationPanel
-        preparation={preparation}
-        loading={preparationLoading}
-        onRefresh={() => void queuePreparation(true)}
-        action={applicationAction}
-      />
-
       <div className="grid items-start gap-9 lg:grid-cols-[minmax(0,1fr)_minmax(0,320px)]">
         <div className="flex min-w-0 flex-col gap-8">
-          <article className="min-w-0">
-            <div className="mb-4 flex flex-wrap items-end justify-between gap-3 border-b border-app-border pb-3">
-              <div>
-                <p className="font-mono text-[0.62rem] tracking-[0.18em] text-app-muted uppercase">
-                  The role
-                </p>
-                <h2 className="mt-1 text-[1.15rem] leading-tight font-semibold tracking-[-0.015em] text-app-text">
-                  What the employer is asking for
-                </h2>
-              </div>
-              <span className="text-[0.75rem] text-app-muted">
-                Posted {formatDate(data.postedAt)}
-              </span>
-            </div>
-            <JobDescription
-              text={data.description || "No description was provided by the source."}
+          <Panel>
+            <PanelHead
+              eyebrow="The role"
+              title="What the employer is asking for"
+              description="The posting first, then the structured details we could read from it."
             />
-          </article>
-
-          <section>
-            <div className="mb-4 border-b border-app-border pb-3">
-              <p className="font-mono text-[0.62rem] tracking-[0.18em] text-app-muted uppercase">
-                Employer page
-              </p>
-              <h2 className="mt-1 text-[1.15rem] leading-tight font-semibold tracking-[-0.015em] text-app-text">
-                The application stays inside MboQara
-              </h2>
-              <p className="mt-1.5 max-w-[62ch] text-[0.82rem] leading-relaxed text-app-muted">
-                The agent has already read this page. You can see it here while
-                you review the package, answer anything missing, and approve the
-                application.
-              </p>
+            <div className="border-t border-app-border px-5 py-5">
+              <JobDescription
+                text={data.description || "No description was provided by the source."}
+              />
             </div>
-            <EmployerFrame url={data.applyUrl} title={data.title} defaultOpen />
-          </section>
+            <RoleCriteriaSection
+              eyebrow="The work"
+              title="Responsibilities"
+              criteria={criteria}
+              kind="responsibilities"
+            />
+            <RoleCriteriaSection
+              eyebrow="What you need"
+              title="Requirements"
+              criteria={criteria}
+              kind="requirements"
+            />
+          </Panel>
+
+          <HiringCompany opportunity={data} />
         </div>
 
         <aside className="flex flex-col gap-4 lg:sticky lg:top-[92px]">
-          <Panel>
-            <PanelHead eyebrow="Your position" title="Fit and gaps" />
-            <div className="border-t border-app-border px-5 py-4">
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="text-[0.84rem] text-app-soft">Match score</span>
-                <span className="font-display text-[1.55rem] font-semibold tabular-nums text-app-text">
-                  {score}
-                </span>
-              </div>
-              <div className="mt-2">
-                <Meter value={Math.max(0, Math.min(100, score))} />
-              </div>
-              {match?.explanation ? (
-                <p className="mt-3 text-[0.79rem] leading-relaxed text-app-muted">
-                  {match.explanation}
-                </p>
-              ) : null}
-              {(match?.gaps ?? []).length ? (
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {(match?.gaps ?? []).slice(0, 6).map((gap) => (
-                    <Badge key={gap} tone="warning">
-                      {gap}
-                    </Badge>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          </Panel>
+          <FitAssessment fit={fit} loading={insightsLoading} />
+          <ResumeImprovements suggestions={suggestions} />
 
           <Panel>
             <PanelHead eyebrow="The facts" title="At a glance" />
             <Rows className="border-t border-app-border">
               <Row className="grid grid-cols-2 gap-4 px-5 py-3">
-                <Meta label="Salary" value={formatSalary(data.salaryMin, data.salaryMax, data.currency)} />
+                <Meta
+                  label="Match"
+                  value={
+                    score === null ? (
+                      "Not scored"
+                    ) : (
+                      <span className="inline-flex items-baseline gap-1 tabular-nums">
+                        {score}
+                        <span className="font-mono text-[0.62rem] font-normal text-app-muted">
+                          /100
+                        </span>
+                      </span>
+                    )
+                  }
+                />
+                <Meta
+                  label="Salary"
+                  value={
+                    data.salaryMin || data.salaryMax
+                      ? formatSalary(data.salaryMin, data.salaryMax, data.currency)
+                      : "Not stated"
+                  }
+                />
                 <Meta label="Location" value={data.city ? `${data.city}, ${data.country}` : data.country} />
-                <Meta label="Mode" value={titleCase(data.workMode)} />
                 <Meta label="Method" value={titleCase(data.applicationMethod)} />
                 <Meta label="Posted on" value={data.sourceKind ?? titleCase(data.platform)} />
                 <Meta
@@ -347,6 +443,16 @@ function OpportunityDetailInner() {
                 />
               </Row>
             </Rows>
+            {score !== null ? (
+              <div className="border-t border-app-border px-5 py-4">
+                <Meter value={Math.max(0, Math.min(100, score))} />
+                {match?.explanation ? (
+                  <p className="mt-3 text-[0.79rem] leading-relaxed text-app-muted">
+                    {match.explanation}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
           </Panel>
 
           <Panel>
@@ -367,42 +473,22 @@ function OpportunityDetailInner() {
           </Panel>
 
           <Panel>
-            <PanelHead eyebrow="Employer" title={data.companyName} />
-            <div className="border-t border-app-border px-5 py-4">
-              <div className="flex items-center gap-2.5">
-                <CompanyMark name={data.companyName} size={36} />
-                <div className="min-w-0">
-                  <p className="truncate text-[0.86rem] font-medium text-app-text">
-                    {data.companyName}
-                  </p>
-                  <p className="truncate text-[0.72rem] text-app-muted">
-                    {data.companyWebsite ?? "No website listed"}
-                  </p>
-                </div>
-              </div>
-              <Link href={`/companies/${data.companySlug}`} className="mt-3 block">
-                <Button variant="ghost" size="sm" icon={<ArrowUpRight size={13} />} className="w-full">
-                  Company intelligence
-                </Button>
-              </Link>
-            </div>
-          </Panel>
-
-          <Panel>
             <PanelHead eyebrow="Trust" title="Posting assessment" />
             <div className="border-t border-app-border px-5 py-4">
               <div className="flex items-center gap-2">
                 {riskFlags.length ? (
-                  <TriangleAlert size={15} className="text-app-warning" />
+                  <TriangleAlert size={15} className="text-app-warning" aria-hidden />
                 ) : (
-                  <CheckCircle2 size={15} className="text-app-success" />
+                  <CheckCircle2 size={15} className="text-app-success" aria-hidden />
                 )}
                 <span className="text-[0.82rem] font-medium text-app-text">
                   {riskFlags.length ? `${riskFlags.length} signal${riskFlags.length === 1 ? "" : "s"}` : "No risk signals"}
                 </span>
               </div>
               <p className="mt-2 text-[0.76rem] leading-relaxed text-app-muted">
-                Risk score {Math.round(data.riskScore ?? 0)}/100 · decision {titleCase(data.riskAction ?? "publish")}
+                {typeof data.riskScore === "number"
+                  ? `Risk score ${Math.round(data.riskScore)}/100 · decision ${titleCase(data.riskAction ?? "publish")}`
+                  : "No risk score was recorded for this posting."}
               </p>
               {riskFlags.slice(0, 3).map((flag) => (
                 <p key={flag} className="mt-1.5 text-[0.75rem] leading-relaxed text-app-soft">
@@ -414,7 +500,7 @@ function OpportunityDetailInner() {
 
           <Link href="/documents" className="block">
             <Button variant="outline" className="w-full" icon={<FileText size={14} />}>
-              Your source documents
+              Your document library
             </Button>
           </Link>
         </aside>
@@ -425,5 +511,9 @@ function OpportunityDetailInner() {
 
 export default function OpportunityDetailPage() {
   const params = useParams<{ id: string }>();
-  return <OpportunityDetailInner key={params.id} />;
+  return (
+    <Suspense fallback={<Skeleton height={320} />}>
+      <OpportunityDetailInner key={params.id} />
+    </Suspense>
+  );
 }

@@ -11,7 +11,16 @@ export interface OpportunityFilters {
   workMode?: string;
   employmentType?: string;
   seniority?: string;
+  /** Profession taxonomy slug; descendants of that profession count too. */
+  profession?: string;
   eligibility?: Eligibility;
+  /** Earliest `posted_at` to include (ISO timestamp), used by the daily feed. */
+  postedSince?: string;
+  /**
+   * Minimum computed match score. Applied after ranking, never in the shared
+   * feed clauses: `score` is derived, not a column on `opportunities`.
+   */
+  minScore?: number;
   limit?: number;
   /** How many rows to skip. Pagination for a catalogue of a thousand roles. */
   offset?: number;
@@ -139,7 +148,9 @@ export function mapOpportunity(row: OpportunityRow): Opportunity {
   };
 }
 
-export const opportunitySelect = `
+/** The catalogue columns, with the FROM clause supplied by the caller. */
+export function opportunitySelectFrom(fromClause: string): string {
+  return `
   SELECT o.id, o.company_id, c.name AS company_name, c.slug AS company_slug,
     c.website AS company_website, o.title, o.description, o.country, o.city,
     o.work_mode, o.seniority, o.employment_type, o.salary_min, o.salary_max,
@@ -147,10 +158,15 @@ export const opportunitySelect = `
     o.expires_at, o.status, o.eligibility, o.eligibility_reasons,
     o.risk_score, o.risk_action, o.risk_flags,
     COALESCE(array_agg(os.skill ORDER BY os.skill) FILTER (WHERE os.skill IS NOT NULL), '{}') AS skills
+  ${fromClause}
+`;
+}
+
+export const opportunitySelect = opportunitySelectFrom(`
   FROM opportunities o
   JOIN companies c ON c.id = o.company_id
   LEFT JOIN opportunity_skills os ON os.opportunity_id = o.id
-`;
+`);
 
 /**
  * The WHERE clause for the feed, shared by the list and the count.
@@ -206,6 +222,36 @@ export function opportunityFeedClauses(filters: OpportunityFilters): {
     values.push(filters.eligibility);
     clauses.push(`o.eligibility = $${values.length}`);
   }
+  if (filters.profession) {
+    // EXISTS keeps this a filter rather than another row source: joining the
+    // taxonomy directly would duplicate an opportunity tagged with both a
+    // parent and a child profession, and the count would drift from the list.
+    values.push(filters.profession);
+    clauses.push(`EXISTS (
+      SELECT 1
+        FROM opportunity_professions op
+        JOIN profession_taxonomy pt ON pt.id = op.profession_id
+       WHERE op.opportunity_id = o.id
+         AND (
+           pt.slug = $${values.length}
+           OR EXISTS (
+             SELECT 1
+               FROM profession_closure pc
+               JOIN profession_taxonomy child ON child.id = pc.descendant
+              WHERE pc.ancestor = pt.id
+                AND child.slug = $${values.length}
+           )
+         )
+    )`);
+  }
+  if (filters.postedSince) {
+    values.push(filters.postedSince);
+    clauses.push(`o.posted_at >= $${values.length}::timestamptz`);
+  }
+
+  // `minScore` is intentionally absent: the score is computed later by the
+  // ranking query, so putting it here would either be invalid SQL or make
+  // the unranked list/count disagree with what the feed can actually show.
 
   return { clauses, values };
 }

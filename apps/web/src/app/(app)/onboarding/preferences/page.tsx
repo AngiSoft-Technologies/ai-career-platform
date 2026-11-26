@@ -26,6 +26,8 @@ import {
   cx,
   useToast,
 } from "@/components/ui";
+import { SceneBackdrop } from "@/components/app-scene";
+import { sceneForPath } from "@/lib/app-scenes";
 import { api } from "@/lib/api";
 import { useOnboarding } from "@/lib/hooks";
 import { takeOnboardingPath } from "@/lib/onboarding";
@@ -146,24 +148,25 @@ function OnboardingPreferencesInner() {
 
   return (
     <Page className="mx-auto max-w-[860px]">
-      <header className="text-center">
-        <p className="inline-flex items-center gap-2 font-mono text-[0.62rem] font-semibold tracking-[0.24em] text-app-muted uppercase">
-          <span
-            aria-hidden
-            className="h-px w-8 bg-[linear-gradient(90deg,var(--accent),var(--accent-2))]"
-          />
-          <MapPin size={13} /> Almost there
+      <SceneBackdrop
+        scene={sceneForPath("/onboarding")}
+        priority
+        minHeight="clamp(240px, 26vw, 320px)"
+      >
+        <p className="flex items-center gap-2.5 font-mono text-[0.62rem] font-semibold tracking-[0.18em] text-white/65 uppercase">
+          <MapPin size={13} aria-hidden />
+          Almost there
         </p>
-        <h1 className="mt-4 text-[clamp(1.8rem,5vw,2.7rem)] leading-[1.02] font-semibold tracking-[-0.03em] text-balance text-app-text">
+        <h1 className="mt-3 max-w-[26ch] text-[clamp(1.8rem,5vw,2.7rem)] leading-[1.02] font-semibold tracking-[-0.03em] text-balance text-white">
           How should we match you?
         </h1>
-        <p className="mx-auto mt-3 max-w-[54ch] text-[1rem] leading-relaxed text-app-muted">
+        <p className="mt-3 max-w-[54ch] text-[0.92rem] leading-relaxed text-white/75">
           This decides the order roles appear in — nearby first, then same
           country, then continent, then remote.
         </p>
 
         {/* The stepper. Three steps, one done, one here, one to go. */}
-        <ol className="mx-auto mt-7 flex max-w-[520px] items-center justify-center gap-2 text-[0.74rem]">
+        <ol className="mt-7 flex max-w-[520px] items-center gap-2 text-[0.74rem]">
           {[
             { label: "Resume", state: "done" },
             { label: "Preferences", state: "current" },
@@ -174,10 +177,10 @@ function OnboardingPreferencesInner() {
                 className={cx(
                   "grid size-6 place-items-center rounded-full border font-mono text-[0.66rem] font-semibold",
                   step.state === "done"
-                    ? "border-app-success/40 bg-app-success/12 text-app-success"
+                    ? "border-app-success/50 bg-app-success/20 text-white"
                     : step.state === "current"
-                      ? "border-app-accent bg-app-accent text-app-accent-contrast"
-                      : "border-app-border text-app-muted",
+                      ? "border-white bg-white text-[#07070c]"
+                      : "border-white/40 text-white/70",
                 )}
               >
                 {step.state === "done" ? "✓" : index + 1}
@@ -185,21 +188,18 @@ function OnboardingPreferencesInner() {
               <span
                 className={cx(
                   "font-medium",
-                  step.state === "current" ? "text-app-text" : "text-app-muted",
+                  step.state === "current" ? "text-white" : "text-white/65",
                 )}
               >
                 {step.label}
               </span>
               {index < 2 ? (
-                <span
-                  aria-hidden
-                  className="h-px w-8 bg-app-border sm:w-12"
-                />
+                <span aria-hidden className="h-px w-8 bg-white/35 sm:w-12" />
               ) : null}
             </li>
           ))}
         </ol>
-      </header>
+      </SceneBackdrop>
 
       {loadFailed ? (
         <div

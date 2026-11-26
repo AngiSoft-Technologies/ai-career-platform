@@ -3,7 +3,7 @@ import {
   DEFAULT_COVER_LETTER_TEMPLATE_KEY,
   DEFAULT_RESUME_TEMPLATE_KEY,
 } from "@angisoft/mboqara-contracts";
-import { query } from "../db/pool.js";
+import { query, withTransaction } from "../db/pool.js";
 import { getOpportunity } from "./opportunities.js";
 import { getProfile } from "./profile.js";
 import { runDocumentTailoringAgent, type TailoringProposal } from "./documents/tailoring-agent.js";
@@ -22,6 +22,7 @@ interface DocumentRow {
   application_id: string | null;
   opportunity_id: string | null;
   parent_document_id?: string | null;
+  is_base?: boolean;
   type: DocumentType;
   title: string;
   content: string;
@@ -271,7 +272,7 @@ export async function listDocuments(
 
   const [items, counted] = await Promise.all([
     query<DocumentRow>(
-      `SELECT id, application_id, opportunity_id, parent_document_id, type, title${
+      `SELECT id, application_id, opportunity_id, parent_document_id, is_base, type, title${
         includeContent ? ", content" : ", ''::text AS content"
       }
        FROM documents
@@ -293,12 +294,36 @@ export async function listDocuments(
       applicationId: row.application_id ?? undefined,
       opportunityId: row.opportunity_id ?? "",
       parentDocumentId: row.parent_document_id ?? undefined,
+      isBase: row.is_base ?? undefined,
       type: row.type,
       title: row.title,
       content: row.content,
     })),
     total: Number(counted.rows[0]?.count ?? 0),
   };
+}
+
+/**
+ * A newly uploaded or imported resume becomes the source all tailored copies
+ * are derived from. Only one document of a type can hold that role.
+ */
+export async function makeBaseDocument(
+  userId: string,
+  documentId: string,
+  type: "cv" | "cover_letter" = "cv",
+): Promise<void> {
+  await withTransaction(async (client) => {
+    await client.query(
+      `UPDATE documents SET is_base = false
+        WHERE user_id = $1 AND type = $2 AND is_base = true`,
+      [userId, type],
+    );
+    await client.query(
+      `UPDATE documents SET is_base = true
+        WHERE id = $1 AND user_id = $2 AND type = $3`,
+      [documentId, userId, type],
+    );
+  });
 }
 
 export async function generateDocumentFromProfile(input: {
@@ -331,6 +356,7 @@ export async function generateDocumentFromProfile(input: {
   );
   const row = inserted.rows[0];
   if (!row) throw new Error("DOCUMENT_CREATE_FAILED");
+  await makeBaseDocument(userId, row.id, type);
 
   return {
     id: row.id,
@@ -338,6 +364,7 @@ export async function generateDocumentFromProfile(input: {
       id: row.id,
       applicationId: row.application_id ?? undefined,
       opportunityId: row.opportunity_id ?? "",
+      isBase: true,
       type: row.type,
       title: row.title,
       content: row.content,

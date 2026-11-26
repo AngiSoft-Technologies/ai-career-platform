@@ -1,9 +1,53 @@
+import type { DailyMatchesResponse } from "@angisoft/mboqara-contracts";
 import { Router } from "express";
 import { z } from "zod";
 import { query } from "../db/pool.js";
 import { rankedOpportunities, calculateMatch } from "../services/matching.js";
 
 export const matchesRouter = Router();
+
+/**
+ * The five roles a candidate can apply to today.
+ *
+ * "Qualified" is deliberately strict: the posting is active and published,
+ * the posting itself says the candidate is eligible (NULL is not a yes), and
+ * the candidate's match score is at least 60. The window is the UTC calendar
+ * day named in the response, so yesterday's late posts do not leak into the
+ * next day. The same shared feed clauses that hide held/rejected postings
+ * apply here.
+ */
+matchesRouter.get("/daily", async (request, response, next) => {
+  try {
+    const userId = response.locals.userId as string;
+    const now = new Date();
+    const postedSince = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+    ).toISOString();
+
+    const page = await rankedOpportunities(userId, {
+      eligibility: "eligible",
+      postedSince,
+      minScore: 60,
+      orderByScore: true,
+      limit: 5,
+      offset: 0,
+    });
+
+    // The threshold is applied in SQL; this guard keeps the contract true even
+    // if a semantic ranking later changes how the score is rounded.
+    const items = page.items
+      .filter((item) => item.match.score >= 60)
+      .slice(0, 5);
+    const payload: DailyMatchesResponse = {
+      date: now.toISOString().slice(0, 10),
+      items,
+      total: items.length,
+    };
+    response.json(payload);
+  } catch (error) {
+    next(error);
+  }
+});
 
 matchesRouter.get("/", async (request, response, next) => {
   try {

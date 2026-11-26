@@ -14,6 +14,7 @@ import {
   Activity,
   BadgeCheck,
   Bell,
+  Bookmark,
   Briefcase,
   ChevronLeft,
   ChevronRight,
@@ -88,6 +89,7 @@ const ROLE_NAV: Record<RoleKey, NavItem[]> = {
   job_seeker: [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["job_seeker"], group: "Overview" },
     { href: "/opportunities", label: "Opportunities", icon: Compass, roles: ["job_seeker"], group: "Overview" },
+    { href: "/saved", label: "Saved roles", icon: Bookmark, roles: ["job_seeker"], group: "Overview" },
     { href: "/matches", label: "Matches", icon: Sparkles, roles: ["job_seeker"], group: "Overview" },
     { href: "/applications", label: "Applications", icon: Briefcase, roles: ["job_seeker"], group: "Work" },
     { href: "/documents", label: "Documents", icon: FileText, roles: ["job_seeker"], group: "Work" },
@@ -394,7 +396,7 @@ export function AppShell({
     >
       {/* Desktop rail. It fills its grid track, so the track is the single
           source of truth for how wide it is. */}
-      <aside className="sticky top-0 hidden h-dvh flex-col overflow-hidden border-r border-app-border bg-[linear-gradient(180deg,color-mix(in_srgb,var(--bg-elevated)_92%,transparent),var(--bg))] backdrop-blur-xl lg:flex">
+      <aside className="sticky top-0 hidden h-dvh flex-col overflow-hidden border-r border-app-border bg-app-elevated lg:flex">
         <Sidebar
           nav={nav}
           pathname={pathname}
@@ -496,7 +498,7 @@ function Sidebar({
           className="flex min-w-0 items-center gap-2.5"
           aria-label="MboQara home"
         >
-          <span className="relative grid size-8 shrink-0 place-items-center rounded-[10px] bg-[linear-gradient(140deg,var(--accent),var(--accent-2))] shadow-[0_6px_18px_color-mix(in_srgb,var(--accent)_38%,transparent)]">
+          <span className="relative grid size-8 shrink-0 place-items-center rounded-[10px] bg-app-accent">
             <img src={`${CDN_URL}/brand/logo-mark.png`} alt="" width={20} height={20} className="size-5" />
           </span>
           {collapsed ? null : (
@@ -629,7 +631,7 @@ function NavLink({
         nested ? "px-2 py-1.5" : "px-2.5 py-[7px]",
         collapsed && "justify-center px-0 py-2",
         active
-          ? "bg-[linear-gradient(90deg,color-mix(in_srgb,var(--accent)_18%,transparent),color-mix(in_srgb,var(--accent)_5%,transparent))] font-medium text-app-text"
+          ? "bg-app-accent-soft font-medium text-app-text"
           : "font-normal text-app-soft hover:bg-app-surface-2 hover:text-app-text",
       )}
     >
@@ -637,7 +639,7 @@ function NavLink({
         <span
           aria-hidden
           className={cx(
-            "absolute top-1/2 left-0 h-5 w-[2.5px] -translate-y-1/2 rounded-full bg-[linear-gradient(180deg,var(--accent),var(--accent-2))]",
+            "absolute top-1/2 left-0 h-5 w-[2.5px] -translate-y-1/2 rounded-full bg-app-accent",
             nested && "left-[-13px] h-3.5",
           )}
         />

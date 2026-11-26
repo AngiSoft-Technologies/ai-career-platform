@@ -4,17 +4,13 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ArrowUpRight,
-  Building2,
-  CalendarClock,
-  Compass,
+  Bookmark,
   Globe,
   LayoutGrid,
   ListFilter,
   RefreshCw,
   SlidersHorizontal,
   Sparkles,
-  Wallet,
   X,
 } from "lucide-react";
 import {
@@ -33,17 +29,14 @@ import {
   SearchInput,
   SegmentedControl,
   Skeleton,
-  cx,
 } from "@/components/ui";
-import { CompanyMark, EmptySearchArt } from "@/components/app-art";
+import { EmptySearchArt } from "@/components/app-art";
+import { OpportunityRow } from "@/components/discovery/opportunity-row";
+import { ProfessionFilter } from "@/components/discovery/profession-filter";
+import { sceneForPath } from "@/lib/app-scenes";
 import { useApi, useDebounced } from "@/lib/hooks";
-import {
-  eligibilityLabel,
-  eligibilityTone,
-  formatSalary,
-  relativeTime,
-  titleCase,
-} from "@/lib/format";
+import { titleCase } from "@/lib/format";
+import type { ProfessionFacet, SavedOpportunity } from "@angisoft/mboqara-contracts";
 import type { Opportunity, Profile } from "@/lib/types";
 
 interface OpportunitiesResponse {
@@ -56,6 +49,11 @@ interface FacetsResponse {
   workModes: Array<{ workMode: string; count: number }>;
   seniorities: Array<{ seniority: string; count: number }>;
   employmentTypes: Array<{ employmentType: string; count: number }>;
+  professions?: ProfessionFacet[];
+}
+
+interface SavedResponse {
+  items: SavedOpportunity[];
 }
 
 interface ProfileResponse {
@@ -89,24 +87,10 @@ const EMPLOYMENT_TYPES = [
 ] as const;
 
 /**
- * The feed of every role the platform monitors, ranked for the person
- * looking at it.
- *
- * Two views of the same catalogue:
- *
- *   • "Best match" ranks every opening against the profile and applies the
- *     candidate's own constraints — employment type, geography, and the
- *     remote-only preference. That is the useful default, but it is also a
- *     filtered set, and a filtered set that says nothing about its own
- *     filter reads as an empty platform. The scope banner names the
- *     constraints and offers the whole catalogue in one click.
- *
- *   • "All roles" pages through the entire catalogue, unranked and
- *     unfiltered by the profile, for someone who wants to see the market
- *     rather than the shortlist.
- *
- * Filters live in the URL, so a search can be shared and the back button
- * works.
+ * The whole catalogue, newest first. Ranking is an optional second view:
+ * useful for a final shortlist, but not what someone sees when they arrive
+ * to find work. Filters live in the URL so a search can be shared and the
+ * back button works.
  */
 function OpportunitiesPageInner() {
   const router = useRouter();
@@ -119,22 +103,19 @@ function OpportunitiesPageInner() {
     params.get("employmentType") ?? "",
   );
   const [seniority, setSeniority] = useState(params.get("seniority") ?? "");
+  const [profession, setProfession] = useState(params.get("profession") ?? "");
   const [eligibility, setEligibility] = useState(params.get("eligibility") ?? "");
   const [semantic, setSemantic] = useState(params.get("semantic") === "true");
-  // "ranked" pages the profile-matched feed; "all" pages the whole
-  // catalogue. The default is ranked, because that is the point of the
-  // product, but it is one click away from the alternative and the banner
-  // says so.
-  const [ranked, setRanked] = useState(params.get("ranked") !== "false");
+  // The full catalogue is the default. Ranking is a deliberate second step.
+  const [ranked, setRanked] = useState(params.get("ranked") === "true");
   const [page, setPage] = useState(Number(params.get("page") ?? 1) || 1);
   const [pageSize, setPageSize] = useState(Number(params.get("size") ?? 24) || 24);
   const [compact, setCompact] = useState(params.get("view") === "compact");
   const [showFilters, setShowFilters] = useState(false);
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
 
   const debounced = useDebounced(search, 350);
 
-  // The filters and the page live in the URL: a search is a thing people
-  // share, and the back button has to work.
   useEffect(() => {
     const next = new URLSearchParams();
     if (debounced) next.set("q", debounced);
@@ -142,9 +123,10 @@ function OpportunitiesPageInner() {
     if (workMode) next.set("workMode", workMode);
     if (employmentType) next.set("employmentType", employmentType);
     if (seniority) next.set("seniority", seniority);
+    if (profession) next.set("profession", profession);
     if (eligibility) next.set("eligibility", eligibility);
     if (semantic) next.set("semantic", "true");
-    if (!ranked) next.set("ranked", "false");
+    if (ranked) next.set("ranked", "true");
     if (compact) next.set("view", "compact");
     if (pageSize !== 24) next.set("size", String(pageSize));
     if (page > 1) next.set("page", String(page));
@@ -160,6 +142,7 @@ function OpportunitiesPageInner() {
     employmentType,
     page,
     pageSize,
+    profession,
     ranked,
     router,
     semantic,
@@ -174,6 +157,7 @@ function OpportunitiesPageInner() {
       workMode: workMode || undefined,
       employmentType: employmentType || undefined,
       seniority: seniority || undefined,
+      profession: profession || undefined,
       eligibility: eligibility || undefined,
       semantic: semantic ? "true" : undefined,
       ranked: ranked ? "true" : "false",
@@ -186,6 +170,7 @@ function OpportunitiesPageInner() {
       workMode,
       employmentType,
       seniority,
+      profession,
       eligibility,
       semantic,
       ranked,
@@ -198,14 +183,23 @@ function OpportunitiesPageInner() {
     useApi<OpportunitiesResponse>("/opportunities", query);
   const facets = useApi<FacetsResponse>("/opportunities/facets");
   const profile = useApi<ProfileResponse>("/profile");
+  const savedQuery = useApi<SavedResponse>("/feed/state/saved", { limit: 200 });
+
+  useEffect(() => {
+    if (savedQuery.data) {
+      setSavedIds(
+        new Set(savedQuery.data.items.map((entry) => entry.opportunity.id)),
+      );
+    }
+  }, [savedQuery.data]);
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
-  const pages = Math.max(1, Math.ceil(total / pageSize));
   const profileValue = profile.data?.profile;
+  const professions = facets.data?.professions ?? [];
+  const professionLabel =
+    professions.find((entry) => entry.slug === profession)?.name ?? profession;
 
-  // A filter change invalidates the page: page nine of the old result set
-  // is not page nine of the new one.
   const setFilter = useCallback(
     (setter: (value: string) => void, value: string) => {
       setter(value);
@@ -214,7 +208,20 @@ function OpportunitiesPageInner() {
     [],
   );
 
+  const updateSaved = useCallback((id: string, saved: boolean) => {
+    setSavedIds((previous) => {
+      const next = new Set(previous);
+      if (saved) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+
   const activeFilters = [
+    profession && {
+      label: `Profession: ${professionLabel}`,
+      clear: () => setFilter(setProfession, ""),
+    },
     country && { label: country, clear: () => setFilter(setCountry, "") },
     workMode && {
       label: titleCase(workMode),
@@ -243,14 +250,14 @@ function OpportunitiesPageInner() {
     setWorkMode("");
     setSeniority("");
     setEmploymentType("");
+    setProfession("");
     setEligibility("");
     setSemantic(false);
     setPage(1);
   };
 
-  // The constraints the ranked feed is silently applying. Naming them is the
-  // difference between "five roles" and "five roles that fit your profile,
-  // out of thirty-nine thousand".
+  // The constraints the ranked view applies silently. Naming them prevents a
+  // short list from reading as an empty platform.
   const scopeConstraints = useMemo(() => {
     if (!profileValue) return [];
     const entries: Array<{ label: string; value: string }> = [];
@@ -285,6 +292,13 @@ function OpportunitiesPageInner() {
 
   const filters = (
     <div className="flex flex-col gap-6">
+      <ProfessionFilter
+        professions={professions}
+        value={profession}
+        loading={facets.loading}
+        onChange={(value) => setFilter(setProfession, value)}
+      />
+
       <FilterGroup label="Work mode">
         <div className="flex flex-col gap-0.5">
           {WORK_MODES.map((mode) => (
@@ -378,22 +392,25 @@ function OpportunitiesPageInner() {
     </div>
   );
 
+  const scene = sceneForPath("/opportunities");
+
   return (
     <Page>
       <PageHeader
         eyebrow="Discovery"
         title="Opportunities"
-        description="Every opening we monitor, ranked against your profile. Narrow the catalogue with filters, then work through it a page at a time."
-        art={{
-          src: "https://cdn1.angisoft.co.ke/mboqara/images/mboqara/careers/lagos-career-story.webp",
-          alt: "A candidate researching roles from a cafe table",
-          caption: "Ranked against your profile",
-        }}
+        description="Every opening we monitor, newest first. Filter by profession, country and work mode, then save the roles worth a closer look."
+        art={{ src: scene.src, alt: scene.alt, caption: scene.caption }}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {offline ? <Badge tone="warning" dot>Offline cache</Badge> : null}
+            <Link href="/saved">
+              <Button variant="outline" size="sm" icon={<Bookmark size={14} />}>
+                Saved roles
+              </Button>
+            </Link>
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
               icon={<RefreshCw size={14} />}
               onClick={refresh}
@@ -411,7 +428,7 @@ function OpportunitiesPageInner() {
           constraints={scopeConstraints}
           action={
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
               icon={<Globe size={14} />}
               onClick={() => {
@@ -419,14 +436,12 @@ function OpportunitiesPageInner() {
                 setPage(1);
               }}
             >
-              Browse the whole catalogue
+              Show the whole catalogue
             </Button>
           }
         >
-          Your ranked feed applies the filters in your profile — where you are
-          based, the contract types you will take, and whether you only work
-          remotely. Switch to the full catalogue to see every opening we
-          monitor, ranked by date instead.
+          This is a ranked shortlist. Your profile's location, contract type and
+          remote preference narrow the catalogue before ranking.
         </ScopeBanner>
       ) : (
         <ScopeBanner
@@ -442,13 +457,12 @@ function OpportunitiesPageInner() {
                 setPage(1);
               }}
             >
-              Back to ranked for me
+              Best match
             </Button>
           }
         >
-          You are looking at every opening we monitor, newest first, without
-          the profile filters applied. Turn ranking back on to see only the
-          roles that fit your skills, location and seniority.
+          You are seeing every opening we monitor, newest first, without profile
+          filters. Best match is a separate shortlist you can switch to at any time.
         </ScopeBanner>
       )}
 
@@ -476,22 +490,16 @@ function OpportunitiesPageInner() {
               Filters{activeFilters.length ? ` (${activeFilters.length})` : ""}
             </Button>
             <SegmentedControl
-              label="Sort"
+              label="View"
               size="sm"
-              value={ranked ? "rank" : "semantic"}
+              value={ranked ? "rank" : "all"}
               onChange={(value) => {
-                if (value === "rank") {
-                  setRanked(true);
-                  setSemantic(false);
-                } else {
-                  setRanked(false);
-                  setSemantic(false);
-                }
+                setRanked(value === "rank");
                 setPage(1);
               }}
               options={[
+                { value: "all", label: "All roles" },
                 { value: "rank", label: "Best match" },
-                { value: "semantic", label: "All roles" },
               ]}
             />
             <SegmentedControl
@@ -500,8 +508,14 @@ function OpportunitiesPageInner() {
               value={compact ? "compact" : "comfortable"}
               onChange={(value) => setCompact(value === "compact")}
               options={[
-                { value: "comfortable", label: <ListFilter size={13} aria-label="Comfortable rows" /> },
-                { value: "compact", label: <LayoutGrid size={13} aria-label="Compact rows" /> },
+                {
+                  value: "comfortable",
+                  label: <ListFilter size={13} aria-label="Comfortable rows" />,
+                },
+                {
+                  value: "compact",
+                  label: <LayoutGrid size={13} aria-label="Compact rows" />,
+                },
               ]}
             />
           </div>
@@ -560,7 +574,7 @@ function OpportunitiesPageInner() {
             <EmptyState
               icon={<EmptySearchArt />}
               title="No roles matched"
-              description="Try widening the filters, switch to the full catalogue, or tell us a board we are missing and we will add it to monitoring."
+              description="Try widening the filters, or tell us a board we are missing and we will add it to monitoring."
               action={
                 <div className="flex flex-wrap items-center justify-center gap-2">
                   {activeFilters.length > 0 ? (
@@ -572,12 +586,13 @@ function OpportunitiesPageInner() {
                     <Button size="sm" onClick={() => setRanked(false)}>
                       Browse all roles
                     </Button>
-                  ) : null}
-                  <Link href="/sources">
-                    <Button size="sm" variant="ghost">
-                      Suggest a source
-                    </Button>
-                  </Link>
+                  ) : (
+                    <Link href="/sources">
+                      <Button size="sm" variant="ghost">
+                        Suggest a source
+                      </Button>
+                    </Link>
+                  )}
                 </div>
               }
             />
@@ -586,7 +601,14 @@ function OpportunitiesPageInner() {
               <Panel className="overflow-visible">
                 <ul className="divide-y divide-app-border">
                   {items.map((item) => (
-                    <OpportunityRow key={item.id} item={item} compact={compact} ranked={ranked} />
+                    <OpportunityRow
+                      key={item.id}
+                      item={item}
+                      compact={compact}
+                      saved={savedIds.has(item.id)}
+                      showScore={ranked}
+                      onSavedChange={(value) => updateSaved(item.id, value)}
+                    />
                   ))}
                 </ul>
               </Panel>
@@ -607,138 +629,6 @@ function OpportunitiesPageInner() {
         </div>
       </div>
     </Page>
-  );
-}
-
-function OpportunityRow({
-  item,
-  compact,
-  ranked,
-}: {
-  item: Opportunity;
-  compact: boolean;
-  ranked: boolean;
-}) {
-  const score = item.match?.score;
-  const risk = item.riskScore ?? null;
-
-  return (
-    <li>
-      <Link
-        href={`/opportunities/${item.id}`}
-        className={cx(
-          "group flex items-start gap-4 transition-colors duration-150 hover:bg-app-surface-2/50",
-          compact ? "px-4 py-3" : "px-5 py-4",
-        )}
-      >
-        <CompanyMark
-          name={item.companyName}
-          size={compact ? 38 : 46}
-          className="rounded-app-md"
-        />
-
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <h3
-              className={cx(
-                "font-medium tracking-[-0.012em] text-app-text transition-colors duration-150 group-hover:text-app-accent",
-                compact ? "text-[0.9rem]" : "text-[1rem]",
-              )}
-            >
-              {item.title}
-            </h3>
-            {risk !== null && risk >= 60 ? (
-              <Badge tone="danger">Risk {Math.round(risk)}</Badge>
-            ) : null}
-            {item.eligibility && item.eligibility !== "unknown" ? (
-              <Badge tone={eligibilityTone(item.eligibility)}>
-                {eligibilityLabel(item.eligibility)}
-              </Badge>
-            ) : null}
-          </div>
-
-          <p className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[0.8rem] text-app-soft">
-            <span className="inline-flex items-center gap-1.5 font-medium">
-              <Building2 size={12} className="text-app-muted" />
-              {item.companyName}
-            </span>
-            <span aria-hidden className="text-app-muted/60">
-              ·
-            </span>
-            <span className="inline-flex items-center gap-1.5 text-app-muted">
-              <Globe size={12} />
-              {item.city ? `${item.city}, ` : ""}
-              {item.country}
-            </span>
-            {item.salaryMin || item.salaryMax ? (
-              <>
-                <span aria-hidden className="text-app-muted/60">
-                  ·
-                </span>
-                <span className="inline-flex items-center gap-1.5 font-mono text-[0.74rem] text-app-muted">
-                  <Wallet size={12} />
-                  {formatSalary(item.salaryMin, item.salaryMax, item.currency)}
-                </span>
-              </>
-            ) : null}
-          </p>
-
-          {!compact ? (
-            <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-              <Badge tone="neutral">{titleCase(item.seniority)}</Badge>
-              <Badge tone="info">{titleCase(item.workMode)}</Badge>
-              {item.employmentType ? (
-                <Badge tone="neutral">{titleCase(item.employmentType)}</Badge>
-              ) : null}
-              {item.skills?.slice(0, 4).map((skill) => (
-                <span
-                  key={skill}
-                  className="rounded-app-sm border border-app-border bg-app-surface-2/40 px-1.5 py-0.5 text-[0.7rem] text-app-muted"
-                >
-                  {skill}
-                </span>
-              ))}
-              {item.skills && item.skills.length > 4 ? (
-                <span className="text-[0.7rem] text-app-muted">
-                  +{item.skills.length - 4}
-                </span>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-
-        <div className="flex shrink-0 flex-col items-end gap-1 pl-2">
-          {ranked && typeof score === "number" ? (
-            <>
-              <span
-                className={cx(
-                  "font-display font-semibold tabular-nums text-app-text",
-                  compact ? "text-[1.25rem] leading-none" : "text-[1.55rem] leading-none",
-                )}
-              >
-                {Math.round(score)}
-              </span>
-              <span className="font-mono text-[0.54rem] tracking-[0.16em] text-app-muted uppercase">
-                match
-              </span>
-            </>
-          ) : (
-            <span className="font-mono text-[0.72rem] text-app-muted">
-              {item.country.slice(0, 2).toUpperCase()}
-            </span>
-          )}
-          <span className="mt-1 inline-flex items-center gap-1 text-[0.66rem] text-app-muted">
-            <CalendarClock size={11} />
-            {relativeTime(item.postedAt)}
-          </span>
-        </div>
-
-        <ArrowUpRight
-          size={16}
-          className="mt-1 hidden shrink-0 text-app-muted transition-colors duration-150 group-hover:text-app-accent sm:block"
-        />
-      </Link>
-    </li>
   );
 }
 

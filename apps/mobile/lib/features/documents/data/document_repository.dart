@@ -64,10 +64,10 @@ class DocumentRepository {
   }) async {
     final body = <String, dynamic>{
       'opportunityId': opportunityId,
-      if (applicationId != null) 'applicationId': applicationId,
+      'applicationId': ?applicationId,
       'type': type,
-      if (templateKey != null) 'templateKey': templateKey,
-      if (userGuidance != null) 'userGuidance': userGuidance,
+      'templateKey': ?templateKey,
+      'userGuidance': ?userGuidance,
     };
     try {
       final response = await _apiClient.post('/documents/generate', body: body);
@@ -277,7 +277,7 @@ class DocumentRepository {
   }) async {
     final response = await _apiClient.post(
       '/documents/$id/export',
-      body: {'format': format, if (template != null) 'template': template},
+      body: {'format': format, 'template': ?template},
     );
     if (response is Map && response['data'] is String) {
       return base64Decode(response['data'] as String);
@@ -300,8 +300,8 @@ class DocumentRepository {
   }) async {
     final body = <String, dynamic>{
       'content': content,
-      if (opportunityId != null) 'opportunityId': opportunityId,
-      if (documentId != null) 'documentId': documentId,
+      'opportunityId': ?opportunityId,
+      'documentId': ?documentId,
       if (keywords.isNotEmpty) 'keywords': keywords,
     };
     final response = await _apiClient.post('/documents/validate', body: body);
@@ -351,7 +351,7 @@ class DocumentRepository {
   Future<void> completeResumeOnboarding({String? path}) async {
     await _apiClient.post(
       '/profile/onboarding-complete',
-      body: <String, dynamic>{if (path != null) 'path': path},
+      body: <String, dynamic>{'path': ?path},
     );
   }
 

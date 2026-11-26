@@ -117,6 +117,8 @@ export interface JobDocument {
   id: string;
   opportunityId: string;
   parentDocumentId?: string;
+  /** The candidate's original resume, as opposed to a derived tailored copy. */
+  isBase?: boolean;
   type: string;
   title: string;
   content: string;

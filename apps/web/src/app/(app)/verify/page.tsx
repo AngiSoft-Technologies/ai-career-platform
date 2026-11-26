@@ -12,7 +12,9 @@ import {
   type VerificationMethod,
   type VerificationMethodName,
 } from "@/lib/auth";
+import { SceneBackdrop } from "@/components/app-scene";
 import { useSession } from "@/components/session";
+import { sceneForPath } from "@/lib/app-scenes";
 import { Badge, Button, Field, Input, Page, Panel, PanelHead, useToast } from "@/components/ui";
 
 function methodTitle(method: VerificationMethodName): string {
@@ -111,12 +113,27 @@ function VerifyInner() {
 
   return (
     <Page>
+      <SceneBackdrop
+        scene={sceneForPath("/verify")}
+        priority
+        minHeight="clamp(190px, 20vw, 250px)"
+      >
+        <p className="flex items-center gap-2.5 font-mono text-[0.62rem] font-semibold tracking-[0.18em] text-white/65 uppercase">
+          <ShieldCheck size={13} aria-hidden />
+          Account security
+        </p>
+        <h1 className="mt-3 max-w-[24ch] text-[clamp(1.8rem,3.6vw,2.5rem)] leading-[1] font-semibold tracking-[-0.03em] text-white text-balance">
+          Confirm your identity
+        </h1>
+        <p className="mt-3 max-w-[52ch] text-[0.9rem] leading-relaxed text-white/75">
+          Your session is long-lived, so we check in once in a while. Pick a method and continue.
+        </p>
+      </SceneBackdrop>
       <div className="mx-auto flex w-full max-w-[520px] flex-col gap-6">
         <Panel>
           <PanelHead
-            eyebrow="Verify it is you"
-            title="Confirm your identity"
-            description="Your session is long-lived, so we check in once in a while. Pick a method and continue."
+            eyebrow="Verification methods"
+            title="Choose how to continue"
             action={<ShieldCheck size={16} className="text-app-muted" />}
           />
           <div className="border-t border-app-border px-5 py-5">

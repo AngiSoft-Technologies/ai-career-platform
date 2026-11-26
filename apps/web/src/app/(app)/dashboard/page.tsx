@@ -5,6 +5,7 @@ import {
   Activity,
   ArrowUpRight,
   BadgeCheck,
+  Bookmark,
   Briefcase,
   Compass,
   FileText,
@@ -13,6 +14,7 @@ import {
   TrendingUp,
   Users,
 } from "lucide-react";
+import type { DailyMatchesResponse } from "@angisoft/mboqara-contracts";
 import {
   BarList,
   Badge,
@@ -36,6 +38,7 @@ import {
 } from "@/components/ui";
 import { CompanyMark, EmptySearchArt, HeroSplit } from "@/components/app-art";
 import { useSession } from "@/components/session";
+import { sceneForPath } from "@/lib/app-scenes";
 import { useApi } from "@/lib/hooks";
 import { formatDate, formatNumber, formatSalary, relativeTime, titleCase } from "@/lib/format";
 import type {
@@ -158,7 +161,10 @@ function StatGrid({ children, cols = 4 }: { children: React.ReactNode; cols?: 3 
 /* ========================================================================== */
 
 function SeekerDashboard() {
-  const matches = useApi<MatchesResponse>("/matches", { limit: 6 });
+  // The landing surface is the one place motion earns its weight: a quiet
+  // radar loop behind the greeting, with a still photograph underneath.
+  const scene = sceneForPath("/dashboard");
+  const matches = useApi<DailyMatchesResponse>("/matches/daily");
   const applications = useApi<ApplicationsResponse>("/applications");
   const followups = useApi<FollowUpsResponse>("/followups");
   const profile = useApi<ProfileResponse>("/profile");
@@ -169,56 +175,37 @@ function SeekerDashboard() {
   const pending = followups.data?.items?.filter((item) => item.status === "PENDING") ?? [];
   const profileValue = profile.data?.profile;
 
-  const completeness = profileValue?.skills?.length
-    ? Math.min(100, 20 + profileValue.skills.length * 6)
-    : 20;
   const firstName = profileValue?.name?.split(" ")[0];
+  const matchDate = matches.data?.date;
 
   return (
     <Page>
       <HeroSplit
-        src="https://cdn1.angisoft.co.ke/mboqara/images/mboqara/careers/technology-professional.webp"
-        alt="A professional working at a laptop in a studio"
+        src={scene.src}
+        alt={scene.alt}
+        video={scene.video}
+        poster={scene.poster}
         eyebrow="MboQara · live"
         priority
         title={firstName ? `Good to see you, ${firstName}.` : "Your job search is live."}
-        description="Every opening we monitor, ranked against your profile. Work the top of the list, then keep your pipeline moving."
+        description="Here are the roles posted today that meet your profile's baseline. See the full catalogue whenever you want to look wider."
         actions={
           <>
             <Link href="/opportunities">
-              <Button icon={<Compass size={15} />}>Browse ranked roles</Button>
+              <Button icon={<Compass size={15} />}>Browse all roles</Button>
             </Link>
-            <Link href="/profile">
-              <Button
-                variant="outline"
-                icon={<FileText size={15} />}
-              >
-                Complete profile
+            <Link href="/saved">
+              <Button variant="outline" icon={<Bookmark size={15} />}>
+                Saved roles
               </Button>
             </Link>
           </>
         }
-        badge={
-          <div className="rounded-app-lg border border-white/15 bg-black/45 px-4 py-3 backdrop-blur-md">
-            <p className="font-mono text-[0.56rem] tracking-[0.2em] text-white/60 uppercase">
-              Profile strength
-            </p>
-            <p className="mt-1 font-display text-[1.75rem] leading-none font-semibold text-white">
-              {completeness}%
-            </p>
-            <div className="mt-2 h-[3px] w-full overflow-hidden rounded-full bg-white/20">
-              <span
-                className="block h-full rounded-full bg-[linear-gradient(90deg,var(--accent),var(--accent-2))]"
-                style={{ width: `${completeness}%` }}
-              />
-            </div>
-          </div>
-        }
         stats={[
           {
-            label: "Ranked roles",
+            label: "Posted today",
             value: matches.data ? formatNumber(matches.data.total) : "—",
-            hint: "in your match pool",
+            hint: "roles you can apply to",
           },
           {
             label: "Applications",
@@ -252,9 +239,13 @@ function SeekerDashboard() {
         <div className="flex min-w-0 flex-col gap-6">
           <Panel>
             <PanelHead
-              eyebrow="Highest match"
-              title="Start with these"
-              description="Strongest alignment with your skills, location and seniority this week."
+              eyebrow="Today"
+              title={matches.data?.total === 5 ? "Five roles posted today" : "Roles posted today"}
+              description={
+                matchDate
+                  ? `Posted on ${formatDate(matchDate)} (UTC). Each row opens the full posting.`
+                  : "Posted today in UTC. Each row opens the full posting."
+              }
               action={
                 <Link href="/opportunities">
                   <Button variant="ghost" size="sm" icon={<ArrowUpRight size={14} />}>
@@ -274,11 +265,11 @@ function SeekerDashboard() {
               <div className="px-5 pb-5">
                 <EmptyState
                   icon={<EmptySearchArt />}
-                  title="No ranked roles yet"
-                  description="Complete your profile and we will rank every opening we monitor against it."
+                  title="No roles posted today"
+                  description="Nothing posted today in UTC met your profile's baseline. The full catalogue is still open."
                   action={
-                    <Link href="/profile">
-                      <Button size="sm">Complete profile</Button>
+                    <Link href="/opportunities">
+                      <Button size="sm">Browse all roles</Button>
                     </Link>
                   }
                 />
@@ -304,7 +295,7 @@ function SeekerDashboard() {
                         <span>{item.city || item.country}</span>
                         <span aria-hidden>·</span>
                         <span>{titleCase(item.workMode)}</span>
-                        {item.salaryMin ? (
+                        {item.salaryMin || item.salaryMax ? (
                           <>
                             <span aria-hidden>·</span>
                             <span>{formatSalary(item.salaryMin, item.salaryMax, item.currency)}</span>
@@ -426,16 +417,17 @@ function SeekerDashboard() {
           </Panel>
 
           <Panel>
-            <PanelHead eyebrow="Coverage" title="Where we are looking" />
+            <PanelHead eyebrow="Wish list" title="Roles you saved" />
             <div className="px-5 pb-5">
-              <BarList
-                items={[
-                  { label: "Remote", value: 48, hint: "48%" },
-                  { label: "Hybrid", value: 31, hint: "31%" },
-                  { label: "On site", value: 22, hint: "22%" },
-                  { label: "Internships", value: 14, hint: "14%" },
-                ]}
-              />
+              <p className="text-[0.82rem] leading-relaxed text-app-muted">
+                Keep promising roles in one place while you compare them. Saved
+                roles stay on your list until you remove them.
+              </p>
+              <Link href="/saved" className="mt-3 block">
+                <Button variant="outline" size="sm" className="w-full" icon={<Bookmark size={13} />}>
+                  Open saved roles
+                </Button>
+              </Link>
             </div>
           </Panel>
         </div>

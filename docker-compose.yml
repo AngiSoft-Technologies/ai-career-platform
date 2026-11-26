@@ -59,6 +59,30 @@ services:
       - "1025:1025"
       - "8025:8025"
 
+  # Optional stage 2 workspace. It is behind the `browser` profile so existing
+  # `docker compose up` runs never download Playwright or expose port 8787.
+  browser-runtime:
+    build:
+      context: ./services/browser-runtime
+    profiles:
+      - browser
+    environment:
+      BROWSER_RUNTIME_TOKEN: ${BROWSER_RUNTIME_TOKEN:?Set BROWSER_RUNTIME_TOKEN to start the browser runtime}
+      BROWSER_UPLOAD_SECRET: ${BROWSER_UPLOAD_SECRET:-dev-upload-secret}
+      UPLOAD_ALLOWED_HOSTS: ${UPLOAD_ALLOWED_HOSTS:-cdn1.angisoft.co.ke}
+      MAX_BROWSER_SESSIONS: ${MAX_BROWSER_SESSIONS:-4}
+      FRAME_RATE_LIMIT_MS: ${FRAME_RATE_LIMIT_MS:-700}
+    ports:
+      - "8787:8787"
+    shm_size: "1gb"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - node -e "fetch('http://127.0.0.1:8787/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres-data:
   redis-data:

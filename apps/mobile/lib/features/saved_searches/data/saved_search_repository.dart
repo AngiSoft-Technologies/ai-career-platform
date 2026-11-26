@@ -39,16 +39,13 @@ class SavedSearchDatabaseStore implements SavedSearchLocalStore {
 /// Test-friendly store with the same semantics as the SQLite table.
 class InMemorySavedSearchStore implements SavedSearchLocalStore {
   final Map<String, Map<String, dynamic>> _rows = {};
+  final Map<String, int> _order = {};
 
   @override
   Future<List<Map<String, dynamic>>> savedSearchRows() async {
-    final rows = _rows.values.toList()
-      ..sort(
-        (a, b) => (b['updatedAt'] as int? ?? 0).compareTo(
-          a['updatedAt'] as int? ?? 0,
-        ),
-      );
-    return rows.map((row) => Map<String, dynamic>.from(row)).toList();
+    final ids = _rows.keys.toList()
+      ..sort((a, b) => (_order[b] ?? 0).compareTo(_order[a] ?? 0));
+    return ids.map((id) => Map<String, dynamic>.from(_rows[id]!)).toList();
   }
 
   @override
@@ -56,16 +53,14 @@ class InMemorySavedSearchStore implements SavedSearchLocalStore {
     final id =
         item['id'] as String? ??
         'local-${DateTime.now().microsecondsSinceEpoch}';
-    _rows[id] = {
-      ...item,
-      'id': id,
-      'updatedAt': DateTime.now().millisecondsSinceEpoch,
-    };
+    _rows[id] = {...item, 'id': id};
+    _order[id] = DateTime.now().microsecondsSinceEpoch;
   }
 
   @override
   Future<void> replaceSavedSearches(List<Map<String, dynamic>> items) async {
     _rows.clear();
+    _order.clear();
     for (final item in items) {
       await upsertSavedSearch(item);
     }

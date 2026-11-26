@@ -10,6 +10,7 @@ import { importResume } from "../services/documents/extract.js";
 import {
   generateDocument,
   listDocuments,
+  makeBaseDocument,
   prepareDocumentTailoring,
 } from "../services/documents.js";
 import {
@@ -512,15 +513,7 @@ documentsRouter.post("/import", async (request, response, next) => {
 
     // The newest imported resume becomes the source the agent tailors from.
     // Older source resumes stay intact and remain selectable explicitly.
-    await query(
-      `UPDATE documents SET is_base = false
-        WHERE user_id = $1 AND type = 'cv' AND is_base = true`,
-      [userId],
-    );
-    await query(
-      `UPDATE documents SET is_base = true WHERE id = $1 AND user_id = $2`,
-      [result.document.id, userId],
-    );
+    await makeBaseDocument(userId, result.document.id, "cv");
 
     broadcast(
       "document.generated",

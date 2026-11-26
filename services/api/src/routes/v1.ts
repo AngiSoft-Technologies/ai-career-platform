@@ -17,6 +17,7 @@ import { streamRouter } from "./stream.js";
 import { userLocationRouter } from "./user-location.js";
 import { browserRouter } from "./browser.js";
 import { platformRouter } from "./platform.js";
+import { guidanceRouter } from "./guidance.js";
 
 export const v1Router = Router();
 
@@ -33,6 +34,9 @@ v1Router.use("/me", meRouter);
 v1Router.use("/profile", profileRouter);
 v1Router.use("/profile/preferences", preferencesRouter);
 v1Router.use("/opportunities", opportunitiesRouter);
+// The guided-application router owns whole /applications/:id/... paths; it
+// goes first so the general applications router cannot shadow them.
+v1Router.use(guidanceRouter);
 v1Router.use("/applications", applicationsRouter);
 v1Router.use("/applications", analysisRouter);
 v1Router.use("/applications", applicationFollowupsRouter);

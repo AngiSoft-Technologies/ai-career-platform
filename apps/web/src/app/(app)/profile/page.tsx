@@ -221,7 +221,7 @@ export default function ProfilePage() {
             </p>
             <div className="mt-2 h-[3px] w-full overflow-hidden rounded-full bg-white/20">
               <span
-                className="block h-full rounded-full bg-[linear-gradient(90deg,var(--accent),var(--accent-2))]"
+                className="block h-full rounded-full bg-app-accent"
                 style={{ width: `${completeness}%` }}
               />
             </div>
@@ -440,7 +440,7 @@ export default function ProfilePage() {
         <aside className="flex flex-col gap-6 lg:sticky lg:top-[92px]">
           <Panel>
             <div className="flex items-center gap-3 px-5 pt-5">
-              <span className="grid size-14 shrink-0 place-items-center rounded-app-md bg-[linear-gradient(140deg,var(--accent),var(--accent-2))] font-display text-[1.2rem] font-semibold text-app-accent-contrast">
+              <span className="grid size-14 shrink-0 place-items-center rounded-app-md border border-app-accent/25 bg-app-accent-soft font-display text-[1.2rem] font-semibold text-app-accent">
                 {initials || "Y"}
               </span>
               <div className="min-w-0">

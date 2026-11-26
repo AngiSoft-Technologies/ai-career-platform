@@ -28,6 +28,8 @@ import {
   cx,
   useToast,
 } from "@/components/ui";
+import { SceneBackdrop } from "@/components/app-scene";
+import { sceneForPath } from "@/lib/app-scenes";
 import { api } from "@/lib/api";
 import { rememberOnboardingPath } from "@/lib/onboarding";
 
@@ -234,6 +236,24 @@ export default function OnboardingManualPage() {
 
   return (
     <Page className="mx-auto max-w-[860px]">
+      <SceneBackdrop
+        scene={sceneForPath("/onboarding")}
+        priority
+        minHeight="clamp(190px, 21vw, 260px)"
+      >
+        <p className="flex items-center gap-2.5 font-mono text-[0.62rem] font-semibold tracking-[0.18em] text-white/65 uppercase">
+          <Sparkles size={13} aria-hidden />
+          Resume builder
+        </p>
+        <h1 className="mt-3 max-w-[28ch] text-[clamp(1.8rem,3.6vw,2.5rem)] leading-[1] font-semibold tracking-[-0.03em] text-white text-balance">
+          Build a profile the machine can read
+        </h1>
+        <p className="mt-3 max-w-[54ch] text-[0.9rem] leading-relaxed text-white/75">
+          Step {stepIndex + 1} of {STEPS.length}. Everything you enter here is
+          editable later and never invented by us.
+        </p>
+      </SceneBackdrop>
+
       {/* The stepper. Each step is a real button — a person who has already
           answered a step should be able to jump back to it. */}
       <Panel className="p-4 sm:p-5">

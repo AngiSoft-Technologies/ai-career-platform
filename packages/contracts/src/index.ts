@@ -137,6 +137,30 @@ export interface MatchResult {
   gaps: string[];
 }
 
+/**
+ * One of the five roles posted in the last 24 hours that the candidate is
+ * actually qualified for. This is deliberately a separate contract from the
+ * ranked catalogue: the dashboard asks "what can I apply to today", not
+ * "what is the best thing on the board".
+ */
+export interface DailyMatchItem extends Opportunity {
+  match: MatchResult;
+}
+
+export interface DailyMatchesResponse {
+  /** UTC day the selection belongs to, `YYYY-MM-DD`. */
+  date: string;
+  items: DailyMatchItem[];
+  total: number;
+}
+
+export interface ProfessionFacet {
+  id: string;
+  name: string;
+  slug: string;
+  count: number;
+}
+
 export interface ApplicationBlueprint {
   id: string;
   opportunityId: string;
@@ -247,6 +271,106 @@ export interface ApplicationSubmissionRun {
   updatedAt: string;
 }
 
+/**
+ * How the employer page is presented in the full-page application workspace.
+ * `remote_browser` renders an isolated browser streamed into the route;
+ * `companion_tab` keeps the workspace beside a page in the person's own
+ * browser for sites that block embedding or require an existing login.
+ */
+export type GuidanceMode = "remote_browser" | "companion_tab" | "email_compose";
+
+export type GuidanceSessionStatus =
+  | "ACTIVE"
+  | "WAITING_FOR_HUMAN"
+  | "COMPLETED"
+  | "CANCELLED"
+  | "EXPIRED";
+
+export type GuidanceHintSeverity = "info" | "warning" | "action";
+
+export type GuidanceSuggestedAction =
+  | "fill"
+  | "upload"
+  | "click_next"
+  | "wait_for_user"
+  | "stop";
+
+export interface GuidanceHint {
+  id: string;
+  title: string;
+  body: string;
+  severity: GuidanceHintSeverity;
+  suggestedAction?: GuidanceSuggestedAction;
+  targetFieldKey?: string;
+  createdAt: string;
+  acknowledgedAt?: string;
+}
+
+export interface GuidanceDetectedField {
+  key: string;
+  label: string;
+  type: string;
+  required: boolean;
+  value?: string;
+  options?: string[];
+  /** The server will never fill a field the candidate must complete. */
+  manualOnly?: boolean;
+}
+
+export interface ApplicationGuidanceSession {
+  id: string;
+  applicationId: string;
+  submissionRunId?: string;
+  mode: GuidanceMode;
+  status: GuidanceSessionStatus;
+  targetUrl?: string;
+  targetHost?: string;
+  siteKey?: string;
+  playbookVersion?: number;
+  hints: GuidanceHint[];
+  detectedFields: GuidanceDetectedField[];
+  blockers: string[];
+  consentAt: string;
+  lastObservationAt?: string;
+  endedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SitePlaybookStep {
+  label: string;
+  action: GuidanceSuggestedAction;
+  fieldKey?: string;
+  note?: string;
+}
+
+export interface SitePlaybook {
+  id: string;
+  siteKey: string;
+  host: string;
+  platform?: string;
+  version: number;
+  status: "PROPOSED" | "PUBLISHED" | "REJECTED";
+  steps: SitePlaybookStep[];
+  blockerPatterns: string[];
+  confidence: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A long-running browser assigned to one application guidance session. */
+export interface BrowserWorkspace {
+  id: string;
+  applicationId: string;
+  guidanceSessionId: string;
+  status: "STARTING" | "READY" | "BUSY" | "FAILED" | "CLOSED";
+  /** Same-origin path that streams screenshots/accessibility state. */
+  streamPath?: string;
+  targetUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface BrowserAgentDevice {
   id: string;
   name: string;
@@ -271,6 +395,11 @@ export interface DocumentDraft {
   applicationId?: string;
   opportunityId: string;
   parentDocumentId?: string;
+  /**
+   * The candidate's original/base resume or cover letter. Tailored documents
+   * are derived from this one; clients use it for role-fit analysis.
+   */
+  isBase?: boolean;
   type: "cv" | "cover_letter" | "application_email" | "answer";
   title: string;
   content: string;
@@ -282,7 +411,13 @@ export interface OpportunitySearch {
   workMode?: WorkMode;
   employmentType?: EmploymentType;
   seniority?: Seniority;
+  /** Profession taxonomy slug (matches `profession_taxonomy.slug`). */
+  profession?: string;
+  eligibility?: Eligibility;
+  semantic?: boolean;
+  ranked?: boolean;
   limit?: number;
+  offset?: number;
 }
 
 export interface EventEnvelope<T = unknown> {
@@ -865,6 +1000,12 @@ export interface FeedStateItem {
   seenAt: string | null;
   savedAt: string | null;
   appliedAt: string | null;
+}
+
+/** A wish-list row: the full role plus the moment it was saved. */
+export interface SavedOpportunity {
+  opportunity: Opportunity;
+  savedAt: string;
 }
 
 export interface DocumentVersion {

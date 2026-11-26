@@ -324,6 +324,8 @@ export async function calculateMatch(
 
 export interface RankedFilters extends OpportunityFilters {
   semantic?: boolean;
+  /** The ranked feed is location-first; daily matches are score-first. */
+  orderByScore?: boolean;
 }
 
 export interface RankedPage {
@@ -431,8 +433,10 @@ export async function rankedOpportunities(
     )`,
   );
 
-  // The count runs against the same clauses, but not the page's later
-  // scoring parameters, so it gets its own argument list.
+  // The count runs against the same feed clauses, but not the page's later
+  // scoring/threshold parameters, so it gets its own argument list. A caller
+  // using `minScore` must treat `total` as the pre-threshold relevance count;
+  // the daily feed reports the size of its own five-item selection.
   const countValues = [...values];
 
   // Ranking parameters. A semantic query contributes a vector; without one
@@ -448,8 +452,16 @@ export async function rankedOpportunities(
   );
   const semanticVectorParam = addParam(semantic?.embedding ?? null);
   const semanticModelParam = addParam(semantic?.model ?? null);
+  const minScoreParam = addParam(filters.minScore ?? null);
   const limitParam = addParam(limit);
   const offsetParam = addParam(offset);
+
+  // Only the daily-matches endpoint asks for score-first ordering. The
+  // ordinary feed keeps its location-first order, so this flag changes
+  // nothing for existing callers.
+  const orderBy = filters.orderByScore
+    ? "ranking_score DESC, posted_at DESC, id ASC"
+    : "location_score DESC, eligibility_rank DESC, ranking_score DESC, posted_at DESC, id ASC";
 
   const locationScoreSql = `CASE
     WHEN work_mode = 'remote' THEN 50::int
@@ -590,11 +602,18 @@ export async function rankedOpportunities(
           )::numeric, 1)
         END::numeric AS ranking_score
       FROM semantic_scored
+    ),
+    -- A minimum score is a threshold on the computed score, not on a
+    -- column, so it has to be applied outside the CTE that computes it.
+    score_filtered AS (
+      SELECT *
+        FROM ranked
+       WHERE $${minScoreParam}::numeric IS NULL
+          OR ranking_score >= $${minScoreParam}::numeric
     )
     SELECT *
-      FROM ranked
-     ORDER BY location_score DESC, eligibility_rank DESC, ranking_score DESC,
-              posted_at DESC, id ASC
+      FROM score_filtered
+     ORDER BY ${orderBy}
      LIMIT $${limitParam}::int
     OFFSET $${offsetParam}::int
   `;

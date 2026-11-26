@@ -25,6 +25,7 @@ const nextConfig: NextConfig = {
     ],
   },
   experimental: {
+    agentUpgrade: "security",
     optimizePackageImports: ["lucide-react"],
   },
   async rewrites() {

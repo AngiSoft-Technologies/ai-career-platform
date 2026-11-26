@@ -104,25 +104,11 @@ export default function OnboardingPage() {
             sizes="(max-width: 1024px) 100vw, 1080px"
             className="object-cover object-center"
           />
-          <div
-            aria-hidden
-            className="absolute inset-0 bg-[linear-gradient(100deg,rgba(7,7,12,0.95)_0%,rgba(7,7,12,0.8)_34%,rgba(7,7,12,0.36)_66%,rgba(7,7,12,0.2)_100%)]"
-          />
-          <div
-            aria-hidden
-            className="absolute inset-0 bg-[radial-gradient(70%_120%_at_0%_0%,rgba(124,147,255,0.24),transparent_62%)]"
-          />
-          <div
-            aria-hidden
-            className="absolute inset-x-0 bottom-0 h-1/2 bg-[linear-gradient(to_top,rgba(7,7,12,0.94),rgba(7,7,12,0.4)_55%,transparent)]"
-          />
+          <div aria-hidden className="absolute inset-0 bg-[#07070c]/78" />
 
           <div className="relative flex min-h-[380px] flex-col justify-end p-6 sm:p-9 lg:min-h-[440px] lg:p-12">
-            <p className="flex items-center gap-2.5 font-mono text-[0.64rem] font-semibold tracking-[0.24em] text-white/60 uppercase">
-              <span
-                aria-hidden
-                className="h-px w-8 bg-[linear-gradient(90deg,var(--accent),var(--accent-2))]"
-              />
+            <p className="flex items-center gap-2.5 font-mono text-[0.62rem] font-semibold tracking-[0.18em] text-white/65 uppercase">
+              <span aria-hidden className="h-px w-7 bg-white/60" />
               <Sparkles size={13} /> Welcome to MboQara
             </p>
             <h1 className="mt-4 max-w-[18ch] text-[clamp(2rem,5vw,3.4rem)] leading-[0.98] font-semibold tracking-[-0.03em] text-balance text-white">
@@ -179,10 +165,7 @@ export default function OnboardingPage() {
                   sizes="(max-width: 768px) 100vw, 33vw"
                   className="object-cover object-center transition-transform duration-500 group-hover:scale-105"
                 />
-                <span
-                  aria-hidden
-                  className="absolute inset-0 bg-[linear-gradient(to_top,rgba(7,7,12,0.92),rgba(7,7,12,0.25)_65%,transparent)]"
-                />
+                <span aria-hidden className="absolute inset-0 bg-[#07070c]/62" />
                 <span
                   className={cx(
                     "absolute bottom-3 left-3 grid size-9 place-items-center rounded-app-md border",

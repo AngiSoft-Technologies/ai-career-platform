@@ -12,6 +12,8 @@ import {
   UserCheck,
 } from "lucide-react";
 import { Button, Field, Input, Page, Panel, PanelHead, Rows, Row, useToast, cx } from "@/components/ui";
+import { SceneBackdrop } from "@/components/app-scene";
+import { sceneForPath } from "@/lib/app-scenes";
 import { api } from "@/lib/api";
 import { rememberOnboardingPath } from "@/lib/onboarding";
 
@@ -78,28 +80,29 @@ export default function OnboardingLinkedInPage() {
 
   return (
     <Page className="mx-auto max-w-[700px]">
-      <header className="text-center">
+      <SceneBackdrop
+        scene={sceneForPath("/onboarding")}
+        priority
+        minHeight="clamp(210px, 23vw, 280px)"
+      >
         <Link
           href="/onboarding"
-          className="mb-5 inline-flex items-center gap-1.5 text-[0.9rem] text-app-muted transition-colors hover:text-app-text"
+          className="mb-4 inline-flex items-center gap-1.5 text-[0.82rem] text-white/70 transition-colors hover:text-white"
         >
           <Link2 size={14} /> Back to options
         </Link>
-        <p className="inline-flex items-center gap-2 font-mono text-[0.62rem] font-semibold tracking-[0.24em] text-app-muted uppercase">
-          <span
-            aria-hidden
-            className="h-px w-8 bg-[linear-gradient(90deg,var(--accent),var(--accent-2))]"
-          />
+        <p className="flex items-center gap-2.5 font-mono text-[0.62rem] font-semibold tracking-[0.18em] text-white/65 uppercase">
+          <span aria-hidden className="h-px w-7 bg-white/60" />
           Import from LinkedIn
         </p>
-        <h1 className="mt-4 text-[clamp(1.7rem,4vw,2.5rem)] leading-[1.02] font-semibold tracking-[-0.03em] text-balance text-app-text">
+        <h1 className="mt-3 max-w-[26ch] text-[clamp(1.8rem,4vw,2.5rem)] leading-[1.02] font-semibold tracking-[-0.03em] text-balance text-white">
           Connect your LinkedIn profile
         </h1>
-        <p className="mx-auto mt-3 max-w-[50ch] text-[0.94rem] leading-relaxed text-app-muted">
+        <p className="mt-3 max-w-[50ch] text-[0.9rem] leading-relaxed text-white/75">
           Sign in and we convert your experience, education and skills into a
           structured, ATS-ready resume.
         </p>
-      </header>
+      </SceneBackdrop>
 
       <Panel>
         <PanelHead

@@ -163,9 +163,29 @@ analysisRouter.post("/:id/submission", async (request, response, next) => {
   try {
     const applicationId = z.string().uuid().parse(request.params.id);
     const userId = response.locals.userId as string;
-    const consent = z.object({ consent: z.literal(true) }).parse(request.body);
-    if (!consent.consent) throw new Error("SUBMISSION_CONSENT_REQUIRED");
-    const run = await createSubmissionRun(userId, applicationId);
+    const input = z
+      .object({
+        consent: z.literal(true),
+        guidedSession: z.boolean().optional(),
+      })
+      .parse(request.body);
+    if (!input.consent) throw new Error("SUBMISSION_CONSENT_REQUIRED");
+
+    // The guided browser workspace is a second, independently authenticated
+    // way to drive a submission. Only waive the paired-extension requirement
+    // when a live guidance session actually exists for this application.
+    let guidedSession = false;
+    if (input.guidedSession) {
+      const active = await query<{ id: string }>(
+        `SELECT id FROM application_guidance_sessions
+          WHERE user_id = $1 AND application_id = $2
+            AND status = ANY($3::text[]) AND ended_at IS NULL
+          LIMIT 1`,
+        [userId, applicationId, ["ACTIVE", "WAITING_FOR_HUMAN"]],
+      );
+      guidedSession = Boolean(active.rows[0]);
+    }
+    const run = await createSubmissionRun(userId, applicationId, { guidedSession });
     response.status(202).json({ run });
   } catch (error) {
     next(error);
