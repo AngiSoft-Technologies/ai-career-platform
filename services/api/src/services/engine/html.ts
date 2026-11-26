@@ -321,6 +321,11 @@ const BLOCK_TAG_NAMES = new Set([
  */
 export function fastTextFromHtml(html: string): string {
   const text = html
+    // Adjacent inline elements carry no whitespace between their tags. On job
+    // boards the filter lists are built from hundreds of <a> tags, so without
+    // this the description arrives as "NairobiMombasaBaringo...". One newline
+    // per tag boundary is enough; the renderer joins prose lines again.
+    .replace(/>(?=<)/g, ">\n")
     .replace(/<\/?([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>/g, (_match, name: string) =>
       BLOCK_TAG_NAMES.has(name.toLowerCase()) ? "\n" : " ",
     )

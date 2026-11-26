@@ -77,8 +77,7 @@ export function RoleCriteriaSection({
       </div>
       {prepared ? (
         <p className="mt-4 text-[0.75rem] leading-relaxed text-app-muted">
-          The application agent extracted these from the posting because it had no
-          separate section. Confirm them against the employer's page before applying.
+          Prepared from the posting. Confirm on the employer's page.
         </p>
       ) : null}
     </section>
@@ -105,7 +104,7 @@ export function FitAssessment({ fit, loading }: { fit: FitSummary; loading: bool
       <PanelHead
         eyebrow="Your position"
         title="Strengths and weaknesses"
-        description="Read from your profile, default resume and this role's preparation only."
+        description="From your profile and default resume."
       />
       <div className="grid gap-5 border-t border-app-border px-5 py-5">
         <div>
@@ -161,7 +160,7 @@ export function ResumeImprovements({ suggestions }: { suggestions: ResumeSuggest
       <PanelHead
         eyebrow="Before you apply"
         title="Proposed resume improvements"
-        description="Each suggestion opens the document editor. Add only what you can support with real experience."
+        description="Add only what you can support."
       />
       <Rows className="border-t border-app-border">
         {suggestions.map((suggestion, index) => (

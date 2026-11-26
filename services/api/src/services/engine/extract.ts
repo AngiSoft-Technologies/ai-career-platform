@@ -381,6 +381,66 @@ function findApplyUrl(markdown: string, sourceUrl: string): string {
   return sourceUrl;
 }
 
+/**
+ * Page chrome that must never be stored as a job description.
+ *
+ * Job boards put their filters, company profile, other vacancies, pagination
+ * and reviews in the same DOM as the posting. A whole-page read therefore
+ * produces text like "NairobiMombasaBaringo..." followed by a hundred other
+ * roles. Those lines are navigation, not the job, and showing them makes the
+ * role page unreadable.
+ */
+const DESCRIPTION_CHROME = [
+  /^\[?(?:jobs|career advice|post job|search for jobs|detailed search|close)\]?$/i,
+  /^(?:follow this company|industry|founded|type|website|address)\b/i,
+  /^\d+$/,
+  /^\[\d+\]\([^)]*\)$/,
+  /^- \[!\[/,
+  /^- ### \[/,
+  /^\d{1,2}\s+[A-Z][a-z]+\s*$/,
+  /related companies hiring now/i,
+  /^view all jobs\b/i,
+  /^anonymously add review\b/i,
+  /^view salary structure\b/i,
+  /^no review available\b/i,
+  /^average salary\b/i,
+  /^about [A-Z][\w&.' -]{1,60}\b/i,
+  /jobs? in (?:kenya|africa).*vacanc/i,
+];
+
+/** Five glued capitalised words are a filter list, not a sentence. */
+const GLUED_NAV = /(?:[A-Z][A-Za-z]{2,}){5,}/;
+
+const DESCRIPTION_START =
+  /\b(job purpose statement|about the role|about this role|about the job|job description|role description|the role|what you(?:'|’)?ll do|what you will do|what we are looking for|key accountabilities|responsibilities|requirements|qualifications)\b/i;
+
+const DESCRIPTION_END =
+  /\b(related companies hiring now|view all jobs|follow this company|no review available|average salary|salary structure)\b/i;
+
+/** Keeps the posting and drops the page around it. */
+export function cleanJobDescription(markdown: string): string {
+  let text = (markdown ?? "").replace(/\r\n/g, "\n").trim();
+  if (!text) return "";
+
+  text = text
+    .split("\n")
+    .filter((line) => {
+      const value = line.trim();
+      if (!value) return true;
+      if (GLUED_NAV.test(value)) return false;
+      return !DESCRIPTION_CHROME.some((pattern) => pattern.test(value));
+    })
+    .join("\n");
+
+  const start = DESCRIPTION_START.exec(text);
+  if (start && start.index > 0) text = text.slice(start.index);
+
+  const end = DESCRIPTION_END.exec(text);
+  if (end && end.index > 0) text = text.slice(0, end.index);
+
+  return text.replace(/\n{3,}/g, "\n\n").trim().slice(0, 8_000);
+}
+
 /** Deterministic extraction (the ACE `deterministicJson` equivalent). */
 export function extractJobDeterministic(input: {
   url: string;
@@ -409,9 +469,9 @@ export function extractJobDeterministic(input: {
       null,
   );
 
-  const description =
-    jsonLd?.description?.trim() ||
-    markdown.slice(0, 12_000).trim();
+  const description = cleanJobDescription(
+    jsonLd?.description?.trim() || markdown,
+  );
 
   const locationRaw =
     jsonLd?.location ??

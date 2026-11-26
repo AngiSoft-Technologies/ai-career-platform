@@ -228,14 +228,14 @@ export function fitSummary({
   const weaknesses: string[] = [];
 
   for (const match of prepared.matched.slice(0, 4)) {
-    strengths.push(`Your resume or profile supports: ${match}`);
+    strengths.push(`Supported: ${match}`);
   }
 
   const sharedSkills = (opportunity.skills ?? []).filter(
     (skill) => mentioned(skill, evidence),
   );
   if (sharedSkills.length && strengths.length < 5) {
-    strengths.push(`Your profile and resume mention ${sharedSkills.slice(0, 4).join(", ")}.`);
+    strengths.push(`Your evidence mentions ${sharedSkills.slice(0, 4).join(", ")}.`);
   }
 
   if (
@@ -243,17 +243,17 @@ export function fitSummary({
     opportunity.seniority &&
     normalize(profile.seniority) === normalize(opportunity.seniority)
   ) {
-    strengths.push(`Your profile's level matches the posting's ${opportunity.seniority} level.`);
+    strengths.push(`Your level matches the posting's ${opportunity.seniority}.`);
   }
   if (profile?.remotePreferred && opportunity.workMode === "remote") {
-    strengths.push("You prefer remote work and this role is remote.");
+    strengths.push("You prefer remote; this role is remote.");
   }
   if (profile?.country && opportunity.country && mentioned(profile.country, opportunity.country)) {
-    strengths.push(`Your profile is based in ${profile.country}, the country named in the posting.`);
+    strengths.push(`Based in ${profile.country}, the posting's country.`);
   }
 
   for (const gap of prepared.uncovered.slice(0, 4)) {
-    weaknesses.push(`Not yet evidenced in your resume or profile: ${gap}`);
+    weaknesses.push(`Not yet evidenced: ${gap}`);
   }
 
   const unmatched = (opportunity.skills ?? []).filter(
@@ -261,17 +261,17 @@ export function fitSummary({
   );
   if (unmatched.length && weaknesses.length < 5) {
     weaknesses.push(
-      `The posting lists ${unmatched.slice(0, 4).join(", ")}, which is not yet in your profile or default resume.`,
+      `No evidence yet for ${unmatched.slice(0, 4).join(", ")}.`,
     );
   }
 
   if (preparation?.missingInputs?.length) {
     weaknesses.push(
-      `The application still needs ${preparation.missingInputs.slice(0, 4).map((input) => input.label).join(", ")}.`,
+      `Missing: ${preparation.missingInputs.slice(0, 4).map((input) => input.label).join(", ")}.`,
     );
   }
   if (!resume) {
-    weaknesses.push("There is no default resume in your document library yet.");
+    weaknesses.push("No default resume yet.");
   }
 
   return {
@@ -304,15 +304,14 @@ export function resumeSuggestions({
   if (!resume) {
     suggestions.push({
       title: "Add a default resume",
-      detail:
-        "Upload or generate a resume in your document library. Until one exists, requirements cannot be checked against real experience.",
+      detail: "Upload or generate a resume so requirements can be checked against real experience.",
       href: "/documents",
     });
   } else {
     for (const criterion of prepared.uncovered.slice(0, 4)) {
       suggestions.push({
         title: `Evidence ${criterion}`,
-        detail: `In “${resume.title}”, add a truthful bullet showing where you have used this, if you have. Keep the posting's wording only where it matches work you actually did.`,
+        detail: `Add a truthful bullet in “${resume.title}” only if you have used this.`,
         href: `/documents/${resume.id}`,
       });
     }
@@ -321,7 +320,7 @@ export function resumeSuggestions({
     if (titleMissing && suggestions.length < 4) {
       suggestions.push({
         title: "Align the resume headline with the role",
-        detail: `If it describes work you have actually done, put the closest true title to “${opportunity.title}” in the resume headline. Do not add a title you have not held.`,
+        detail: `Use the closest true title to “${opportunity.title}” in your headline. Only if you have held it.`,
         href: `/documents/${resume.id}`,
       });
     }
@@ -330,8 +329,7 @@ export function resumeSuggestions({
   if (suggestions.length === 0) {
     suggestions.push({
       title: "Review the resume against the posting",
-      detail:
-        "Open the editor and check that every skill the posting asks for is supported by an accurate line in your experience or skills section.",
+      detail: "Check that each listed skill has an accurate line in your resume.",
       href: resume ? `/documents/${resume.id}` : "/documents",
     });
   }

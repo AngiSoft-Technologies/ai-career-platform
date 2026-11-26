@@ -91,7 +91,14 @@ function sourceKindOf(platform: string): string {
     case "careers_page":
       return "Employer's careers page";
     case "listing_link":
+    case "listing":
       return "Job listing page";
+    case "duckduckgo":
+    case "bing":
+    case "searxng":
+      return "Web search listing";
+    case "web":
+      return "Employer's website";
     case "custom":
       return "Employer's own site";
     default:

@@ -312,7 +312,7 @@ function OpportunityDetailInner() {
         title={data.title}
         description={
           data.skills?.length
-            ? `Listed skills: ${data.skills.slice(0, 10).join(" · ")}`
+            ? `Skills: ${data.skills.slice(0, 10).join(" · ")}`
             : undefined
         }
         actions={
@@ -376,11 +376,7 @@ function OpportunityDetailInner() {
       <div className="grid items-start gap-9 lg:grid-cols-[minmax(0,1fr)_minmax(0,320px)]">
         <div className="flex min-w-0 flex-col gap-8">
           <Panel>
-            <PanelHead
-              eyebrow="The role"
-              title="What the employer is asking for"
-              description="The posting first, then the structured details we could read from it."
-            />
+            <PanelHead eyebrow="The role" title="What the employer is asking for" />
             <div className="border-t border-app-border px-5 py-5">
               <JobDescription
                 text={data.description || "No description was provided by the source."}
