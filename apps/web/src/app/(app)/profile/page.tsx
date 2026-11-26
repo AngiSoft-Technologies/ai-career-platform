@@ -508,7 +508,7 @@ export default function ProfilePage() {
               description="Ask the model what it thinks is missing."
             />
             <div className="border-t border-app-border px-5 py-4">
-              <a href="/v1/ai/profile-analysis" target="_blank" rel="noopener noreferrer">
+              <a href="/api/ai/profile-analysis" target="_blank" rel="noopener noreferrer">
                 <Button variant="outline" size="sm" icon={<Sparkles size={14} />} className="w-full">
                   Run analysis
                 </Button>

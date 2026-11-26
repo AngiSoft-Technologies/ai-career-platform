@@ -26,7 +26,7 @@ export const SITE = {
   alternateNames: ["MboQara", "Mbo Qara", "mboqara", "MboQara app", "MboQara careers"],
   legalName: "AngiSoft Technologies",
   url: "https://mboqara.angisoft.co.ke",
-  apiUrl: "https://mboqara-api-angisoft.fly.dev/v1",
+  apiUrl: "https://api.mboqara.angisoft.co.ke/v1",
   email: "mboqara@angisoft.co.ke",
   supportEmail: "mboqara@angisoft.co.ke",
   locale: "en_KE",

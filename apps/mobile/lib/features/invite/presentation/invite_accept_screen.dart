@@ -132,6 +132,7 @@ class _InviteAcceptScreenState extends State<InviteAcceptScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Accept Invitation'),
         leading: IconButton(
@@ -246,7 +247,7 @@ class _InviteAcceptScreenState extends State<InviteAcceptScreen> {
                   ),
                   const SizedBox(height: 16),
                   TextButton(
-                    onPressed: () => context.go('/login'),
+                    onPressed: () => context.go('/onboarding'),
                     child: const Text('Already have an account? Sign in'),
                   ),
                 ],

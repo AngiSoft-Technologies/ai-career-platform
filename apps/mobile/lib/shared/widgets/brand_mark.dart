@@ -7,12 +7,16 @@ class BrandMark extends StatelessWidget {
     super.key,
     this.size = 30,
     this.showWordmark = false,
-    this.onDark = true,
+    this.onDark,
   });
 
   final double size;
   final bool showWordmark;
-  final bool onDark;
+
+  /// Which wordmark variant to use. Defaults to following the ambient
+  /// brightness — the dark-ink mark on light surfaces, the light-ink mark
+  /// on dark ones — so callers don't have to think about it.
+  final bool? onDark;
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +26,7 @@ class BrandMark extends StatelessWidget {
         ConstrainedBox(
           constraints: BoxConstraints(maxWidth: size * 6.4),
           child: Image.asset(
-            onDark
+            (onDark ?? Theme.of(context).brightness == Brightness.dark)
                 ? 'assets/branding/logo_wordmark_light.png'
                 : 'assets/branding/logo_wordmark.png',
             height: size * 0.92,

@@ -2,14 +2,21 @@ import 'package:flutter/material.dart';
 
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../shared/formatting/app_formatters.dart';
 import '../../../shared/theme/app_colors.dart';
+import '../../../shared/theme/app_media.dart';
+import '../../../shared/widgets/app_background.dart';
+import '../../../shared/widgets/app_shimmer.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/eligibility_badge.dart';
+import '../../../shared/widgets/hero_media_card.dart';
 import '../../../shared/widgets/match_score_badge.dart';
+import '../../saved_searches/presentation/recent_query_chips.dart';
 import '../domain/opportunity.dart';
 import 'opportunity_controller.dart';
+import 'smart_feed_controls.dart';
 
 class OpportunityListScreen extends StatefulWidget {
   const OpportunityListScreen({super.key});
@@ -39,14 +46,18 @@ class _OpportunityListScreenState extends State<OpportunityListScreen> {
   Widget build(BuildContext context) {
     final controller = context.watch<OpportunityController>();
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: Image.asset(
-          'assets/branding/logo_wordmark.png',
-          height: 24,
+          Theme.of(context).brightness == Brightness.dark
+              ? AppMedia.wordmarkLight
+              : AppMedia.wordmarkDark,
+          height: 26,
           fit: BoxFit.contain,
           filterQuality: FilterQuality.high,
         ),
         actions: [
+          FeedSortMenu(controller: controller),
           IconButton(
             tooltip: controller.showSavedOnly
                 ? 'Show all opportunities'
@@ -62,32 +73,59 @@ class _OpportunityListScreenState extends State<OpportunityListScreen> {
           IconButton(
             tooltip: 'Filters',
             onPressed: () => _showFilters(context, controller),
-            icon: const Icon(Icons.tune_rounded),
+            icon: Badge(
+              isLabelVisible: controller.hasActiveFilters,
+              child: const Icon(Icons.tune_rounded),
+            ),
           ),
         ],
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: TextField(
-              controller: _searchController,
-              textInputAction: TextInputAction.search,
-              onSubmitted: (value) => controller.searchNow(query: value),
-              decoration: InputDecoration(
-                hintText: 'Search role, skill, or company',
-                prefixIcon: const Icon(Icons.search_rounded),
-                suffixIcon: IconButton(
-                  tooltip: 'Search',
-                  onPressed: () =>
-                      controller.searchNow(query: _searchController.text),
-                  icon: const Icon(Icons.arrow_forward_rounded),
+      body: AppBackground(
+        child: Column(
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: HeroMediaCard(
+                eyebrow: 'OPPORTUNITY RADAR',
+                title: 'Discover roles that match your momentum.',
+                subtitle: 'Live opportunities, eligibility signals, and AI match insight.',
+                imageUrl: AppMedia.heroCareer,
+                videoUrl: AppMedia.radarLoop,
+                height: 148,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: TextField(
+                controller: _searchController,
+                textInputAction: TextInputAction.search,
+                onSubmitted: (value) => _search(context, controller, value),
+                decoration: InputDecoration(
+                  hintText: 'Search role, skill, or company',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: IconButton(
+                    tooltip: 'Search',
+                    
+                    onPressed: () =>
+                        _search(context, controller, _searchController.text),
+                    icon: const Icon(Icons.arrow_forward_rounded),
+                  ),
                 ),
               ),
             ),
-          ),
-          Expanded(child: _body(context, controller)),
-        ],
+            QuickFilterChips(controller: controller),
+            const SizedBox(height: 10),
+            RecentQueryChips(
+              queries: controller.recent,
+              label: 'Recent searches',
+              onSelected: (query) {
+                _searchController.text = query;
+                _search(context, controller, query);
+              },
+            ),
+            Expanded(child: _body(context, controller)),
+          ],
+        ),
       ),
       // A live strip between the results and the edge of the screen, saying
       // what the catalogue is doing right now. The pulsing dot is the only
@@ -97,10 +135,19 @@ class _OpportunityListScreenState extends State<OpportunityListScreen> {
     );
   }
 
+  Future<void> _search(
+    BuildContext context,
+    OpportunityController controller,
+    String value,
+  ) async {
+    await controller.searchNow(query: value);
+    await controller.rememberQuery(value);
+  }
+
   Widget _body(BuildContext context, OpportunityController controller) {
     if (controller.state == OpportunityLoadState.loading &&
         controller.items.isEmpty) {
-      return const LoadingState(label: 'Finding relevant opportunities…');
+      return const ShimmerList(count: 5, itemHeight: 132);
     }
     if (controller.state == OpportunityLoadState.error &&
         controller.items.isEmpty) {
@@ -120,30 +167,50 @@ class _OpportunityListScreenState extends State<OpportunityListScreen> {
         icon: Icons.search_off_rounded,
       );
     }
+    final cachedAt = controller.servedCachedAt;
+    final leadingCount = cachedAt == null ? 1 : 2;
     return RefreshIndicator(
       onRefresh: controller.refresh,
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-        itemCount: controller.items.length + 1,
+        itemCount: controller.items.length + leadingCount,
         separatorBuilder: (_, index) => const SizedBox(height: 12),
         itemBuilder: (context, index) {
-          if (index == 0) {
+          if (index == 0 && cachedAt != null) {
+            return StaleCacheBanner(cachedAt: cachedAt);
+          }
+          if (index == leadingCount - 1) {
             return Padding(
               padding: const EdgeInsets.only(bottom: 4),
               child: Text(
-                '${controller.items.length} opportunities',
+                '${controller.items.length} opportunities · '
+                '${controller.unseenCount} new'
+                ' · ${controller.sort.label}',
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
             );
           }
-          final opportunity = controller.items[index - 1];
+          final opportunity = controller.items[index - leadingCount];
           return _OpportunityCard(
             opportunity: opportunity,
             isSaved: controller.savedIds.contains(opportunity.id),
-            onTap: () => context.push('/opportunities/${opportunity.id}'),
+            isSeen: controller.seenIds.contains(opportunity.id),
+            isApplied: controller.appliedIds.contains(opportunity.id),
+            onTap: () async {
+              await controller.markSeen(opportunity);
+              await controller.rememberQuery(opportunity.title);
+              if (context.mounted) {
+                context.push('/opportunities/${opportunity.id}');
+              }
+            },
             onSave: () => controller.toggleSaved(opportunity),
+            onShare: () => Share.share(
+              '${opportunity.title} at ${opportunity.companyName}\n'
+              '${opportunity.shareUrl}',
+              subject: opportunity.title,
+            ),
           );
         },
       ),
@@ -346,6 +413,17 @@ class _LiveStripState extends State<_LiveStrip>
     super.dispose();
   }
 
+  Widget _statusDot(BuildContext context) {
+    return Container(
+      width: 8,
+      height: 8,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: context.appColors.verified,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -356,24 +434,26 @@ class _LiveStripState extends State<_LiveStrip>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: theme.colorScheme.outlineVariant)),
+          border: Border(
+            top: BorderSide(color: theme.colorScheme.outlineVariant),
+          ),
           color: theme.colorScheme.surfaceContainerLow,
         ),
         child: Row(
           children: [
-            FadeTransition(
-              opacity: Tween<double>(begin: 0.35, end: 1).animate(
-                CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-              ),
-              child: Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: context.appColors.verified,
-                ),
-              ),
-            ),
+            // Respect the device's "reduce animations" setting: the status
+            // dot stays visible without the pulse when motion is disabled.
+            MediaQuery.disableAnimationsOf(context)
+                ? _statusDot(context)
+                : FadeTransition(
+                    opacity: Tween<double>(begin: 0.35, end: 1).animate(
+                      CurvedAnimation(
+                        parent: _controller,
+                        curve: Curves.easeInOut,
+                      ),
+                    ),
+                    child: _statusDot(context),
+                  ),
             const SizedBox(width: 8),
             Text(
               'Live — boards read daily',
@@ -400,14 +480,20 @@ class _OpportunityCard extends StatelessWidget {
   const _OpportunityCard({
     required this.opportunity,
     required this.isSaved,
+    required this.isSeen,
+    required this.isApplied,
     required this.onTap,
     required this.onSave,
+    required this.onShare,
   });
 
   final Opportunity opportunity;
   final bool isSaved;
+  final bool isSeen;
+  final bool isApplied;
   final VoidCallback onTap;
   final VoidCallback onSave;
+  final VoidCallback onShare;
 
   @override
   Widget build(BuildContext context) {
@@ -452,9 +538,16 @@ class _OpportunityCard extends StatelessWidget {
                             ),
                           ),
                           IconButton(
+                            tooltip: 'Share opportunity link',
+                            
+                            onPressed: onShare,
+                            icon: const Icon(Icons.share_outlined),
+                          ),
+                          IconButton(
                             tooltip: isSaved
                                 ? 'Remove bookmark'
                                 : 'Save opportunity',
+                            
                             onPressed: onSave,
                             icon: Icon(
                               isSaved
@@ -508,6 +601,12 @@ class _OpportunityCard extends StatelessWidget {
                         ),
                       ],
                       const SizedBox(height: 12),
+                      OpportunityStateChips(
+                        isSaved: isSaved,
+                        isSeen: isSeen,
+                        isApplied: isApplied,
+                      ),
+                      const SizedBox(height: 8),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,

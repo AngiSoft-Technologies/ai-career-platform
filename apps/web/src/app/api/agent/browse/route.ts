@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Browse through our own extraction engine via the API
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "") ?? "https://mboqara-api-angisoft.fly.dev/v1";
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "") ?? "https://api.mboqara.angisoft.co.ke/v1";
 
     const response = await fetch(`${apiUrl}/agent/browse`, {
       method: "POST",

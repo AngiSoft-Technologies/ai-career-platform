@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/app_background.dart';
 import 'resume_onboarding_controller.dart';
 
 /// The first screen a candidate sees after signing up or signing in for the
@@ -23,7 +24,7 @@ class ResumeStartScreen extends StatelessWidget {
     final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(title: const Text('Build your resume')),
-      body: SafeArea(
+      body: AppBackground(child: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
           children: [
@@ -74,7 +75,7 @@ class ResumeStartScreen extends StatelessWidget {
           ],
         ),
       ),
-    );
+    ));
   }
 }
 
@@ -191,19 +192,20 @@ class _ResumeUploadScreenState extends State<ResumeUploadScreen> {
   Future<void> _pick() async {
     setState(() => _error = null);
     try {
-      final picked = await FilePicker.pickFiles(
+      final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: const ['pdf', 'docx', 'png', 'jpg', 'jpeg', 'webp'],
+        withData: true,
       );
-      if (picked.isEmpty) return;
-      final file = picked.first;
-      final bytes = await file.readAsBytes();
-      final size = await file.length();
+      if (result == null || result.files.isEmpty) return;
+      final file = result.files.first;
+      final bytes = file.bytes ?? await file.xFile.readAsBytes();
+      final size = file.size;
       if (!mounted) return;
       setState(() {
         _file = file;
         _bytes = bytes;
-        _size = size ?? bytes.length;
+        _size = size;
       });
     } catch (error) {
       setState(() => _error = 'That file could not be read.');

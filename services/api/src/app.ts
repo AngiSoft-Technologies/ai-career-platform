@@ -12,10 +12,10 @@ import { redis, startRedis, waitForRedis } from "./db/redis.js";
 import { ensureRedisQueuePolicy } from "./db/redis-policy.js";
 import { schema } from "./graphql/schema.js";
 import { logger } from "./logger.js";
+import { redactError, redactHeaders, redactUrl } from "./lib/redact.js";
 import { tickerStatus } from "./lib/ticker.js";
 import {
   errorHandler,
-  flyReplayMiddleware,
   notFoundHandler,
 } from "./middleware/error-handler.js";
 import { identity } from "./middleware/identity.js";
@@ -25,6 +25,7 @@ import { statsRouter } from "./routes/stats.js";
 import { publicRouter } from "./routes/public.js";
 import { reviewsRouter } from "./routes/reviews.js";
 import { contentRouter } from "./routes/content.js";
+import { publicConfigRouter } from "./routes/platform.js";
 import { invitationRouter } from "./routes/invitations.js";
 import { v1Router } from "./routes/v1.js";
 import { authRouter } from "./routes/auth.js";
@@ -96,6 +97,23 @@ app.use(
       if (status >= 500) return "error";
       if (status >= 400) return "warn";
       return "info";
+    },
+    // The default HTTP serializers echo every request header (including
+    // Authorization) and the raw URL (including token query parameters).
+    serializers: {
+      req: (request) => ({
+        id: typeof request.headers["x-request-id"] === "string"
+          ? request.headers["x-request-id"]
+          : undefined,
+        method: request.method,
+        url: redactUrl(request.originalUrl ?? request.url ?? ""),
+        headers: redactHeaders(request.headers),
+      }),
+      res: (response) => ({
+        statusCode: response.statusCode,
+        headers: redactHeaders(response.getHeaders()),
+      }),
+      err: (error: Error) => redactError(error),
     },
   }),
 );
@@ -252,9 +270,11 @@ app.use("/v1/invitations", invitationRouter);
 app.use("/api/v1/invitations", invitationRouter);
 app.use("/v1/content", contentRouter);
 app.use("/api/v1/content", contentRouter);
+// Client bootstrap config is public and must resolve before `identity`.
+app.use("/v1/config", publicConfigRouter);
+app.use("/api/v1/config", publicConfigRouter);
 app.use("/v1/n8n", n8nRouter);
 app.use("/api/v1/n8n", n8nRouter);
-app.use(flyReplayMiddleware);
 
 /**
  * Auth is mounted before identity on purpose.

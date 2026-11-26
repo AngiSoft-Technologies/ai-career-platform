@@ -3,7 +3,10 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/formatting/app_formatters.dart';
+import '../../../shared/theme/app_media.dart';
+import '../../../shared/widgets/app_background.dart';
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/hero_media_card.dart';
 import '../../../shared/widgets/match_score_badge.dart';
 import '../../opportunities/domain/opportunity.dart';
 import '../data/match_repository.dart';
@@ -34,6 +37,7 @@ class _MatchesScreenState extends State<MatchesScreen> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Your matches'),
         actions: [
@@ -44,54 +48,85 @@ class _MatchesScreenState extends State<MatchesScreen> {
           ),
         ],
       ),
-      body: FutureBuilder<List<Opportunity>>(
-        future: _matches,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              !snapshot.hasData) {
-            return const LoadingState(label: 'Finding roles that fit…');
-          }
-          if (snapshot.hasError && !snapshot.hasData) {
-            return ErrorState(
-              message: 'Could not load your matches. Check your connection and try again.',
-              onRetry: _refresh,
-            );
-          }
-          final items = snapshot.data ?? const <Opportunity>[];
-          if (items.isEmpty) {
-            return const EmptyState(
-              title: 'No matches yet',
-              message: 'Add skills, experience and role preferences to your profile, then check again.',
-              icon: Icons.auto_awesome_outlined,
-            );
-          }
-          return RefreshIndicator(
-            onRefresh: _refresh,
-            child: ListView.separated(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
-              itemCount: items.length + 1,
-              separatorBuilder: (_, index) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                if (index == 0) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 2),
-                    child: Text(
-                      'Ranked by your profile and preferences',
-                      style: Theme.of(context).textTheme.bodyMedium
-                          ?.copyWith(color: colors.onSurfaceVariant),
-                    ),
+      body: AppBackground(
+        child: FutureBuilder<List<Opportunity>>(
+          future: _matches,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                !snapshot.hasData) {
+              return const LoadingState(label: 'Finding roles that fit…');
+            }
+            if (snapshot.hasError && !snapshot.hasData) {
+              return ErrorState(
+                message: 'Could not load your matches. Check your connection and try again.',
+                onRetry: _refresh,
+              );
+            }
+            final items = snapshot.data ?? const <Opportunity>[];
+            if (items.isEmpty) {
+              return const EmptyState(
+                title: 'No matches yet',
+                message: 'Add skills, experience and role preferences to your profile, then check again.',
+                icon: Icons.auto_awesome_outlined,
+              );
+            }
+            return RefreshIndicator(
+              onRefresh: _refresh,
+              child: ListView.separated(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+                itemCount:
+                    items.length +
+                    2 +
+                    (context.read<MatchRepository>().servedFromCache ? 1 : 0),
+                separatorBuilder: (_, index) => const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final cachedBanner = context
+                      .read<MatchRepository>()
+                      .servedFromCache;
+                  final offset = cachedBanner ? 1 : 0;
+                  if (cachedBanner && index == 0) {
+                    return Semantics(
+                      label: 'Showing cached match results',
+                      child: const SectionCard(
+                        child: Text(
+                          'Showing cached match results from this device.',
+                        ),
+                      ),
+                    );
+                  }
+                  if (index == offset) {
+                    return const HeroMediaCard(
+                      eyebrow: 'AI MATCHES',
+                      title: 'Roles picked for your profile.',
+                      subtitle:
+                          'Ranked by skills, preferences, and opportunity fit.',
+                      imageUrl: AppMedia.heroInterview,
+                      videoUrl: AppMedia.radarLoop,
+                      height: 142,
+                    );
+                  }
+                  if (index == offset + 1) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: Text(
+                        'Ranked by your profile and preferences',
+                        style: Theme.of(context).textTheme.bodyMedium
+                            ?.copyWith(color: colors.onSurfaceVariant),
+                      ),
+                    );
+                  }
+                  final opportunity = items[index - offset - 2];
+                  return _MatchCard(
+                    opportunity: opportunity,
+                    onTap: () =>
+                        context.push('/opportunities/${opportunity.id}'),
                   );
-                }
-                final opportunity = items[index - 1];
-                return _MatchCard(
-                  opportunity: opportunity,
-                  onTap: () => context.push('/opportunities/${opportunity.id}'),
-                );
-              },
-            ),
-          );
-        },
+                },
+              ),
+            );
+          },
+        ),
       ),
     );
   }

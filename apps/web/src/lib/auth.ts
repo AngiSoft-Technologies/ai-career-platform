@@ -8,11 +8,20 @@
  * provider URL, provider token or provider cookie is ever handled here.
  */
 
-export const API_URL = (
-  process.env.NEXT_PUBLIC_API_URL ?? "https://mboqara-api-angisoft.fly.dev/v1"
+/**
+ * Client calls go through the same-origin `/api` proxy so the session can
+ * live in httpOnly cookies on this domain. `NEXT_PUBLIC_API_ORIGIN` is only
+ * needed for things a browser cannot proxy, like the WebSocket handshake.
+ */
+export const API_URL = "/api";
+
+const API_ORIGIN = (
+  process.env.NEXT_PUBLIC_API_ORIGIN ??
+  process.env.NEXT_PUBLIC_API_URL ??
+  "https://api.mboqara.angisoft.co.ke/v1"
 ).replace(/\/$/, "");
 
-export const WS_URL = API_URL.replace(/\/v1$/, "") + "/v1/ws";
+export const WS_URL = `${API_ORIGIN.replace(/\/v1$/, "")}/v1/ws`;
 
 const TOKEN_KEY = "mboqara.auth.token";
 const REFRESH_TOKEN_KEY = "mboqara.auth.refresh";
@@ -30,6 +39,8 @@ export interface Session {
   roles: string[];
   permissions: string[];
   expiresAt?: string | null;
+  verifiedAt?: string | null;
+  requiresVerification?: boolean;
 }
 
 function readJson<T>(key: string): T | null {
@@ -71,10 +82,17 @@ function tokenExpiry(token: string): number | null {
   }
 }
 
+/**
+ * Tokens live in sessionStorage, not localStorage: the refresh credential
+ * itself is an httpOnly cookie now, so the only thing kept here is the
+ * short-lived access token a tab needs for the WebSocket handshake. The
+ * cached session profile stays in localStorage because it is UI state, not
+ * a credential.
+ */
 function readLocal(key: string): string | null {
   if (typeof window === "undefined") return null;
   try {
-    return window.localStorage.getItem(key);
+    return window.sessionStorage.getItem(key);
   } catch {
     return null;
   }
@@ -83,7 +101,7 @@ function readLocal(key: string): string | null {
 function writeLocal(key: string, value: string): void {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(key, value);
+    window.sessionStorage.setItem(key, value);
   } catch {
     return;
   }
@@ -92,7 +110,7 @@ function writeLocal(key: string, value: string): void {
 function removeLocal(key: string): void {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.removeItem(key);
+    window.sessionStorage.removeItem(key);
   } catch {
     return;
   }
@@ -180,7 +198,10 @@ interface AuthSessionResponse {
 
 function storeAuthSession(payload: AuthSessionResponse): void {
   writeLocal(TOKEN_KEY, payload.token);
-  writeLocal(REFRESH_TOKEN_KEY, payload.refreshToken);
+  // The refresh credential lives in an httpOnly cookie; a copy in web
+  // storage would only widen what an XSS could steal. Older sessions that
+  // still carry one are ignored.
+  removeLocal(REFRESH_TOKEN_KEY);
   const expiry = new Date(payload.expiresAt).getTime();
   if (!Number.isNaN(expiry)) writeLocal(TOKEN_TTL_KEY, String(expiry));
 }
@@ -190,6 +211,7 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
     method: "POST",
     headers: { "Content-Type": "application/json", accept: "application/json" },
     body: JSON.stringify(body ?? {}),
+    credentials: "include",
   });
   const payload = (await response.json().catch(() => null)) as
     | (T & { error?: string; code?: string })
@@ -215,11 +237,13 @@ export async function getToken(): Promise<string | null> {
 
   refreshRequest = (async () => {
     const refreshToken = cachedRefreshToken();
-    if (!refreshToken) return null;
     try {
-      const payload = await post<AuthSessionResponse>("/auth/refresh", {
-        refreshToken,
-      });
+      // The refresh credential normally arrives as an httpOnly cookie; the
+      // body field is only a fallback for sessions minted before cookies.
+      const payload = await post<AuthSessionResponse>(
+        "/auth/refresh",
+        refreshToken ? { refreshToken } : {},
+      );
       if (!payload?.token) return null;
       storeAuthSession(payload);
       return payload.token;
@@ -236,18 +260,31 @@ export async function getToken(): Promise<string | null> {
 
 /** Reads the current session from the API. */
 export async function fetchSession(): Promise<Session | null> {
-  const token = await getToken();
-  if (!token) return null;
+  const read = async (token: string | null): Promise<Response> =>
+    fetch(`${API_URL}/auth/session`, {
+      headers: {
+        accept: "application/json",
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: "include",
+    });
 
-  const response = await fetch(`${API_URL}/auth/session`, {
-    headers: { accept: "application/json", authorization: `Bearer ${token}` },
-  });
+  // The access cookie usually answers this directly; only when it has
+  // expired do we spend a refresh rotation to mint a new one.
+  let response = await read(cachedToken());
+  if (response.status === 401) {
+    const token = await getToken();
+    if (!token) return null;
+    response = await read(token);
+  }
   if (!response.ok) return null;
 
   const payload = (await response.json().catch(() => null)) as {
     user?: { id: string; email: string; name?: string | null; image?: string | null };
     roles?: string[];
     permissions?: string[];
+    verifiedAt?: string | null;
+    requiresVerification?: boolean;
   } | null;
   if (!payload?.user) return null;
 
@@ -261,6 +298,8 @@ export async function fetchSession(): Promise<Session | null> {
     roles: payload.roles ?? [],
     permissions: payload.permissions ?? [],
     expiresAt: null,
+    verifiedAt: payload.verifiedAt ?? null,
+    requiresVerification: payload.requiresVerification === true,
   };
   storeSession(session);
   return session;
@@ -325,9 +364,7 @@ export async function signInWithGoogle(next = "/dashboard"): Promise<boolean> {
   if (typeof window === "undefined") return false;
   rememberNextPath(next);
   const redirectUri = encodeURIComponent(webAuthCallbackUrl());
-  // API_URL already carries the /v1 base — the path is /auth/..., not
-  // /v1/auth/..., or the browser is sent to /v1/v1/... and the provider
-  // consent page never loads.
+  // The /api proxy maps this onto the API's /v1/auth/google/start.
   window.location.assign(`${API_URL}/auth/google/start?redirect_uri=${redirectUri}`);
   return true;
 }
@@ -351,6 +388,7 @@ export async function linkGoogle(next = "/settings"): Promise<boolean> {
       authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({}),
+    credentials: "include",
   });
   if (!response.ok) return false;
 
@@ -385,7 +423,6 @@ export function storeSessionFromFragment(fragment: string): boolean {
   if (!token || !refreshToken) return false;
 
   writeLocal(TOKEN_KEY, token);
-  writeLocal(REFRESH_TOKEN_KEY, refreshToken);
   const expiresAt = params.get("expires_at");
   if (expiresAt) {
     const expiry = new Date(expiresAt).getTime();
@@ -471,14 +508,109 @@ export async function resetPassword(
 }
 
 export async function signOut(): Promise<void> {
-  const refreshToken = cachedRefreshToken();
   try {
-    if (refreshToken) {
-      await post("/auth/sign-out", { refreshToken });
-    }
+    // The refresh credential is an httpOnly cookie; the API revokes it and
+    // clears both cookies on the way out.
+    await post("/auth/sign-out", {});
   } catch {
     // The local session is cleared either way.
   } finally {
     clearSession();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Step-up verification
+// ---------------------------------------------------------------------------
+
+export type VerificationMethodName =
+  | "totp"
+  | "email_link"
+  | "email_otp"
+  | "passkey";
+
+export interface VerificationMethod {
+  method: VerificationMethodName;
+  destination: string;
+  isDefault: boolean;
+  enrolled: boolean;
+  lastUsedAt?: string | null;
+}
+
+export interface VerificationRequestResult {
+  method: VerificationMethodName;
+  requiresCode: boolean;
+  sent: boolean;
+}
+
+export async function fetchVerificationMethods(): Promise<VerificationMethod[]> {
+  const response = await fetch(`${API_URL}/auth/verification/methods`, {
+    headers: { accept: "application/json" },
+    credentials: "include",
+  });
+  if (!response.ok) return [];
+  const payload = (await response.json().catch(() => null)) as {
+    methods?: VerificationMethod[];
+  } | null;
+  return payload?.methods ?? [];
+}
+
+export async function startTotpEnrollment(): Promise<{
+  secret: string;
+  otpauthUrl: string;
+} | null> {
+  try {
+    return await post<{ secret: string; otpauthUrl: string }>(
+      "/auth/verification/totp/enroll",
+      {},
+    );
+  } catch {
+    return null;
+  }
+}
+
+export async function confirmTotpEnrollment(
+  code: string,
+): Promise<VerificationMethod[] | null> {
+  try {
+    const payload = await post<{ methods?: VerificationMethod[] }>(
+      "/auth/verification/totp/confirm",
+      { code },
+    );
+    return payload.methods ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Asks the API to start a verification. TOTP answers immediately (the code
+ * the user types is the proof); email_link sends a single-use link.
+ */
+export async function requestVerification(input: {
+  method?: VerificationMethodName;
+  redirectUri?: string;
+}): Promise<VerificationRequestResult | null> {
+  try {
+    return await post<VerificationRequestResult>(
+      "/auth/verification/request",
+      {
+        ...(input.method ? { method: input.method } : {}),
+        redirectUri: input.redirectUri ?? webAuthCallbackUrl(),
+      },
+    );
+  } catch {
+    return null;
+  }
+}
+
+/** Verifies a TOTP step-up code, then refreshes the cached session. */
+export async function verifyTotp(code: string): Promise<boolean> {
+  try {
+    await post("/auth/verification/verify", { method: "totp", code });
+    await fetchSession();
+    return true;
+  } catch {
+    return false;
   }
 }

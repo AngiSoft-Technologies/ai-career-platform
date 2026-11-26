@@ -1,0 +1,119 @@
+{
+  "project_info": {
+    "project_number": "1058678501857",
+    "firebase_url": "https://flutterapps-db036-default-rtdb.firebaseio.com",
+    "project_id": "flutterapps-db036",
+    "storage_bucket": "flutterapps-db036.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1058678501857:android:4070fd457b1589b47fa2a0",
+        "android_client_info": {
+          "package_name": "com.angerasilas.bmi_calculator"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1058678501857-bsqitbgsmsog3arv8eiebd5jsfvtum5m.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBMEui8pIuqA_c6HEVHsv_Ib7VRLuJHklw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1058678501857-bsqitbgsmsog3arv8eiebd5jsfvtum5m.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "1058678501857-mfcp2ts1ti5irnr638g0voo13ggkp1ua.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "ke.co.angisoft.mboqara"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1058678501857:android:76ed0b6c65a8d3057fa2a0",
+        "android_client_info": {
+          "package_name": "com.example.adoption_and_childcare"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1058678501857-bsqitbgsmsog3arv8eiebd5jsfvtum5m.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBMEui8pIuqA_c6HEVHsv_Ib7VRLuJHklw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1058678501857-bsqitbgsmsog3arv8eiebd5jsfvtum5m.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "1058678501857-mfcp2ts1ti5irnr638g0voo13ggkp1ua.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "ke.co.angisoft.mboqara"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1058678501857:android:073cebe3fdbcddeb7fa2a0",
+        "android_client_info": {
+          "package_name": "ke.co.angisoft.mboqara"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1058678501857-bsqitbgsmsog3arv8eiebd5jsfvtum5m.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBMEui8pIuqA_c6HEVHsv_Ib7VRLuJHklw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1058678501857-bsqitbgsmsog3arv8eiebd5jsfvtum5m.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "1058678501857-mfcp2ts1ti5irnr638g0voo13ggkp1ua.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "ke.co.angisoft.mboqara"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

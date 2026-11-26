@@ -39,6 +39,8 @@ export const JOB_NAMES = {
   scheduleApplicationPreparations: "schedule-application-preparations",
   reconcileApplicationPreparations: "reconcile-application-preparations",
   expireApplicationSubmissionLeases: "expire-application-submission-leases",
+  evaluateSavedSearchAlerts: "evaluate-saved-search-alerts",
+  sendCalendarReminders: "send-calendar-reminders",
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
@@ -516,6 +518,29 @@ async function handleExpireApplicationSubmissionLeases(): Promise<{
   return { expired: await expireStaleSubmissionRuns() };
 }
 
+/** Runs the saved-search cadence pass. Safe with zero saved searches. */
+async function handleSavedSearchAlerts(): Promise<{
+  evaluated: number;
+  notified: number;
+  skipped: number;
+}> {
+  const { evaluateSavedSearchAlerts } = await import(
+    "../services/platform-alerts.js"
+  );
+  return evaluateSavedSearchAlerts();
+}
+
+/** Reminds users about follow-ups and interviews in the next hour. */
+async function handleCalendarReminders(): Promise<{
+  considered: number;
+  sent: number;
+}> {
+  const { enqueueCalendarReminders } = await import(
+    "../services/platform-alerts.js"
+  );
+  return enqueueCalendarReminders();
+}
+
 async function handlePrepareApplication(data: Record<string, unknown>): Promise<{
   preparationId: string;
   status: string;
@@ -580,6 +605,8 @@ const JOB_TIMEOUTS: Record<JobName, number> = {
   [JOB_NAMES.scheduleApplicationPreparations]: 5 * 60_000,
   [JOB_NAMES.reconcileApplicationPreparations]: 5 * 60_000,
   [JOB_NAMES.expireApplicationSubmissionLeases]: 60_000,
+  [JOB_NAMES.evaluateSavedSearchAlerts]: 5 * 60_000,
+  [JOB_NAMES.sendCalendarReminders]: 5 * 60_000,
 };
 
 class JobTimeoutError extends Error {
@@ -648,6 +675,8 @@ const handlers: Record<JobName, (data: Record<string, unknown>) => Promise<unkno
   [JOB_NAMES.scheduleApplicationPreparations]: handleScheduleApplicationPreparations,
   [JOB_NAMES.reconcileApplicationPreparations]: handleReconcileApplicationPreparations,
   [JOB_NAMES.expireApplicationSubmissionLeases]: handleExpireApplicationSubmissionLeases,
+  [JOB_NAMES.evaluateSavedSearchAlerts]: handleSavedSearchAlerts,
+  [JOB_NAMES.sendCalendarReminders]: handleCalendarReminders,
 };
 
 /** Last time a job finished on each queue, for the stall watchdog. */
@@ -705,7 +734,7 @@ export interface WorkerHandle {
 
 /**
  * Starts every background consumer inside the API process. The backend is a
- * single deployable: `fly deploy` boots HTTP, GraphQL, MCP, SSE, WebSocket,
+ * single deployable: one deploy boots HTTP, GraphQL, MCP, SSE, WebSocket,
  * gRPC and the background workers together. Nothing has to be started by hand.
  */
 export async function startWorkers(): Promise<WorkerHandle> {
@@ -1150,6 +1179,38 @@ async function scheduleRecurringJobs(
     );
     entries.push(
       pollingEntry(maintenanceQueue, JOB_NAMES.reapStaleRows, reaperIntervalMs),
+    );
+  }
+
+  // Saved-search alerts and calendar reminders share the maintenance queue.
+  // Both are cheap, idempotent passes over a small set of user-owned rows, and
+  // neither should hold up application preparation.
+  if (maintenanceQueue && process.env.CONTINUOUS_PLATFORM_ALERTS !== "false") {
+    const alertIntervalMs = boundedEnvInteger(
+      process.env.SAVED_SEARCH_ALERT_INTERVAL_MS,
+      5 * 60_000,
+      60_000,
+      24 * 60 * 60_000,
+    );
+    const reminderIntervalMs = boundedEnvInteger(
+      process.env.CALENDAR_REMINDER_INTERVAL_MS,
+      10 * 60_000,
+      60_000,
+      24 * 60 * 60_000,
+    );
+    await removeStaleScheduler(maintenanceQueue, "scheduler-saved-search-alerts");
+    await removeStaleScheduler(maintenanceQueue, "scheduler-calendar-reminders");
+    entries.push(
+      pollingEntry(
+        maintenanceQueue,
+        JOB_NAMES.evaluateSavedSearchAlerts,
+        alertIntervalMs,
+      ),
+      pollingEntry(
+        maintenanceQueue,
+        JOB_NAMES.sendCalendarReminders,
+        reminderIntervalMs,
+      ),
     );
   }
 

@@ -7,6 +7,10 @@ class GeneratedDocument {
     required this.content,
     this.applicationId,
     this.template,
+    this.version,
+    this.updatedAt,
+    this.usedInApplications = const [],
+    this.atsScore,
   });
 
   final String id;
@@ -18,6 +22,13 @@ class GeneratedDocument {
 
   /// Catalogue key of the template this document is styled with.
   final String? template;
+
+  final int? version;
+  final DateTime? updatedAt;
+
+  /// Applications this document was attached to or generated for.
+  final List<String> usedInApplications;
+  final int? atsScore;
 
   String get typeLabel {
     return switch (type) {
@@ -37,7 +48,11 @@ class GeneratedDocument {
       type: json['type'] as String? ?? 'cv',
       title: json['title'] as String? ?? 'Generated document',
       content: json['content'] as String? ?? '',
-      template: json['template'] as String?,
+      template: (json['template'] ?? json['templateKey']) as String?,
+      version: (json['version'] as num?)?.toInt(),
+      updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? ''),
+      usedInApplications: _strings(json['usedInApplications']),
+      atsScore: (json['atsScore'] as num?)?.toInt(),
     );
   }
 
@@ -49,5 +64,14 @@ class GeneratedDocument {
     'title': title,
     'content': content,
     if (template != null) 'template': template,
+    if (version != null) 'version': version,
+    if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
+    if (usedInApplications.isNotEmpty) 'usedInApplications': usedInApplications,
+    if (atsScore != null) 'atsScore': atsScore,
   };
+
+  static List<String> _strings(dynamic value) {
+    if (value is! List) return const [];
+    return value.whereType<String>().toList();
+  }
 }

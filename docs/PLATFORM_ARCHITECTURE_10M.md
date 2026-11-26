@@ -2,8 +2,8 @@
 
 **Status:** Design. Nothing in this document is implemented yet.
 **Companion doc:** `docs/ARCHITECTURE_BOUNDARIES.md` (the boundary rule and the violation inventory). This document covers *capability and scale*; that one covers *ownership*.
-**Scope:** web + mobile clients, one Express backend on Fly.io, Neon Lakebase Postgres, Upstash Redis, Tigris object storage.
-**Verified:** 2026-10-29. All numbers below are quoted from vendor docs or measured against the live deployment. Where a number is an estimate, it says so.
+**Scope:** web + mobile clients, one Express backend on Vercel, Neon Lakebase Postgres, Upstash Redis, AWS S3 object storage.
+**Verified:** 2026-10-29 (infrastructure re-verified after the hosting migration to Vercel). All numbers below are quoted from vendor docs or measured against the live deployment. Where a number is an estimate, it says so.
 
 ---
 
@@ -18,13 +18,13 @@
 | Neon compute | **100 CU-hours / project / month** | ~9,000 CU-hours / month | 90× |
 | Neon Auth | **60,000 MAU** | 10,000,000 MAU | 167× |
 | Neon Functions invocations | **1M / project** | 100M+ | 100× |
-| Fly.io | **No free tier.** 2 h trial or 7 days, whichever first | Always-on, multi-region | — |
+| Vercel | Hobby is non-commercial; **Pro ~$20/mo per member** + usage | Always-on-equivalent, global edge | — |
 
 The architectural consequence, and the design rule that follows from it:
 
 > **Every tier boundary must be a plan change and a config change, never a rewrite.**
 
-If "go from 50k to 10M users" requires changing `PLAN` on Neon, changing `fly scale count`, and flipping a replica host — the design is correct. If it requires sharding the application by tenant, rewriting the DB layer, or re-platforming, the design is wrong. Everything below is chosen with that test applied.
+If "go from 50k to 10M users" requires changing `PLAN` on Neon, raising Vercel spend limits, and flipping a function region — the design is correct. If it requires sharding the application by tenant, rewriting the DB layer, or re-platforming, the design is wrong. Everything below is chosen with that test applied.
 
 Current state, measured live: **6 users, 2,449 opportunities, 8,835 skill edges, 1,265 companies, 6 candidate profiles.** This is an empty database. The architecture is therefore designed for the destination, and this document is the plan for getting there without a rewrite.
 
@@ -60,30 +60,22 @@ Current state, measured live: **6 users, 2,449 opportunities, 8,835 skill edges,
 
 **Neon Functions / Object Storage / AI Gateway / Realtime are restricted to 4 regions:** `aws-us-east-2`, `aws-us-east-1`, `aws-eu-central-1` (Frankfurt), `aws-ap-southeast-1` (Singapore).
 
-### Fly.io (18 regions, confirmed from `docs.fly.io/reference/regions.md`)
+### Vercel (the API + web host)
 
 | Fact | Value |
 | --- | --- |
-| Free tier | **None.** Trial: up to 2 h machine runtime **or** 7 days, whichever comes first |
-| Cheapest always-on machine | `shared-cpu-1x` / 256 MB in `iad`/`ewr` = **$2.19 / 30 days** |
-| Machine RAM overage | ~$0.0087/hr per 30 days per additional GB (from published table) |
-| Volumes | **$0.15 / GB / month** |
-| Volume snapshots | first **10 GB free / month**, billed on stored size not provisioned |
-| Egress → internet | **$0.02/GB** N.America+Europe · **$0.04/GB** Asia Pacific, Oceania, S.America · **$0.12/GB** **Africa & India** |
-| Private cross-region transfer | $0.006/GB NA/EU · $0.015/GB APAC/Oceania/SA · **$0.050/GB** Africa & India |
-| Same-region private transfer | **free** |
-| Inbound data | **free** |
-| Shared IPv4, IPv6, inbound, first 10 SSL certs | **free** |
-| Static egress IP | $0.005/hr (~$3.60/mo) |
-| Wildcard cert | $1/mo |
-| Builders / image registry / image pulls | **free** |
-| **African region** | **`jnb` (Johannesburg) only — and it has NO Gateway and NO Managed Postgres** |
+| Hobby plan | Free, **non-commercial use only** — a paid product cannot legally run on it |
+| Pro plan | ~$20/mo per member, includes usage credits; commercial use allowed |
+| Compute model | Serverless functions / Fluid compute — scale to zero, no always-on VMs |
+| Regions | Global edge; function regions include **`cpt1` (Cape Town)** — the only African region of any major host we evaluated, and it is what `apps/web/vercel.json` already pins (`regions: ["cpt1"]`) |
+| Static/data transfer | Fast Data Transfer metered after included allowance (~$0.15/GB on Pro — estimate, check current pricing) |
+| Functions | Concurrent executions capped per plan; long-running work needs Fluid/`maxDuration` or an external worker |
+| WebSockets / gRPC | **Constrained** — serverless functions are request-scoped; persistent connections need a different home (see §4 note) |
+| Secrets / env | `vercel env` — already how `SMTP_*`, `DATABASE_URL`, `JWT_SECRET` are managed |
 
-**The two most expensive facts in this project:**
-1. Fly egress from Africa is **6× Europe** ($0.12 vs $0.02 per GB).
-2. Neon has **no African region at all**, and Fly's only African region (`jnb`) has **no Gateway** (no WireGuard private network) and **no Managed Postgres**.
+**The honest caveat:** the API is a long-lived Express process (SSE, WebSocket, gRPC, BullMQ workers, a 1-second ticker). Vercel's request-scoped functions cannot host all of that as-is. Today the deployment works because the workload fits; at scale the background workers and realtime transports need a dedicated host (see §4 and the open question in §16). This is the single biggest architectural difference from the previous container-host topology.
 
-### Upstash Redis on Fly (`flyctl redis`)
+### Upstash Redis
 
 | Plan | Price | Max commands/sec | Max data | Monthly bandwidth |
 | --- | --- | --- | --- | --- |
@@ -94,20 +86,16 @@ Current state, measured live: **6 users, 2,449 opportunities, 8,835 skill edges,
 | Fixed 10GB | $200/mo + $100/read region | — | 10 GB | 1 TB |
 | Fixed 50GB | $400/mo + $200/read region | — | 50 GB | 5 TB |
 
-Key behaviours (from Fly docs):
-- Available in **all Fly regions** via private IPv6 restricted to your org — traffic auto-routes to nearest replica.
+Key behaviours:
 - **Replicas forward writes to the primary; writes are synchronous and slow over distance.** Read regions cannot be written to.
 - Docs explicitly warn: *"If you're using Sidekiq, BullMQ or similar software, consider switching your database to a fixed price plan to avoid running up your pay-as-you-go bill."* **This applies directly to us — BullMQ is already in the stack.**
-- Eviction is off by default (writes rejected at limit); region-local cache DBs should have eviction on.
+- Eviction is off by default on queue DBs (writes rejected at limit); cache DBs should have eviction on.
 
-### Tigris on Fly (`fly storage create`)
+### Object storage — AWS S3 (current) / Tigris (alternative)
 
-- S3-compatible, globally distributed, **multi-cloud**, provisioned inside the Fly org.
-- **"This automatic global replication can replace a CDN and makes all your data available at low latency with zero configuration required."** — Fly's own docs. This is our CDN.
-- Public bucket → `https://<bucket>.t3.tigrisfiles.io/<key>` (+ `.tigrisbucket.io`, `.tigrisblob.io` mirrors), custom domains via CNAME.
-- Private by default; per-object ACLs can make single objects public-read.
-- Access keys printed once at create; `flyctl` cannot retrieve later.
-- Billed at provider list price, **and transfer to Tigris is billed separately as egress.**
+- **Current:** AWS S3 via `@aws-sdk/client-s3` (credentials already in env: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT_URL_S3`, `AWS_REGION`, `S3_BUCKET`). Region-pinned; pair with CloudFront or a CDN for edge reads.
+- **Alternative:** Tigris — S3-compatible, globally distributed object storage with automatic replication; "this automatic global replication can replace a CDN" per its docs. Public bucket URLs are S3-style; custom domains via CNAME. Access keys printed once at create.
+- Billed at provider list price; **transfer out of the bucket is billed separately as egress** — which makes a CDN in front non-optional at scale.
 
 ---
 
@@ -119,15 +107,16 @@ Assumptions: 10M MAU, 300M requests/month, 60% of traffic from Africa (Kenya pri
 | --- | --- | --- |
 | Storage | 10M users × ~100 KB avg (profile + applications + matches + doc metadata) + 5M opportunities × 5 KB + 5M embeddings × 6 KB | **~1.1 TB** → Neon Launch @ $0.35/GB-mo ≈ **$385/mo** |
 | Neon compute | 300M req/mo ≈ 115 req/s avg, ~1,200 req/s peak. Primary 8 CU + 3 read replicas × 4 CU, ~12 CU sustained average | 12 × 730 = 8,760 CU-h × $0.106 ≈ **$930/mo** |
-| Fly machines | Peak 1,200 req/s ÷ ~1,500 req/s per `shared-cpu-2x` = ~4 API machines; + 2 worker machines; spread over `jnb`, `fra`, `iad` | **~6–8 machines ≈ $150–400/mo** (varies by region) |
-| Fly egress | 300M × 8 KB = 2.4 TB. 60% (1,440 GB) from `jnb` @ $0.12 = $173; 40% (960 GB) from `fra`/`iad` @ $0.02 = $19 | **~$192/mo** |
+| Vercel compute | Function GB-hours + requests at 300M/mo — estimate **$400–900/mo** depending on Fluid settings and caching hit rate (Vercel's per-request pricing punishes uncached dynamic traffic) | **~$400–900/mo (estimate)** |
+| Vercel egress | 300M × 8 KB = 2.4 TB fast data transfer @ ~$0.15/GB ≈ **$360/mo** — partially offset by CDN caching of public reads | **~$200–360/mo (estimate)** |
 | Upstash Redis | ~1 Redis op per request = 300M ops. PAYG = 300M/100k × $0.20 = **$600/mo**. Fixed 10GB = **$200/mo** | **$200/mo (must use fixed plan)** |
-| Tigris | ~50 TB user files (CVs, avatars) at list price | **~$1,150/mo** |
+| S3 + CDN | ~50 TB user files at S3 list price + transfer/CDN | **~$1,000–1,300/mo** |
 | Neon Auth | 10M MAU exceeds even Scale's 1M MAU cap | **self-host or multi-tenant — see §11** |
+| Worker/realtime host | BullMQ workers + WS/gRPC cannot live in request-scoped functions — dedicated container (see §4) | **~$50–200/mo (estimate)** |
 
-**Order-of-magnitude total at 10M MAU: $2,500–4,000 / month.** Storage and Tigris dominate; Fly's African egress is real but second-order (~$190). Neither is the free tier.
+**Order-of-magnitude total at 10M MAU: $2,500–4,000 / month.** Storage and object storage dominate; egress is real but second-order (~$300). Neither is the free tier.
 
-**The byte-efficiency insight:** because Africa egress is 6× Europe, every kilobyte removed from an African response is worth 6× a kilobyte removed from a European one. Response shaping is a *cost control*, not a nicety. This is the strongest argument in the whole document for GraphQL/sparse-fieldsets on mobile (§6).
+**The byte-efficiency insight:** African users pay the highest effective latency and every uncached byte crosses a long-haul link. Response shaping (GraphQL sparse fieldsets on mobile, §6) is a *cost and latency control*, not a nicety — the single highest-leverage optimization available.
 
 ---
 
@@ -136,62 +125,56 @@ Assumptions: 10M MAU, 300M requests/month, 60% of traffic from Africa (Kenya pri
 ```
                           ┌──────────────────────────────────────────────┐
    Web (Next.js)          │  Vercel CDN  (static, edge-cached, global)    │
-   Mobile (Flutter)       └──────────────────────────────────────────────┘
+   Mobile (Flutter)       │  pinned to cpt1 (Cape Town) for the app       │
+   └──────────────────────┴──────────────────────────────────────────────┘
                     │ REST /v1  ·  GraphQL /v1/graphql  ·  SSE /v1/stream
                     ▼
 ╔═══════════════════════════════════════════════════════════════════════════╗
-║  FLY.IO — anycast edge (Fly Proxy)                                        ║
-║  TLS termination · autostop/autostart · concurrency limits · fly-replay   ║
-║  health checks · sticky sessions (fly-force-instance-id)                  ║
+║  VERCEL — edge network + serverless functions                             ║
+║  api.mboqara.angisoft.co.ke → Express app                                 ║
+║  TLS termination · edge cache · function concurrency limits               ║
 ╚═══════════════════════════════════════════════════════════════════════════╝
    │                      │                        │                    │
-   ▼ jnb (Johannesburg)   ▼ fra (Frankfurt)        ▼ iad / ord           ▼ sin
+   ▼ cpt1 (Cape Town)     ▼ fra1 (Frankfurt)       ▼ iad1 (N. Virginia)   ▼
  ┌───────────────┐  ┌───────────────┐  ┌──────────────────┐  ┌───────────────┐
- │ app process   │  │ app process   │  │ app process      │  │ app process   │
- │ group ×N      │  │ group ×N      │  │ group ×N         │  │ group ×N      │
- │               │  │               │  │                  │  │               │
- │ worker group  │  │ worker group  │  │ worker group     │  │ worker group  │
- │ ×M (BullMQ)   │  │ ×M            │  │ ×M               │  │ ×M            │
+ │ API functions │  │ API functions │  │ API functions    │  │ API functions │
+ │ (request-     │  │               │  │                  │  │               │
+ │  scoped)      │  │               │  │                  │  │               │
  └───────┬───────┘  └───────┬───────┘  └────────┬─────────┘  └───────┬───────┘
          │                  │                   │                    │
-         │  internal gRPC (:50051, private 6PN) │                    │
-         └──────────────────┴───────────────────┴────────────────────┘
-                             │
-   ┌─────────────────────────┼──────────────────────────┬──────────────────┐
+         │            dedicated worker host ────┴────────────────────┘
+         │            (BullMQ consumers, gRPC, WS/SSE fan-out —
+         │             request-scoped functions cannot hold these;
+         │             PROCESS_ROLE=worker exists for exactly this)
+         │
+   ┌─────┴──────────────────────────────────────────────────────────────┐
    ▼                         ▼                          ▼                  ▼
 ┌──────────────────┐ ┌──────────────────┐ ┌────────────────────┐ ┌─────────────────┐
-│ UPSTASH REDIS    │ │ UPSTASH REDIS    │ │ NEON LAKEBASE      │ │ TIGRIS          │
-│ region-local     │ │ region-local     │ │ POSTGRES           │ │ global object   │
- │ cache (evict on)│ │ queue (BullMQ)   │ │                    │ │ storage         │
- │ jnb / fra / iad │ │ per-region       │ │ primary rw compute │ │ (= the CDN)     │
- └──────────────────┘ └──────────────────┘ │ eu-central-1       │ └─────────────────┘
+│ UPSTASH REDIS    │ │ UPSTASH REDIS    │ │ NEON LAKEBASE      │ │ AWS S3          │
+│ cache (evict on) │ │ queue (BullMQ)   │ │ POSTGRES           │ │ (+ CDN in front)│
+│ per-region       │ │ per-region       │ │                    │ │                 │
+└──────────────────┘ └──────────────────┘ │ primary rw compute │ └─────────────────┘
+                                            │ aws-eu-central-1   │
                                             │ + 3 read replicas  │
                                             │ (same region only) │
-                                            └─────────┬──────────┘
-                                                      │ logical replication
-                                                      ▼
-                                            ┌──────────────────┐
-                                            │ NEON project #2  │
-                                            │ (cross-region /  │
-                                            │  analytics replica│
-                                            └──────────────────┘
+                                            └────────────────────┘
 ```
 
-### The three hard geographic truths this diagram encodes
+### The geographic truth this diagram encodes
 
-1. **No Postgres can live in Africa.** Neither Fly (`jnb` has no Managed Postgres) nor Neon (no African region) offers it. The nearest Neon region supporting the full primitive set is **`aws-eu-central-1` (Frankfurt)**.
-2. **Therefore African reads must not come from Postgres.** They come from Redis (region-local), Tigris (global edge), and Vercel's CDN. Postgres is for the ~30% of requests that genuinely need fresh authoritative data, and those pay the jnb→fra latency.
-3. **Writes always go to Frankfurt.** `fly-replay: region=fra` forwards the whole request through the edge back to Frankfurt — cheaper and faster than 3 round-trips from `jnb` to Frankfurt. Cross-region private transfer `jnb`→`fra` is $0.050/GB; same-region is free, so the write path is deliberately kept small.
+1. **Vercel has an African region — `cpt1` (Cape Town)** — the first major host in this stack that does. Web is already pinned there. API functions can follow.
+2. **No Postgres can live in Africa.** Neon has zero African regions, so authoritative reads still pay a Cape Town → Frankfurt round trip. African reads must come from Redis, the CDN, and edge cache; Postgres is for the ~30% of requests that need fresh authoritative data.
+3. **Writes always go to Frankfurt** — the Neon primary lives there. Every write pays the distance; keep the write path small.
 
 **Expected latencies from Nairobi (estimates, to be measured):**
-- Edge-terminated static + cached reads from `jnb`: 15–40 ms
-- jnb-local Redis hit: 20–50 ms
-- Frankfurt Postgres read (via replay): 130–180 ms
-- Write (replay + Frankfurt commit): 150–250 ms
-- Tigris edge fetch: 20–60 ms
+- Edge-cached static + CDN reads: 15–40 ms
+- `cpt1`-local Redis hit: 20–50 ms
+- Frankfurt Postgres read: 130–180 ms
+- Write (Frankfurt commit): 150–250 ms
+- S3/CDN fetch: 20–60 ms
 
 **Measured from Nairobi, 2026-10-30** (`services/api/scripts/probe-latency.mjs`, 20–25 samples each,
-served by the `jnb` machine):
+served by the previous single-region deployment):
 
 | Path | p50 | p95 | max |
 | --- | --- | --- | --- |
@@ -205,6 +188,8 @@ Frankfurt Postgres read. Second, the tail is the real problem: roughly one reque
 4–15× the median, and `/v1/public/stats` has a worse p95 than `/live`, which points at connection
 acquisition rather than query time. The next step is not a new region, it is connection reuse and
 a repeat of these numbers with a keep-alive client.
+
+**Persistent-connection caveat:** SSE (`/v1/stream`), the WebSocket hub, and gRPC `:50051` assume a long-lived process. On Vercel these need either Fluid compute with extended `maxDuration`, a separate always-on worker host, or a managed realtime service — decide before the 10M path, not during it.
 
 ---
 
@@ -231,9 +216,9 @@ The user's instinct to blend REST, GraphQL, gRPC, MCP and SOAP is right, but onl
 | Protocol | Verdict | Where it goes | Reasoning |
 | --- | --- | --- | --- |
 | **REST** `/v1/*` | **Primary** | All web + mobile calls. Writes, auth, simple reads | One contract, HTTP-cachable, trivially debuggable, works identically on web and mobile. Already built and mounted |
-| **GraphQL** `/v1/graphql` | **Yes — cost control, not novelty** | Mobile read paths: opportunity feed, match list, profile, applications list | **This is the egress argument.** A Kenyan user's feed fetched at 50 KB and shaped to 6 KB saves 88% of the response — at $0.12/GB that is the single highest-leverage optimization available. Also kills N+1 waterfall on 3G. `graphql-yoga` and the schema **already exist in `app.ts:140`** |
-| **gRPC** `:50051` | **Yes — internal only** | Worker dispatch, service-to-service, bulk ingestion batches | Binary + HTTP/2 multiplexing is far cheaper than JSON for internal high-volume traffic. **Never exposed to browsers.** Already implemented |
-| **MCP** `/v1/mcp` | **Yes — growth channel, not core** | Expose MboQara search + matching as tools for Claude / Copilot / other agents | Already implemented with OAuth-protected-resource metadata. Not a product path; a distribution path. Fly has a dedicated MCP blueprint (`fly mcp`) for hosting |
+| **GraphQL** `/v1/graphql` | **Yes — cost control, not novelty** | Mobile read paths: opportunity feed, match list, profile, applications list | **This is the egress argument.** A Kenyan user's feed fetched at 50 KB and shaped to 6 KB saves 88% of the response. Also kills N+1 waterfall on 3G. `graphql-yoga` and the schema **already exist in `app.ts`** |
+| **gRPC** `:50051` | **Yes — internal only** | Worker dispatch, service-to-service, bulk ingestion batches | Binary + HTTP/2 multiplexing is far cheaper than JSON for internal high-volume traffic. **Never exposed to browsers.** Already implemented — but note gRPC needs a persistent host, not request-scoped functions |
+| **MCP** `/v1/mcp` | **Yes — growth channel, not core** | Expose MboQara search + matching as tools for Claude / Copilot / other agents | Already implemented with OAuth-protected-resource metadata. Not a product path; a distribution path |
 | **SOAP** | **No — do not build** | — | SOAP's entire value is WS-Security + WS-* contracts with enterprise HR systems. There is no such partner. If a Kenyan employer (SAP SuccessFactors, a payroll vendor) ever mandates SOAP, add a **single thin endpoint** then. Building it now is pure cost with zero users |
 
 **The deleted-path rule:** `apps/web/src/lib/graphql.ts` is dead code — web never calls GraphQL. Per the boundary rule it gets removed, and the GraphQL endpoint becomes mobile-first.
@@ -275,11 +260,12 @@ routing layer, not a rewrite.
 ### Read replica routing
 
 ```
-if (FLY_REGION !== PRIMARY_REGION) throw flyReplay("fra")   // writes
-read  →  local replica if exists, else primary
+write  →  primary (aws-eu-central-1, Frankfurt)
+read   →  local replica if one exists in the serving region,
+          else Redis → CDN → primary (paying the latency)
 ```
 
-Neon read replicas are **same-region only**, so `jnb` has no local replica. African reads therefore go: Redis → Tigris → (Frankfurt, paying latency). Only 3 read replicas exist on Free, and they are useless to Kenyan users — the replica strategy serves *throughput and analytics offload*, not African latency. Say this plainly rather than pretending replicas solve the geography.
+Neon read replicas are **same-region only**, so `cpt1` has no local replica. African reads therefore go: Redis → CDN → (Frankfurt, paying latency). Only 3 read replicas exist on Free, and they are useless to Kenyan users — the replica strategy serves *throughput and analytics offload*, not African latency. Say this plainly rather than pretending replicas solve the geography.
 
 ### Concrete index gaps to close (migration 013)
 
@@ -339,7 +325,7 @@ Already implemented (`worker/index.ts`, `services/api/src/worker/`). Design:
 | `cache-warm` | deploy, TTL expiry | 8 | bulk |
 
 Rules:
-- **One Redis DB per region** (`jnb`, `fra`, `iad`). Queues are region-local; only results are shared.
+- **One Redis DB per region** (`cpt1`, `fra1`, `iad1`). Queues are region-local; only results are shared.
 - **Eviction ON** for cache DBs, **OFF** for queue DBs (never lose a notification).
   Reported at startup by `services/api/src/db/redis-policy.ts`. Note: Upstash exposes
   neither `CONFIG GET` nor `CONFIG SET` for `maxmemory-policy`, so this is an
@@ -349,12 +335,13 @@ Rules:
 - **Dead-letter queues** after 5 attempts, exponential backoff with jitter.
 - **Idempotency** on every mutating endpoint via the `idempotency_keys` table from migration 012 — the same key returns the stored response instead of a second write. Mobile networks retry aggressively; without this, retries duplicate applications.
 - **Switch to a fixed Upstash plan.** PAYG at $0.20/100k with BullMQ is a documented cost trap. At 300M ops/month PAYG is $600/mo vs $200/mo for fixed 10 GB.
+- **Workers cannot run in request-scoped functions.** BullMQ consumers, the gRPC server and the WebSocket hub need a persistent process — `PROCESS_ROLE=worker` exists for a dedicated deployment (container host, or Vercel's long-running compute where available).
 
 ---
 
 ## 9. Caching
 
-Layer order: Vercel CDN (web static) → Fly edge → region-local Redis → Postgres (Neon).
+Layer order: Vercel CDN (web static + public API reads) → Upstash Redis → Postgres (Neon).
 
 | Cache | Key | TTL | Eviction |
 | --- | --- | --- | --- |
@@ -374,12 +361,12 @@ Layer order: Vercel CDN (web static) → Fly edge → region-local Redis → Pos
 
 | Store | Used for | Why not the other |
 | --- | --- | --- |
-| **Tigris** (Fly) | **All production user files**: CVs, avatars, generated PDFs, document versions | Global automatic replication — *the CDN is built in*. Low latency in Africa with zero config. S3-compatible, so `@aws-sdk/client-s3` already in the stack works unchanged |
+| **AWS S3** (current) | **All production user files**: CVs, avatars, generated PDFs, document versions | Already wired via `@aws-sdk/client-s3`; presigned PUT keeps credentials off clients. Needs a CDN in front for edge reads |
+| **Tigris** (alternative) | Same role, if global replication without a separate CDN is preferred | Automatic global replication — *the CDN is built in*. S3-compatible, so the client code works unchanged |
 | **Neon Object Storage** (5 GB free) | Branch-scoped fixtures and dev uploads only | Branches with the database, which is genuinely useful for testing upload flows — but only exists in 4 non-African AWS regions, so every Kenyan fetch would cross to Frankfurt |
-| **Vercel** | Web static assets (`/media` photography, the Next.js bundle) | Hosts the app; edge cache included |
-| **Fly Volumes** | **Nothing.** | $0.15/GB/mo, region-locked, no replication. Not appropriate for user data |
+| **Vercel Blob / static** | Web static assets (`/media` photography, the Next.js bundle) | Hosts the app; edge cache included |
 
-Private buckets + presigned PUT from the backend. The backend signs, Tigris stores, the CDN serves. **Clients never hold storage credentials.**
+Private buckets + presigned PUT from the backend. The backend signs, S3 stores, the CDN serves. **Clients never hold storage credentials.**
 
 ---
 
@@ -393,7 +380,7 @@ state mismatches and lost session challenges).
 
 ```
 1. Mobile opens a Custom Tab / ASWebAuthenticationSession to
-     https://mboqara-api-angisoft.fly.dev/v1/auth/google/start
+     https://api.mboqara.angisoft.co.ke/v1/auth/google/start
        ?redirect_uri=mboqara://auth/callback
 2. Backend: store state + PKCE verifier in auth_oauth_states (10 min TTL), respond 302 ->
      accounts.google.com/o/oauth2/v2/auth (client_id, redirect_uri=<API>/v1/auth/google/callback,
@@ -404,20 +391,21 @@ state mismatches and lost session challenges).
      -> map identity -> app user (auth_identities) -> create handoff code
 5. Backend 302s to mboqara://auth/callback#code=<handoff>
 6. App POSTs /v1/auth/exchange { code } -> MboQara access token (15 min) +
-   rotating refresh token (30 d). Done.
+   rotating refresh token (long-lived). Done.
 ```
 
 This is exactly how LinkedIn, X and GitHub do native social sign-in. **No `google-services.json`, no iOS `GIDClientID`, no Google client ID from the user, no Gradle plugin.** The mobile app needs only a Custom Tab and a deep-link handler — `flutter_web_auth`-style, not `google_sign_in`.
 
 The Google OAuth client needs the API callback
-(`https://<api-host>/v1/auth/google/callback`) as an authorized redirect URI;
+(`https://api.mboqara.angisoft.co.ke/v1/auth/google/callback`) as an authorized redirect URI;
 the app redirect (`mboqara://auth/callback`) is where the browser lands *after* the API
 finishes, and is allowed by `AUTH_OAUTH_REDIRECT_ALLOWLIST` on the API.
 
 ### Token model (already implemented in `auth/tokens.ts`)
 
 - **Access token:** HS256 JWT, `sub` = local `users.id`, issuer/audience `mboqara`, **15 minutes**, `jti`.
-- **Refresh token:** 32-byte random, stored **hashed** (SHA-256) in `auth_refresh_tokens`, **30 days**, rotated on every use.
+- **Refresh token:** 32-byte random, stored **hashed** (SHA-256) in `auth_refresh_tokens`, rotated on every use; web sessions carry it in an httpOnly cookie for long-lived sign-in.
+- **Step-up verification:** `users.last_verified_at` is stamped at interactive sign-in; once older than `AUTH_STEP_UP_INTERVAL_SECONDS` the API answers `VERIFICATION_REQUIRED` and the user proves identity again via TOTP or an emailed magic link (`auth/verification.ts`).
 - **Reuse detection:** presenting an already-rotated token revokes the *entire family* — attacker and victim both forced to re-auth. This is the correct OAuth 2.1 behaviour and it is already built.
 - `JWT_SECRET` is now actually used, and refuses to start in production under 32 chars.
 
@@ -440,20 +428,20 @@ Either way: **the backend is the only caller.** Mobile and web call `/v1/ai/*` a
 
 ## 13. Observability
 
-The user asked for Grafana specifically. Fly's own metrics pipeline feeds it:
+The user asked for Grafana specifically. The pipeline is host-agnostic:
 
 | Signal | Source | Destination |
 | --- | --- | --- |
-| App metrics | `routes/metrics.ts` (Prometheus format, `recordHttpRequest` already wired in `app.ts:85`) | **Fly Metrics → Grafana** dashboards |
-| Machine/system | Fly platform | Grafana |
+| App metrics | `routes/metrics.ts` (Prometheus format, `recordHttpRequest` already wired in `app.ts`) | Prometheus scraper → **Grafana** dashboards |
+| Runtime/system | Vercel dashboard + drain | Grafana / Vercel Observability |
 | Neon Postgres | Neon console (1 day history on Free) | Neon dashboard |
 | Neon Functions / Object Storage logs | `neon logs query --branch production --source function` | Loki → Grafana |
-| App logs | `pino-http` + `logger.ts` (already wired) | `fly logs` / log drain → Loki |
+| App logs | `pino-http` + `logger.ts` (already wired) | Vercel log drains → Loki |
 | Distributed traces | **missing — add OpenTelemetry** | Grafana Tempo or Jaeger |
 | Error tracking | **missing — add Sentry or GlitchTip** | alerts |
-| Uptime / synthetic | `fly checks` + `/live`, `/health` | Grafana alerts |
+| Uptime / synthetic | Vercel checks + `/live`, `/health` | Grafana alerts |
 
-**Gaps to close:** OpenTelemetry traces (a request that crosses jnb → fra → Postgres → Redis → BullMQ is invisible without them), and synthetic checks from an African vantage point — `jnb` health checks do not tell you what a Kenyan user experiences.
+**Gaps to close:** OpenTelemetry traces (a request that crosses edge → function → Postgres → Redis → BullMQ is invisible without them), and synthetic checks from an African vantage point — `cpt1` health checks do not tell you what a Kenyan user experiences.
 
 ---
 
@@ -464,13 +452,13 @@ The user asked for Grafana specifically. Fly's own metrics pipeline feeds it:
 | Neon storage (~1.1 TB) | ~$385 | ❌ 1 GB |
 | Neon compute (~8,760 CU-h) | ~$930 | ❌ 100 CU-h |
 | Neon Auth (10M MAU) | exceeds Scale cap → self-host or partition | ❌ 60k MAU |
-| Fly machines (6–8, multi-region) | ~$150–400 | ❌ no free tier |
-| Fly egress (~2.4 TB, 60% Africa) | ~$192 | n/a (always billed) |
+| Vercel functions + fast data transfer | ~$400–900 + ~$200–360 (estimates) | ❌ Hobby is non-commercial |
+| Worker/realtime host | ~$50–200 (estimate) | ❌ |
 | Upstash Redis (fixed 10 GB + 1 read region) | ~$300 | n/a |
-| Tigris (~50 TB files) | ~$1,150 | n/a |
+| S3 + CDN (~50 TB files) | ~$1,000–1,300 | n/a |
 | **Total** | **~$2,500–4,000 / month** | |
 
-Free tier realistically carries **50k–100k MAU** for $0 (modulo Fly machine cost, which is never $0).
+Free tier realistically carries **50k–100k MAU** for $0 — and even that assumes the worker/realtime host is the one always-paid line.
 
 ---
 
@@ -481,12 +469,13 @@ Extends P0–P5 in `ARCHITECTURE_BOUNDARIES.md`.
 | Phase | Work | Unblocks |
 | --- | --- | --- |
 | **P1 — Auth boundary** *(done)* | `authRouter` mounted at `/v1/auth` **ahead of** the identity middleware; API-owned passwords; refresh rotation + reuse detection; migrations 012–016; contract types; 25-check verification suite green against production | Backend owns identity |
-| **P1b — Production wiring** *(done)* | `NEON_AUTH_OAUTH_CLIENT_ID`, `AUTH_OAUTH_REDIRECT_ALLOWLIST` and a 48-char `JWT_SECRET` in `fly secrets`; Redis eviction policy corrected at startup | Sign-in works outside localhost |
-| **P2 — Cut clients off Neon** *(done)* | `neon_auth_service.dart` deleted; cookie `token_storage.dart` removed; mobile → Custom Tab flow; the web `/api/auth` route is now a same-origin relay to the API. **No backward compatibility** | Boundary is real |
+| **P1b — Production wiring** *(done)* | `GOOGLE_WEB_CLIENT_ID`, `AUTH_OAUTH_REDIRECT_ALLOWLIST`, a real `JWT_SECRET` and SMTP secrets in Vercel env; Redis eviction policy corrected at startup | Sign-in + email work outside localhost |
+| **P2 — Cut clients off Neon** *(done)* | `neon_auth_service.dart` deleted; cookie `token_storage.dart` removed; mobile → Custom Tab flow; web auth runs same-origin through the `/api` rewrite with httpOnly cookies | Boundary is real |
+| **P2b — Hosting migration** *(done)* | Container-host config and the process-group/replay machinery removed; API + web on Vercel behind `api.mboqara.angisoft.co.ke` / `mboqara.angisoft.co.ke` | Single host, custom domains |
 | **P3 — Schema at scale** *(next)* | Migration 013 (the indexes in §7); `pg_stat_statements`; autovacuum tuning; verify index usage with `EXPLAIN` | Reads stop seq-scanning |
 | **P4 — Partition** *(deferred, deliberately)* | Would force a permanent decision about surrogate-key uniqueness — see the correction in §7. Trigger: ~50M rows per user-owned table | Table size stops mattering |
-| **P5 — Region + replica** | `fly-replay` write routing built and tested, **off by default** (`WRITE_REPLAY_REGION`); `fra` machine deployed alongside 3× `jnb` + 2× `iad` | Global latency |
-| **P6 — Protocol blend** | Mobile reads → GraphQL; worker → gRPC; MCP hosted on its own autostop Machine; delete dead web GraphQL client | Cost + throughput |
+| **P5 — Realtime/worker home** | Decide where BullMQ workers + WS/SSE + gRPC live now that the API is request-scoped (`PROCESS_ROLE=worker` on a container host, or Vercel long-running compute); `cpt1` function region for the API | Global latency + durable background jobs |
+| **P6 — Protocol blend** | Mobile reads → GraphQL; worker → gRPC; MCP exposed for agents; delete dead web GraphQL client | Cost + throughput |
 | **P7 — Observability** | OTel traces, error tracking, African synthetic checks, Grafana dashboards | Operability |
 | **P8 — Upgrade** | Neon Launch; AI Gateway on; Functions for long-running streams; Realtime where polling exists | Past 100k MAU |
 
@@ -504,18 +493,18 @@ Extends P0–P5 in `ARCHITECTURE_BOUNDARIES.md`.
 ### CI gates
 1. `npm run typecheck` (API) + `@angisoft/mboqara-web` typecheck — must pass.
 2. **No client may import a Neon/provider SDK.** Failure if `apps/web/**` or `apps/mobile/**` references `neonauth`, `NEON_AUTH_BASE_URL`, `neon.tech`, or any `AWS_*` key.
-3. **No direct provider DB strings in clients.** Only `https://mboqara-api-angisoft.fly.dev/v1` (or a config-injected origin) may appear.
+3. **No direct provider DB strings in clients.** Only `https://api.mboqara.angisoft.co.ke/v1` (or a config-injected origin) may appear.
 4. Migrations must be additive and safe on existing data (`CREATE INDEX CONCURRENTLY`, no destructive column drops in the same release as the code that stops using them).
 
 ### Acceptance checklist
 
-- [x] Mobile Google sign-in completes end-to-end with **zero** Google client *secrets* in the repo or in `fly secrets`. (The OAuth `client_id` is a public identifier by design and is set on Fly; the flow needs no secret at all — the Neon client is a PKCE public client.)
+- [x] Mobile Google sign-in completes end-to-end with **zero** Google client *secrets* in the repo or in hosting secrets. (The OAuth `client_id` is a public identifier by design; the flow needs no secret at all — the Neon client is a PKCE public client.)
 - [x] No mobile/web code path reaches Neon, S3, or any provider directly — enforced by `npm run check:boundaries` in CI.
 - [x] `/v1/auth/*` returns `Cache-Control: no-store`; rate limits enforced.
 - [x] Refresh rotation + reuse detection verified (reuse kills the family) — `verify-auth.mjs`.
 - [x] Every `EXPLAIN` on the four hottest queries uses an index, not a seq scan — verified with `enable_seqscan` forced off in migration 017; the planner already takes the feed index at 3,103 rows.
 - [x] p95 from Nairobi measured and recorded — 124 ms for `/live`, but a 1.2 s max. The tail is the open problem, not the median.
-- [ ] A write from `jnb` is replayed to `fra`; a read is served locally. *(mechanism built and tested; deliberately off — see `middleware/error-handler.ts` and §5 above)*
+- [ ] A write is served by the primary while reads hit replicas/edge cache where available. *(replica routing designed; region placement pending §16 Q3)*
 - [ ] Load test at 1,200 req/s peak on a staging branch before Launch upgrade.
 
 ---
@@ -524,7 +513,7 @@ Extends P0–P5 in `ARCHITECTURE_BOUNDARIES.md`.
 
 1. **Google branding.** Do you want the zero-config redirect flow (ships now, no client ID), or branded consent screens + true native `google_sign_in` (needs a Google OAuth web client ID — one-time, ~10 minutes in Google Cloud Console)? Recommendation: **ship the redirect flow this week, add the client ID later.** The switch is one config value plus one client change.
 2. **Neon plan.** Confirm you are ready to move to **Launch** when storage crosses ~800 MB. I can set a threshold alert.
-3. **Region priority.** Is `jnb` (Johannesburg) acceptable as the African edge for Kenyan users, given Nairobi–Johannesburg is ~60 ms and there is no closer Fly region?
+3. **Worker + realtime host.** BullMQ workers, the WebSocket hub and gRPC cannot run in request-scoped Vercel functions. Options: a small always-on container (the same Dockerfile shape we removed, on any container host), Vercel's long-running compute where available, or a managed realtime service. This decides the P5 phase.
 4. **AI provider.** Stay on the direct NVIDIA key, or upgrade Neon to Launch for AI Gateway?
 5. **SOAP.** Is there a specific enterprise partner that requires it? If not, my recommendation is not to build it — say the word and I'll add one thin endpoint.
 
@@ -533,6 +522,7 @@ Extends P0–P5 in `ARCHITECTURE_BOUNDARIES.md`.
 ## Appendix — verified sources
 
 - Neon plans, read replicas, regions, Functions, AI Gateway: `neon.com/docs/introduction/plans`, `/introduction/read-replicas`, `/compute/functions/overview`, `/ai-gateway/overview`, plus `Neon.list_regions()` (11 regions, zero African) and `Neon.list_organizations()` (org plan = `free`).
-- Fly pricing, regions, Upstash, Tigris, fly-replay: `fly.io/docs/about/pricing`, `docs.fly.io/reference/regions.md`, `docs.fly.io/upstash/redis/`, `docs.fly.io/tigris/`, `docs.fly.io/blueprints/multi-region-fly-replay/`.
-- Better Auth / Neon Auth Google: `better-auth.com/docs/authentication/google`, `neon.com/docs/auth/guides/setup-oauth`, `neon-auth` skill `references/managed-auth.md`.
+- Vercel functions, regions (`cpt1` Cape Town), Fast Data Transfer pricing, Fluid compute: `vercel.com/docs`, project settings on `mboqara-api` / `mboqara`.
+- Upstash Redis plans and eviction semantics: `upstash.com/docs/redis`, pricing page.
+- Better Auth / Neon Auth Google: `better-auth.com/docs/authentication/google`, `neon.com/docs/auth/guides/setup-oauth`.
 - Live probes: Neon Auth `/sign-in/social` × 4 payload shapes (all returned redirect URLs), `/token` (401 without challenge cookie).

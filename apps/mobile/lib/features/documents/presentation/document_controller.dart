@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../data/document_repository.dart';
+import '../domain/document_version.dart';
 import '../domain/generated_document.dart';
 
 enum DocumentLoadState { idle, loading, ready, error }
@@ -63,4 +64,48 @@ class DocumentController extends ChangeNotifier {
 
   Future<GeneratedDocument?> getDocument(String id) =>
       _repository.getDocument(id);
+
+  /// Local-first edit: the cache is updated immediately and the change is
+  /// queued as `update_document` while offline.
+  Future<GeneratedDocument?> updateDocument(
+    String id, {
+    String? title,
+    String? content,
+    String? templateKey,
+  }) async {
+    try {
+      final updated = await _repository.updateDocument(
+        id: id,
+        title: title,
+        content: content,
+        templateKey: templateKey,
+      );
+      _items = [updated, ..._items.where((item) => item.id != updated.id)];
+      notifyListeners();
+      return updated;
+    } catch (error) {
+      _errorMessage = error.toString();
+      notifyListeners();
+      return null;
+    }
+  }
+
+  Future<List<DocumentVersion>> versions(String id) => _repository.versions(id);
+
+  Future<GeneratedDocument?> restoreVersion(
+    String documentId,
+    DocumentVersion version,
+  ) => _repository.restoreVersion(documentId, version);
+
+  Future<List<int>> exportDocument(
+    String id,
+    String format, {
+    String? template,
+  }) => _repository.exportDocument(id: id, format: format, template: template);
+
+  Future<Map<String, dynamic>?> latestAtsReport(String id) =>
+      _repository.latestAtsReport(id);
+
+  Future<Map<String, dynamic>> runAtsCheck(String id) =>
+      _repository.runAtsCheck(id);
 }

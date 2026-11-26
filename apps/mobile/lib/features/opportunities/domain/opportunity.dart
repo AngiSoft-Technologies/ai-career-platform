@@ -101,6 +101,23 @@ class Opportunity {
     return parts.isEmpty ? 'Location not specified' : parts.join(', ');
   }
 
+  /// Stable identity across feeds: the same posting often appears under
+  /// several board URLs. Used to dedupe before it reaches the list.
+  String get canonicalKey {
+    String normalize(String value) =>
+        value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
+    return [
+      normalize(title),
+      normalize(companyName),
+      normalize(city),
+      normalize(workMode),
+    ].join('|');
+  }
+
+  /// Canonical public link, used when sharing a role from the app.
+  String get shareUrl =>
+      'https://mboqara.angisoft.co.ke/opportunities/${Uri.encodeComponent(id)}';
+
   factory Opportunity.fromJson(Map<String, dynamic> json) {
     final matchJson = json['match'];
     return Opportunity(

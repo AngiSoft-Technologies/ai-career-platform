@@ -1,7 +1,7 @@
 version: '3.8'
 
 # n8n stack with Neon PostgreSQL integration
-# Integrates with existing Neon + Fly.io infrastructure
+# Integrates with existing Neon + Vercel infrastructure
 # Run with: docker compose --env-file .env up -d
 
 volumes:

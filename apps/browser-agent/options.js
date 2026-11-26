@@ -1,4 +1,4 @@
-const DEFAULT_API_BASE = "https://mboqara-api-angisoft.fly.dev/v1";
+const DEFAULT_API_BASE = "https://api.mboqara.angisoft.co.ke/v1";
 const form = document.getElementById("pairing-form");
 const apiBaseInput = document.getElementById("api-base");
 const pairingCodeInput = document.getElementById("pairing-code");

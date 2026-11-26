@@ -1,3 +1,11 @@
+class FactorContribution {
+  const FactorContribution(this.label, this.value, this.reason);
+
+  final String label;
+  final double value;
+  final String reason;
+}
+
 class MatchFactors {
   const MatchFactors({
     this.skills = 0,
@@ -5,6 +13,7 @@ class MatchFactors {
     this.location = 0,
     this.role = 0,
     this.freshness = 0,
+    this.reasons = const {},
   });
 
   final double skills;
@@ -12,6 +21,38 @@ class MatchFactors {
   final double location;
   final double role;
   final double freshness;
+
+  /// Per-factor explanations returned by the ranking engine, when present.
+  final Map<String, String> reasons;
+
+  List<FactorContribution> get contributions => [
+    FactorContribution(
+      'Skills',
+      skills,
+      reasons['skills'] ?? 'Overlap between your skills and the role.',
+    ),
+    FactorContribution(
+      'Seniority',
+      seniority,
+      reasons['seniority'] ?? 'How the level compares with your experience.',
+    ),
+    FactorContribution(
+      'Location',
+      location,
+      reasons['location'] ??
+          'How the role location compares with your preferences.',
+    ),
+    FactorContribution(
+      'Role fit',
+      role,
+      reasons['role'] ?? 'How the target role compares with your history.',
+    ),
+    FactorContribution(
+      'Freshness',
+      freshness,
+      reasons['freshness'] ?? 'How recently the posting was published.',
+    ),
+  ];
 
   factory MatchFactors.fromJson(Map<String, dynamic>? json) {
     if (json == null) return const MatchFactors();
@@ -21,6 +62,7 @@ class MatchFactors {
       location: _number(json['location']),
       role: _number(json['role']),
       freshness: _number(json['freshness']),
+      reasons: _reasons(json['reasons']),
     );
   }
 
@@ -30,7 +72,15 @@ class MatchFactors {
     'location': location,
     'role': role,
     'freshness': freshness,
+    'reasons': reasons,
   };
+
+  static Map<String, String> _reasons(dynamic value) {
+    if (value is! Map) return const {};
+    return value.map(
+      (key, item) => MapEntry(key.toString(), item?.toString() ?? ''),
+    );
+  }
 
   static double _number(dynamic value) {
     if (value is num) return value.toDouble();
@@ -45,6 +95,12 @@ class JobMatch {
     required this.gaps,
     required this.factors,
     this.opportunityId,
+    this.confidence,
+    this.seniorityReason,
+    this.locationReason,
+    this.remoteReason,
+    this.salaryReason,
+    this.eligibilityReason,
   });
 
   final String? opportunityId;
@@ -52,6 +108,15 @@ class JobMatch {
   final String explanation;
   final List<String> gaps;
   final MatchFactors factors;
+
+  /// Optional per-dimension explanations from the ranking engine. The UI
+  /// falls back to local, evidence-backed rules when they are absent.
+  final String? confidence;
+  final String? seniorityReason;
+  final String? locationReason;
+  final String? remoteReason;
+  final String? salaryReason;
+  final String? eligibilityReason;
 
   factory JobMatch.fromJson(Map<String, dynamic>? json) {
     if (json == null) {
@@ -72,6 +137,12 @@ class JobMatch {
             ? Map<String, dynamic>.from(json['factors'] as Map)
             : null,
       ),
+      confidence: json['confidence'] as String?,
+      seniorityReason: json['seniorityReason'] as String?,
+      locationReason: json['locationReason'] as String?,
+      remoteReason: json['remoteReason'] as String?,
+      salaryReason: json['salaryReason'] as String?,
+      eligibilityReason: json['eligibilityReason'] as String?,
     );
   }
 
@@ -81,6 +152,12 @@ class JobMatch {
     'explanation': explanation,
     'gaps': gaps,
     'factors': factors.toJson(),
+    if (confidence != null) 'confidence': confidence,
+    if (seniorityReason != null) 'seniorityReason': seniorityReason,
+    if (locationReason != null) 'locationReason': locationReason,
+    if (remoteReason != null) 'remoteReason': remoteReason,
+    if (salaryReason != null) 'salaryReason': salaryReason,
+    if (eligibilityReason != null) 'eligibilityReason': eligibilityReason,
   };
 
   static double _number(dynamic value) {

@@ -4,8 +4,8 @@ import { useEffect } from "react";
 
 /**
  * Registers the mboqara service worker so the frontend owns its own
- * offline shell, cached reads and queued background writes. The backend on
- * Fly runs its own dependencies; the frontend runs its own worker.
+ * offline shell, cached reads and queued background writes. The API runs
+ * its own dependencies; the frontend runs its own worker.
  */
 export function ServiceWorkerRegistrar(): null {
   useEffect(() => {

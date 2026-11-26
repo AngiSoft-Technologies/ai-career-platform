@@ -202,6 +202,7 @@ export async function request<T>(
       headers,
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
       signal: options.signal,
+      credentials: "include",
     });
   } catch (error) {
     if (method === "GET" && options.cache !== false) {
@@ -234,6 +235,7 @@ export async function request<T>(
           headers: retryHeaders,
           body: options.body === undefined ? undefined : JSON.stringify(options.body),
           signal: options.signal,
+          credentials: "include",
         });
         if (retried.ok) {
           const contentType = retried.headers.get("content-type") ?? "";
@@ -257,11 +259,24 @@ export async function request<T>(
     if (isJson) {
       payload = (await response.json()) as { error?: string; code?: string };
     }
-    throw new ApiRequestError({
+    const apiError: ApiError = {
       error: payload.error ?? `Request failed with ${response.status}`,
       code: payload.code,
       status: response.status,
-    });
+    };
+    // The step-up interval can lapse while the app is open: the API answers
+    // 403 VERIFICATION_REQUIRED and the only way forward is the verify page.
+    if (
+      apiError.code === "VERIFICATION_REQUIRED" &&
+      typeof window !== "undefined" &&
+      !window.location.pathname.startsWith("/verify")
+    ) {
+      const next = encodeURIComponent(
+        `${window.location.pathname}${window.location.search}`,
+      );
+      window.location.assign(`/verify?next=${next}`);
+    }
+    throw new ApiRequestError(apiError);
   }
 
   if (!isJson) {
@@ -276,7 +291,7 @@ export async function request<T>(
 async function requestBlob(path: string, body: unknown): Promise<Blob> {
   const url = buildUrl(path);
   const createHeaders = async () => ({ ...(await authHeaders()), "Content-Type": "application/json" });
-  let response = await fetch(url, { method: "POST", headers: await createHeaders(), body: JSON.stringify(body) });
+  let response = await fetch(url, { method: "POST", headers: await createHeaders(), body: JSON.stringify(body), credentials: "include" });
   if (response.status === 401) {
     clearToken();
     const fresh = await getToken();
@@ -284,6 +299,7 @@ async function requestBlob(path: string, body: unknown): Promise<Blob> {
       method: "POST",
       headers: { accept: "application/json", authorization: `Bearer ${fresh}`, "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      credentials: "include",
     });
   }
   if (!response.ok) {
@@ -309,6 +325,7 @@ export async function replayOutbox(): Promise<{ replayed: number; failed: number
         method: item.method,
         headers,
         body: item.body === undefined ? undefined : JSON.stringify(item.body),
+        credentials: "include",
       });
       if (response.ok) {
         replayed += 1;

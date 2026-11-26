@@ -10,14 +10,12 @@ import { logger } from "../logger.js";
 /**
  * Internal-only egress endpoint.
  *
- * This is how our own multi-region proxy works: a worker can ask any other
- * API Machine (in a different Fly region) to perform a request, so the target
- * site sees that Machine's IP instead of the worker's. No third-party proxy
- * provider is involved.
+ * This is how our own egress proxy works: a worker can ask another API
+ * instance to perform a request, so the target site sees that instance's IP
+ * instead of the worker's. No third-party proxy provider is involved.
  *
- * It is never exposed publicly: Fly routes `/internal/*` only over the private
- * 6PN network when the service is configured that way, and we additionally
- * require a shared token.
+ * It is not a public endpoint: callers must present the shared internal
+ * token, and deployments should keep `/internal/*` off the public edge.
  */
 export const internalRouter = Router();
 

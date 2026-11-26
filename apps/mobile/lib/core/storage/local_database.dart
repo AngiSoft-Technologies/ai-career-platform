@@ -14,46 +14,43 @@ class LocalDatabase {
   static Future<LocalDatabase> open() async {
     final directory = await getApplicationDocumentsDirectory();
     final databasePath = path.join(directory.path, 'mboqara.sqlite');
-    final database = await openDatabase(
-      databasePath,
-      version: 1,
-      onCreate: (db, version) async {
-        await db.execute('''
+    Future<void> createV1(Database db) async {
+      await db.execute('''
           CREATE TABLE recent_opportunities (
             id TEXT PRIMARY KEY,
             json TEXT NOT NULL,
             updated_at INTEGER NOT NULL
           )
         ''');
-        await db.execute('''
+      await db.execute('''
           CREATE TABLE saved_opportunities (
             id TEXT PRIMARY KEY,
             json TEXT NOT NULL,
             saved_at INTEGER NOT NULL
           )
         ''');
-        await db.execute('''
+      await db.execute('''
           CREATE TABLE candidate_profile (
             id TEXT PRIMARY KEY,
             json TEXT NOT NULL,
             updated_at INTEGER NOT NULL
           )
         ''');
-        await db.execute('''
+      await db.execute('''
           CREATE TABLE preferences (
             id INTEGER PRIMARY KEY,
             json TEXT NOT NULL,
             updated_at INTEGER NOT NULL
           )
         ''');
-        await db.execute('''
+      await db.execute('''
           CREATE TABLE companies (
             id TEXT PRIMARY KEY,
             json TEXT NOT NULL,
             updated_at INTEGER NOT NULL
           )
         ''');
-        await db.execute('''
+      await db.execute('''
           CREATE TABLE applications (
             id TEXT PRIMARY KEY,
             opportunity_id TEXT NOT NULL,
@@ -63,7 +60,7 @@ class LocalDatabase {
             updated_at INTEGER NOT NULL
           )
         ''');
-        await db.execute('''
+      await db.execute('''
           CREATE TABLE application_status (
             application_id TEXT PRIMARY KEY,
             status TEXT NOT NULL,
@@ -71,7 +68,7 @@ class LocalDatabase {
             updated_at INTEGER NOT NULL
           )
         ''');
-        await db.execute('''
+      await db.execute('''
           CREATE TABLE documents (
             id TEXT PRIMARY KEY,
             opportunity_id TEXT NOT NULL,
@@ -83,7 +80,7 @@ class LocalDatabase {
             updated_at INTEGER NOT NULL
           )
         ''');
-        await db.execute('''
+      await db.execute('''
           CREATE TABLE notifications (
             id TEXT PRIMARY KEY,
             title TEXT NOT NULL,
@@ -94,7 +91,7 @@ class LocalDatabase {
             created_at INTEGER NOT NULL
           )
         ''');
-        await db.execute('''
+      await db.execute('''
           CREATE TABLE followups (
             id TEXT PRIMARY KEY,
             application_id TEXT NOT NULL,
@@ -105,7 +102,7 @@ class LocalDatabase {
             updated_at INTEGER NOT NULL
           )
         ''');
-        await db.execute('''
+      await db.execute('''
           CREATE TABLE offline_actions (
             idempotency_key TEXT PRIMARY KEY,
             action_type TEXT NOT NULL,
@@ -116,6 +113,115 @@ class LocalDatabase {
             last_error TEXT
           )
         ''');
+    }
+
+    Future<void> createV2(Database db) async {
+      await db.execute('''
+          CREATE TABLE IF NOT EXISTS sync_metadata (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at INTEGER NOT NULL
+          )
+        ''');
+      await db.execute('''
+          CREATE TABLE IF NOT EXISTS entity_sync_state (
+            entity_type TEXT NOT NULL,
+            entity_id TEXT NOT NULL,
+            sync_status TEXT NOT NULL,
+            server_version INTEGER,
+            local_updated_at INTEGER NOT NULL,
+            server_updated_at INTEGER,
+            last_error TEXT,
+            PRIMARY KEY (entity_type, entity_id)
+          )
+        ''');
+      await db.execute('''
+          CREATE TABLE IF NOT EXISTS saved_searches (
+            id TEXT PRIMARY KEY,
+            json TEXT NOT NULL,
+            updated_at INTEGER NOT NULL
+          )
+        ''');
+      await db.execute('''
+          CREATE TABLE IF NOT EXISTS job_alerts (
+            id TEXT PRIMARY KEY,
+            json TEXT NOT NULL,
+            updated_at INTEGER NOT NULL
+          )
+        ''');
+      // Add retry/conflict columns to offline_actions if missing
+      for (final col in [
+        'retry_count INTEGER NOT NULL DEFAULT 0',
+        'entity_type TEXT',
+        'entity_id TEXT',
+        'next_retry_at INTEGER',
+      ]) {
+        try {
+          await db.execute('ALTER TABLE offline_actions ADD COLUMN $col');
+        } catch (_) {}
+      }
+    }
+
+    // V3 adds a namespaced query cache, cached match/company detail, and
+    // conflict metadata on the outbox. Migrations are additive so an install
+    // that already has a populated cache keeps all of its rows.
+    Future<void> createV3(Database db) async {
+      await db.execute('''
+          CREATE TABLE IF NOT EXISTS query_cache (
+            cache_key TEXT PRIMARY KEY,
+            entity_type TEXT NOT NULL,
+            json TEXT NOT NULL,
+            updated_at INTEGER NOT NULL
+          )
+        ''');
+      await db.execute('''
+          CREATE TABLE IF NOT EXISTS cached_matches (
+            id TEXT PRIMARY KEY,
+            json TEXT NOT NULL,
+            updated_at INTEGER NOT NULL
+          )
+        ''');
+      await db.execute('''
+          CREATE TABLE IF NOT EXISTS cached_company_details (
+            slug TEXT PRIMARY KEY,
+            json TEXT NOT NULL,
+            updated_at INTEGER NOT NULL
+          )
+        ''');
+      for (final column in [
+        'server_version INTEGER',
+        'server_updated_at INTEGER',
+        'conflict_resolution TEXT',
+        'server_payload TEXT',
+      ]) {
+        try {
+          await db.execute('ALTER TABLE offline_actions ADD COLUMN $column');
+        } catch (_) {
+          // The column already exists (fresh V3 databases are created with it
+          // by the earlier CREATE TABLE plus these no-op alterations).
+        }
+      }
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS offline_actions_status_idx '
+        'ON offline_actions (status, next_retry_at)',
+      );
+    }
+
+    final database = await openDatabase(
+      databasePath,
+      version: 3,
+      onCreate: (db, version) async {
+        await createV1(db);
+        await createV2(db);
+        await createV3(db);
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await createV2(db);
+        }
+        if (oldVersion < 3) {
+          await createV3(db);
+        }
       },
     );
     return LocalDatabase._(database);
@@ -501,30 +607,352 @@ class LocalDatabase {
       'created_at': action.createdAt.millisecondsSinceEpoch,
       'updated_at': action.updatedAt.millisecondsSinceEpoch,
       'last_error': action.lastError,
+      'retry_count': action.retryCount,
+      'entity_type': action.entityType,
+      'entity_id': action.entityId,
+      'next_retry_at': action.nextRetryAt?.millisecondsSinceEpoch,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
+    if (action.entityType != null && action.entityId != null) {
+      await setEntitySyncState(action.entityType!, action.entityId!, 'pending');
+    }
   }
 
   Future<List<OfflineAction>> pendingActions() async {
+    final now = _now;
     final rows = await _database.query(
       'offline_actions',
-      where: 'status = ?',
-      whereArgs: ['pending'],
+      where: "(status = 'pending' OR status = 'failed') AND (next_retry_at IS NULL OR next_retry_at <= ?)",
+      whereArgs: [now],
       orderBy: 'created_at ASC',
     );
     return rows.map(OfflineAction.fromRow).toList();
+  }
+
+  Future<void> setSyncMetadata(String key, String value) async {
+    await _database.insert('sync_metadata', {
+      'key': key,
+      'value': value,
+      'updated_at': _now,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<String?> getSyncMetadata(String key) async {
+    final rows = await _database.query(
+      'sync_metadata',
+      where: 'key = ?',
+      whereArgs: [key],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return rows.first['value'] as String?;
+  }
+
+  Future<void> setEntitySyncState(
+    String entityType,
+    String entityId,
+    String syncStatus, {
+    int? serverVersion,
+    DateTime? serverUpdatedAt,
+    String? lastError,
+  }) async {
+    // Replace used to write `server_updated_at: null` unconditionally, which
+    // threw away the server timestamp on every status-only transition. Read
+    // the existing row first so an absent argument means "keep what we know".
+    final existing = await getEntitySyncState(entityType, entityId);
+    final previousVersion = existing?['server_version'];
+    final previousUpdated = existing?['server_updated_at'];
+    await _database.insert('entity_sync_state', {
+      'entity_type': entityType,
+      'entity_id': entityId,
+      'sync_status': syncStatus,
+      'server_version':
+          serverVersion ?? (previousVersion is int ? previousVersion : null),
+      'local_updated_at': _now,
+      'server_updated_at':
+          serverUpdatedAt?.millisecondsSinceEpoch ??
+          (previousUpdated is int ? previousUpdated : null),
+      'last_error': lastError,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<Map<String, dynamic>?> getEntitySyncState(
+    String entityType,
+    String entityId,
+  ) async {
+    final rows = await _database.query(
+      'entity_sync_state',
+      where: 'entity_type = ? AND entity_id = ?',
+      whereArgs: [entityType, entityId],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return Map<String, dynamic>.from(rows.first);
+  }
+
+  Future<void> cacheSavedSearches(List<Map<String, dynamic>> items) async {
+    final batch = _database.batch();
+    batch.delete('saved_searches');
+    for (final item in items) {
+      batch.insert('saved_searches', {
+        'id': item['id'] ?? 'search-$_now',
+        'json': jsonEncode(item),
+        'updated_at': _now,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await batch.commit(noResult: true);
+  }
+
+  Future<void> upsertSavedSearch(Map<String, dynamic> item) async {
+    final id = item['id'] as String? ?? 'local-$_now';
+    await _database.insert('saved_searches', {
+      'id': id,
+      'json': jsonEncode({...item, 'id': id}),
+      'updated_at': _now,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<Map<String, dynamic>>> savedSearchRows() async {
+    final rows = await _database.query(
+      'saved_searches',
+      orderBy: 'updated_at DESC',
+    );
+    return rows.map(_decodeMap).toList();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Namespaced read cache
+  // ---------------------------------------------------------------------------
+
+  /// Stores a response under a stable key such as
+  /// `opportunities|country=KE&q=engineer|page=2`.
+  ///
+  /// A single blob per entity used to make one search overwrite another, so
+  /// the "stale cached results" banner could show results for the wrong
+  /// query. Namespacing keeps each consumer's snapshot separate.
+  Future<void> cacheQuery(
+    String cacheKey,
+    Map<String, dynamic> value, {
+    String entityType = 'generic',
+  }) async {
+    await _database.insert('query_cache', {
+      'cache_key': cacheKey,
+      'entity_type': entityType,
+      'json': jsonEncode(value),
+      'updated_at': _now,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<Map<String, dynamic>?> cachedQuery(String cacheKey) async {
+    final rows = await _database.query(
+      'query_cache',
+      where: 'cache_key = ?',
+      whereArgs: [cacheKey],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return _decodeMap(rows.first);
+  }
+
+  Future<DateTime?> cachedQueryAge(String cacheKey) async {
+    final rows = await _database.query(
+      'query_cache',
+      columns: ['updated_at'],
+      where: 'cache_key = ?',
+      whereArgs: [cacheKey],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    final value = rows.first['updated_at'];
+    if (value is! int) return null;
+    return DateTime.fromMillisecondsSinceEpoch(value);
+  }
+
+  Future<void> cacheMatches(List<Map<String, dynamic>> matches) async {
+    final batch = _database.batch();
+    batch.delete('cached_matches');
+    for (final match in matches) {
+      final id =
+          match['id']?.toString() ??
+          match['opportunityId']?.toString() ??
+          'match-$_now';
+      batch.insert('cached_matches', {
+        'id': id,
+        'json': jsonEncode(match),
+        'updated_at': _now,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await batch.commit(noResult: true);
+  }
+
+  Future<List<Map<String, dynamic>>> cachedMatches() async {
+    final rows = await _database.query(
+      'cached_matches',
+      orderBy: 'updated_at DESC',
+    );
+    return rows.map(_decodeMap).toList();
+  }
+
+  Future<void> cacheCompanyDetail(
+    String slug,
+    Map<String, dynamic> company,
+  ) async {
+    await _database.insert('cached_company_details', {
+      'slug': slug,
+      'json': jsonEncode(company),
+      'updated_at': _now,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<Map<String, dynamic>?> cachedCompanyDetail(String slug) async {
+    final rows = await _database.query(
+      'cached_company_details',
+      where: 'slug = ?',
+      whereArgs: [slug],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return _decodeMap(rows.first);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Outbox / conflicts
+  // ---------------------------------------------------------------------------
+
+  Future<List<OfflineAction>> conflictActions() async {
+    final rows = await _database.query(
+      'offline_actions',
+      where: "status = 'conflict'",
+      orderBy: 'updated_at DESC',
+    );
+    return rows.map(OfflineAction.fromRow).toList();
+  }
+
+  /// Applies a user's conflict decision and makes the action eligible for
+  /// the next sync run.
+  ///
+  /// * `use_server` drops the local edit — the cached server payload wins.
+  /// * `keep_local` replays the local payload with the server version so the
+  ///   API can decide whether the override is still safe.
+  /// * `merge` replays a payload the user/UI assembled from both sides.
+  Future<void> resolveConflict(
+    String idempotencyKey,
+    String resolution, {
+    Map<String, dynamic>? mergedPayload,
+  }) async {
+    if (resolution == 'use_server') {
+      await deleteAction(idempotencyKey);
+      return;
+    }
+    final rows = await _database.query(
+      'offline_actions',
+      where: 'idempotency_key = ?',
+      whereArgs: [idempotencyKey],
+      limit: 1,
+    );
+    if (rows.isEmpty) return;
+    final action = OfflineAction.fromRow(rows.first);
+    final payload = <String, dynamic>{
+      ...action.payload,
+      if (mergedPayload != null) ...mergedPayload,
+      if (resolution == 'keep_local' && action.serverVersion != null)
+        'version': action.serverVersion,
+      'conflictResolution': resolution,
+    };
+    await _database.update(
+      'offline_actions',
+      {
+        'payload': jsonEncode(payload),
+        'status': 'pending',
+        'conflict_resolution': resolution,
+        'last_error': null,
+        'next_retry_at': null,
+        'updated_at': _now,
+      },
+      where: 'idempotency_key = ?',
+      whereArgs: [idempotencyKey],
+    );
+  }
+
+  Future<void> deleteAction(String idempotencyKey) async {
+    await _database.delete(
+      'offline_actions',
+      where: 'idempotency_key = ?',
+      whereArgs: [idempotencyKey],
+    );
   }
 
   Future<void> updateAction(
     String idempotencyKey, {
     required String status,
     String? error,
+    int? retryCount,
+    DateTime? nextRetryAt,
+    bool clearNextRetryAt = true,
+    int? serverVersion,
+    DateTime? serverUpdatedAt,
+    Map<String, dynamic>? serverPayload,
+    OfflineAction? action,
   }) async {
+    final values = <String, Object?>{
+      'status': status,
+      'updated_at': _now,
+      'last_error': error,
+      if (retryCount != null) 'retry_count': retryCount,
+      if (clearNextRetryAt)
+        'next_retry_at': nextRetryAt?.millisecondsSinceEpoch,
+      if (serverVersion != null) 'server_version': serverVersion,
+      if (serverUpdatedAt != null)
+        'server_updated_at': serverUpdatedAt.millisecondsSinceEpoch,
+      if (serverPayload != null) 'server_payload': jsonEncode(serverPayload),
+    };
     await _database.update(
       'offline_actions',
-      {'status': status, 'updated_at': _now, 'last_error': error},
+      values,
       where: 'idempotency_key = ?',
       whereArgs: [idempotencyKey],
     );
+    if (status == 'synced' &&
+        action != null &&
+        action.entityType != null &&
+        action.entityId != null) {
+      await setEntitySyncState(
+        action.entityType!,
+        action.entityId!,
+        'synced',
+        serverVersion: serverVersion,
+        serverUpdatedAt: serverUpdatedAt,
+      );
+    }
+  }
+
+  /// Wipes every user-scoped cache and queue. Called on revocation and
+  /// account deletion; theme/base-URL preferences live in SharedPreferences
+  /// and are deliberately left alone.
+  Future<void> clearUserData() async {
+    final batch = _database.batch();
+    for (final table in [
+      'recent_opportunities',
+      'saved_opportunities',
+      'candidate_profile',
+      'preferences',
+      'companies',
+      'applications',
+      'application_status',
+      'documents',
+      'notifications',
+      'followups',
+      'offline_actions',
+      'sync_metadata',
+      'entity_sync_state',
+      'saved_searches',
+      'job_alerts',
+      'query_cache',
+      'cached_matches',
+      'cached_company_details',
+    ]) {
+      batch.delete(table);
+    }
+    await batch.commit(noResult: true);
   }
 
   Future<int> actionCount({String? status}) async {

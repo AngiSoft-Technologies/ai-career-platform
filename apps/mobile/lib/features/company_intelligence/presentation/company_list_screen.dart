@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/app_background.dart';
 import '../domain/company.dart';
 import 'companies_controller.dart';
 
@@ -40,15 +41,18 @@ class _CompanyListScreenState extends State<CompanyListScreen> {
   Widget build(BuildContext context) {
     final controller = context.watch<CompaniesController>();
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: Image.asset(
-          'assets/branding/logo_wordmark.png',
+          Theme.of(context).brightness == Brightness.dark
+              ? 'assets/branding/logo_wordmark_light.png'
+              : 'assets/branding/logo_wordmark.png',
           height: 24,
           fit: BoxFit.contain,
           filterQuality: FilterQuality.high,
         ),
       ),
-      body: Column(
+      body: AppBackground(child: Column(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
@@ -75,7 +79,7 @@ class _CompanyListScreenState extends State<CompanyListScreen> {
           Expanded(child: _body(context, controller)),
         ],
       ),
-    );
+    ));
   }
 
   Widget _body(BuildContext context, CompaniesController controller) {

@@ -1,4 +1,4 @@
-const DEFAULT_API_BASE = "https://mboqara-api-angisoft.fly.dev/v1";
+const DEFAULT_API_BASE = "https://api.mboqara.angisoft.co.ke/v1";
 const POLL_ALARM = "mboqara-browser-agent-poll";
 const HEARTBEAT_ALARM = "mboqara-browser-agent-heartbeat";
 const frames = new Map();

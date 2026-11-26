@@ -50,7 +50,7 @@ const FORBIDDEN = [
 
 /** Hostnames a client is allowed to address. */
 const ALLOWED_CLIENT_HOSTS = [
-  /mboqara-api-angisoft\.fly\.dev/i,
+  /api\.mboqara\.angisoft\.co\.ke/i,
   /mboqara\.angisoft\.co\.ke/i,
   /localhost/i,
 ];

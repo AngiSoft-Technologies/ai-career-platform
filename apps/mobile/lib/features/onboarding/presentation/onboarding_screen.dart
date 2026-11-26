@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/authentication/auth_session.dart';
+import '../../../shared/theme/app_media.dart';
+import '../../../shared/widgets/app_background.dart';
 import '../../../shared/widgets/brand_mark.dart';
+import '../../../shared/widgets/hero_media_card.dart';
 import '../domain/onboarding_form_state.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -31,38 +34,43 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 460),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Center(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: scheme.primaryContainer,
-                          borderRadius: BorderRadius.circular(22),
-                        ),
-                        child: const Padding(
-                          padding: EdgeInsets.all(14),
-                          child: BrandMark(size: 44),
-                        ),
+      backgroundColor: Colors.transparent,
+      body: AppBackground(
+        imageUrl: AppMedia.heroOffice,
+        videoUrl: AppMedia.radarLoop,
+        imageOpacity: Theme.of(context).brightness == Brightness.dark ? 0.14 : 0.08,
+        videoOpacity: Theme.of(context).brightness == Brightness.dark ? 0.20 : 0.12,
+        bottomScrim: Theme.of(context).brightness == Brightness.dark ? 0.32 : 0.12,
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 460),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const HeroMediaCard(
+                        eyebrow: 'MBOQARA MOBILE',
+                        title: 'Career intelligence, redesigned for mobile.',
+                        subtitle:
+                            'Find roles, tailor applications, and track progress in a modern light/dark experience.',
+                        imageUrl: AppMedia.heroTeam,
+                        videoUrl: AppMedia.radarLoop,
+                        height: 168,
                       ),
-                    ),
-                    const SizedBox(height: 24),
-
-                    Text(
-                      'Find focused opportunities and prepare every application with AI.',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyLarge
-                          ?.copyWith(color: scheme.onSurfaceVariant),
-                    ),
-                    const SizedBox(height: 28),
+                      const SizedBox(height: 24),
+                      const Center(child: BrandMark(size: 34, showWordmark: true)),
+                      const SizedBox(height: 20),
+                      Text(
+                        'Find focused opportunities and prepare every application with AI.',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyLarge
+                            ?.copyWith(color: scheme.onSurfaceVariant),
+                      ),
+                      const SizedBox(height: 28),
                     SegmentedButton<OnboardingMode>(
                       segments: const [
                         ButtonSegment(
@@ -222,6 +230,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }

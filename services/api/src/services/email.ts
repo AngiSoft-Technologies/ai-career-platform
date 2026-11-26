@@ -124,6 +124,57 @@ export async function sendPasswordResetEmail(input: {
   return { sent: true, provider: "smtp" };
 }
 
+/**
+ * Sends a step-up verification link.
+ *
+ * The link is single-use and short-lived; it proves the account owner still
+ * controls the email address without making them type a password again.
+ */
+export async function sendVerificationEmail(input: {
+  to: string;
+  name?: string | null;
+  verifyUrl: string;
+}): Promise<EmailResult> {
+  if (!smtpConfigured()) {
+    return { sent: false, provider: null, reason: "email delivery unavailable" };
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: config.SMTP_HOST,
+    port: config.SMTP_PORT,
+    secure: config.SMTP_PORT === 465,
+    auth:
+      config.SMTP_USER && config.SMTP_PASSWORD
+        ? { user: config.SMTP_USER, pass: config.SMTP_PASSWORD }
+        : undefined,
+  });
+
+  const greeting = input.name ? `Hi ${escapeHtml(input.name)},` : "Hi,";
+
+  await transporter.sendMail({
+    from: config.SMTP_FROM,
+    to: input.to,
+    subject: "Verify it is you on mboqara",
+    text: [
+      greeting,
+      "",
+      "Confirm it is you to continue your mboqara session.",
+      "",
+      input.verifyUrl,
+      "",
+      "This link expires in 15 minutes. If you did not request it, ignore this email.",
+    ].join("\n"),
+    html: [
+      `<p>${greeting}</p>`,
+      "<p>Confirm it is you to continue your mboqara session.</p>",
+      `<p><a href="${escapeHtml(input.verifyUrl)}">Verify and continue</a></p>`,
+      "<p>This link expires in 15 minutes. If you did not request it, ignore this email.</p>",
+    ].join(""),
+  });
+
+  return { sent: true, provider: "smtp" };
+}
+
 export async function sendInvitationEmail(input: {
   to: string;
   name?: string | null;

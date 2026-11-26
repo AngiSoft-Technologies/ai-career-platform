@@ -5,7 +5,7 @@
  * from a user, a source connector, or a third-party API — any of them can
  * carry a token in the query string, a password in the userinfo, or a bearer
  * credential in a header. Logging those verbatim leaks them to whatever
- * collects our logs (Fly, Loki, Sentry, a screenshot in a bug report).
+ * collects our logs (Vercel, Loki, Sentry, a screenshot in a bug report).
  *
  * This module is the single place that decides what is safe to emit:
  *

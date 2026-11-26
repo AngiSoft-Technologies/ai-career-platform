@@ -23,6 +23,25 @@ import {
 import { AuthNotConfiguredError, AuthTokenError } from "../auth/tokens.js";
 import { claimHandoffCode, createHandoffCode } from "../auth/handoff.js";
 import {
+  clearAuthCookies,
+  requestAccessToken,
+  requestRefreshToken,
+  setAuthCookies,
+} from "../auth/cookies.js";
+import {
+  claimVerificationLink,
+  confirmTotpEnrollment,
+  enrollBiometricMethod,
+  listVerificationMethods,
+  markVerified,
+  requestVerification,
+  startTotpEnrollment,
+  verificationState,
+  verifyBiometricStepUp,
+  verifyTotpStepUp,
+  type VerificationMethodName,
+} from "../auth/verification.js";
+import {
   issueRefreshToken,
   revokeRefreshToken,
   revokeUserSessions,
@@ -75,10 +94,7 @@ export const authRouter = Router();
  * or absent.
  */
 authRouter.use(async (request, response, next) => {
-  const authorization = request.header("authorization");
-  const token = authorization?.startsWith("Bearer ")
-    ? authorization.slice("Bearer ".length).trim()
-    : undefined;
+  const token = requestAccessToken(request) ?? undefined;
 
   if (!token) {
     next();
@@ -188,7 +204,7 @@ const googleSchema = z.object({
 });
 
 const refreshSchema = z.object({
-  refreshToken: z.string().min(20).max(512),
+  refreshToken: z.string().min(20).max(512).optional(),
 });
 
 const signOutSchema = z.object({
@@ -206,6 +222,41 @@ const resetRequestSchema = z.object({
 const resetSchema = z.object({
   token: z.string().min(20).max(512),
   password: z.string().min(8).max(200),
+});
+
+const verificationMethodSchema = z.enum([
+  "totp",
+  "email_link",
+  "email_otp",
+  "passkey",
+  "biometric",
+]);
+
+const verificationRequestSchema = z.object({
+  method: verificationMethodSchema.optional(),
+  redirectUri: z.string().min(1).max(2048).optional(),
+  deviceId: z.string().min(8).max(128).optional(),
+});
+
+const verificationCodeSchema = z.discriminatedUnion("method", [
+  z.object({
+    method: z.literal("totp"),
+    code: z.string().min(6).max(12),
+  }),
+  z.object({
+    method: z.literal("biometric"),
+    deviceId: z.string().min(8).max(128),
+    challengeId: z.string().uuid(),
+    proof: z.string().min(32).max(128),
+  }),
+]);
+
+const biometricEnrollSchema = z.object({
+  deviceId: z.string().min(8).max(128),
+});
+
+const totpConfirmSchema = z.object({
+  code: z.string().min(6).max(12),
 });
 
 function requestMeta(request: {
@@ -241,6 +292,29 @@ async function sessionPayload(userId: string, refresh: RefreshToken) {
     roles: roles.map((role) => role.roleName),
     permissions,
   };
+}
+
+/**
+ * Answers a freshly minted session.
+ *
+ * The tokens still travel in the body for clients that need them (mobile,
+ * the WebSocket handshake); the browser additionally gets them as httpOnly
+ * cookies so the session survives in persistent storage rather than
+ * localStorage.
+ */
+async function sendSession(
+  response: Response,
+  userId: string,
+  refresh: RefreshToken,
+) {
+  const payload = await sessionPayload(userId, refresh);
+  setAuthCookies(response, {
+    accessToken: payload.token,
+    accessExpiresAt: new Date(payload.expiresAt),
+    refreshToken: payload.refreshToken,
+    refreshExpiresAt: new Date(payload.refreshExpiresAt),
+  });
+  return payload;
 }
 
 function sendAuthError(response: Response, error: unknown): boolean {
@@ -285,6 +359,7 @@ authRouter.post("/sign-up", signUpLimiter, async (request, response, next) => {
       name: input.name,
     });
     const refresh = await issueRefreshToken(userId, meta);
+    await markVerified(userId);
 
     await recordAuthEvent({
       userId,
@@ -294,7 +369,7 @@ authRouter.post("/sign-up", signUpLimiter, async (request, response, next) => {
     });
 
     noStore(response);
-    response.status(201).json(await sessionPayload(userId, refresh));
+    response.status(201).json(await sendSession(response, userId, refresh));
   } catch (error) {
     if (sendAuthError(response, error)) {
       await recordAuthEvent({
@@ -328,6 +403,7 @@ authRouter.post("/sign-in", signInLimiter, async (request, response, next) => {
       password: input.password,
     });
     const refresh = await issueRefreshToken(userId, meta);
+    await markVerified(userId);
 
     await recordAuthEvent({
       userId,
@@ -337,7 +413,7 @@ authRouter.post("/sign-in", signInLimiter, async (request, response, next) => {
     });
 
     noStore(response);
-    response.json(await sessionPayload(userId, refresh));
+    response.json(await sendSession(response, userId, refresh));
   } catch (error) {
     if (sendAuthError(response, error)) {
       await recordAuthEvent({
@@ -360,6 +436,7 @@ authRouter.post("/google", googleLimiter, async (request, response, next) => {
     const identity = await verifyGoogleIdToken(input.idToken, input.nonce);
     const userId = await resolveGoogleUser(identity);
     const refresh = await issueRefreshToken(userId, meta);
+    await markVerified(userId);
 
     await recordAuthEvent({
       userId,
@@ -369,7 +446,7 @@ authRouter.post("/google", googleLimiter, async (request, response, next) => {
     });
 
     noStore(response);
-    response.json(await sessionPayload(userId, refresh));
+    response.json(await sendSession(response, userId, refresh));
   } catch (error) {
     if (sendAuthError(response, error)) {
       await recordAuthEvent({
@@ -387,10 +464,15 @@ authRouter.post("/google", googleLimiter, async (request, response, next) => {
 authRouter.post("/refresh", refreshLimiter, async (request, response, next) => {
   try {
     const input = refreshSchema.parse(request.body ?? {});
-    const rotated = await rotateRefreshToken(
-      input.refreshToken,
-      requestMeta(request),
-    );
+    const refreshToken = input.refreshToken ?? requestRefreshToken(request);
+    if (!refreshToken) {
+      noStore(response);
+      response
+        .status(401)
+        .json({ error: "No refresh token", code: "TOKEN_INVALID" });
+      return;
+    }
+    const rotated = await rotateRefreshToken(refreshToken, requestMeta(request));
 
     const user = await getAuthUser(rotated.userId);
     if (!user) {
@@ -403,7 +485,7 @@ authRouter.post("/refresh", refreshLimiter, async (request, response, next) => {
     }
 
     noStore(response);
-    response.json(await sessionPayload(rotated.userId, rotated.refresh));
+    response.json(await sendSession(response, rotated.userId, rotated.refresh));
   } catch (error) {
     if (sendAuthError(response, error)) return;
     if (
@@ -460,6 +542,7 @@ authRouter.post(
       }
 
       const refresh = await issueRefreshToken(claimed.userId, requestMeta(request));
+      await markVerified(claimed.userId);
 
       await recordAuthEvent({
         userId: claimed.userId,
@@ -469,7 +552,7 @@ authRouter.post(
       });
 
       noStore(response);
-      response.json(await sessionPayload(claimed.userId, refresh));
+      response.json(await sendSession(response, claimed.userId, refresh));
     } catch (error) {
       if (sendAuthError(response, error)) return;
       next(error);
@@ -480,9 +563,11 @@ authRouter.post(
 authRouter.post("/sign-out", async (request, response, next) => {
   try {
     const input = signOutSchema.parse(request.body ?? {});
-    if (input.refreshToken) {
-      await revokeRefreshToken(input.refreshToken);
+    const refreshToken = input.refreshToken ?? requestRefreshToken(request);
+    if (refreshToken) {
+      await revokeRefreshToken(refreshToken);
     }
+    clearAuthCookies(response);
     noStore(response);
     response.status(204).end();
   } catch (error) {
@@ -523,6 +608,7 @@ authRouter.post(
       const input = resetSchema.parse(request.body ?? {});
       const userId = await resetPassword(input);
       const refresh = await issueRefreshToken(userId, requestMeta(request));
+      await markVerified(userId);
 
       await recordAuthEvent({
         userId,
@@ -532,7 +618,7 @@ authRouter.post(
       });
 
       noStore(response);
-      response.json(await sessionPayload(userId, refresh));
+      response.json(await sendSession(response, userId, refresh));
     } catch (error) {
       if (sendAuthError(response, error)) {
         await recordAuthEvent({
@@ -784,10 +870,11 @@ authRouter.get("/session", async (request, response, next) => {
       return;
     }
 
-    const [user, roles, permissions] = await Promise.all([
+    const [user, roles, permissions, verification] = await Promise.all([
       getAuthUser(userId),
       getUserRoles(userId),
       getUserPermissions(userId),
+      verificationState(userId),
     ]);
 
     noStore(response);
@@ -796,12 +883,248 @@ authRouter.get("/session", async (request, response, next) => {
       user,
       roles: roles.map((role) => role.roleName),
       permissions,
+      verifiedAt: verification.verifiedAt,
+      requiresVerification: verification.requiresVerification,
       mode: config.DEMO_MODE && !authenticated ? "demo" : "live",
     });
   } catch (error) {
     next(error);
   }
 });
+
+// ---------------------------------------------------------------------------
+// Step-up verification
+// ---------------------------------------------------------------------------
+
+function requireUserId(
+  response: Response,
+): string | null {
+  const userId = response.locals.userId as string | undefined;
+  return userId ?? null;
+}
+
+function unauthorized(response: Response): void {
+  noStore(response);
+  response.status(401).json({ error: "Unauthorized", code: "UNAUTHORIZED" });
+}
+
+/** The methods this account can verify with, and which one is default. */
+authRouter.get("/verification/methods", async (request, response, next) => {
+  try {
+    const userId = requireUserId(response);
+    if (!userId) {
+      unauthorized(response);
+      return;
+    }
+    noStore(response);
+    response.json({ methods: await listVerificationMethods(userId) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Starts TOTP enrolment: returns the secret and otpauth URL to confirm. */
+authRouter.post(
+  "/verification/totp/enroll",
+  signInLimiter,
+  async (request, response, next) => {
+    try {
+      const userId = requireUserId(response);
+      if (!userId) {
+        unauthorized(response);
+        return;
+      }
+      const user = await getAuthUser(userId);
+      if (!user) {
+        unauthorized(response);
+        return;
+      }
+      const enrolment = await startTotpEnrollment({
+        userId,
+        email: user.email,
+      });
+      noStore(response);
+      response.json(enrolment);
+    } catch (error) {
+      if (sendAuthError(response, error)) return;
+      next(error);
+    }
+  },
+);
+
+/** Confirms a TOTP enrolment with a live code from the authenticator. */
+authRouter.post(
+  "/verification/totp/confirm",
+  signInLimiter,
+  async (request, response, next) => {
+    try {
+      const userId = requireUserId(response);
+      if (!userId) {
+        unauthorized(response);
+        return;
+      }
+      const input = totpConfirmSchema.parse(request.body ?? {});
+      const methods = await confirmTotpEnrollment({
+        userId,
+        code: input.code,
+      });
+      noStore(response);
+      response.json({ methods });
+    } catch (error) {
+      if (sendAuthError(response, error)) {
+        await recordAuthEvent({
+          userId: requireUserId(response),
+          action: "auth.verify.totp_enroll",
+          outcome: "failure",
+          code:
+            error instanceof AuthProviderError || error instanceof AuthTokenError
+              ? error.code
+              : null,
+          ...requestMeta(request),
+        });
+        return;
+      }
+      next(error);
+    }
+  },
+);
+
+/**
+ * Enrols this device for biometric step-up (fingerprint / Face ID / etc.).
+ *
+ * Returns the device secret exactly once — the client seals it in the
+ * platform keystore and later proves possession by signing challenges.
+ */
+authRouter.post(
+  "/verification/biometric/enroll",
+  signInLimiter,
+  async (request, response, next) => {
+    try {
+      const userId = requireUserId(response);
+      if (!userId) {
+        unauthorized(response);
+        return;
+      }
+      const input = biometricEnrollSchema.parse(request.body ?? {});
+      const enrolment = await enrollBiometricMethod({
+        userId,
+        deviceId: input.deviceId,
+        meta: requestMeta(request),
+      });
+      noStore(response);
+      response.json(enrolment);
+    } catch (error) {
+      if (sendAuthError(response, error)) return;
+      next(error);
+    }
+  },
+);
+
+/**
+ * Asks for a verification.
+ *
+ * `totp` answers immediately — the code the user types is the proof.
+ * `email_link` sends a single-use link; the API's `/verification/magic`
+ * endpoint redeems it and hands the browser a normal sign-in handoff code.
+ */
+authRouter.post(
+  "/verification/request",
+  signInLimiter,
+  async (request, response, next) => {
+    try {
+      const userId = requireUserId(response);
+      if (!userId) {
+        unauthorized(response);
+        return;
+      }
+      const input = verificationRequestSchema.parse(request.body ?? {});
+      const result = await requestVerification({
+        userId,
+        method: input.method as VerificationMethodName | undefined,
+        redirectUri: input.redirectUri,
+        deviceId: input.deviceId,
+        meta: requestMeta(request),
+      });
+      noStore(response);
+      response.status(202).json(result);
+    } catch (error) {
+      if (sendAuthError(response, error)) return;
+      next(error);
+    }
+  },
+);
+
+/** Verifies a TOTP step-up code for the signed-in account. */
+authRouter.post(
+  "/verification/verify",
+  signInLimiter,
+  async (request, response, next) => {
+    try {
+      const userId = requireUserId(response);
+      if (!userId) {
+        unauthorized(response);
+        return;
+      }
+      const input = verificationCodeSchema.parse(request.body ?? {});
+      const meta = requestMeta(request);
+      if (input.method === "biometric") {
+        await verifyBiometricStepUp({
+          userId,
+          deviceId: input.deviceId,
+          challengeId: input.challengeId,
+          proof: input.proof,
+          meta,
+        });
+      } else {
+        await verifyTotpStepUp({
+          userId,
+          code: input.code,
+          meta,
+        });
+      }
+      noStore(response);
+      response.json({ verified: true });
+    } catch (error) {
+      if (sendAuthError(response, error)) return;
+      next(error);
+    }
+  },
+);
+
+/**
+ * Redeems an emailed verification link.
+ *
+ * The browser is sent back to the app's callback with an ordinary handoff
+ * code, so the rest of the sign-in path — exchange, session, cookies — is
+ * exactly the one a social sign-in already uses.
+ */
+authRouter.get(
+  "/verification/magic",
+  exchangeLimiter,
+  async (request, response, next) => {
+    try {
+      const token = z.string().min(20).max(512).parse(request.query.token);
+      const claim = await claimVerificationLink(token);
+
+      if (!claim) {
+        const base = (config.WEB_ORIGIN ?? "").split(",")[0]?.trim();
+        const target = base
+          ? `${base}/login?verify_error=expired`
+          : "/login?verify_error=expired";
+        noStore(response);
+        response.redirect(302, target);
+        return;
+      }
+
+      const fragment = new URLSearchParams({ code: claim.handoff });
+      noStore(response);
+      response.redirect(302, `${claim.redirectUri}#${fragment.toString()}`);
+    } catch (error) {
+      if (sendAuthError(response, error)) return;
+      next(error);
+    }
+  },
+);
 
 /**
  * Starts the LinkedIn sign-in flow for resume import.

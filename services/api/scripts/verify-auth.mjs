@@ -11,7 +11,7 @@
  *   node services/api/scripts/verify-auth.mjs [baseUrl]
  *
  * Defaults to the local API. Set the base URL to check a deployed environment:
- *   node services/api/scripts/verify-auth.mjs https://mboqara-api-angisoft.fly.dev/v1
+ *   node services/api/scripts/verify-auth.mjs https://api.mboqara.angisoft.co.ke/v1
  *
  * The Google handshake can only be checked with a real browser session, so this
  * script verifies that the API starts it correctly and that it rejects a

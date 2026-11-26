@@ -6,7 +6,7 @@ output, not from habit.
 
 > **Status:** This document describes algorithm and scale-up proposals, not a claim that all
 > components are implemented. The current backend is Node.js/TypeScript with Express on
-> Fly.io and Neon PostgreSQL. Kafka, Roaring bitmap indexes, and other infrastructure named
+> Vercel and Neon PostgreSQL. Kafka, Roaring bitmap indexes, and other infrastructure named
 > below are future design options unless present in the repository configuration and code.
 
 ## 1. Canonical opportunity deduplication

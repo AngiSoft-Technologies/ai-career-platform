@@ -32,7 +32,7 @@ export function ContactForm() {
     if (!validate() || submitting) return;
     setSubmitting(true);
     try {
-      const res = await fetch(`${API_URL.replace(/\/v1$/, "")}/v1/public/contact`, {
+      const res = await fetch(`${API_URL}/public/contact`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),

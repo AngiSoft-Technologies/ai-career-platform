@@ -17,7 +17,7 @@
 const BASE = (
   process.argv[2] ??
   process.env.PROBE_BASE ??
-  "https://mboqara-api-angisoft.fly.dev"
+  "https://api.mboqara.angisoft.co.ke"
 ).replace(/\/+$/, "");
 const COUNT = Number(process.argv[3] ?? 20);
 
@@ -29,7 +29,7 @@ async function once() {
   await response.arrayBuffer();
   const total = performance.now() - started;
   const ttfb = Number(response.headers.get("server-timing")?.match(/dur=([\d.]+)/)?.[1]);
-  const region = response.headers.get("fly-request-id")?.split("-").pop() ?? "?";
+  const region = response.headers.get("x-vercel-id")?.split("-")[0] ?? "?";
   return { total, ttfb: Number.isFinite(ttfb) ? ttfb : null, region, status: response.status };
 }
 

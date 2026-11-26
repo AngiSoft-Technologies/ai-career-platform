@@ -22,7 +22,7 @@ interface Summary {
   generatedAt: string;
 }
 
-const API = (process.env.NEXT_PUBLIC_API_URL ?? "https://mboqara-api-angisoft.fly.dev/v1").replace(/\/$/, "");
+const API = (process.env.NEXT_PUBLIC_API_URL ?? "https://api.mboqara.angisoft.co.ke/v1").replace(/\/$/, "");
 
 function Stars({ value }: { value: number }) {
   return (

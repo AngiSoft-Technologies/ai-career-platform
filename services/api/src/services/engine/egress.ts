@@ -6,7 +6,7 @@
  * We cannot buy that, so we build the same idea from free parts we already
  * own:
  *
- *   1. Direct egress from the Fly Machine running the worker.
+ *   1. Direct egress from the instance running the worker.
  *   2. Our own multi-region egress nodes: any API Machine can act as an
  *      egress proxy through the internal-only `/internal/egress` endpoint.
  *      That gives us several source IPs in several countries for free.
@@ -245,7 +245,7 @@ function recordFailure(health: Health): void {
 }
 
 // ---------------------------------------------------------------------------
-// Our own egress nodes (Fly Machines exposing /internal/egress)
+// Our own egress nodes (API instances exposing /internal/egress)
 // ---------------------------------------------------------------------------
 
 interface EgressNode {
@@ -359,8 +359,8 @@ let proxyRefreshing: Promise<void> | null = null;
 /**
  * The self-discovered free proxy pool is opt-in.
  *
- * Our own machines already give us several distinct egress IPs across Fly
- * regions, and public proxy lists are slow, mostly dead, and a liability for
+ * Our own machines already give us several distinct egress IPs, and
+ * public proxy lists are slow, mostly dead, and a liability for
  * a crawler that has to stay polite. It stays available for operators who want
  * it, but it is off by default so the common path is fast and predictable.
  */

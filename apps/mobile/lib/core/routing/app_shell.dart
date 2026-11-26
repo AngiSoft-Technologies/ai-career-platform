@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 
 import '../../features/notifications/presentation/notification_controller.dart';
 import '../../shared/responsive/app_layout.dart';
+import '../../shared/widgets/app_background.dart';
+import '../../shared/widgets/offline_banner.dart';
 
 class AppShell extends StatelessWidget {
   const AppShell({super.key, required this.navigationShell});
@@ -60,7 +62,14 @@ class AppShell extends StatelessWidget {
     // a content column capped at a readable measure.
     if (!context.isMediumWidth) {
       return Scaffold(
-        body: navigationShell,
+        body: AppBackground(
+          child: Column(
+            children: [
+              const OfflineBanner(),
+              Expanded(child: navigationShell),
+            ],
+          ),
+        ),
         bottomNavigationBar: NavigationBar(
           selectedIndex: navigationShell.currentIndex,
           onDestinationSelected: _goToBranch,
@@ -71,41 +80,50 @@ class AppShell extends StatelessWidget {
 
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: scheme.surface,
-      body: Row(
-        children: [
-          NavigationRail(
-            selectedIndex: navigationShell.currentIndex,
-            onDestinationSelected: _goToBranch,
-            labelType: NavigationRailLabelType.all,
-            backgroundColor: scheme.surface,
-            indicatorColor: scheme.primaryContainer,
-            destinations: [
-              for (final destination in destinations)
-                NavigationRailDestination(
-                  icon: destination.icon,
-                  selectedIcon: destination.selectedIcon,
-                  label: Text(destination.label),
-                ),
-            ],
-          ),
-          VerticalDivider(
-            width: 1,
-            thickness: 1,
-            color: scheme.outlineVariant.withValues(alpha: 0.6),
-          ),
-          Expanded(
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: AppBreakpoints.contentMaxWidth,
-                ),
-                child: navigationShell,
+      backgroundColor: Colors.transparent,
+      body: AppBackground(
+        child: Row(
+          children: [
+            NavigationRail(
+              selectedIndex: navigationShell.currentIndex,
+              onDestinationSelected: _goToBranch,
+              labelType: NavigationRailLabelType.all,
+              backgroundColor: Colors.transparent,
+              indicatorColor: scheme.primaryContainer,
+              destinations: [
+                for (final destination in destinations)
+                  NavigationRailDestination(
+                    icon: destination.icon,
+                    selectedIcon: destination.selectedIcon,
+                    label: Text(destination.label),
+                  ),
+              ],
+            ),
+            VerticalDivider(
+              width: 1,
+              thickness: 1,
+              color: scheme.outlineVariant.withValues(alpha: 0.35),
+            ),
+            Expanded(
+              child: Column(
+                children: [
+                  const OfflineBanner(),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxWidth: AppBreakpoints.contentMaxWidth,
+                        ),
+                        child: navigationShell,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

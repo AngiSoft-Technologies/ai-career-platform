@@ -7,7 +7,6 @@ import {
   completeSignInFromFragment,
   takeNextPath,
 } from "@/lib/auth";
-import { useSession } from "@/components/session";
 
 /**
  * Landing page for a completed social sign-in.
@@ -18,7 +17,6 @@ import { useSession } from "@/components/session";
  */
 function AuthCallbackInner() {
   const router = useRouter();
-  const { refresh } = useSession();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -39,18 +37,14 @@ function AuthCallbackInner() {
         return;
       }
 
-      // The exchange stored tokens but not the session object, and this is a
-      // client-side navigation — SessionProvider does not remount, so without
-      // an explicit refresh the app shell still believes there is no session
-      // and AuthGate bounces the user back to /login.
-      await refresh();
-      if (cancelled) return;
-
       // The fragment must not stay in the address bar.
       window.history.replaceState(null, "", window.location.pathname);
 
-      router.replace(takeNextPath());
-      router.refresh();
+      // A full navigation is deliberate: the session now lives in
+      // localStorage, and a fresh app boot reads it before AuthGate runs.
+      // router.replace()+router.refresh() can cancel the pending navigation
+      // and leave the callback page stuck on "signed in".
+      window.location.replace(takeNextPath());
     };
 
     void finish();
@@ -58,7 +52,7 @@ function AuthCallbackInner() {
     return () => {
       cancelled = true;
     };
-  }, [router, refresh]);
+  }, []);
 
   return (
     <main className="landing flex min-h-dvh items-center justify-center px-4">

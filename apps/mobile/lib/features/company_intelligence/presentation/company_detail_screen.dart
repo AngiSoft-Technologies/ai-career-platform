@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../shared/formatting/app_formatters.dart';
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/app_background.dart';
 import '../domain/company.dart';
 import 'companies_controller.dart';
 
@@ -58,9 +59,10 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen> {
     }
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(title: Text(detail?.company.name ?? 'Company')),
-      body: body,
-    );
+      body: AppBackground(child: body,
+    ));
   }
 
   Widget _content(BuildContext context, CompanyDetail detail) {

@@ -581,8 +581,69 @@ export interface AuthSessionState {
   user?: AuthUser | null;
   roles?: string[];
   permissions?: string[];
+  /** When the user last completed a step-up verification. */
+  verifiedAt?: string | null;
+  /** True when the session is due for a step-up verification. */
+  requiresVerification?: boolean;
   mode: "live" | "demo";
 }
+
+export type VerificationMethodName =
+  | "totp"
+  | "email_link"
+  | "email_otp"
+  | "passkey"
+  | "biometric";
+
+export interface VerificationMethod {
+  method: VerificationMethodName;
+  destination: string;
+  isDefault: boolean;
+  enrolled: boolean;
+  lastUsedAt?: string | null;
+}
+
+export interface VerificationMethodsResponse {
+  methods: VerificationMethod[];
+}
+
+export interface TotpEnrollment {
+  secret: string;
+  otpauthUrl: string;
+}
+
+export interface VerificationRequest {
+  method?: VerificationMethodName;
+  redirectUri?: string;
+  /** Picks which enrolled device a `biometric` challenge is bound to. */
+  deviceId?: string;
+}
+
+export interface VerificationRequestResponse {
+  method: VerificationMethodName;
+  requiresCode: boolean;
+  sent: boolean;
+  /** Single-use challenge the client must sign for `biometric`. */
+  challengeId?: string;
+}
+
+export interface BiometricEnrollment {
+  deviceId: string;
+  /** Returned exactly once — the client must store it in the keystore. */
+  secret: string;
+}
+
+export interface BiometricVerification {
+  method: "biometric";
+  deviceId: string;
+  challengeId: string;
+  /** HMAC-SHA256(secret, challengeId), hex-encoded. */
+  proof: string;
+}
+
+export type VerificationConfirm =
+  | { method: "totp"; code: string }
+  | BiometricVerification;
 
 export interface SignUpRequest {
   email: string;
@@ -626,6 +687,10 @@ export type AuthErrorCode =
   | "INVALID_REDIRECT"
   | "INVALID_STATE"
   | "IDENTITY_ALREADY_LINKED"
+  | "METHOD_NOT_AVAILABLE"
+  | "INVALID_CODE"
+  | "VERIFICATION_RATE_LIMITED"
+  | "VERIFICATION_REQUIRED"
   | "UNAUTHORIZED";
 
 export interface AuthErrorResponse {
@@ -667,4 +732,187 @@ export interface AuthCallbackFragment {
   refresh_expires_at?: string;
   /** Set when the flow only linked a provider account. */
   linked?: "1";
+}
+
+// ---------------------------------------------------------------------------
+// Platform hardening contracts
+// ---------------------------------------------------------------------------
+
+export const PUSH_PROVIDERS = ["fcm", "apns", "huawei", "samsung"] as const;
+export type PushProvider = (typeof PUSH_PROVIDERS)[number];
+
+export interface DeviceRegistrationInput {
+  provider: PushProvider;
+  /** Never echoed back: the API stores only a hash and an optional ciphertext. */
+  token: string;
+  deviceId?: string;
+  platform?: string;
+  appVersion?: string;
+  locale?: string;
+  topics?: string[];
+}
+
+export interface DeviceSummary {
+  id: string;
+  provider: PushProvider;
+  tokenHint: string;
+  deviceId: string;
+  platform: string;
+  appVersion: string;
+  locale: string;
+  topics: string[];
+  enabled: boolean;
+  lastSeenAt: string | null;
+  createdAt: string | null;
+}
+
+export interface QuietHours {
+  /** 24-hour HH:MM strings, interpreted in UTC. */
+  start: string;
+  end: string;
+}
+
+export type SearchAlertCadence = "realtime" | "daily" | "weekly";
+export type SearchAlertChannel = "in_app" | "push" | "email";
+
+export interface SavedSearchInput {
+  name: string;
+  query?: Record<string, unknown>;
+  alertEnabled?: boolean;
+  cadence?: SearchAlertCadence;
+  quietHours?: QuietHours | null;
+  channels?: SearchAlertChannel[];
+}
+
+export interface SavedSearch extends Required<Omit<SavedSearchInput, "quietHours">> {
+  id: string;
+  quietHours: QuietHours | null;
+  lastSeenAt: string | null;
+  lastEvaluatedAt: string | null;
+  newCount: number;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface JobAlertsSummary {
+  items: SavedSearch[];
+  total: number;
+  activeCount: number;
+  unreadCount: number;
+}
+
+export interface PrivacySettings {
+  allowAnalytics: boolean;
+  allowPersonalisation: boolean;
+  screenshotProtection: boolean;
+  updatedAt: string | null;
+}
+
+export interface UserExportBundle {
+  generatedAt: string;
+  user: Record<string, unknown> | null;
+  profile: Record<string, unknown> | null;
+  preferences: Record<string, unknown> | null;
+  applications: Record<string, unknown>[];
+  followups: Record<string, unknown>[];
+  documents: Record<string, unknown>[];
+  notifications: Record<string, unknown>[];
+  savedSearches: Record<string, unknown>[];
+}
+
+export type TimelineEntryKind =
+  | "status"
+  | "interview"
+  | "note"
+  | "attachment"
+  | "followup";
+
+export interface TimelineEntry {
+  kind: TimelineEntryKind;
+  at: string;
+  title: string;
+  body: string;
+}
+
+export interface InterviewInput {
+  stage?: string;
+  startsAt: string;
+  location?: string;
+  contact?: string;
+  notes?: string;
+}
+
+export interface ApplicationNoteInput {
+  body: string;
+}
+
+export interface ApplicationAttachmentInput {
+  fileName: string;
+  /** Must be inside the caller's storage prefix. */
+  storageKey: string;
+  mimeType?: string;
+}
+
+export interface FeedStateInput {
+  opportunityId: string;
+  seen?: boolean;
+  saved?: boolean;
+  applied?: boolean;
+}
+
+export interface FeedStateItem {
+  opportunityId: string;
+  seenAt: string | null;
+  savedAt: string | null;
+  appliedAt: string | null;
+}
+
+export interface DocumentVersion {
+  id: string;
+  version: number;
+  title: string;
+  content: string;
+  template: string | null;
+  parentDocumentId: string | null;
+  createdAt: string | null;
+}
+
+export interface ClientConfig {
+  minSupportedVersion: string;
+  forceUpdate: boolean;
+  maintenanceMode: boolean;
+  featureFlags: Record<string, boolean>;
+  serverTime: string;
+  apiVersion: string;
+}
+
+export const ANALYTICS_EVENTS = [
+  "search",
+  "view_job",
+  "save_job",
+  "match_view",
+  "apply_start",
+  "apply_submit",
+  "doc_generate",
+  "doc_export",
+  "followup_set",
+  "notification_open",
+] as const;
+
+export type AnalyticsEventName = (typeof ANALYTICS_EVENTS)[number];
+
+export interface AnalyticsEventInput {
+  event: AnalyticsEventName;
+  properties?: Record<string, string | number | boolean | null>;
+  consent: boolean;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  userId: string | null;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
 }

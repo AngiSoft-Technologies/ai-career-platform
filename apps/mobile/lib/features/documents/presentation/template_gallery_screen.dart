@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../../shared/theme/app_colors.dart';
+import '../../../shared/widgets/app_background.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../domain/resume_template.dart';
 import 'template_controller.dart';
@@ -38,13 +40,14 @@ class _TemplateGalleryScreenState extends State<TemplateGalleryScreen> {
     final isCoverLetter = widget.documentType == 'cover_letter';
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: Text(
           isCoverLetter ? 'Cover letter templates' : 'Resume templates',
         ),
         centerTitle: false,
       ),
-      body: switch (controller.state) {
+      body: AppBackground(child: switch (controller.state) {
         TemplateLoadState.idle || TemplateLoadState.loading =>
           const LoadingState(label: 'Loading templates…'),
         TemplateLoadState.error => ErrorState(
@@ -53,7 +56,7 @@ class _TemplateGalleryScreenState extends State<TemplateGalleryScreen> {
         ),
         TemplateLoadState.ready => _buildList(controller, isCoverLetter),
       },
-    );
+    ));
   }
 
   Widget _buildList(TemplateController controller, bool isCoverLetter) {
@@ -159,12 +162,18 @@ class _TemplateCard extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: Color(template.accent).withValues(alpha: 0.12),
+                  color: surfaceSafeAccent(
+                    Color(template.accent),
+                    Theme.of(context).brightness,
+                  ).withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
                   Icons.description_outlined,
-                  color: Color(template.accent),
+                  color: surfaceSafeAccent(
+                    Color(template.accent),
+                    Theme.of(context).brightness,
+                  ),
                 ),
               ),
               const SizedBox(width: 16),

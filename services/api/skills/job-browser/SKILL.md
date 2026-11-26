@@ -18,7 +18,7 @@ Use this when a page must be *acted on*, not just read.
 
 ## Why it runs on the user's browser
 
-Our API runs on Fly.io with no browser and no paid browser service. A page
+Our API runs without a browser and no paid browser service. A page
 that needs a click, a form fill, a login, or a screenshot is therefore handled
 in the job seeker's own browser, driven by the client automation agent:
 

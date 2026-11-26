@@ -125,7 +125,7 @@ Host `assetlinks.json` at `https://mboqara.angisoft.co.ke/.well-known/assetlinks
 
 ### API Base URL
 
-Set via Settings screen → "API Connection" → Base URL. Defaults to `https://mboqara-api-angisoft.fly.dev/v1`.
+Set via Settings screen → "API Connection" → Base URL. Defaults to `https://api.mboqara.angisoft.co.ke/v1`.
 
 ### Demo Mode
 

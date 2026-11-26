@@ -3,15 +3,14 @@ import { query } from "../db/pool.js";
 
 export const publicRouter = Router();
 
-// Debug endpoint to diagnose Fly.io routing issues
+// Debug endpoint to diagnose edge/proxy routing issues
 publicRouter.get("/debug", async (_request, response) => {
   response.json({
     message: "Public debug endpoint works",
     timestamp: new Date().toISOString(),
     headers: {
-      "fly-request-id": _request.headers["fly-request-id"],
-      "fly-client-id": _request.headers["fly-client-id"],
-      "fly-replay": _request.headers["fly-replay"],
+      "x-vercel-id": _request.headers["x-vercel-id"],
+      "x-vercel-forwarded-for": _request.headers["x-vercel-forwarded-for"],
       "x-forwarded-for": _request.headers["x-forwarded-for"],
       "x-forwarded-proto": _request.headers["x-forwarded-proto"],
     },

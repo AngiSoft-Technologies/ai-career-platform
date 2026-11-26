@@ -12,6 +12,32 @@ interface Counter {
 const httpRequests = new Map<string, Counter>();
 const httpDuration = new Map<string, { total: number; count: number }>();
 
+// Low-cardinality outcome counters. Labels are enum-like (`sent`, `dry-run`,
+// provider names, `ok`/`invalid`) — never user ids, device ids or emails.
+const notificationDeliveries = new Map<string, Counter>();
+const deviceRegistrations = new Map<string, Counter>();
+
+function recordCounter(
+  store: Map<string, Counter>,
+  labels: Record<string, string>,
+): void {
+  const key = Object.values(labels).join("|");
+  const existing = store.get(key);
+  if (existing) existing.value += 1;
+  else store.set(key, { value: 1, labels });
+}
+
+export function recordNotificationDelivery(
+  outcome: string,
+  provider: string,
+): void {
+  recordCounter(notificationDeliveries, { outcome, provider });
+}
+
+export function recordDeviceRegistration(outcome: string): void {
+  recordCounter(deviceRegistrations, { outcome });
+}
+
 function keyFor(method: string, route: string, status: number): string {
   return `${method}|${route}|${status}`;
 }
@@ -52,8 +78,7 @@ function renderLabels(labels: Record<string, string>): string {
 }
 
 /**
- * Prometheus exposition endpoint. Fly Metrics scrapes this and feeds the
- * built-in Grafana dashboards for the app.
+ * Prometheus exposition endpoint for external scrapers and dashboards.
  */
 metricsRouter.get("/metrics", async (_request, response) => {
   response.setHeader("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
@@ -90,6 +115,22 @@ metricsRouter.get("/metrics", async (_request, response) => {
   lines.push(`jr_db_pool_connections{state="total"} ${poolStats.total}`);
   lines.push(`jr_db_pool_connections{state="idle"} ${poolStats.idle}`);
   lines.push(`jr_db_pool_connections{state="waiting"} ${poolStats.waiting}`);
+
+  lines.push("# HELP jr_notification_delivery_total Push delivery outcomes.");
+  lines.push("# TYPE jr_notification_delivery_total counter");
+  for (const counter of notificationDeliveries.values()) {
+    lines.push(
+      `jr_notification_delivery_total${renderLabels(counter.labels)} ${counter.value}`,
+    );
+  }
+
+  lines.push("# HELP jr_device_registration_total Device token registration outcomes.");
+  lines.push("# TYPE jr_device_registration_total counter");
+  for (const counter of deviceRegistrations.values()) {
+    lines.push(
+      `jr_device_registration_total${renderLabels(counter.labels)} ${counter.value}`,
+    );
+  }
 
   lines.push("# HELP jr_redis_connected Whether the Redis cache is connected.");
   lines.push("# TYPE jr_redis_connected gauge");

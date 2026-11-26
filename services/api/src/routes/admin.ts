@@ -9,7 +9,7 @@ import {
   listAllRoles,
   removeRole,
 } from "../services/rbac/index.js";
-import { requirePermission } from "../middleware/rbac.js";
+import { requirePermission, requireRole } from "../middleware/rbac.js";
 import {
   createInvitation,
   InvitationError,
@@ -330,6 +330,41 @@ adminRouter.get("/event-stream", requirePermission("users:read"), async (request
   }
 });
 
+
+/**
+ * Audit trail for support investigations. Deliberately role-gated in
+ * addition to permission-gated: analytics roles can read counters, but only
+ * platform administrators should see who changed what.
+ */
+adminRouter.get(
+  "/audit-logs",
+  requireRole("admin", "super_admin"),
+  requirePermission("users:read"),
+  async (request, response, next) => {
+    try {
+      const filters = z
+        .object({
+          userId: z.string().uuid().optional(),
+          action: z.string().max(80).optional(),
+          limit: z.coerce.number().int().min(1).max(200).default(50),
+          offset: z.coerce.number().int().min(0).max(1_000_000).default(0),
+        })
+        .parse(request.query);
+      const result = await query(
+        `SELECT id, user_id, action, entity_type, entity_id, metadata, created_at
+           FROM audit_events
+          WHERE ($1::uuid IS NULL OR user_id = $1)
+            AND ($2::text IS NULL OR action = $2)
+          ORDER BY created_at DESC
+          LIMIT $3 OFFSET $4`,
+        [filters.userId ?? null, filters.action ?? null, filters.limit, filters.offset],
+      );
+      response.json({ items: result.rows, total: result.rowCount ?? 0 });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 adminRouter.get("/invitations", requirePermission("users:roles:read"), async (_request, response, next) => {
   try {

@@ -1,7 +1,7 @@
 import type { ErrorRequestHandler, RequestHandler } from "express";
 import { ZodError } from "zod";
-import { config } from "../config.js";
 import { logger } from "../logger.js";
+import { redactError } from "../lib/redact.js";
 
 const statusByCode: Record<string, number> = {
   PROFILE_NOT_FOUND: 404,
@@ -43,82 +43,6 @@ const statusByCode: Record<string, number> = {
 
 export const notFoundHandler: RequestHandler = (_request, response) => {
   response.status(404).json({ error: "Not found" });
-};
-
-/**
- * Fly Replay support.
- *
- * Fly's edge proxy stamps `fly-request-id`, `fly-client-id` and
- * `fly-replay: true` on requests it can replay. Echoing the request id and
- * marking the response lets `fly replay <request-id>` reconstruct the exact
- * request against a local machine.
- *
- * Write routing is a separate concern and is off by default.
- * `fly replay` moves a whole request to another region, which only pays off
- * when that region holds something the current one does not — today every
- * machine talks to the same Neon primary, so a replay from `jnb` to `fra`
- * would add a hop and gain nothing. Set `WRITE_REPLAY_REGION` once a machine
- * sits next to a regional read/write database; see §5 of
- * PLATFORM_ARCHITECTURE_10M.md.
- */
-const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
-
-/** The proxy refuses to replay anything larger than this. */
-const REPLAYABLE_REQUEST_LIMIT = 1_000_000;
-
-export const flyReplayMiddleware: RequestHandler = (request, response, next) => {
-  const flyRequestId = request.headers["fly-request-id"];
-  const flyClientId = request.headers["fly-client-id"];
-  const replayable = request.headers["fly-replay"] === "true";
-
-  if (typeof flyRequestId === "string") {
-    response.setHeader("fly-request-id", flyRequestId);
-  }
-  if (typeof flyClientId === "string") {
-    response.setHeader("fly-client-id", flyClientId);
-  }
-  if (replayable) {
-    response.setHeader("fly-replay", "true");
-  }
-
-  const target = config.WRITE_REPLAY_REGION;
-  const region = process.env.FLY_REGION;
-
-  if (!target || !region || region === target) {
-    next();
-    return;
-  }
-
-  // Already replayed once (`fly-replay-src` is stamped by the proxy) or the
-  // replay failed and the proxy handed the request back — replaying again
-  // would loop.
-  if (request.headers["fly-replay-src"] || request.headers["fly-replay-failed"]) {
-    next();
-    return;
-  }
-
-  if (!WRITE_METHODS.has(request.method)) {
-    next();
-    return;
-  }
-
-  const declared = Number(request.headers["content-length"] ?? 0);
-  if (Number.isFinite(declared) && declared > REPLAYABLE_REQUEST_LIMIT) {
-    // Rejected by the proxy anyway; handling it locally is the better failure.
-    next();
-    return;
-  }
-
-  response.setHeader(
-    "fly-replay",
-    `region=${target};timeout=10s;fallback=force_self`,
-  );
-  response.status(409).json({
-    error: "Request replayed to the write region",
-    code: "REPLAYED_TO_WRITE_REGION",
-    replayTo: target,
-    from: region,
-  });
 };
 
 export const errorHandler: ErrorRequestHandler = (
@@ -173,17 +97,14 @@ export const errorHandler: ErrorRequestHandler = (
     return;
   }
 
+  // Error text can contain a SQL bind value (an email, a token) echoed back
+  // by a driver. Use the shared redactor rather than logging `error` directly.
   logger.error(
     {
-      errorName: error instanceof Error ? error.name : typeof error,
-      errorMessage: error instanceof Error ? error.message : String(error),
-      errorStack:
-        error instanceof Error
-          ? error.stack?.split("\n").slice(0, 6).join(" | ")
-          : undefined,
+      error: redactError(error),
       method: request.method,
       path: request.path,
-      flyRequestId: request.headers["fly-request-id"],
+      requestId: request.headers["x-vercel-id"] ?? request.headers["x-request-id"],
     },
     "Unhandled request error",
   );

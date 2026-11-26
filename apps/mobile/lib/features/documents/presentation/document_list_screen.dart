@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../../shared/theme/app_media.dart';
+import '../../../shared/widgets/app_background.dart';
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/hero_media_card.dart';
 import '../domain/generated_document.dart';
 import 'document_controller.dart';
 
@@ -26,6 +29,7 @@ class _DocumentListScreenState extends State<DocumentListScreen> {
   Widget build(BuildContext context) {
     final controller = context.watch<DocumentController>();
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Documents'),
         actions: [
@@ -36,36 +40,54 @@ class _DocumentListScreenState extends State<DocumentListScreen> {
           ),
         ],
       ),
-      body: switch (controller.state) {
-        DocumentLoadState.idle || DocumentLoadState.loading =>
-          const LoadingState(label: 'Loading documents…'),
-        DocumentLoadState.error => ErrorState(
-          message: controller.errorMessage ?? 'Unable to load documents',
-          onRetry: controller.load,
-        ),
-        DocumentLoadState.ready =>
-          controller.items.isEmpty
-              ? const EmptyState(
-                  title: 'No generated documents',
-                  message: 'Generate a CV or cover letter from an application workspace.',
-                  icon: Icons.description_outlined,
-                )
-              : RefreshIndicator(
-                  onRefresh: controller.load,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                    itemCount: controller.items.length,
-                    separatorBuilder: (_, index) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      final document = controller.items[index];
-                      return _DocumentCard(
-                        document: document,
-                        onTap: () => context.push('/documents/${document.id}'),
-                      );
-                    },
+      body: AppBackground(
+        child: Column(
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: HeroMediaCard(
+                eyebrow: 'DOCUMENTS',
+                title: 'Polished materials, ready to send.',
+                subtitle: 'CVs and cover letters generated for your applications.',
+                imageUrl: AppMedia.heroOffice,
+                height: 136,
+              ),
+            ),
+            Expanded(
+              child: switch (controller.state) {
+                DocumentLoadState.idle || DocumentLoadState.loading =>
+                  const LoadingState(label: 'Loading documents…'),
+                DocumentLoadState.error => ErrorState(
+                    message: controller.errorMessage ?? 'Unable to load documents',
+                    onRetry: controller.load,
                   ),
-                ),
-      },
+                DocumentLoadState.ready =>
+                  controller.items.isEmpty
+                      ? const EmptyState(
+                          title: 'No generated documents',
+                          message: 'Generate a CV or cover letter from an application workspace.',
+                          icon: Icons.description_outlined,
+                        )
+                      : RefreshIndicator(
+                          onRefresh: controller.load,
+                          child: ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                            itemCount: controller.items.length,
+                            separatorBuilder: (_, index) => const SizedBox(height: 12),
+                            itemBuilder: (context, index) {
+                              final document = controller.items[index];
+                              return _DocumentCard(
+                                document: document,
+                                onTap: () => context.push('/documents/${document.id}'),
+                              );
+                            },
+                          ),
+                        ),
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

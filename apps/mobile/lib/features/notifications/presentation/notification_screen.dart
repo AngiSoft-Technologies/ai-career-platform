@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/formatting/app_formatters.dart';
+import '../../../shared/widgets/app_background.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../domain/app_notification.dart';
 import 'notification_controller.dart';
@@ -26,6 +27,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
   Widget build(BuildContext context) {
     final controller = context.watch<NotificationController>();
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Notifications'),
         actions: [
@@ -36,7 +38,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
             ),
         ],
       ),
-      body: switch (controller.state) {
+      body: AppBackground(
+        child: switch (controller.state) {
         NotificationLoadState.idle || NotificationLoadState.loading =>
           const LoadingState(label: 'Loading notifications…'),
         NotificationLoadState.error => ErrorState(
@@ -62,6 +65,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                   ),
                 ),
       },
+      ),
     );
   }
 }

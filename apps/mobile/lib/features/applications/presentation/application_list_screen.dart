@@ -3,7 +3,10 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/formatting/app_formatters.dart';
+import '../../../shared/theme/app_media.dart';
+import '../../../shared/widgets/app_background.dart';
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/hero_media_card.dart';
 import '../../../shared/widgets/status_chip.dart';
 import '../../followups/presentation/follow_up_controller.dart';
 import '../../followups/presentation/follow_up_section.dart';
@@ -30,6 +33,7 @@ class _ApplicationListScreenState extends State<ApplicationListScreen> {
     final controller = context.watch<ApplicationController>();
     final followUps = context.watch<FollowUpController>();
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Applications'),
         actions: [
@@ -40,18 +44,20 @@ class _ApplicationListScreenState extends State<ApplicationListScreen> {
           ),
         ],
       ),
-      body: RefreshIndicator(
+      body: AppBackground(
+        child: RefreshIndicator(
         onRefresh: _refresh,
         child: CustomScrollView(
           slivers: [
-            SliverToBoxAdapter(
+            const SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                child: Text(
-                  'Track every application from shortlist to offer.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                padding: EdgeInsets.fromLTRB(16, 8, 16, 12),
+                child: HeroMediaCard(
+                  eyebrow: 'APPLICATIONS',
+                  title: 'Track every move with clarity.',
+                  subtitle: 'From shortlist to offer, keep your pipeline visible.',
+                  imageUrl: AppMedia.heroTeam,
+                  height: 142,
                 ),
               ),
             ),
@@ -122,6 +128,7 @@ class _ApplicationListScreenState extends State<ApplicationListScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

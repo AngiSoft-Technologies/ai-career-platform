@@ -7,6 +7,7 @@ import { Badge, Button, Page, PageHeader, Panel, PanelHead, useToast } from "@/c
 import { ROLE_LABELS, ThemePicker, useTheme } from "@/components/theme";
 import { useSession } from "@/components/session";
 import { outboxItems, replayOutbox } from "@/lib/api";
+import { VerificationPanel } from "@/components/verification-panel";
 
 export default function SettingsPage() {
   const { role } = useTheme();
@@ -61,6 +62,7 @@ export default function SettingsPage() {
             <ul className="flex flex-col gap-0.5 border-l border-app-border">
               {[
                 { href: "#appearance", label: "Appearance" },
+                { href: "#security", label: "Verification" },
                 ...(isStaff ? [{ href: "#access", label: "Access" }] : []),
                 { href: "#offline", label: "Offline queue" },
                 { href: "#trust", label: "Your data" },
@@ -95,6 +97,8 @@ export default function SettingsPage() {
             </div>
             <ThemePicker />
           </section>
+
+          <VerificationPanel />
 
           {isStaff ? (
             <Panel id="access" className="scroll-mt-24">

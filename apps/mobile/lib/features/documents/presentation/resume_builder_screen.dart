@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
+import '../../../shared/theme/app_colors.dart';
+import '../../../shared/widgets/app_background.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../data/document_repository.dart';
 import '../domain/generated_document.dart';
@@ -223,13 +225,13 @@ class _ResumeBuilderScreenState extends State<ResumeBuilderScreen> {
                 ),
                 decoration: BoxDecoration(
                   color: _atsGrade == 'A' || _atsGrade == 'B'
-                      ? Colors.green.withValues(alpha: 0.15)
-                      : Colors.orange.withValues(alpha: 0.15),
+                      ? context.appColors.verified.withValues(alpha: 0.15)
+                      : context.appColors.signal.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
                     color: (_atsGrade == 'A' || _atsGrade == 'B')
-                        ? Colors.green
-                        : Colors.orange,
+                        ? context.appColors.verified
+                        : context.appColors.signal,
                   ),
                 ),
                 child: Text(
@@ -260,10 +262,10 @@ class _ResumeBuilderScreenState extends State<ResumeBuilderScreen> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.lightbulb_outline_rounded,
                           size: 16,
-                          color: Colors.amber,
+                          color: context.appColors.signal,
                         ),
                         const SizedBox(width: 8),
                         Expanded(child: Text(issue)),
@@ -275,7 +277,7 @@ class _ResumeBuilderScreenState extends State<ResumeBuilderScreen> {
             Text(
               'No ATS issues detected — the document is ATS-safe.',
               style: Theme.of(context).textTheme.bodyMedium
-                  ?.copyWith(color: Colors.green.shade700),
+                  ?.copyWith(color: context.appColors.verified),
             ),
         ],
       ),
@@ -287,6 +289,7 @@ class _ResumeBuilderScreenState extends State<ResumeBuilderScreen> {
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Tailor resume'),
         actions: [
@@ -298,7 +301,7 @@ class _ResumeBuilderScreenState extends State<ResumeBuilderScreen> {
             ),
         ],
       ),
-      body: _isGenerating && _document == null
+      body: AppBackground(child: _isGenerating && _document == null
           ? const LoadingState(label: 'Tailoring your document…')
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
@@ -408,25 +411,29 @@ class _ResumeBuilderScreenState extends State<ResumeBuilderScreen> {
                         ),
                         child: Row(
                           children: [
-                            Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color:
-                                    (_selectedTemplate != null
-                                            ? Color(
-                                                _selectedTemplate!.accentColor,
-                                              )
-                                            : scheme.primary)
-                                        .withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Icon(
-                                Icons.description_outlined,
-                                color: _selectedTemplate != null
-                                    ? Color(_selectedTemplate!.accentColor)
-                                    : scheme.primary,
-                              ),
+                            Builder(
+                              builder: (context) {
+                                final accent = surfaceSafeAccent(
+                                  _selectedTemplate != null
+                                      ? Color(
+                                          _selectedTemplate!.accentColor,
+                                        )
+                                      : scheme.primary,
+                                  Theme.of(context).brightness,
+                                );
+                                return Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: accent.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(
+                                    Icons.description_outlined,
+                                    color: accent,
+                                  ),
+                                );
+                              },
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -563,7 +570,7 @@ class _ResumeBuilderScreenState extends State<ResumeBuilderScreen> {
                 ],
               ],
             ),
-    );
+    ));
   }
 
   Future<void> _editDocumentContent(BuildContext context) async {

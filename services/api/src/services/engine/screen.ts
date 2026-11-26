@@ -1,7 +1,7 @@
 /**
  * Page interaction & capture — no browser required.
  *
- * Our infrastructure is multi-region Fly machines with noChromium, so a real
+ * Our servers ship without a browser engine, so a real
  * browser engine is not an option for server-side agents. This module gets us
  * the same outcomes by reading what the page already ships to the client:
  *

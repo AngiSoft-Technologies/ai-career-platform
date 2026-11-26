@@ -7,6 +7,7 @@ import '../../../core/networking/api_client.dart';
 import '../../../core/networking/api_exception.dart';
 import '../../../core/storage/local_database.dart';
 import '../../../core/synchronization/offline_action.dart';
+import '../domain/document_version.dart';
 import '../domain/generated_document.dart';
 import '../domain/resume_template.dart';
 
@@ -117,6 +118,7 @@ class DocumentRepository {
   }
 
   /// Save edits to an existing document (title / content / template).
+  /// Edits are cached immediately and queued as `update_document` offline.
   Future<GeneratedDocument> updateDocument({
     required String id,
     String? title,
@@ -127,8 +129,141 @@ class DocumentRepository {
     if (title != null) body['title'] = title;
     if (content != null) body['content'] = content;
     if (templateKey != null) body['template'] = templateKey;
-    final response = await _apiClient.patch('/documents/$id', body: body);
-    return GeneratedDocument.fromJson(Map<String, dynamic>.from(response));
+    final cached = await _database.cachedDocument(id);
+    final base =
+        cached ??
+        <String, dynamic>{
+          'id': id,
+          'opportunityId': '',
+          'type': 'cv',
+          'title': '',
+          'content': '',
+        };
+    final optimistic = GeneratedDocument.fromJson(<String, dynamic>{
+      ...base,
+      ...body,
+      'id': id,
+      'updatedAt': DateTime.now().toUtc().toIso8601String(),
+    });
+    await _database.cacheDocument(optimistic.toJson());
+    try {
+      final response = await _apiClient.patch('/documents/$id', body: body);
+      final updated = GeneratedDocument.fromJson(_documentMap(response));
+      await _database.cacheDocument(updated.toJson());
+      return updated;
+    } on ApiException catch (error) {
+      if (!error.isNetworkError) rethrow;
+      await _enqueueAction('update_document', {
+        'id': id,
+        'body': body,
+      }, entityId: id);
+      return optimistic;
+    }
+  }
+
+  /// Version history for the compare / restore UI. Cached in the generic
+  /// sync_metadata table so the panel still works offline.
+  Future<List<DocumentVersion>> versions(String documentId) async {
+    try {
+      final response = await _apiClient.get(
+        '/v1/documents/$documentId/versions',
+      );
+      final items = _versionList(response);
+      await _database.setSyncMetadata(
+        'document_versions:$documentId',
+        jsonEncode(items.map((item) => item.toJson()).toList()),
+      );
+      return items;
+    } on ApiException catch (error) {
+      if (!error.isNetworkError && !error.isNotFound) rethrow;
+      return cachedVersions(documentId);
+    }
+  }
+
+  Future<List<DocumentVersion>> cachedVersions(String documentId) async {
+    final raw = await _database.getSyncMetadata(
+      'document_versions:$documentId',
+    );
+    if (raw == null) return const [];
+    try {
+      final decoded = jsonDecode(raw) as List;
+      return decoded
+          .whereType<Map>()
+          .map(
+            (item) => DocumentVersion.fromJson(Map<String, dynamic>.from(item)),
+          )
+          .toList();
+    } on FormatException {
+      return const [];
+    }
+  }
+
+  /// Restores a revision by patching the current document's content, then
+  /// refreshing the local version list.
+  Future<GeneratedDocument?> restoreVersion(
+    String documentId,
+    DocumentVersion version,
+  ) async {
+    final updated = await updateDocument(
+      id: documentId,
+      title: version.title.isNotEmpty ? version.title : null,
+      content: version.content,
+    );
+    final latest = await versions(documentId);
+    await _database.setSyncMetadata(
+      'document_versions:$documentId',
+      jsonEncode([
+        ...latest,
+        DocumentVersion(
+          id: 'restored-${DateTime.now().microsecondsSinceEpoch}',
+          documentId: documentId,
+          version:
+              (latest.fold<int>(
+                0,
+                (max, item) => item.version > max ? item.version : max,
+              ) +
+              1),
+          content: version.content,
+          title: version.title,
+          createdAt: DateTime.now(),
+          author: 'Restored from v${version.version}',
+        ).toJson(),
+      ]),
+    );
+    return updated;
+  }
+
+  List<DocumentVersion> _versionList(dynamic response) {
+    final dynamic raw = response is Map
+        ? (response['versions'] ?? response['items'])
+        : response;
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map(
+          (item) => DocumentVersion.fromJson(Map<String, dynamic>.from(item)),
+        )
+        .toList();
+  }
+
+  Future<void> _enqueueAction(
+    String actionType,
+    Map<String, dynamic> payload, {
+    String? entityId,
+  }) async {
+    final now = DateTime.now();
+    await _database.enqueueAction(
+      OfflineAction(
+        idempotencyKey: '$actionType-${now.microsecondsSinceEpoch}',
+        actionType: actionType,
+        payload: payload,
+        status: 'pending',
+        createdAt: now,
+        updatedAt: now,
+        entityType: 'document',
+        entityId: entityId,
+      ),
+    );
   }
 
   /// Export a document to PDF / DOCX / PPTX / PNG. Returns the raw bytes.

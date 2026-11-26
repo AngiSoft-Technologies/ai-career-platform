@@ -29,7 +29,7 @@ Job seekers, students, fresh graduates, interns, attachment placements, career c
 - Company: AngiSoft Technologies, Nairobi, Kenya. Contact: mboqara@angisoft.co.ke
 - Web app: https://mboqara.angisoft.co.ke
 - Android app: https://play.google.com/store/apps/details?id=ke.co.angisoft.mboqara (package `ke.co.angisoft.mboqara`)
-- API: https://mboqara-api-angisoft.fly.dev
+- API: https://api.mboqara.angisoft.co.ke
 - Price: free founding access during beta; no credit card; no charges until paid plans launch
 - Languages of content: English, with Swahili search terms supported
 

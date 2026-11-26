@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/app_background.dart';
 import '../../applications/presentation/application_controller.dart';
 import '../domain/application_analysis.dart';
 import '../domain/application_workspace.dart';
@@ -558,11 +559,12 @@ class _ApplicationApplyScreenState extends State<ApplicationApplyScreen> {
     final workspace = _workspace;
     if (_loading) {
       return const Scaffold(
-        body: LoadingState(label: 'Preparing your application guide…'),
-      );
+        body: AppBackground(child: LoadingState(label: 'Preparing your application guide…'),
+      ));
     }
     if (workspace == null) {
       return Scaffold(
+      backgroundColor: Colors.transparent,
         appBar: AppBar(title: const Text('Guided application')),
         body: ErrorState(
           message: _error ?? 'Could not load this application.',

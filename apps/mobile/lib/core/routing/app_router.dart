@@ -20,28 +20,64 @@ import '../../features/opportunities/presentation/opportunity_detail_screen.dart
 import '../../features/opportunities/presentation/opportunity_list_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../../features/invite/presentation/invite_accept_screen.dart';
+import '../../features/verification/presentation/verification_screen.dart';
 import '../authentication/auth_session.dart';
+import '../deeplinks/deep_link_service.dart';
+import '../observability/app_observability.dart';
 import 'app_shell.dart';
 
-GoRouter createAppRouter(AuthSession authSession) {
+GoRouter createAppRouter(
+  AuthSession authSession, {
+  DeepLinkService? deepLinks,
+}) {
   return GoRouter(
     initialLocation: '/home/opportunities',
     refreshListenable: authSession,
+    observers: [AppObservability.routeObserver],
     redirect: (context, state) {
       final location = state.matchedLocation;
+      final fullLocation = state.uri.toString();
       final isSignIn = location == '/onboarding';
       final isResumeFlow =
           location == '/resume' || location.startsWith('/resume/');
       final isPreferences = location == '/onboarding/preferences';
+      final isPublic = DeepLinkService.isPublicRoute(location) || isPreferences;
 
+      // Invites, sign-in, verification and resume onboarding must be
+      // reachable while signed out. Any other destination is remembered so
+      // it can be replayed after authentication instead of being replaced by
+      // the generic post-login landing page.
       if (!authSession.isSignedIn) {
+        if (isPublic) return null;
+        deepLinks?.rememberRoute(fullLocation);
         return isSignIn ? null : '/onboarding';
       }
-      if (isSignIn) return '/home/opportunities';
+      if (isSignIn) {
+        final deferred = deepLinks?.consumePendingRoute();
+        if (deferred != null && deferred.isNotEmpty) return deferred;
+        return '/home/opportunities';
+      }
+
+      // A long-lived session still re-proves itself on a schedule; the
+      // step-up screen is the only place allowed while the flag is up.
+      final isVerify = location == '/verify';
+      if (authSession.verificationRequired && !isVerify) {
+        deepLinks?.rememberRoute(fullLocation);
+        return '/verify';
+      }
 
       // First sign-in: the candidate picks a resume path before anything else.
-      if (!authSession.resumeOnboarded && !isResumeFlow && !isPreferences) {
+      if (!authSession.resumeOnboarded &&
+          !isResumeFlow &&
+          !isPreferences &&
+          !isVerify) {
+        deepLinks?.rememberRoute(fullLocation);
         return '/resume';
+      }
+
+      final deferred = deepLinks?.consumePendingRoute();
+      if (deferred != null && deferred.isNotEmpty && deferred != fullLocation) {
+        return deferred;
       }
       return null;
     },
@@ -54,6 +90,10 @@ GoRouter createAppRouter(AuthSession authSession) {
       GoRoute(
         path: '/onboarding',
         builder: (context, state) => const OnboardingScreen(),
+      ),
+      GoRoute(
+        path: '/verify',
+        builder: (context, state) => const VerificationScreen(),
       ),
       GoRoute(
         path: '/resume',

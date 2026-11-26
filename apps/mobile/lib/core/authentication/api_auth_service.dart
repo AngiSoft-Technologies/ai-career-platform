@@ -88,6 +88,98 @@ class ApiAuthService {
     await _post('/auth/sign-out', {'refreshToken': refreshToken});
   }
 
+  // -------------------------------------------------------------------------
+  // Step-up verification
+  // -------------------------------------------------------------------------
+
+  /// The verification methods enrolled on the account.
+  Future<List<Map<String, dynamic>>> verificationMethods(String token) async {
+    final data = await _request(
+      'GET',
+      '/auth/verification/methods',
+      token: token,
+    );
+    final methods = data is Map ? data['methods'] : null;
+    if (methods is! List) return const [];
+    return methods.whereType<Map>().map(Map<String, dynamic>.from).toList();
+  }
+
+  /// Starts a verification. `email_link` sends a single-use link that comes
+  /// back through [kAuthCallbackUri]; `totp` just means "collect a code";
+  /// `biometric` returns a single-use `challengeId` the device must sign.
+  Future<Map<String, dynamic>> requestVerification({
+    required String token,
+    String? method,
+    String? redirectUri,
+    String? deviceId,
+  }) async {
+    final body = <String, dynamic>{
+      'redirectUri': redirectUri ?? kAuthCallbackUri,
+    };
+    if (method != null) body['method'] = method;
+    if (deviceId != null) body['deviceId'] = deviceId;
+    final data = await _request(
+      'POST',
+      '/auth/verification/request',
+      body: body,
+      token: token,
+    );
+    return data is Map<String, dynamic> ? data : const {};
+  }
+
+  /// Enrols this device for biometric step-up. The returned secret is shown
+  /// once and must be sealed in the platform keystore immediately.
+  Future<Map<String, dynamic>> enrollBiometric({
+    required String token,
+    required String deviceId,
+  }) async {
+    final data = await _request(
+      'POST',
+      '/auth/verification/biometric/enroll',
+      body: {'deviceId': deviceId},
+      token: token,
+    );
+    return data is Map<String, dynamic> ? data : const {};
+  }
+
+  /// Verifies a TOTP step-up code for the signed-in account.
+  Future<void> verifyTotp({required String token, required String code}) async {
+    await _request(
+      'POST',
+      '/auth/verification/verify',
+      body: {'method': 'totp', 'code': code},
+      token: token,
+    );
+  }
+
+  /// Verifies a biometric step-up: `proof` is HMAC-SHA256(secret, challengeId).
+  Future<void> verifyBiometric({
+    required String token,
+    required String deviceId,
+    required String challengeId,
+    required String proof,
+  }) async {
+    await _request(
+      'POST',
+      '/auth/verification/verify',
+      body: {
+        'method': 'biometric',
+        'deviceId': deviceId,
+        'challengeId': challengeId,
+        'proof': proof,
+      },
+      token: token,
+    );
+  }
+
+  /// Trades an auth-callback deep link for a session.
+  ///
+  /// Used both by the social sign-in flow and by the emailed verification
+  /// link, which the API redirects to the same callback with a handoff code.
+  Future<AuthResult> completeAuthCallback(Uri uri) {
+    return _resultFromCallback(uri);
+  }
+
   /// Runs the Google sign-in flow.
   ///
   /// The browser is sent to the API, which completes the provider consent and
@@ -181,16 +273,45 @@ class ApiAuthService {
   }
 
   Future<AuthResult> _post(String path, Map<String, dynamic> body) async {
-    final response = await _client
-        .post(
-          Uri.parse('${_settings.baseUrl}$path'),
-          headers: const {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          body: jsonEncode(body),
-        )
-        .timeout(_timeout);
+    final decoded = await _request('POST', path, body: body);
+    return AuthResult(
+      token: (decoded['token'] as String?) ?? '',
+      refreshToken: (decoded['refreshToken'] as String?) ?? '',
+      email: ((decoded['user'] as Map?)?['email'] as String?) ?? '',
+      name: ((decoded['user'] as Map?)?['name'] as String?) ?? '',
+      expiresAt: _parseDate(decoded['expiresAt'] as String?),
+      refreshExpiresAt: _parseDate(decoded['refreshExpiresAt'] as String?),
+    );
+  }
+
+  /// One authenticated-or-public JSON call. Unlike [_post] it returns the
+  /// decoded body so endpoints that are not session payloads (verification
+  /// methods, enrolment) can use it too.
+  Future<dynamic> _request(
+    String method,
+    String path, {
+    Map<String, dynamic>? body,
+    String? token,
+  }) async {
+    final uri = Uri.parse('${_settings.baseUrl}$path');
+    final headers = <String, String>{
+      'Accept': 'application/json',
+      if (body != null) 'Content-Type': 'application/json',
+      if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+    };
+    final encoded = body == null ? null : jsonEncode(body);
+
+    final http.Response response;
+    switch (method) {
+      case 'GET':
+        response = await _client.get(uri, headers: headers).timeout(_timeout);
+      case 'POST':
+        response = await _client
+            .post(uri, headers: headers, body: encoded)
+            .timeout(_timeout);
+      default:
+        throw AuthException('Unsupported method $method');
+    }
 
     final decoded = _decode(response.body);
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -200,15 +321,7 @@ class ApiAuthService {
         statusCode: response.statusCode,
       );
     }
-
-    return AuthResult(
-      token: (decoded['token'] as String?) ?? '',
-      refreshToken: (decoded['refreshToken'] as String?) ?? '',
-      email: ((decoded['user'] as Map?)?['email'] as String?) ?? '',
-      name: ((decoded['user'] as Map?)?['name'] as String?) ?? '',
-      expiresAt: _parseDate(decoded['expiresAt'] as String?),
-      refreshExpiresAt: _parseDate(decoded['refreshExpiresAt'] as String?),
-    );
+    return decoded;
   }
 
   Map<String, dynamic> _decode(String value) {

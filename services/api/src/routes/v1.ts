@@ -16,8 +16,15 @@ import { notificationsRouter } from "./notifications.js";
 import { streamRouter } from "./stream.js";
 import { userLocationRouter } from "./user-location.js";
 import { browserRouter } from "./browser.js";
+import { platformRouter } from "./platform.js";
 
 export const v1Router = Router();
+
+// Platform routes are mounted at the root so their paths stay readable. They
+// come before `/me` and `/documents` because they own several sub-paths of
+// those prefixes (devices, saved searches, document versions); unmatched
+// requests simply fall through to the older routers.
+v1Router.use(platformRouter);
 
 // Mounted before `/me` so `/me/notifications` resolves here rather than being
 // swallowed by the account router.

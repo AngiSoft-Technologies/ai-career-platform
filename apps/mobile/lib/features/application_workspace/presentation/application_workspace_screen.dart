@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../../shared/theme/app_colors.dart';
+import '../../../shared/widgets/app_background.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/match_score_badge.dart';
 import '../../documents/presentation/document_controller.dart';
@@ -35,8 +37,9 @@ class _ApplicationWorkspaceScreenState
   Widget build(BuildContext context) {
     final controller = context.watch<ApplicationWorkspaceController>();
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(title: const Text('Application workspace')),
-      body: switch (controller.state) {
+      body: AppBackground(child: switch (controller.state) {
         WorkspaceLoadState.idle || WorkspaceLoadState.loading =>
           const LoadingState(label: 'Preparing your workspace…'),
         WorkspaceLoadState.error => ErrorState(
@@ -45,7 +48,7 @@ class _ApplicationWorkspaceScreenState
         ),
         WorkspaceLoadState.ready => _content(context, controller.workspace!),
       },
-    );
+    ));
   }
 
   Widget _content(BuildContext context, ApplicationWorkspace workspace) {
@@ -149,9 +152,9 @@ class _ApplicationWorkspaceScreenState
                       : () => context.push(
                           '/builder/resume?opportunityId=${Uri.encodeComponent(workspace.opportunityId)}&opportunityTitle=${Uri.encodeComponent(opportunity?.title ?? 'Untitled role')}&companyName=${Uri.encodeComponent(opportunity?.companyName ?? 'Company')}&applicationId=${Uri.encodeComponent(widget.applicationId ?? '')}',
                         ),
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.auto_awesome_rounded,
-                    color: Colors.green,
+                    color: context.appColors.insight,
                   ),
                   label: const Text('Build tailored resume (AI)'),
                 ),

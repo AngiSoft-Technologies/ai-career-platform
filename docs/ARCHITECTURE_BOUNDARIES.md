@@ -2,26 +2,26 @@
 
 > **Status:** implemented. The boundary described here is enforced by
 > `npm run check:boundaries` in CI (`.github/workflows/ci.yml`).
-> **Scope:** `apps/web` (Next.js), `apps/mobile` (Flutter), `services/api` (Express on Fly.io),
+> **Scope:** `apps/web` (Next.js), `apps/mobile` (Flutter), `services/api` (Express on Vercel),
 > `packages/contracts`.
 > **Applies to:** every network call, every credential, every piece of business logic.
 >
 > **Last verified:** 2026-10-30 — `npm run check` passes, `npm run build` passes,
 > `flutter analyze` and `flutter test` pass, and
 > `node services/api/scripts/verify-auth.mjs` passes 25/25 against the live API
-> (`https://mboqara-api-angisoft.fly.dev/v1`).
+> (`https://api.mboqara.angisoft.co.ke/v1`).
 
 ---
 
 ## 1. The rule
 
-**The backend running at `https://mboqara-api-angisoft.fly.dev` is the only component that
+**The backend running at `https://api.mboqara.angisoft.co.ke` is the only component that
 talks to identity providers, databases, object storage, and third-party APIs. Web and mobile are
 thin clients that call the backend and render the result.**
 
 Corollaries, in priority order:
 
-1. **One network ingress per client.** `https://mboqara-api-angisoft.fly.dev/v1` plus the
+1. **One network ingress per client.** `https://api.mboqara.angisoft.co.ke/v1` plus the
    realtime endpoints mounted under it (`/v1/ws`, `/v1/stream`). Nothing else.
 2. **No client holds a credential that belongs to a provider.** A JWT minted *by MboQara* is
    fine. A provider session cookie, a provider URL, or a third-party secret is not.
@@ -47,7 +47,7 @@ are REST (canonical, both clients), WebSocket/SSE (realtime, through the API), a
 
 | Destination | Web | Mobile | Allowed | Condition |
 |---|---|---|---|---|
-| `mboqara-api-angisoft.fly.dev/v1/*` | yes | yes | ✅ | Only via `apps/web/src/lib/api.ts` / `apps/mobile/lib/core/networking/api_client.dart` |
+| `api.mboqara.angisoft.co.ke/v1/*` | yes | yes | ✅ | Only via `apps/web/src/lib/api.ts` / `apps/mobile/lib/core/networking/api_client.dart` |
 | `/v1/ws`, `/v1/stream` (same host) | yes | yes | ✅ | Bearer token, through the API |
 | Neon Auth (`*.neonauth.*.neon.tech`) | ❌ | ❌ | ⛔ | Retired — no longer used |
 | Neon Postgres | ❌ | ❌ | ⛔ | Backend only |
@@ -124,7 +124,7 @@ the assumption in the client.
                └───────────────┬──────────────────────┘
                                ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│  services/api  — Fly.io                                             │
+│  services/api  — Vercel                                            │
 │                                                                     │
 │  middleware/     identity · rbac · rate-limit · error-handler       │
 │  routes/         v1.ts  (profile, opportunities, applications, …)   │
@@ -157,7 +157,7 @@ the assumption in the client.
 | Validation of every write | zod schemas in `routes/*` | send the documented shape |
 | Matching / scoring | `services/matching.ts` | read `/v1/matches` |
 | Documents, export, storage signing | `services/documents.ts`, `services/storage.ts` | call API; use returned presigned URL |
-| Provider credentials & URLs | `config.ts` + Fly secrets | never see them |
+| Provider credentials & URLs | `config.ts` + hosting env vars | never see them |
 | Offline cache, optimistic UI, formatting, platform APIs | clients | — |
 
 ---
@@ -239,7 +239,7 @@ Cache and outbox are legitimate client concerns. Inventing server state is not.
    mints a session and returns 503 `AUTH_NOT_CONFIGURED` there. It did exactly that: the API
    was deployed without the variable, so every sign-in and sign-up failed for every user while
    the sign-in page, the redirect chain and the Google handshake all looked healthy. The
-   variable was set on Fly on 2026-11-07 (64 random bytes, kept in the operator's `.env.local`,
+   variable was set on Vercel on 2026-11-07 (64 random bytes, kept in the operator's `.env.local`,
    never in the repo). When the signing key changes, existing tokens stop verifying — a
    deliberate trade, since tokens are valid for 15 minutes and the refresh token is rotated.
 
@@ -357,7 +357,7 @@ must be either proven or absent.
 **2. `JWT_SECRET` was not set in production.**
 `accessSecret()` refuses to mint a token when the secret is missing, equals the development default,
 or is shorter than 32 characters — so the API returned `503 AUTH_NOT_CONFIGURED` for every sign-in.
-This guard is correct and worth keeping; the failure was operational. The secret is set on Fly and
+This guard is correct and worth keeping; the failure was operational. The secret is set on Vercel and
 kept out of the repository (`.env.production`, git-ignored). Rotating it invalidates access tokens
 immediately (15-minute TTL); refresh tokens are opaque and hashed, so they are unaffected.
 

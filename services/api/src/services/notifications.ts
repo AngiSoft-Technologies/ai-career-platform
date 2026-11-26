@@ -1,6 +1,7 @@
 import { logger } from "../logger.js";
 import { query } from "../db/pool.js";
 import { broadcast } from "../realtime/hub.js";
+import { dispatchPush } from "./push/delivery.js";
 
 export type NotificationType =
   | "application"
@@ -13,7 +14,17 @@ export interface NotificationInput {
   type: NotificationType;
   title: string;
   body?: string;
+  /** Optional device topic, used to filter push delivery. Never user data. */
+  topic?: string;
 }
+
+/** Alerts tied to an action the user took are not subject to marketing opt-out. */
+const TRANSACTIONAL_TYPES: ReadonlySet<NotificationType> = new Set([
+  "application",
+  "document",
+  "followup",
+  "system",
+]);
 
 /**
  * Record a user-facing notification.
@@ -38,6 +49,16 @@ export async function notify(
       [userId, input.type, input.title, input.body ?? ""],
     );
     broadcast("notification.created", { type: input.type }, userId);
+
+    // Push is an optional second channel. It stays fire-and-forget: no await
+    // here, and no provider failure may change the response to the caller.
+    void dispatchPush(userId, {
+      type: input.type,
+      title: input.title,
+      body: input.body,
+      topic: input.topic,
+      transactional: TRANSACTIONAL_TYPES.has(input.type),
+    }).catch(() => undefined);
   } catch (error) {
     logger.warn(
       { err: error, userId, type: input.type },

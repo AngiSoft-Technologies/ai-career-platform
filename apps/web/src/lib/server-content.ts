@@ -9,7 +9,7 @@ import "server-only";
  * source of truth (revalidated every few minutes).
  */
 const API_URL = (
-  process.env.NEXT_PUBLIC_API_URL ?? "https://mboqara-api-angisoft.fly.dev/v1"
+  process.env.NEXT_PUBLIC_API_URL ?? "https://api.mboqara.angisoft.co.ke/v1"
 ).replace(/\/$/, "");
 
 async function getJson<T>(url: string, revalidate: number): Promise<T | null> {

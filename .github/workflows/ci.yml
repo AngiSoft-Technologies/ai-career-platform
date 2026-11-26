@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -17,28 +21,44 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - run: npm ci
       - run: npm run check:boundaries
       - run: npm run verify
 
   typescript:
-    name: Typecheck and build
+    name: API and web lint/typecheck/build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run typecheck
-      - run: npm run typecheck:web
-      - run: npm run build
+      # There is no ESLint/Biome config in this repository yet. Run a lint
+      # script automatically if one is added, and keep typecheck + boundary
+      # checks as the static gates until then.
+      - name: Lint (when configured)
+        shell: bash
+        run: |
+          if node -e "const s=require('./package.json').scripts||{}; process.exit(s.lint?0:1)"; then
+            npm run lint
+          else
+            echo "No lint script configured; typecheck and boundary checks are the static gates."
+          fi
+      - name: Typecheck API
+        run: npm run typecheck -w @angisoft/mboqara-api
+      - name: Typecheck web
+        run: npm run typecheck:web
+      - name: Build API
+        run: npm run build -w @angisoft/mboqara-api
+      - name: Build web
+        run: npm run build -w @angisoft/mboqara-web
 
   flutter:
-    name: Flutter analyze
+    name: Flutter analyze and tests
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -47,8 +67,77 @@ jobs:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.24.0"
           channel: stable
+          cache: true
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
+
+  android:
+    name: Android AAB/APK (${{ matrix.env }} hint)
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Gradle product flavors are not configured yet; APP_ENV is a
+        # build-time hint so artifacts are labelled dev/stage/prod today.
+        env: [dev, stage, prod]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Install Flutter dependencies
+        working-directory: apps/mobile
+        run: flutter pub get
+      - name: Configure release signing (optional)
+        working-directory: apps/mobile/android
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$HOME/.android"
+          if [ -n "${ANDROID_KEYSTORE_BASE64:-}" ] && [ -n "${ANDROID_KEYSTORE_PASSWORD:-}" ] && [ -n "${ANDROID_KEY_ALIAS:-}" ] && [ -n "${ANDROID_KEY_PASSWORD:-}" ]; then
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$HOME/.android/release.keystore"
+            cat > key.properties <<EOF
+          storeFile=$HOME/.android/release.keystore
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          keyPassword=$ANDROID_KEY_PASSWORD
+          EOF
+            echo "Release signing configured from repository secrets."
+          else
+            echo "Release signing secrets absent; using an ephemeral debug keystore. Artifacts are not Play-uploadable."
+            if [ ! -f "$HOME/.android/debug.keystore" ]; then
+              keytool -genkeypair -keystore "$HOME/.android/debug.keystore" \
+                -storepass android -alias androiddebugkey -keypass android \
+                -keyalg RSA -keysize 2048 -validity 10000 \
+                -dname "CN=Android Debug, OU=Android, O=Android, L=Mountain View, ST=CA, C=US"
+            fi
+          fi
+      - name: Build AAB
+        working-directory: apps/mobile
+        run: flutter build appbundle --release --dart-define=APP_ENV=${{ matrix.env }}
+      - name: Build split APKs
+        working-directory: apps/mobile
+        run: flutter build apk --release --split-per-abi --dart-define=APP_ENV=${{ matrix.env }}
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-${{ matrix.env }}
+          path: |
+            apps/mobile/build/app/outputs/bundle/release/app-release.aab
+            apps/mobile/build/app/outputs/flutter-apk/app-*.apk
+          if-no-files-found: error

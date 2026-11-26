@@ -17,7 +17,7 @@ info:
     The API owns identity. Clients exchange credentials for mboqara tokens
     and never contact the identity provider directly.
 servers:
-  - url: https://mboqara-api-angisoft.fly.dev/v1
+  - url: https://api.mboqara.angisoft.co.ke/v1
     description: Production
   - url: http://localhost:8088/v1
     description: Local
@@ -1175,6 +1175,321 @@ paths:
                 params: { type: object }
       responses:
         "200": { description: JSON-RPC response }
+  /config/client:
+    get:
+      tags: [public]
+      summary: Public client bootstrap configuration
+      security: []
+      responses:
+        "200":
+          description: Current client configuration and server time
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ClientConfig" }
+  /me/devices:
+    get:
+      tags: [profile]
+      summary: List registered push devices (never returns raw tokens)
+      responses:
+        "200":
+          description: Device registry
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/DeviceSummary" }
+    post:
+      tags: [profile]
+      summary: Register or refresh a device token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DeviceRegistrationInput" }
+      responses:
+        "201":
+          description: Device registered; token is returned only as a short hint
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  device: { $ref: "#/components/schemas/DeviceSummary" }
+                  pushConfigured: { type: boolean }
+        "400": { $ref: "#/components/responses/BadRequest" }
+    delete:
+      tags: [profile]
+      summary: Remove device registrations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                provider: { $ref: "#/components/schemas/PushProvider" }
+                token: { type: string }
+                deviceId: { type: string }
+      responses:
+        "200": { description: Number of registrations removed }
+  /me/saved-searches:
+    get:
+      tags: [profile]
+      summary: List the caller's saved searches
+      responses:
+        "200": { description: Saved searches }
+    post:
+      tags: [profile]
+      summary: Create a saved search
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SavedSearchInput" }
+      responses:
+        "201": { description: Saved search created }
+        "400": { $ref: "#/components/responses/BadRequest" }
+  /me/saved-searches/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      tags: [profile]
+      summary: Update a saved search
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SavedSearchInput" }
+      responses:
+        "200": { description: Saved search updated }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [profile]
+      summary: Delete a saved search
+      responses:
+        "200": { description: Saved search deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /me/saved-searches/{id}/mark-seen:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [profile]
+      summary: Clear the unread count for a saved search
+      responses:
+        "200": { description: Saved search marked seen }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /me/job-alerts:
+    get:
+      tags: [profile]
+      summary: Job alert summary for the caller
+      responses:
+        "200":
+          description: Alert counts and enabled saved searches
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobAlertsSummary" }
+  /me/privacy:
+    get:
+      tags: [profile]
+      summary: Read the caller's privacy settings
+      responses:
+        "200":
+          description: Privacy settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  privacy: { $ref: "#/components/schemas/PrivacySettings" }
+    put:
+      tags: [profile]
+      summary: Update the caller's privacy settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PrivacySettings" }
+      responses:
+        "200": { description: Updated privacy settings }
+  /me/export:
+    get:
+      tags: [profile]
+      summary: Export the caller's own data as JSON
+      responses:
+        "200":
+          description: Personal data bundle (no other users' records)
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /me:
+    delete:
+      tags: [profile]
+      summary: Anonymise the account and revoke all sessions and devices
+      responses:
+        "200": { description: Account anonymised; audit trail retained }
+  /applications/{id}/timeline:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [applications]
+      summary: Merged application timeline
+      responses:
+        "200":
+          description: Chronological timeline entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/TimelineEntry" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /applications/{id}/interviews:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [applications]
+      summary: Add an interview to an application
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [startsAt]
+              properties:
+                stage: { type: string }
+                startsAt: { type: string, format: date-time }
+                location: { type: string }
+                contact: { type: string }
+                notes: { type: string }
+      responses:
+        "201": { description: Interview created }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /applications/{id}/notes:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [applications]
+      summary: Add a private note to an application
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: { type: string }
+      responses:
+        "201": { description: Note created }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /applications/{id}/attachments:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [applications]
+      summary: Attach a file from the caller's own storage prefix
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fileName, storageKey]
+              properties:
+                fileName: { type: string }
+                storageKey: { type: string }
+                mimeType: { type: string }
+      responses:
+        "201": { description: Attachment created }
+        "403": { description: Storage key belongs to another user }
+  /applications/{id}/calendar.ics:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [applications]
+      summary: Download interviews and follow-ups as iCalendar
+      responses:
+        "200":
+          description: VCALENDAR document
+          content:
+            text/calendar:
+              schema: { type: string }
+  /feed/state:
+    get:
+      tags: [opportunities]
+      summary: Per-user seen/saved/applied state
+      parameters:
+        - { name: ids, in: query, schema: { type: array, items: { type: string, format: uuid } } }
+        - { name: limit, in: query, schema: { type: integer, default: 50 } }
+      responses:
+        "200":
+          description: Feed state items
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/FeedStateItem" }
+    post:
+      tags: [opportunities]
+      summary: Mark opportunities seen, saved or applied
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FeedStateInput" }
+      responses:
+        "200": { description: State updated }
+  /documents/{id}/versions:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [documents]
+      summary: List a document and its derived versions
+      responses:
+        "200": { description: Version history }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /documents/{id}/versions/{version}/restore:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: version, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [documents]
+      summary: Restore a document version into a new document
+      responses:
+        "201": { description: Restored document }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /analytics/events:
+    post:
+      tags: [public]
+      summary: Record a consent-gated analytics event (no PII)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AnalyticsEventInput" }
+      responses:
+        "202": { description: Event accepted }
+        "400": { $ref: "#/components/responses/BadRequest" }
+  /admin/audit-logs:
+    get:
+      tags: [admin]
+      summary: Platform audit trail (admin role required)
+      parameters:
+        - { name: userId, in: query, schema: { type: string, format: uuid } }
+        - { name: action, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 50 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        "200": { description: Audit events }
+        "403": { description: Insufficient role or permission }
 components:
   securitySchemes:
     bearerAuth:
@@ -1209,6 +1524,120 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
   schemas:
+    PushProvider:
+      type: string
+      enum: [fcm, apns, huawei, samsung]
+    ClientConfig:
+      type: object
+      required: [minSupportedVersion, forceUpdate, maintenanceMode, featureFlags, serverTime, apiVersion]
+      properties:
+        minSupportedVersion: { type: string }
+        forceUpdate: { type: boolean }
+        maintenanceMode: { type: boolean }
+        featureFlags: { type: object, additionalProperties: { type: boolean } }
+        serverTime: { type: string, format: date-time }
+        apiVersion: { type: string }
+    DeviceRegistrationInput:
+      type: object
+      required: [provider, token]
+      properties:
+        provider: { $ref: "#/components/schemas/PushProvider" }
+        token: { type: string, minLength: 8, writeOnly: true }
+        deviceId: { type: string }
+        platform: { type: string }
+        appVersion: { type: string }
+        locale: { type: string }
+        topics: { type: array, items: { type: string } }
+    DeviceSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        provider: { $ref: "#/components/schemas/PushProvider" }
+        tokenHint: { type: string, description: "Short non-reversible hint; never the token" }
+        deviceId: { type: string }
+        platform: { type: string }
+        appVersion: { type: string }
+        locale: { type: string }
+        topics: { type: array, items: { type: string } }
+        enabled: { type: boolean }
+        lastSeenAt: { type: [string, "null"], format: date-time }
+        createdAt: { type: [string, "null"], format: date-time }
+    SavedSearchInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 140 }
+        query: { type: object, additionalProperties: true }
+        alertEnabled: { type: boolean }
+        cadence: { type: string, enum: [realtime, daily, weekly] }
+        quietHours:
+          type: [object, "null"]
+          properties:
+            start: { type: string, pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$" }
+            end: { type: string, pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$" }
+        channels: { type: array, items: { type: string, enum: [in_app, push, email] } }
+    SavedSearch:
+      allOf:
+        - { $ref: "#/components/schemas/SavedSearchInput" }
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            newCount: { type: integer }
+            lastSeenAt: { type: [string, "null"], format: date-time }
+            lastEvaluatedAt: { type: [string, "null"], format: date-time }
+            createdAt: { type: [string, "null"], format: date-time }
+            updatedAt: { type: [string, "null"], format: date-time }
+    JobAlertsSummary:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SavedSearch" }
+        total: { type: integer }
+        activeCount: { type: integer }
+        unreadCount: { type: integer }
+    PrivacySettings:
+      type: object
+      properties:
+        allowAnalytics: { type: boolean, default: false }
+        allowPersonalisation: { type: boolean, default: true }
+        screenshotProtection: { type: boolean, default: false }
+        updatedAt: { type: [string, "null"], format: date-time }
+    TimelineEntry:
+      type: object
+      properties:
+        kind: { type: string, enum: [status, interview, note, attachment, followup] }
+        at: { type: string, format: date-time }
+        title: { type: string }
+        body: { type: string }
+    FeedStateInput:
+      type: object
+      required: [opportunityId]
+      properties:
+        opportunityId: { type: string, format: uuid }
+        seen: { type: boolean }
+        saved: { type: boolean }
+        applied: { type: boolean }
+    FeedStateItem:
+      type: object
+      properties:
+        opportunityId: { type: string, format: uuid }
+        seenAt: { type: [string, "null"], format: date-time }
+        savedAt: { type: [string, "null"], format: date-time }
+        appliedAt: { type: [string, "null"], format: date-time }
+    AnalyticsEventInput:
+      type: object
+      required: [event, consent]
+      properties:
+        event:
+          type: string
+          enum: [search, view_job, save_job, match_view, apply_start, apply_submit, doc_generate, doc_export, followup_set, notification_open]
+        properties:
+          type: object
+          additionalProperties:
+            type: [string, number, boolean, "null"]
+          description: Scalar allowlist; no email, name or token fields
+        consent: { type: boolean }
     Error:
       type: object
       properties:

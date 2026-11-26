@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/app_background.dart';
 import '../domain/job_preferences.dart';
 import 'preferences_controller.dart';
 
@@ -49,8 +50,9 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
       _apply(controller.preferences);
     }
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(title: const Text('Job preferences')),
-      body: switch (controller.state) {
+      body: AppBackground(child: switch (controller.state) {
         PreferencesLoadState.idle || PreferencesLoadState.loading =>
           const LoadingState(label: 'Loading preferences…'),
         PreferencesLoadState.error => ErrorState(
@@ -60,7 +62,7 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
         PreferencesLoadState.ready ||
         PreferencesLoadState.saving => _form(context, controller),
       },
-    );
+    ));
   }
 
   Widget _form(BuildContext context, PreferencesController controller) {

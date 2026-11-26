@@ -40,6 +40,9 @@ const display = Archivo_Black({
   preload: false,
 });
 
+/** Set NEXT_PUBLIC_ANALYTICS_ENABLED=false to opt the web app out of analytics. */
+const analyticsEnabled = process.env.NEXT_PUBLIC_ANALYTICS_ENABLED !== "false";
+
 const themeBoot = `(function(){try{var t=localStorage.getItem("jr.theme");if(t&&/^[a-z]+$/.test(t)){document.documentElement.setAttribute("data-theme",t);}}catch(e){}})();`;
 
 /** Root metadata: canonical site-wide defaults inherited by every route. */
@@ -164,7 +167,7 @@ export default function RootLayout({
             softwareApplicationSchema(),
           ]}
         />
-        <Analytics />
+        {analyticsEnabled ? <Analytics /> : null}
       </body>
     </html>
   );

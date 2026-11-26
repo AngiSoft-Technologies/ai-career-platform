@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../shared/formatting/app_formatters.dart';
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/app_background.dart';
 import '../../../shared/widgets/eligibility_badge.dart';
 import '../../applications/presentation/application_controller.dart';
 import '../../company_intelligence/data/company_intelligence_repository.dart';
@@ -39,27 +41,29 @@ class _OpportunityDetailScreenState extends State<OpportunityDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Opportunity')),
-      body: FutureBuilder<Opportunity>(
-        future: _opportunity,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const LoadingState(label: 'Loading opportunity…');
-          }
-          if (snapshot.hasError) {
-            return ErrorState(
-              message: snapshot.error.toString(),
-              onRetry: () {
-                setState(() {
-                  _opportunity = context
-                      .read<OpportunityController>()
-                      .getOpportunity(widget.opportunityId);
-                });
-              },
-            );
-          }
-          final opportunity = snapshot.data!;
-          return _content(context, opportunity);
-        },
+      body: AppBackground(
+        child: FutureBuilder<Opportunity>(
+          future: _opportunity,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const LoadingState(label: 'Loading opportunity…');
+            }
+            if (snapshot.hasError) {
+              return ErrorState(
+                message: snapshot.error.toString(),
+                onRetry: () {
+                  setState(() {
+                    _opportunity = context
+                        .read<OpportunityController>()
+                        .getOpportunity(widget.opportunityId);
+                  });
+                },
+              );
+            }
+            final opportunity = snapshot.data!;
+            return _content(context, opportunity);
+          },
+        ),
       ),
     );
   }
@@ -85,7 +89,18 @@ class _OpportunityDetailScreenState extends State<OpportunityDetailScreen> {
               ),
             ),
             IconButton.filledTonal(
+              tooltip: 'Share job link',
+              
+              onPressed: () => Share.share(
+                '${opportunity.title} at ${opportunity.companyName}\n'
+                '${opportunity.shareUrl}',
+                subject: opportunity.title,
+              ),
+              icon: const Icon(Icons.share_outlined),
+            ),
+            IconButton.filledTonal(
               tooltip: isSaved ? 'Remove bookmark' : 'Save opportunity',
+              
               onPressed: () => controller.toggleSaved(opportunity),
               icon: Icon(
                 isSaved
@@ -227,7 +242,7 @@ class _OpportunityDetailScreenState extends State<OpportunityDetailScreen> {
           ),
         ),
         const SizedBox(height: 14),
-        MatchPanel(match: match),
+        MatchPanel(match: match, opportunity: opportunity),
         const SizedBox(height: 14),
         CompanyIntelligenceCard(intelligence: company),
         // The company card answers "who is this"; the company page

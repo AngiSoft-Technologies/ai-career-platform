@@ -17,12 +17,6 @@ const schema = z.object({
     .default(
       "https://mboqara.angisoft.co.ke,https://mboqara.vercel.app,http://localhost:3000,http://localhost:3003,http://localhost:3100",
     ),
-  /**
-   * Region that owns the write path. Unset by default: replaying a write to
-   * another region only helps once that region holds a database the current
-   * one does not. See `middleware/error-handler.ts`.
-   */
-  WRITE_REPLAY_REGION: z.string().optional(),
   DATABASE_URL: z
     .string()
     .default("postgresql://mboqara:mboqara@localhost:5432/mboqara"),
@@ -97,6 +91,17 @@ const schema = z.object({
     .positive()
     .default(900),
   AUTH_REFRESH_TOKEN_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(31_536_000),
+  /**
+   * How long a session may go without a step-up verification. Interactive
+   * sign-ins stamp `users.last_verified_at`; once it is older than this the
+   * API answers account routes with VERIFICATION_REQUIRED until the user
+   * proves one of their enrolled methods again.
+   */
+  AUTH_STEP_UP_INTERVAL_SECONDS: z.coerce
     .number()
     .int()
     .positive()

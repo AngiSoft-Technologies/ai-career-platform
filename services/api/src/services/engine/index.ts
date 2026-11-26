@@ -12,7 +12,7 @@
  * Design:
  *   • `index_entries` keyed by content hash → stores URL, status, mime,
  *     title, markdown fingerprint, and a discovery timestamp
- *   • in-process LRU with TTL for markdown bodies (bounded to keep Fly's
+ *   • in-process LRU with TTL for markdown bodies (bounded to keep
  *     memory flat) and a longer-TTLLRU for *negative* results (404/robots
  *     denials) so we do not re-ask for a dead URL
  *   • `index_domains` counts per domain so the frontier can rank hosts we
@@ -59,7 +59,7 @@ export function contentHash(markdown: string): string {
   return createHash("sha256").update(markdown).digest("hex").slice(0, 32);
 }
 
-/** In-process markdown cache read. Bounded, so Fly memory stays flat. */
+/** In-process markdown cache read. Bounded, so memory stays flat. */
 export function readIndexEntry(url: string): IndexEntry | null {
   const hit = markdownCache.get(url);
   if (!hit) return null;

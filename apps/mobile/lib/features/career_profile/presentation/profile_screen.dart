@@ -2,11 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../../shared/theme/app_media.dart';
+import '../../../shared/widgets/app_background.dart';
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/hero_media_card.dart';
 import '../../career_intelligence/presentation/career_intelligence_controller.dart';
 import '../../career_intelligence/presentation/career_intelligence_panel.dart';
+import '../../documents/presentation/document_controller.dart';
+import '../../job_preferences/presentation/preferences_controller.dart';
 import '../domain/candidate_profile.dart';
 import 'profile_controller.dart';
+import 'profile_completeness_card.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -29,7 +35,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final controller = context.watch<ProfileController>();
     final insights = context.watch<CareerIntelligenceController>();
+    final preferences = context.watch<PreferencesController>();
+    final documents = context.watch<DocumentController>();
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Career profile'),
         actions: [
@@ -38,226 +47,252 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onPressed: () => context.push('/settings'),
             icon: const Icon(Icons.settings_outlined),
           ),
-          IconButton(
-            tooltip: 'Refresh profile',
-            onPressed: () {
-              controller.load();
-              insights.load();
-            },
-            icon: const Icon(Icons.refresh_rounded),
-          ),
         ],
       ),
-      body: switch (controller.state) {
-        ProfileLoadState.idle ||
-        ProfileLoadState.loading ||
-        ProfileLoadState.saving => const LoadingState(
-          label: 'Loading your profile…',
-        ),
-        ProfileLoadState.error => ErrorState(
-          message: controller.errorMessage ?? 'Unable to load your profile',
-          onRetry: controller.load,
-        ),
-        ProfileLoadState.ready => _content(
-          context,
-          controller.profile!,
-          insights,
-        ),
-      },
-    );
-  }
-
-  Widget _content(
-    BuildContext context,
-    CandidateProfile profile,
-    CareerIntelligenceController insights,
-  ) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-      children: [
-        Row(
-          children: [
-            CircleAvatar(
-              radius: 32,
-              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-              foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
-              child: Text(
-                _initials(profile.fullName),
-                style: Theme.of(context).textTheme.titleLarge
-                    ?.copyWith(fontWeight: FontWeight.w800),
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    profile.fullName.isEmpty
-                        ? 'Your profile'
-                        : profile.fullName,
-                    style: Theme.of(context).textTheme.titleLarge
-                        ?.copyWith(fontWeight: FontWeight.w800),
-                  ),
-                  Text(
-                    profile.headline.isEmpty
-                        ? 'Add a professional headline'
-                        : profile.headline,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+      body: AppBackground(
+        child: switch (controller.state) {
+          ProfileLoadState.idle || ProfileLoadState.loading =>
+            const LoadingState(label: 'Loading profile…'),
+          ProfileLoadState.error => ErrorState(
+            message: controller.errorMessage ?? 'Unable to load profile',
+            onRetry: controller.load,
+          ),
+          ProfileLoadState.saving => const LoadingState(
+            label: 'Saving profile…',
+          ),
+          ProfileLoadState.ready =>
+            controller.profile == null
+                ? _CreateProfile(onSave: controller.save)
+                : RefreshIndicator(
+                    onRefresh: () async {
+                      await controller.load();
+                      await insights.load();
+                    },
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                      children: [
+                        const HeroMediaCard(
+                          eyebrow: 'PROFILE',
+                          title: 'Shape the story employers see.',
+                          subtitle: 'Your profile powers matches, eligibility, and AI documents.',
+                          imageUrl: AppMedia.heroCareer,
+                          height: 140,
+                        ),
+                        const SizedBox(height: 14),
+                        ProfileCompletenessCard(
+                          profile: controller.profile!,
+                          salaryConfigured:
+                              preferences.preferences.minSalary != null,
+                          documentCount: documents.items.length,
+                          onEditProfile: () =>
+                              _editProfile(context, controller.profile!),
+                        ),
+                        const SizedBox(height: 14),
+                        SectionCard(
+                          child: Column(
+                            children: [
+                              Row(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 28,
+                                    child: Text(
+                                      _initials(controller.profile!.fullName),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          controller.profile!.fullName,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleLarge
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                        ),
+                                        if (controller
+                                            .profile!
+                                            .headline
+                                            .isNotEmpty)
+                                          Text(
+                                            controller.profile!.headline,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodyMedium
+                                                ?.copyWith(
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurfaceVariant,
+                                                ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Edit profile',
+                                    onPressed: () => _editProfile(
+                                      context,
+                                      controller.profile!,
+                                    ),
+                                    icon: const Icon(Icons.edit_outlined),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              const Divider(height: 1),
+                              const SizedBox(height: 16),
+                              _ProfileRow(
+                                icon: Icons.place_outlined,
+                                label: 'Location',
+                                value: controller.profile!.location.isEmpty
+                                    ? 'Not set'
+                                    : controller.profile!.location,
+                              ),
+                              _ProfileRow(
+                                icon: Icons.work_history_outlined,
+                                label: 'Experience',
+                                value:
+                                    '${controller.profile!.yearsExperience} years',
+                              ),
+                              _ProfileRow(
+                                icon: Icons.signal_cellular_alt_rounded,
+                                label: 'Seniority',
+                                value: controller.profile!.seniority,
+                              ),
+                              _ProfileRow(
+                                icon: Icons.home_work_outlined,
+                                label: 'Remote preferred',
+                                value: controller.profile!.remotePreferred
+                                    ? 'Yes'
+                                    : 'No',
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: () =>
+                              context.push('/home/profile/documents'),
+                          icon: const Icon(Icons.description_outlined),
+                          label: const Text('My documents'),
+                        ),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: () => context.push('/companies'),
+                          icon: const Icon(Icons.business_center_outlined),
+                          label: const Text('Companies hiring now'),
+                        ),
+                        if (controller.profile!.summary.isNotEmpty) ...[
+                          const SizedBox(height: 14),
+                          SectionCard(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Professional summary',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(controller.profile!.summary),
+                              ],
+                            ),
+                          ),
+                        ],
+                        if (controller.profile!.skills.isNotEmpty) ...[
+                          const SizedBox(height: 14),
+                          SectionCard(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Skills',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                                const SizedBox(height: 10),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: controller.profile!.skills
+                                      .map((skill) => Chip(label: Text(skill)))
+                                      .toList(),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        if (controller.profile!.desiredRoles.isNotEmpty) ...[
+                          const SizedBox(height: 14),
+                          SectionCard(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Target roles',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                                const SizedBox(height: 10),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: controller.profile!.desiredRoles
+                                      .map(
+                                        (role) => Chip(
+                                          avatar: const Icon(
+                                            Icons.flag_outlined,
+                                          ),
+                                          label: Text(role),
+                                        ),
+                                      )
+                                      .toList(),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 14),
+                        OutlinedButton.icon(
+                          onPressed: () => context.push('/preferences'),
+                          icon: const Icon(Icons.tune_rounded),
+                          label: const Text('Job preferences'),
+                        ),
+                        const SizedBox(height: 14),
+                        if (insights.state == CareerInsightState.loading ||
+                            insights.state == CareerInsightState.idle)
+                          const SectionCard(child: LinearProgressIndicator())
+                        else if (insights.state == CareerInsightState.error)
+                          SectionCard(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  insights.errorMessage ??
+                                      'Career insights are unavailable.',
+                                ),
+                                const SizedBox(height: 8),
+                                TextButton(
+                                  onPressed: insights.load,
+                                  child: const Text('Try again'),
+                                ),
+                              ],
+                            ),
+                          )
+                        else if (insights.insights != null)
+                          CareerIntelligencePanel(insights: insights.insights!),
+                      ],
                     ),
                   ),
-                ],
-              ),
-            ),
-            IconButton.filledTonal(
-              tooltip: 'Edit profile',
-              onPressed: () => _editProfile(context, profile),
-              icon: const Icon(Icons.edit_rounded),
-            ),
-          ],
-        ),
-        const SizedBox(height: 18),
-        SectionCard(
-          child: Column(
-            children: [
-              _ProfileRow(
-                icon: Icons.location_on_outlined,
-                label: 'Location',
-                value: profile.location.isEmpty ? 'Not set' : profile.location,
-              ),
-              _ProfileRow(
-                icon: Icons.public_rounded,
-                label: 'Country',
-                value: profile.country.isEmpty ? 'Not set' : profile.country,
-              ),
-              _ProfileRow(
-                icon: Icons.work_history_outlined,
-                label: 'Experience',
-                value: '${profile.yearsExperience} years',
-              ),
-              _ProfileRow(
-                icon: Icons.signal_cellular_alt_rounded,
-                label: 'Seniority',
-                value: profile.seniority,
-              ),
-              _ProfileRow(
-                icon: Icons.home_work_outlined,
-                label: 'Remote preferred',
-                value: profile.remotePreferred ? 'Yes' : 'No',
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: () => context.push('/home/profile/documents'),
-          icon: const Icon(Icons.description_outlined),
-          label: const Text('My documents'),
-        ),
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: () => context.push('/companies'),
-          icon: const Icon(Icons.business_center_outlined),
-          label: const Text('Companies hiring now'),
-        ),
-        if (profile.summary.isNotEmpty) ...[
-          const SizedBox(height: 14),
-          SectionCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Professional summary',
-                  style: Theme.of(context).textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 8),
-                Text(profile.summary),
-              ],
-            ),
-          ),
-        ],
-        if (profile.skills.isNotEmpty) ...[
-          const SizedBox(height: 14),
-          SectionCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Skills',
-                  style: Theme.of(context).textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: profile.skills
-                      .map((skill) => Chip(label: Text(skill)))
-                      .toList(),
-                ),
-              ],
-            ),
-          ),
-        ],
-        if (profile.desiredRoles.isNotEmpty) ...[
-          const SizedBox(height: 14),
-          SectionCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Target roles',
-                  style: Theme.of(context).textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: profile.desiredRoles
-                      .map(
-                        (role) => Chip(
-                          avatar: const Icon(Icons.flag_outlined),
-                          label: Text(role),
-                        ),
-                      )
-                      .toList(),
-                ),
-              ],
-            ),
-          ),
-        ],
-        const SizedBox(height: 14),
-        OutlinedButton.icon(
-          onPressed: () => context.push('/preferences'),
-          icon: const Icon(Icons.tune_rounded),
-          label: const Text('Job preferences'),
-        ),
-        const SizedBox(height: 14),
-        if (insights.state == CareerInsightState.loading ||
-            insights.state == CareerInsightState.idle)
-          const SectionCard(child: LinearProgressIndicator())
-        else if (insights.state == CareerInsightState.error)
-          SectionCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  insights.errorMessage ?? 'Career insights are unavailable.',
-                ),
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: insights.load,
-                  child: const Text('Try again'),
-                ),
-              ],
-            ),
-          )
-        else if (insights.insights != null)
-          CareerIntelligencePanel(insights: insights.insights!),
-      ],
+        },
+      ),
     );
   }
 
@@ -282,6 +317,219 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (parts.isEmpty) return '?';
     if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
     return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
+  }
+}
+
+/// First-run state: the account has no profile yet, so the screen becomes a
+/// creation form instead of the read view. Same fields and payload shape as
+/// [_ProfileEditor] — `PUT /profile` upserts.
+class _CreateProfile extends StatefulWidget {
+  const _CreateProfile({required this.onSave});
+
+  final Future<bool> Function(Map<String, dynamic> changes) onSave;
+
+  @override
+  State<_CreateProfile> createState() => _CreateProfileState();
+}
+
+class _CreateProfileState extends State<_CreateProfile> {
+  final _formKey = GlobalKey<FormState>();
+  final _fullName = TextEditingController();
+  final _headline = TextEditingController();
+  final _summary = TextEditingController();
+  final _location = TextEditingController();
+  final _country = TextEditingController();
+  final _years = TextEditingController(text: '0');
+  final _skills = TextEditingController();
+  final _roles = TextEditingController();
+  String _seniority = 'junior';
+  bool _remotePreferred = true;
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _fullName.dispose();
+    _headline.dispose();
+    _summary.dispose();
+    _location.dispose();
+    _country.dispose();
+    _years.dispose();
+    _skills.dispose();
+    _roles.dispose();
+    super.dispose();
+  }
+
+  String? _required(String? value) {
+    return value == null || value.trim().isEmpty
+        ? 'This field is required'
+        : null;
+  }
+
+  List<String> _list(String value) {
+    return value
+        .split(',')
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList();
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate() || _saving) return;
+    setState(() => _saving = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final success = await widget.onSave({
+      'fullName': _fullName.text.trim(),
+      'headline': _headline.text.trim(),
+      'summary': _summary.text.trim(),
+      'location': _location.text.trim(),
+      'country': _country.text.trim(),
+      'yearsExperience': int.tryParse(_years.text) ?? 0,
+      'seniority': _seniority,
+      'skills': _list(_skills.text),
+      'desiredRoles': _list(_roles.text),
+      'remotePreferred': _remotePreferred,
+    });
+    if (!mounted) return;
+    setState(() => _saving = false);
+    if (success) {
+      messenger.showSnackBar(const SnackBar(content: Text('Profile created.')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Form(
+      key: _formKey,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+        children: [
+          const HeroMediaCard(
+            eyebrow: 'GET STARTED',
+            title: 'Tell us about you.',
+            subtitle: 'A few details power your matches, eligibility checks and AI documents.',
+            imageUrl: AppMedia.heroCareer,
+            height: 140,
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _fullName,
+            decoration: const InputDecoration(labelText: 'Full name'),
+            validator: _required,
+            textCapitalization: TextCapitalization.words,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _headline,
+            decoration: const InputDecoration(
+              labelText: 'Headline',
+              hintText: 'Backend Engineer · Payments',
+            ),
+            validator: _required,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _summary,
+            minLines: 3,
+            maxLines: 6,
+            decoration: const InputDecoration(
+              labelText: 'Professional summary',
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _location,
+                  decoration: const InputDecoration(labelText: 'City'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextFormField(
+                  controller: _country,
+                  decoration: const InputDecoration(labelText: 'Country'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _years,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Years of experience',
+                  ),
+                  validator: (value) {
+                    final years = int.tryParse(value ?? '');
+                    if (years == null || years < 0 || years > 60) {
+                      return 'Enter 0 to 60';
+                    }
+                    return null;
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  initialValue: _seniority,
+                  decoration: const InputDecoration(labelText: 'Seniority'),
+                  items: const [
+                    DropdownMenuItem(value: 'intern', child: Text('Intern')),
+                    DropdownMenuItem(value: 'junior', child: Text('Junior')),
+                    DropdownMenuItem(value: 'mid', child: Text('Mid-level')),
+                    DropdownMenuItem(value: 'senior', child: Text('Senior')),
+                    DropdownMenuItem(value: 'lead', child: Text('Lead')),
+                  ],
+                  onChanged: (value) =>
+                      setState(() => _seniority = value ?? 'junior'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _skills,
+            decoration: const InputDecoration(
+              labelText: 'Skills',
+              helperText: 'Separate skills with commas',
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _roles,
+            decoration: const InputDecoration(
+              labelText: 'Target roles',
+              helperText: 'Separate roles with commas',
+            ),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(
+              'Open to remote work',
+              style: theme.textTheme.bodyLarge,
+            ),
+            value: _remotePreferred,
+            onChanged: (value) => setState(() => _remotePreferred = value),
+          ),
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: _saving ? null : _save,
+            child: _saving
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Create profile'),
+          ),
+        ],
+      ),
+    );
   }
 }
 

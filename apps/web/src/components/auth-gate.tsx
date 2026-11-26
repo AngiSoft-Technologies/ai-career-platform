@@ -8,6 +8,8 @@ import { api } from "@/lib/api";
 
 /** Routes that belong to onboarding itself and must not be redirected. */
 const ONBOARDING_PREFIX = "/onboarding";
+/** The step-up verification page must stay reachable while it is required. */
+const VERIFY_PATH = "/verify";
 
 /** A full-screen hold while we know whether there is a session to show. */
 function ScreenHold({ children }: { children: React.ReactNode }) {
@@ -29,6 +31,14 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     if (!session) {
       const next = encodeURIComponent(pathname);
       router.replace(`/login?next=${next}`);
+      return;
+    }
+
+    // A long-lived session still has to re-prove itself on a schedule. The
+    // verification page is the one place that is allowed while the flag is
+    // up; everywhere else sends the user there first.
+    if (session.requiresVerification && pathname !== VERIFY_PATH) {
+      router.replace(`${VERIFY_PATH}?next=${encodeURIComponent(pathname)}`);
       return;
     }
 

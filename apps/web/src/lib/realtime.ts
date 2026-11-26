@@ -172,6 +172,7 @@ export function useEventStream(enabled = true): RealtimeEvent[] {
           },
           signal: controller.signal,
           cache: "no-store",
+          credentials: "include",
         });
         if (!response.ok || !response.body) throw new Error("stream failed");
 
