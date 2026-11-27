@@ -2,10 +2,19 @@ import { Router } from "express";
 import { z } from "zod";
 import { query } from "../db/pool.js";
 import { broadcast } from "../realtime/hub.js";
-import { contentToExportSections, renderDocument } from "../services/documents/export.js";
+import {
+  contentToExportSections,
+  renderDocument,
+  type TemplateStyle,
+} from "../services/documents/export.js";
 import { slugify } from "../services/ingestion/pipeline.js";
 import { validateDocumentForAts, validateRequestSchema } from "../services/documents/validate.js";
 import { runAtsVerification } from "../services/documents/ats-agent.js";
+import {
+  createDocumentImprovement,
+  enqueueDocumentImprovement,
+  getDocumentImprovement,
+} from "../services/documents/improvement-agent.js";
 import { importResume } from "../services/documents/extract.js";
 import {
   generateDocument,
@@ -24,6 +33,10 @@ import {
   DEFAULT_RESUME_TEMPLATE_KEY,
   FALLBACK_COVER_LETTER_TEMPLATES,
   FALLBACK_RESUME_TEMPLATES,
+  RESUME_FONTS,
+  normaliseResumeDocument,
+  resumeDocumentToMarkdown,
+  type ResumeDesign,
 } from "@angisoft/mboqara-contracts";
 
 const generateSchema = z.object({
@@ -227,6 +240,10 @@ const updateSchema = z.object({
   title: z.string().min(1).max(240).optional(),
   content: z.string().max(200_000).optional(),
   template: z.string().min(1).max(120).optional(),
+  // The structured document the editor writes. When it is present the flat
+  // `content` is regenerated from it, so the ATS checker, the tailoring agent
+  // and every exporter keep reading the same text the candidate sees.
+  resumeData: z.unknown().optional(),
 });
 
 const tailorSchema = z.object({ opportunityId: z.string().uuid() });
@@ -292,7 +309,8 @@ documentsRouter.get("/:id", async (request, response, next) => {
   try {
     const documentId = z.string().uuid().parse(request.params.id);
     const result = await query(
-      `SELECT id, opportunity_id, parent_document_id, type, title, content, template, created_at
+      `SELECT id, opportunity_id, parent_document_id, type, title, content, template,
+              resume_data, created_at
          FROM documents WHERE id = $1 AND user_id = $2`,
       [documentId, response.locals.userId as string],
     );
@@ -309,6 +327,7 @@ documentsRouter.get("/:id", async (request, response, next) => {
       title: row.title,
       content: row.content,
       template: row.template,
+      resumeData: row.resume_data ?? undefined,
       createdAt: row.created_at,
     });
   } catch (error) {
@@ -316,23 +335,102 @@ documentsRouter.get("/:id", async (request, response, next) => {
   }
 });
 
+const improvementCreateSchema = z.object({
+  rewrite_type: z.enum(["full"]).default("full"),
+});
+
+const improvementEnqueueSchema = z.object({
+  resumeData: z.unknown().optional(),
+});
+
+/** Grants an in-place AI improvement, exactly like Resumonk's first call. */
+documentsRouter.post("/:id/improvements", async (request, response, next) => {
+  try {
+    const documentId = z.string().uuid().parse(request.params.id);
+    const input = improvementCreateSchema.parse(request.body ?? { rewrite_type: "full" });
+    const result = await createDocumentImprovement({
+      documentId,
+      userId: response.locals.userId as string,
+      rewriteType: input.rewrite_type,
+      idempotencyKey:
+        typeof request.headers["idempotency-key"] === "string" &&
+        z.string().uuid().safeParse(request.headers["idempotency-key"]).success
+          ? (request.headers["idempotency-key"] as string)
+          : undefined,
+    });
+    response.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Enqueues the granted improvement job and returns immediately for polling. */
+documentsRouter.post(
+  "/:id/improvements/:improvementId/enqueue",
+  async (request, response, next) => {
+    try {
+      const documentId = z.string().uuid().parse(request.params.id);
+      const improvementId = z.string().uuid().parse(request.params.improvementId);
+      const input = improvementEnqueueSchema.parse(request.body ?? {});
+      const result = await enqueueDocumentImprovement({
+        id: improvementId,
+        documentId,
+        userId: response.locals.userId as string,
+        resumeData: input.resumeData,
+      });
+      response.json(result);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+/** Polls an in-place improvement job. */
+documentsRouter.get(
+  "/:id/improvements/:improvementId",
+  async (request, response, next) => {
+    try {
+      const documentId = z.string().uuid().parse(request.params.id);
+      const improvementId = z.string().uuid().parse(request.params.improvementId);
+      const result = await getDocumentImprovement({
+        id: improvementId,
+        documentId,
+        userId: response.locals.userId as string,
+      });
+      response.json(result);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 documentsRouter.patch("/:id", async (request, response, next) => {
   try {
     const documentId = z.string().uuid().parse(request.params.id);
     const input = updateSchema.parse(request.body);
+    // The structured document wins over a raw text body: it is the source of
+    // truth, and the flat text is derived from it.
+    const resumeData =
+      input.resumeData === undefined
+        ? undefined
+        : normaliseResumeDocument(input.resumeData);
+    const content = resumeData
+      ? resumeDocumentToMarkdown(resumeData)
+      : input.content;
     const row = await updateDocumentAndInvalidatePreparation({
       userId: response.locals.userId as string,
       documentId,
       title: input.title,
-      content: input.content,
+      content,
       template: input.template,
+      resumeData,
     });
-    if (input.content !== undefined) {
+    if (content !== undefined) {
       void runAtsVerification({
         userId: response.locals.userId as string,
         documentId,
         opportunityId: row.opportunity_id ?? null,
-        content: input.content,
+        content,
       })
         .then((report) =>
           broadcast(
@@ -350,6 +448,7 @@ documentsRouter.patch("/:id", async (request, response, next) => {
       title: row.title,
       content: row.content,
       template: row.template,
+      resumeData: row.resume_data ?? undefined,
       createdAt: row.created_at,
     });
   } catch (error) {
@@ -373,8 +472,9 @@ documentsRouter.post("/:id/versions", async (request, response, next) => {
       title: string;
       content: string;
       template: string | null;
+      resume_data?: unknown;
     }>(
-      `SELECT opportunity_id, parent_document_id, application_id, type, title, content, template
+      `SELECT opportunity_id, parent_document_id, application_id, type, title, content, template, resume_data
          FROM documents WHERE id = $1 AND user_id = $2`,
       [documentId, response.locals.userId as string],
     );
@@ -405,12 +505,12 @@ documentsRouter.post("/:id/versions", async (request, response, next) => {
       applicationId = targetApplication.rows[0]?.id ?? null;
     }
     const inserted = await query(
-      `INSERT INTO documents (user_id, opportunity_id, application_id, parent_document_id, type, title, content, template)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO documents (user_id, opportunity_id, application_id, parent_document_id, type, title, content, template, resume_data)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING id, opportunity_id AS "opportunityId", parent_document_id AS "parentDocumentId", type, title, content, created_at AS "createdAt"`,
       [response.locals.userId as string, opportunityId, applicationId, row.parent_document_id ?? documentId, row.type,
         input.title ?? `${row.title} — tailored copy`, input.content ?? row.content,
-        row.template ?? DEFAULT_RESUME_TEMPLATE_KEY],
+        row.template ?? DEFAULT_RESUME_TEMPLATE_KEY, row.resume_data ?? null],
     );
     const document = inserted.rows[0];
     if (!document) throw new Error("DOCUMENT_VERSION_CREATE_FAILED");
@@ -623,8 +723,9 @@ documentsRouter.post("/:id/export", async (request, response, next) => {
       content: string;
       type: string;
       template: string;
+      resume_data?: { design?: ResumeDesign } | null;
     }>(
-      `SELECT id, user_id, title, content, type, template FROM documents WHERE id = $1`,
+      `SELECT id, user_id, title, content, type, template, resume_data FROM documents WHERE id = $1`,
       [documentId],
     );
     const document = result.rows[0];
@@ -641,13 +742,7 @@ documentsRouter.post("/:id/export", async (request, response, next) => {
     // row, so an unknown or retired key still exports instead of rendering
     // unstyled. Valid keys are never rewritten.
     let templateKey = input.template || document.template || DEFAULT_RESUME_TEMPLATE_KEY;
-    let style: {
-      accent?: string;
-      fontFamily?: string;
-      margins?: "standard" | "narrow" | "comfortable";
-      bodySize?: number;
-      headingSize?: number;
-    } = {};
+    let style: TemplateStyle = {};
 
     interface TemplateRow {
       accent: string;
@@ -692,6 +787,36 @@ documentsRouter.post("/:id/export", async (request, response, next) => {
       }
     } catch {
       style = {};
+    }
+
+    // The candidate's own design settings win over the template defaults:
+    // the preview they edited is the document they expect to download.
+    const design = document.resume_data?.design;
+    if (design) {
+      if (design.textColor) style.textColor = design.textColor;
+      if (design.accentColor) style.accent = design.accentColor;
+      if (design.pageSize) style.pageSize = design.pageSize;
+      if (design.font) style.fontFamily = RESUME_FONTS.find((font) => font.key === design.font)?.label;
+      if (design.margins && typeof design.margins === "object") {
+        style.margins = {
+          top: Number(design.margins.top) || 0,
+          right: Number(design.margins.right) || 0,
+          bottom: Number(design.margins.bottom) || 0,
+          left: Number(design.margins.left) || 0,
+        };
+      } else if (design.margin) {
+        style.margins =
+          design.margin === "narrow"
+            ? "narrow"
+            : design.margin === "wide"
+              ? "comfortable"
+              : "standard";
+      }
+      if (design.textSize) {
+        const size = design.textSize === "compact" ? 9 : design.textSize === "cozy" ? 11 : 10;
+        style.bodySize = size;
+        style.headingSize = size + 2.5;
+      }
     }
 
     const rendered = await renderDocument(

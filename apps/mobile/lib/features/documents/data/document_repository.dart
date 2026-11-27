@@ -7,6 +7,7 @@ import '../../../core/networking/api_client.dart';
 import '../../../core/networking/api_exception.dart';
 import '../../../core/storage/local_database.dart';
 import '../../../core/synchronization/offline_action.dart';
+import '../domain/document_improvement.dart';
 import '../domain/document_version.dart';
 import '../domain/generated_document.dart';
 import '../domain/resume_template.dart';
@@ -117,18 +118,22 @@ class DocumentRepository {
     }
   }
 
-  /// Save edits to an existing document (title / content / template).
-  /// Edits are cached immediately and queued as `update_document` offline.
+  /// Save edits to an existing document (title / template / structured data).
+  ///
+  /// `resumeData` is the structured truth the API regenerates flat text from,
+  /// so sending it keeps the editor, ATS check, tailoring and export in sync.
   Future<GeneratedDocument> updateDocument({
     required String id,
     String? title,
     String? content,
     String? templateKey,
+    Map<String, dynamic>? resumeData,
   }) async {
     final body = <String, dynamic>{};
     if (title != null) body['title'] = title;
     if (content != null) body['content'] = content;
     if (templateKey != null) body['template'] = templateKey;
+    if (resumeData != null) body['resumeData'] = resumeData;
     final cached = await _database.cachedDocument(id);
     final base =
         cached ??
@@ -159,6 +164,43 @@ class DocumentRepository {
       }, entityId: id);
       return optimistic;
     }
+  }
+
+  /// Grant an in-place AI improvement job.
+  Future<DocumentImprovementJob> startImprovement({
+    required String id,
+    String? idempotencyKey,
+  }) async {
+    final response = await _apiClient.post(
+      '/documents/$id/improvements',
+      body: const <String, dynamic>{'rewrite_type': 'full'},
+      idempotencyKey: idempotencyKey,
+    );
+    return DocumentImprovementJob.fromJson(_map(response));
+  }
+
+  /// Enqueue the job with the structured document it should rewrite.
+  Future<DocumentImprovementJob> enqueueImprovement({
+    required String id,
+    required String improvementId,
+    required Map<String, dynamic> resumeData,
+  }) async {
+    final response = await _apiClient.post(
+      '/documents/$id/improvements/$improvementId/enqueue',
+      body: <String, dynamic>{'resumeData': resumeData},
+    );
+    return DocumentImprovementJob.fromJson(_map(response));
+  }
+
+  /// Poll a running improvement job.
+  Future<DocumentImprovementJob> improvementStatus({
+    required String id,
+    required String improvementId,
+  }) async {
+    final response = await _apiClient.get(
+      '/documents/$id/improvements/$improvementId',
+    );
+    return DocumentImprovementJob.fromJson(_map(response));
   }
 
   /// Version history for the compare / restore UI. Cached in the generic
@@ -319,6 +361,11 @@ class DocumentRepository {
       final cached = await _database.cachedDocument(id);
       return cached == null ? null : GeneratedDocument.fromJson(cached);
     }
+  }
+
+  Map<String, dynamic> _map(dynamic response) {
+    if (response is Map) return Map<String, dynamic>.from(response);
+    return <String, dynamic>{};
   }
 
   Map<String, dynamic> _documentMap(dynamic response) {

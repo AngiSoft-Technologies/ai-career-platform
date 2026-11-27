@@ -237,6 +237,18 @@ function DocumentsPageInner() {
         </div>
 
         <aside className="lg:sticky lg:top-[92px]">
+          <div className="mb-3 flex flex-wrap gap-2">
+            <Link href="/onboarding/linkedin">
+              <Button variant="outline" size="sm" icon={<FilePlus2 size={14} />}>
+                Import LinkedIn
+              </Button>
+            </Link>
+            <Link href="/onboarding/upload">
+              <Button variant="outline" size="sm" icon={<FilePlus2 size={14} />}>
+                Upload PDF / DOCX
+              </Button>
+            </Link>
+          </div>
           <Panel>
             <PanelHead
               eyebrow="Generate"

@@ -109,9 +109,12 @@ app.use(
         url: redactUrl(request.originalUrl ?? request.url ?? ""),
         headers: redactHeaders(request.headers),
       }),
+      // Pino hands a response serializer the response it has already
+      // reduced, not the live `ServerResponse`, so there are no raw headers
+      // to read here. Only the status is logged; the request headers above
+      // are the ones that can carry a credential.
       res: (response) => ({
         statusCode: response.statusCode,
-        headers: redactHeaders(response.getHeaders()),
       }),
       err: (error: Error) => redactError(error),
     },

@@ -8,17 +8,21 @@ import { assessEligibility } from "../engine/eligibility.js";
  * Job discovery runner.
  *
  * Order matters and is enforced here:
- *   1. Agents discover (direct feeds first, then search → browse → expansion).
- *   2. Deduplicate pending candidates.
- *   3. PROMOTE verified candidates into `opportunities` — this step was
+ *   1. Deduplicate pending candidates.
+ *   2. PROMOTE verified candidates into `opportunities` — this step was
  *      missing before, which is why no new jobs ever reached the product.
- *   4. Apply geographic eligibility to every promoted record, so the catalogue
+ *   3. Apply geographic eligibility to every promoted record, so the catalogue
  *      can say *why* a job fits a Kenyan candidate instead of guessing.
- *   5. Re-verify freshness of live listings and expire the dead ones.
+ *   4. Run the post-promotion agents against the fresh catalogue rows.
+ *   5. Agents discover (direct feeds first, then search → browse → expansion).
+ *      This is last on purpose: discovery is slow, and a timeout here must not
+ *      hold the jobs already waiting in the catalogue hostage.
+ *   6. Flip quiet sources into backoff.
  *
- * The matching agent runs on its own schedule and reads verified candidates.
+ * Freshness is handled by the maintenance job, not here.
  *
- * Called from the BullMQ scheduler every INGESTION_INTERVAL_MINUTES (30).
+ * Called from the Vercel Schedule every 30 minutes on serverless, and from
+ * the BullMQ scheduler on a persistent host.
  */
 export async function runIngestion(): Promise<{
   status: "success" | "partial" | "failed";
@@ -29,31 +33,13 @@ export async function runIngestion(): Promise<{
   expired: number;
   error?: string;
 }> {
-  // 1. Agents (direct feeds first, then search → browse → expansion).
+  // 1–2. Deduplicate + promote FIRST.
   //
-  // Discovery is deliberately isolated: it is slow by nature and any failure
-  // here must not stop verified candidates from reaching the catalogue. The
-  // next cycle retries discovery on its own.
-  let agentResult: Awaited<ReturnType<typeof runDiscoveryAgents>>;
-  try {
-    agentResult = await runDiscoveryAgents();
-  } catch (error) {
-    logger.error(
-      { error: error instanceof Error ? error.message : String(error) },
-      "Discovery agents failed this cycle; promotion will still run",
-    );
-    agentResult = {
-      status: "partial",
-      fetched: 0,
-      inserted: 0,
-      updated: 0,
-      failed: 1,
-      error: error instanceof Error ? error.message : "DISCOVERY_FAILED",
-    };
-  }
-
-  // 2–3. Deduplicate + promote. Promotion must run even when the discovery
-  // phase failed or the dedup agent was not due on this tick.
+  // Promotion is the step that puts jobs in front of candidates, so it must
+  // not sit behind discovery. Discovery walks employers politely and can take
+  // the whole function timeout; when it ran first the verified candidates
+  // piled up while the catalogue received nothing. Promoting what is already
+  // verified is fast, and the agents below top the queue up for next time.
   const dedup = new DeduplicationAgent();
   let promotion = { promoted: 0, failed: 0 };
   const dedupRow = await query<{ id: string }>(
@@ -103,6 +89,29 @@ export async function runIngestion(): Promise<{
       { error: error instanceof Error ? error.message : String(error) },
       "Post-promotion agents failed this cycle",
     );
+  }
+
+  // 3. Discovery agents (direct feeds first, then search → browse →
+  //    expansion). This is deliberately last: it walks employers politely,
+  //    can take the whole function timeout, and every candidate it finds is
+  //    promoted by the *next* cycle. A slow crawl must never hold the jobs
+  //    already waiting in the catalogue hostage.
+  let agentResult: Awaited<ReturnType<typeof runDiscoveryAgents>>;
+  try {
+    agentResult = await runDiscoveryAgents();
+  } catch (error) {
+    logger.error(
+      { error: error instanceof Error ? error.message : String(error) },
+      "Discovery agents failed this cycle; promotion already ran",
+    );
+    agentResult = {
+      status: "partial",
+      fetched: 0,
+      inserted: 0,
+      updated: 0,
+      failed: 1,
+      error: error instanceof Error ? error.message : "DISCOVERY_FAILED",
+    };
   }
 
   // 5. Freshness is handled by the maintenance job, not here.

@@ -1,11 +1,9 @@
-import 'dart:convert';
-
 /// Fallback resume template key, used when a document has no saved template.
 ///
 /// Keep in sync with `DEFAULT_RESUME_TEMPLATE_KEY` in
 /// `packages/contracts/src/templates.ts` — that is the shared source of truth
 /// for the API and web default.
-const String defaultResumeTemplateKey = 'ats-classic';
+const String defaultResumeTemplateKey = 'zen';
 
 /// Fallback cover-letter template key.
 ///
@@ -28,6 +26,10 @@ class ResumeTemplate {
     required this.atsSafe,
     required this.accent,
     required this.sortOrder,
+    this.free = true,
+    this.photo = false,
+    this.docx = true,
+    this.locked = false,
   });
 
   final String key;
@@ -37,6 +39,10 @@ class ResumeTemplate {
   final bool atsSafe;
   final String accent;
   final int sortOrder;
+  final bool free;
+  final bool photo;
+  final bool docx;
+  final bool locked;
 
   factory ResumeTemplate.fromJson(Map<String, dynamic> json) {
     return ResumeTemplate(
@@ -47,6 +53,10 @@ class ResumeTemplate {
       atsSafe: json['atsSafe'] as bool? ?? false,
       accent: json['accent'] as String? ?? '#1f2937',
       sortOrder: (json['sortOrder'] as num?)?.toInt() ?? 0,
+      free: json['free'] as bool? ?? true,
+      photo: json['photo'] as bool? ?? false,
+      docx: json['docx'] as bool? ?? true,
+      locked: json['locked'] as bool? ?? false,
     );
   }
 
@@ -58,6 +68,10 @@ class ResumeTemplate {
     'atsSafe': atsSafe,
     'accent': accent,
     'sortOrder': sortOrder,
+    'free': free,
+    'photo': photo,
+    'docx': docx,
+    'locked': locked,
   };
 
   /// The accent colour as a Material Color.

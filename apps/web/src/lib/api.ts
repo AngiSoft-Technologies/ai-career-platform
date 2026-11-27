@@ -140,6 +140,8 @@ interface RequestOptions {
   cache?: boolean;
   queueWhenOffline?: boolean;
   signal?: AbortSignal;
+  /** Extra request headers, merged over the authenticated defaults. */
+  headers?: Record<string, string>;
   /**
    * Set to false to stop the client from clearing an expired token and
    * retrying the request once with a freshly minted one.
@@ -192,7 +194,10 @@ export async function request<T>(
     });
   }
 
-  const headers = await authHeaders();
+  const headers = {
+    ...(await authHeaders()),
+    ...(options.headers ?? {}),
+  };
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
 
   let response: Response;
@@ -350,6 +355,11 @@ export const api = {
     request<T>(path, { method: "GET", query, signal }),
   post: <T>(path: string, body?: unknown, query?: RequestOptions["query"]) =>
     request<T>(path, { method: "POST", body, query }),
+  postWithHeaders: <T>(
+    path: string,
+    body?: unknown,
+    headers?: Record<string, string>,
+  ) => request<T>(path, { method: "POST", body, headers }),
   put: <T>(path: string, body?: unknown) => request<T>(path, { method: "PUT", body }),
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: "PATCH", body }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),

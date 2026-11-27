@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../data/document_repository.dart';
+import '../domain/document_improvement.dart';
 import '../domain/document_version.dart';
 import '../domain/generated_document.dart';
 
@@ -65,6 +66,13 @@ class DocumentController extends ChangeNotifier {
   Future<GeneratedDocument?> getDocument(String id) =>
       _repository.getDocument(id);
 
+  /// Updates the in-memory list after a structured save so the documents list
+  /// reflects the new title without a full reload.
+  void refresh(GeneratedDocument document) {
+    _items = [document, ..._items.where((item) => item.id != document.id)];
+    notifyListeners();
+  }
+
   /// Local-first edit: the cache is updated immediately and the change is
   /// queued as `update_document` while offline.
   Future<GeneratedDocument?> updateDocument(
@@ -72,6 +80,7 @@ class DocumentController extends ChangeNotifier {
     String? title,
     String? content,
     String? templateKey,
+    Map<String, dynamic>? resumeData,
   }) async {
     try {
       final updated = await _repository.updateDocument(
@@ -79,6 +88,7 @@ class DocumentController extends ChangeNotifier {
         title: title,
         content: content,
         templateKey: templateKey,
+        resumeData: resumeData,
       );
       _items = [updated, ..._items.where((item) => item.id != updated.id)];
       notifyListeners();
@@ -108,4 +118,29 @@ class DocumentController extends ChangeNotifier {
 
   Future<Map<String, dynamic>> runAtsCheck(String id) =>
       _repository.runAtsCheck(id);
+
+  /// One-click in-place AI improvement, matching Resumonk's behaviour.
+  Future<DocumentImprovementJob> improveInPlace(
+    GeneratedDocument document,
+    Map<String, dynamic> resumeData,
+  ) async {
+    final job = await _repository.startImprovement(
+      id: document.id,
+      idempotencyKey: '${document.id}-${DateTime.now().microsecondsSinceEpoch}',
+    );
+    await _repository.enqueueImprovement(
+      id: document.id,
+      improvementId: job.id,
+      resumeData: resumeData,
+    );
+    return job;
+  }
+
+  Future<DocumentImprovementJob> improvementStatus({
+    required String documentId,
+    required String improvementId,
+  }) => _repository.improvementStatus(
+    id: documentId,
+    improvementId: improvementId,
+  );
 }

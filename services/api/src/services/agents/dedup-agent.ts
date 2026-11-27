@@ -79,8 +79,13 @@ export const PROMOTION_SQL = `WITH payload AS (
      p->>'work_mode',
      'mid',
      p->>'employment_type',
-     (p->>'salary_min')::numeric,
-     (p->>'salary_max')::numeric,
+     -- A single out-of-range salary used to abort the whole batch. Treat an
+     -- implausible value as unknown rather than letting it block 399 good
+     -- opportunities from reaching the catalogue.
+     CASE WHEN (p->>'salary_min')::numeric BETWEEN 0 AND 2147483647
+       THEN (p->>'salary_min')::numeric END,
+     CASE WHEN (p->>'salary_max')::numeric BETWEEN 0 AND 2147483647
+       THEN (p->>'salary_max')::numeric END,
      p->>'currency',
      p->>'apply_url',
      'website',

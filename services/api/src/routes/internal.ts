@@ -1,4 +1,5 @@
 import { Router, type Request } from "express";
+import { waitUntil } from "@vercel/functions";
 import { z } from "zod";
 import { assertPublicUrl } from "../services/engine/fetch.js";
 import { directFetch } from "../services/engine/egress.js";
@@ -78,8 +79,10 @@ const SCHEDULE_LAST_RUN_KEY = "discovery:schedule:last-run";
 /**
  * Two callers may trigger ingestion: a Vercel Schedule (which sends
  * `Authorization: Bearer $CRON_SECRET`) and an operator with the internal
- * token. A scheduled call always runs synchronously, because a detached
- * promise dies when a serverless function returns.
+ * token. A scheduled call answers immediately and keeps working through
+ * `waitUntil`; a full discovery cycle takes longer than the platform's
+ * response budget, and a timed-out invocation is recorded as a failure even
+ * when the work itself succeeded.
  */
 function ingestAuthorisation(request: Request): { ok: boolean; scheduled: boolean } {
   const cronSecret = process.env.CRON_SECRET;
@@ -117,9 +120,7 @@ internalRouter.post("/ingest", async (request, response) => {
   }
 
   const wait =
-    auth.scheduled ||
-    request.query.wait === "1" ||
-    request.query.wait === "true";
+    request.query.wait === "1" || request.query.wait === "true";
   const started = Date.now();
 
   let releaseLock: (() => Promise<void>) | null = null;
@@ -164,6 +165,17 @@ internalRouter.post("/ingest", async (request, response) => {
       if (releaseLock) await releaseLock();
     }
   };
+
+  // The schedule only needs to know the clock fired: waiting for discovery
+  // here makes every invocation time out at 300s, and the scheduled run is
+  // marked failed even though promotion already put jobs in the catalogue.
+  // `waitUntil` keeps the function alive for the rest of the cycle after the
+  // response is on its way. Locally it is a no-op and the promise still runs.
+  if (auth.scheduled) {
+    response.json({ success: true, accepted: true, scheduled: true });
+    waitUntil(execute());
+    return;
+  }
 
   if (wait) {
     response.json({ success: true, result: await execute() });

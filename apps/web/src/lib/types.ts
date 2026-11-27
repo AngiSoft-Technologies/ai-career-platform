@@ -4,6 +4,7 @@ import type {
   ApplicationStatus,
   ApplicationSubmissionRun,
   BrowserAgentDevice,
+  ResumeDocument,
 } from "@angisoft/mboqara-contracts";
 
 export type {
@@ -11,6 +12,7 @@ export type {
   ApplicationPreparation,
   ApplicationSubmissionRun,
   BrowserAgentDevice,
+  ResumeDocument,
 };
 
 export type ThemeKey = "aurora" | "editorial" | "terminal" | "kinetic" | "atlas";
@@ -123,6 +125,8 @@ export interface JobDocument {
   title: string;
   content: string;
   template?: string;
+  /** The structured document the editor writes, when the document has one. */
+  resumeData?: ResumeDocument;
   createdAt: string;
 }
 

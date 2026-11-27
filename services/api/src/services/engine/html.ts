@@ -735,8 +735,18 @@ function parseJobPostingNode(posting: Record<string, unknown>): JsonLdJobPosting
     salary?.value && typeof salary.value === "object"
       ? (salary.value as Record<string, unknown>)
       : undefined;
-  const salaryMin = Number(salaryValue?.minValue ?? salaryValue?.value);
-  const salaryMax = Number(salaryValue?.maxValue ?? salaryValue?.value);
+  // Salary columns are Postgres `integer`; a JSON-LD value outside that range
+  // (some boards publish 2^63 as a sentinel) must not reach the candidate row.
+  const salaryAmount = (value: unknown): number | undefined => {
+    const number = Number(value);
+    return Number.isFinite(number) &&
+      number > 0 &&
+      number <= 2_147_483_647
+      ? number
+      : undefined;
+  };
+  const salaryMin = salaryAmount(salaryValue?.minValue ?? salaryValue?.value);
+  const salaryMax = salaryAmount(salaryValue?.maxValue ?? salaryValue?.value);
 
   const employmentTypeRaw = posting.employmentType;
   const employmentType = Array.isArray(employmentTypeRaw)
@@ -767,8 +777,8 @@ function parseJobPostingNode(posting: Record<string, unknown>): JsonLdJobPosting
     datePosted: textOf(posting.datePosted),
     validThrough: textOf(posting.validThrough),
     applyUrl: text(applyUrl),
-    salaryMin: Number.isFinite(salaryMin) ? salaryMin : undefined,
-    salaryMax: Number.isFinite(salaryMax) ? salaryMax : undefined,
+    salaryMin,
+    salaryMax,
     currency: textOf(salary?.currency),
   };
 }

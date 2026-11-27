@@ -24,58 +24,60 @@ class ResumeStartScreen extends StatelessWidget {
     final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(title: const Text('Build your resume')),
-      body: AppBackground(child: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-          children: [
-            Text('Three ways to start', style: theme.textTheme.headlineSmall),
-            const SizedBox(height: 8),
-            Text(
-              'We structure everything into an ATS-ready document and check it '
-              'for you — nothing here is manual.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+      body: AppBackground(
+        child: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+            children: [
+              Text('Three ways to start', style: theme.textTheme.headlineSmall),
+              const SizedBox(height: 8),
+              Text(
+                'We structure everything into an ATS-ready document and check it '
+                'for you — nothing here is manual.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
-            ),
-            const SizedBox(height: 24),
-            _StartOption(
-              icon: Icons.upload_file_rounded,
-              title: 'Upload your resume',
-              body: 'PDF, DOCX or a photo of a printed resume.',
-              points: const [
-                'Extracted and structured automatically',
-                'ATS-checked the moment it is built',
-              ],
-              onTap: () => context.push('/resume/upload'),
-            ),
-            const SizedBox(height: 16),
-            _StartOption(
-              icon: Icons.link_rounded,
-              title: 'Import from LinkedIn',
-              body: 'Sign in and we convert your profile into a resume.',
-              points: const [
-                'Experience, education and skills',
-                'Or paste a public profile URL instead',
-              ],
-              onTap: () => context.push('/resume/linkedin'),
-            ),
-            const SizedBox(height: 16),
-            _StartOption(
-              icon: Icons.edit_note_rounded,
-              title: 'Build it manually',
-              body: 'Answer a few questions and we draft the rest.',
-              points: const ['Guided steps', 'You control every word'],
-              onTap: () => context.push('/resume/manual'),
-            ),
-            const SizedBox(height: 24),
-            TextButton(
-              onPressed: () => context.go('/home/opportunities'),
-              child: const Text('Skip for now'),
-            ),
-          ],
+              const SizedBox(height: 24),
+              _StartOption(
+                icon: Icons.upload_file_rounded,
+                title: 'Upload your resume',
+                body: 'PDF, DOCX, TXT or Markdown up to 10MB.',
+                points: const [
+                  'Extracted and structured automatically',
+                  'ATS-checked the moment it is built',
+                ],
+                onTap: () => context.push('/resume/upload'),
+              ),
+              const SizedBox(height: 16),
+              _StartOption(
+                icon: Icons.link_rounded,
+                title: 'Import from LinkedIn',
+                body: 'Sign in and we convert your profile into a resume.',
+                points: const [
+                  'Experience, education and skills',
+                  'Or paste a public profile URL instead',
+                ],
+                onTap: () => context.push('/resume/linkedin'),
+              ),
+              const SizedBox(height: 16),
+              _StartOption(
+                icon: Icons.edit_note_rounded,
+                title: 'Build it manually',
+                body: 'Answer a few questions and we draft the rest.',
+                points: const ['Guided steps', 'You control every word'],
+                onTap: () => context.push('/resume/manual'),
+              ),
+              const SizedBox(height: 24),
+              TextButton(
+                onPressed: () => context.go('/home/opportunities'),
+                child: const Text('Skip for now'),
+              ),
+            ],
+          ),
         ),
       ),
-    ));
+    );
   }
 }
 
@@ -194,13 +196,31 @@ class _ResumeUploadScreenState extends State<ResumeUploadScreen> {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: const ['pdf', 'docx', 'png', 'jpg', 'jpeg', 'webp'],
+        allowedExtensions: const [
+          'pdf',
+          'docx',
+          'txt',
+          'md',
+          'markdown',
+          'text',
+        ],
         withData: true,
       );
       if (result == null || result.files.isEmpty) return;
       final file = result.files.first;
       final bytes = file.bytes ?? await file.xFile.readAsBytes();
       final size = file.size;
+      final isText = _isTextFile(file.extension ?? '', file.name);
+      final maxBytes = isText ? 200 * 1024 : 10 * 1024 * 1024;
+      if (size > maxBytes) {
+        if (!mounted) return;
+        setState(
+          () => _error = isText
+              ? 'Text files must be 200KB or smaller.'
+              : 'That file is larger than 10MB.',
+        );
+        return;
+      }
       if (!mounted) return;
       setState(() {
         _file = file;
@@ -210,6 +230,20 @@ class _ResumeUploadScreenState extends State<ResumeUploadScreen> {
     } catch (error) {
       setState(() => _error = 'That file could not be read.');
     }
+  }
+
+  bool _isTextFile(String extension, String filename) {
+    final normalized = extension.toLowerCase();
+    if (normalized == 'txt' ||
+        normalized == 'md' ||
+        normalized == 'markdown' ||
+        normalized == 'text') {
+      return true;
+    }
+    return filename.toLowerCase().endsWith('.txt') ||
+        filename.toLowerCase().endsWith('.md') ||
+        filename.toLowerCase().endsWith('.markdown') ||
+        filename.toLowerCase().endsWith('.text');
   }
 
   Future<void> _import() async {
@@ -239,13 +273,11 @@ class _ResumeUploadScreenState extends State<ResumeUploadScreen> {
       case 'docx':
         return 'application/vnd.openxmlformats-officedocument'
             '.wordprocessingml.document';
-      case 'png':
-        return 'image/png';
-      case 'jpg':
-      case 'jpeg':
-        return 'image/jpeg';
-      case 'webp':
-        return 'image/webp';
+      case 'txt':
+      case 'md':
+      case 'markdown':
+      case 'text':
+        return 'text/plain';
       default:
         return 'application/octet-stream';
     }
@@ -260,7 +292,7 @@ class _ResumeUploadScreenState extends State<ResumeUploadScreen> {
       appBar: AppBar(title: const Text('Upload resume')),
       body: FormScaffold(
         description:
-            'Pick a PDF, DOCX or a photo of your resume. We read the text and '
+            'Pick a PDF, DOCX, TXT or Markdown file. We read the text and '
             'rebuild it as a clean, ATS-ready document.',
         busy: context.watch<ResumeOnboardingController>().isWorking,
         errorMessage: _error,

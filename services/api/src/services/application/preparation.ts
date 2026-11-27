@@ -112,6 +112,8 @@ export interface EditedPreparationDocument {
   title: string;
   content: string;
   template: string;
+  /** The structured document, when the editor has written one. */
+  resume_data?: unknown;
   created_at: Date;
 }
 
@@ -1632,6 +1634,8 @@ export async function updateDocumentAndInvalidatePreparation(input: {
   title?: string;
   content?: string;
   template?: string;
+  /** The structured document the editor writes. */
+  resumeData?: unknown;
 }): Promise<EditedPreparationDocument> {
   const edited = await withTransaction(async (client) => {
     const lookup = await client.query<{
@@ -1685,15 +1689,17 @@ export async function updateDocumentAndInvalidatePreparation(input: {
 
     const changed = input.title !== undefined ||
       input.content !== undefined ||
-      input.template !== undefined;
+      input.template !== undefined ||
+      input.resumeData !== undefined;
     const updated = await client.query<EditedPreparationDocument>(
       `UPDATE documents
           SET title = COALESCE($3, title),
               content = COALESCE($4, content),
               template = COALESCE($5, template),
+              resume_data = COALESCE($7::jsonb, resume_data),
               user_edited = CASE WHEN $6::boolean THEN true ELSE user_edited END
         WHERE id = $1 AND user_id = $2
-        RETURNING id, opportunity_id, type, title, content, template, created_at`,
+        RETURNING id, opportunity_id, type, title, content, template, resume_data, created_at`,
       [
         input.documentId,
         input.userId,
@@ -1701,6 +1707,9 @@ export async function updateDocumentAndInvalidatePreparation(input: {
         input.content ?? null,
         input.template ?? null,
         changed,
+        input.resumeData === undefined
+          ? null
+          : JSON.stringify(input.resumeData),
       ],
     );
     const row = updated.rows[0];

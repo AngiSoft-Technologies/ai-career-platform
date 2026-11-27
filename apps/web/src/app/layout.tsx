@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
 import { Analytics } from "@vercel/analytics/next";
-import { Archivo_Black, Fraunces, Inter, JetBrains_Mono } from "next/font/google";
+import { Archivo_Black, Fraunces, Hanken_Grotesk, Inter, JetBrains_Mono, Lora } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme";
 import { ToastProvider } from "@/components/ui";
@@ -36,6 +36,28 @@ const display = Archivo_Black({
   subsets: ["latin"],
   weight: "400",
   variable: "--font-display-brand",
+  display: "swap",
+  preload: false,
+});
+
+/**
+ * The document fonts.
+ *
+ * The resume editor is a paper bench: the sheet the candidate reads has to
+ * look like the sheet they will print, so the two typefaces a candidate can
+ * choose between are loaded here rather than borrowed from the interface
+ * fonts. They are never preloaded — the marketing pages do not use them.
+ */
+const resumeSerif = Lora({
+  subsets: ["latin"],
+  variable: "--font-resume-serif",
+  display: "swap",
+  preload: false,
+});
+
+const resumeSans = Hanken_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-resume-sans",
   display: "swap",
   preload: false,
 });
@@ -144,7 +166,7 @@ export default function RootLayout({
     <html
       lang={SITE.language}
       suppressHydrationWarning
-      className={`${sans.variable} ${serif.variable} ${mono.variable} ${display.variable}`}
+      className={`${sans.variable} ${serif.variable} ${mono.variable} ${display.variable} ${resumeSerif.variable} ${resumeSans.variable}`}
     >
       <body>
         <a className="skip-link" href="#main-content">Skip to main content</a>

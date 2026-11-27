@@ -301,234 +301,86 @@ class _ResumeBuilderScreenState extends State<ResumeBuilderScreen> {
             ),
         ],
       ),
-      body: AppBackground(child: _isGenerating && _document == null
-          ? const LoadingState(label: 'Tailoring your document…')
-          : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-              children: [
-                Text(
-                  'Build your ${_typeLabel}',
-                  style: Theme.of(context).textTheme.headlineSmall
-                      ?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${widget.opportunityTitle} at ${widget.companyName}',
-                  style: Theme.of(context).textTheme.titleMedium
-                      ?.copyWith(color: scheme.primary),
-                ),
-                const SizedBox(height: 18),
-
-                // Document type
-                SectionCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Document type',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 12),
-                      ToggleButtons(
-                        isSelected: [
-                          _documentType == 'cv',
-                          _documentType == 'cover_letter',
-                        ],
-                        onPressed: (index) {
-                          setState(() {
-                            _documentType = index == 0 ? 'cv' : 'cover_letter';
-                            _selectedTemplate = null;
-                          });
-                        },
-                        children: const [
-                          Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.badge_outlined, size: 20),
-                                SizedBox(width: 8),
-                                Text('CV / Resume'),
-                              ],
-                            ),
-                          ),
-                          Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.edit_note_rounded, size: 20),
-                                SizedBox(width: 8),
-                                Text('Cover letter'),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+      body: AppBackground(
+        child: _isGenerating && _document == null
+            ? const LoadingState(label: 'Tailoring your document…')
+            : ListView(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                children: [
+                  Text(
+                    'Build your ${_typeLabel}',
+                    style: Theme.of(context).textTheme.headlineSmall
+                        ?.copyWith(fontWeight: FontWeight.w800),
                   ),
-                ),
-                const SizedBox(height: 14),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${widget.opportunityTitle} at ${widget.companyName}',
+                    style: Theme.of(context).textTheme.titleMedium
+                        ?.copyWith(color: scheme.primary),
+                  ),
+                  const SizedBox(height: 18),
 
-                // Template selection
-                SectionCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Template',
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: _isGenerating ? null : _pickTemplate,
-                            child: const Text('Choose layout'),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: scheme.surfaceContainerHighest.withValues(
-                            alpha: 0.4,
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: scheme.outlineVariant.withValues(alpha: 0.5),
-                          ),
+                  // Document type
+                  SectionCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Document type',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
-                        child: Row(
-                          children: [
-                            Builder(
-                              builder: (context) {
-                                final accent = surfaceSafeAccent(
-                                  _selectedTemplate != null
-                                      ? Color(
-                                          _selectedTemplate!.accentColor,
-                                        )
-                                      : scheme.primary,
-                                  Theme.of(context).brightness,
-                                );
-                                return Container(
-                                  width: 36,
-                                  height: 36,
-                                  decoration: BoxDecoration(
-                                    color: accent.withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Icon(
-                                    Icons.description_outlined,
-                                    color: accent,
-                                  ),
-                                );
-                              },
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                        const SizedBox(height: 12),
+                        ToggleButtons(
+                          isSelected: [
+                            _documentType == 'cv',
+                            _documentType == 'cover_letter',
+                          ],
+                          onPressed: (index) {
+                            setState(() {
+                              _documentType = index == 0
+                                  ? 'cv'
+                                  : 'cover_letter';
+                              _selectedTemplate = null;
+                            });
+                          },
+                          children: const [
+                            Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Text(
-                                    _selectedTemplate?.label ??
-                                        (_documentType == 'cv'
-                                            ? 'ATS Classic'
-                                            : 'Professional'),
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    _selectedTemplate != null
-                                        ? _selectedTemplate!.description
-                                        : 'Default ${_typeLabel} layout',
-                                    style: Theme.of(context).textTheme.bodySmall
-                                        ?.copyWith(
-                                          color: scheme.onSurfaceVariant,
-                                        ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                                  Icon(Icons.badge_outlined, size: 20),
+                                  SizedBox(width: 8),
+                                  Text('CV / Resume'),
+                                ],
+                              ),
+                            ),
+                            Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.edit_note_rounded, size: 20),
+                                  SizedBox(width: 8),
+                                  Text('Cover letter'),
                                 ],
                               ),
                             ),
                           ],
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-
-                // Guidance
-                SectionCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Additional guidance (optional)',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: _guidanceController,
-                        maxLines: 4,
-                        decoration: const InputDecoration(
-                          hintText: 'E.g. emphasise my leadership experience, keep it to one page, highlight project outcomes',
-                          border: OutlineInputBorder(),
-                        ),
-                        onChanged: (value) => _userGuidance = value,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 18),
-
-                // Generate button
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: FilledButton.icon(
-                    onPressed: _isGenerating ? null : _generate,
-                    icon: _isGenerating
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.auto_awesome_rounded),
-                    label: Text(
-                      _document == null
-                          ? 'Generate tailored document'
-                          : 'Regenerate',
+                      ],
                     ),
                   ),
-                ),
-
-                // Generated document preview
-                if (_document != null) ...[
-                  const SizedBox(height: 22),
-                  Text(
-                    'Preview',
-                    style: Theme.of(context).textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 10),
-                  _buildATSCard(),
                   const SizedBox(height: 14),
+
+                  // Template selection
                   SectionCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -537,40 +389,194 @@ class _ResumeBuilderScreenState extends State<ResumeBuilderScreen> {
                           children: [
                             Expanded(
                               child: Text(
-                                _document!.title,
+                                'Template',
                                 style: Theme.of(context).textTheme.titleMedium
                                     ?.copyWith(fontWeight: FontWeight.w700),
                               ),
                             ),
-                            IconButton(
-                              tooltip: 'Edit content',
-                              onPressed: _isGenerating
-                                  ? null
-                                  : () => _editDocumentContent(context),
-                              icon: const Icon(Icons.edit_outlined),
+                            TextButton(
+                              onPressed: _isGenerating ? null : _pickTemplate,
+                              child: const Text('Choose layout'),
                             ),
                           ],
                         ),
                         const SizedBox(height: 10),
-                        Text(
-                          _document!.content.isNotEmpty
-                              ? _document!.content
-                              : '(no content)',
-                          style: const TextStyle(fontSize: 13, height: 1.5),
-                          maxLines: 40,
-                          overflow: TextOverflow.visible,
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: scheme.surfaceContainerHighest.withValues(
+                              alpha: 0.4,
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: scheme.outlineVariant.withValues(
+                                alpha: 0.5,
+                              ),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Builder(
+                                builder: (context) {
+                                  final accent = surfaceSafeAccent(
+                                    _selectedTemplate != null
+                                        ? Color(_selectedTemplate!.accentColor)
+                                        : scheme.primary,
+                                    Theme.of(context).brightness,
+                                  );
+                                  return Container(
+                                    width: 36,
+                                    height: 36,
+                                    decoration: BoxDecoration(
+                                      color: accent.withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Icon(
+                                      Icons.description_outlined,
+                                      color: accent,
+                                    ),
+                                  );
+                                },
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _selectedTemplate?.label ??
+                                          (_documentType == 'cv'
+                                              ? 'Zen'
+                                              : 'Professional'),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      _selectedTemplate != null
+                                          ? _selectedTemplate!.description
+                                          : 'Default ${_typeLabel} layout',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: scheme.onSurfaceVariant,
+                                          ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  if (_errorMessage != null) ...[
-                    const SizedBox(height: 12),
-                    ErrorState(message: _errorMessage!, onRetry: _generate),
+                  const SizedBox(height: 14),
+
+                  // Guidance
+                  SectionCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Additional guidance (optional)',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: _guidanceController,
+                          maxLines: 4,
+                          decoration: const InputDecoration(
+                            hintText: 'E.g. emphasise my leadership experience, keep it to one page, highlight project outcomes',
+                            border: OutlineInputBorder(),
+                          ),
+                          onChanged: (value) => _userGuidance = value,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+
+                  // Generate button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: FilledButton.icon(
+                      onPressed: _isGenerating ? null : _generate,
+                      icon: _isGenerating
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.auto_awesome_rounded),
+                      label: Text(
+                        _document == null
+                            ? 'Generate tailored document'
+                            : 'Regenerate',
+                      ),
+                    ),
+                  ),
+
+                  // Generated document preview
+                  if (_document != null) ...[
+                    const SizedBox(height: 22),
+                    Text(
+                      'Preview',
+                      style: Theme.of(context).textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 10),
+                    _buildATSCard(),
+                    const SizedBox(height: 14),
+                    SectionCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _document!.title,
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: 'Edit content',
+                                onPressed: _isGenerating
+                                    ? null
+                                    : () => _editDocumentContent(context),
+                                icon: const Icon(Icons.edit_outlined),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            _document!.content.isNotEmpty
+                                ? _document!.content
+                                : '(no content)',
+                            style: const TextStyle(fontSize: 13, height: 1.5),
+                            maxLines: 40,
+                            overflow: TextOverflow.visible,
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (_errorMessage != null) ...[
+                      const SizedBox(height: 12),
+                      ErrorState(message: _errorMessage!, onRetry: _generate),
+                    ],
                   ],
                 ],
-              ],
-            ),
-    ));
+              ),
+      ),
+    );
   }
 
   Future<void> _editDocumentContent(BuildContext context) async {

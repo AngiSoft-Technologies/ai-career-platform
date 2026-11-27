@@ -7,6 +7,7 @@ class GeneratedDocument {
     required this.content,
     this.applicationId,
     this.template,
+    this.resumeData,
     this.version,
     this.updatedAt,
     this.usedInApplications = const [],
@@ -22,6 +23,9 @@ class GeneratedDocument {
 
   /// Catalogue key of the template this document is styled with.
   final String? template;
+
+  /// Structured resume/cover-letter document, when the saved row has one.
+  final Map<String, dynamic>? resumeData;
 
   final int? version;
   final DateTime? updatedAt;
@@ -49,6 +53,9 @@ class GeneratedDocument {
       title: json['title'] as String? ?? 'Generated document',
       content: json['content'] as String? ?? '',
       template: (json['template'] ?? json['templateKey']) as String?,
+      resumeData: (json['resumeData'] is Map)
+          ? Map<String, dynamic>.from(json['resumeData'] as Map)
+          : null,
       version: (json['version'] as num?)?.toInt(),
       updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? ''),
       usedInApplications: _strings(json['usedInApplications']),
@@ -64,6 +71,7 @@ class GeneratedDocument {
     'title': title,
     'content': content,
     if (template != null) 'template': template,
+    if (resumeData != null) 'resumeData': resumeData,
     if (version != null) 'version': version,
     if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
     if (usedInApplications.isNotEmpty) 'usedInApplications': usedInApplications,

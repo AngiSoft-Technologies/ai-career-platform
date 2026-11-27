@@ -56,7 +56,7 @@ const FOOTER_LINKS = {
 const SOCIAL_LINKS = [
   { href: "https://www.linkedin.com/company/angisoft-technologies", label: "LinkedIn", icon: Linkedin, external: true },
   { href: "https://github.com/AngiSoft-Technologies", label: "GitHub", icon: Github, external: true },
-  { href: "https://x.com/AngiSoftTech", label: "X", icon: X, external: true },
+  { href: "https://x.com/angisofttech", label: "X", icon: X, external: true },
 ];
 
 export function MarketingFooter() {

@@ -6,6 +6,7 @@ import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/app_background.dart';
 import '../domain/generated_document.dart';
 import 'document_controller.dart';
+import 'document_editor_screen.dart';
 import 'document_version_history.dart';
 import 'document_workflow_panel.dart';
 
@@ -88,6 +89,9 @@ class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
               return const ErrorState(
                 message: 'This document is not available on the device.',
               );
+            }
+            if (document.type == 'cv' || document.type == 'cover_letter') {
+              return DocumentEditorScreen(document: document);
             }
             return ListView(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),

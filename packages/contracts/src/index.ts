@@ -1,4 +1,7 @@
 export * from "./templates.js";
+export * from "./document.js";
+
+import type { ResumeDocument } from "./document.js";
 
 export type WorkMode = "onsite" | "hybrid" | "remote";
 export type Seniority = "intern" | "junior" | "mid" | "senior" | "lead";
@@ -403,6 +406,10 @@ export interface DocumentDraft {
   type: "cv" | "cover_letter" | "application_email" | "answer";
   title: string;
   content: string;
+  /** The layout key from the template catalogue. */
+  template?: string;
+  /** The structured document the editor reads and writes. */
+  resumeData?: ResumeDocument;
 }
 
 export interface OpportunitySearch {

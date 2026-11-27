@@ -31,12 +31,24 @@ import { rememberOnboardingPath } from "@/lib/onboarding";
 const ACCEPTED_TYPES = [
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "image/png",
-  "image/jpeg",
-  "image/webp",
+  "text/plain",
+  "text/markdown",
 ];
 
 const MAX_BYTES = 10 * 1024 * 1024;
+const TEXT_MAX_BYTES = 200 * 1024;
+
+function isTextFile(selected: File): boolean {
+  return (
+    selected.type === "text/plain" ||
+    selected.type === "text/markdown" ||
+    /\.(txt|md|markdown|text)$/i.test(selected.name)
+  );
+}
+
+function maxBytesFor(selected: File): number {
+  return isTextFile(selected) ? TEXT_MAX_BYTES : MAX_BYTES;
+}
 
 type Stage = "idle" | "uploading" | "extracting" | "done" | "error";
 
@@ -63,12 +75,19 @@ export default function OnboardingUploadPage() {
 
   const accept = useCallback((selected: File | undefined | null) => {
     if (!selected) return;
-    if (!ACCEPTED_TYPES.includes(selected.type)) {
-      setError("Upload a PDF, DOCX, or image file (PNG, JPG, WebP).");
+    const isAccepted =
+      ACCEPTED_TYPES.includes(selected.type) ||
+      (isTextFile(selected) && selected.type === "");
+    if (!isAccepted) {
+      setError("Upload a PDF, DOCX, TXT or Markdown file.");
       return;
     }
-    if (selected.size > MAX_BYTES) {
-      setError("That file is larger than 10MB.");
+    if (selected.size > maxBytesFor(selected)) {
+      setError(
+        isTextFile(selected)
+          ? "Text files must be 200KB or smaller."
+          : "That file is larger than 10MB.",
+      );
       return;
     }
     setFile(selected);
@@ -89,12 +108,14 @@ export default function OnboardingUploadPage() {
     setAtsScore(null);
 
     try {
+      const contentType = file.type || (isTextFile(file) ? "text/plain" : file.type);
+
       // 1. Ask the API for a signed upload slot.
       const { target } = await api.post<{
         target: { url: string; key: string };
       }>("/documents/upload-url", {
         filename: file.name,
-        contentType: file.type,
+        contentType,
       });
 
       setStage("uploading");
@@ -105,7 +126,7 @@ export default function OnboardingUploadPage() {
       // read that file".
       const uploaded = await fetch(target.url, {
         method: "PUT",
-        headers: { "Content-Type": file.type },
+        headers: { "Content-Type": contentType },
         body: file,
       });
       if (!uploaded.ok) {
@@ -123,7 +144,7 @@ export default function OnboardingUploadPage() {
       }>("/documents/import", {
         storageKey: target.key,
         filename: file.name,
-        contentType: file.type,
+        contentType,
       });
 
       setDocumentId(document.id);
@@ -230,8 +251,8 @@ export default function OnboardingUploadPage() {
           Upload your existing resume
         </h1>
         <p className="mt-3 max-w-[46ch] text-[0.9rem] leading-relaxed text-white/75">
-          PDF, DOCX, or an image. Maximum 10MB. We read it, rebuild it and
-          score it before you ever see it.
+          PDF, DOCX, TXT or Markdown. PDF and DOCX up to 10MB; text files up
+          to 200KB. We read it, rebuild it and score it before you ever see it.
         </p>
       </SceneBackdrop>
 
@@ -297,13 +318,13 @@ export default function OnboardingUploadPage() {
                 Drag & drop or click to select
               </span>
               <span className="mt-1.5 block text-[0.85rem] text-app-muted">
-                PDF, DOCX, PNG, JPG, WebP · Maximum 10MB
+                PDF or DOCX up to 10MB · TXT, MD, MARKDOWN or TEXT up to 200KB
               </span>
             </button>
             <input
               ref={inputRef}
               type="file"
-              accept={ACCEPTED_TYPES.join(",")}
+              accept=".pdf,.docx,.txt,.md,.markdown,.text"
               className="hidden"
               onChange={(event) => accept(event.target.files?.[0] ?? null)}
             />

@@ -1,4 +1,4 @@
-import type { DocumentDraft } from "@angisoft/mboqara-contracts";
+import type { DocumentDraft, ResumeDocument } from "@angisoft/mboqara-contracts";
 import {
   DEFAULT_COVER_LETTER_TEMPLATE_KEY,
   DEFAULT_RESUME_TEMPLATE_KEY,
@@ -26,6 +26,7 @@ interface DocumentRow {
   type: DocumentType;
   title: string;
   content: string;
+  resume_data?: ResumeDocument | null;
 }
 
 function buildCoverLetter(
@@ -273,7 +274,9 @@ export async function listDocuments(
   const [items, counted] = await Promise.all([
     query<DocumentRow>(
       `SELECT id, application_id, opportunity_id, parent_document_id, is_base, type, title${
-        includeContent ? ", content" : ", ''::text AS content"
+        includeContent
+          ? ", content, resume_data"
+          : ", ''::text AS content, NULL::jsonb AS resume_data"
       }
        FROM documents
        WHERE ${clauses.join(" AND ")}
@@ -298,6 +301,7 @@ export async function listDocuments(
       type: row.type,
       title: row.title,
       content: row.content,
+      resumeData: row.resume_data ?? undefined,
     })),
     total: Number(counted.rows[0]?.count ?? 0),
   };

@@ -59,6 +59,14 @@ export function organizationSchema(): Json {
         areaServed: "Worldwide",
       },
     ],
+    sameAs: [
+      "https://www.linkedin.com/company/angisoft-technologies",
+      "https://github.com/AngiSoft-Technologies",
+      "https://x.com/angisofttech",
+      "https://www.facebook.com/angisofttechnologies",
+      "https://www.instagram.com/angisofttech",
+      "https://youtube.com/@angisofttechnologies",
+    ],
   };
 }
 

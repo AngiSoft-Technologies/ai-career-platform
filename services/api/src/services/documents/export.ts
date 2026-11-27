@@ -2,7 +2,7 @@ import { createRequire } from "node:module";
 import PDFDocument from "pdfkit";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from "docx";
 import sharp from "sharp";
-import { DEFAULT_RESUME_TEMPLATE_KEY } from "@angisoft/mboqara-contracts";
+import { DEFAULT_RESUME_TEMPLATE_KEY, resumeTemplateShape } from "@angisoft/mboqara-contracts";
 
 export type DocumentFormat = "pdf" | "docx" | "pptx" | "png";
 export type DocumentTemplate = string;
@@ -10,9 +10,18 @@ export type DocumentTemplate = string;
 export interface TemplateStyle {
   accent?: string;
   fontFamily?: string;
-  margins?: "standard" | "narrow" | "comfortable";
+  /** Either legacy name margins or four independent millimetre edges. */
+  margins?:
+    | "standard"
+    | "narrow"
+    | "comfortable"
+    | { top: number; right: number; bottom: number; left: number };
   bodySize?: number;
   headingSize?: number;
+  /** The candidate's own text colour, from the editor's design settings. */
+  textColor?: string;
+  /** The candidate's own page size, from the editor's design settings. */
+  pageSize?: "a4" | "letter";
 }
 
 export interface ExportableDocument {
@@ -72,9 +81,17 @@ export function contentToExportSections(content: string): ExportableDocument["se
   };
 
   for (const line of content.split(/\r?\n/)) {
-    const candidate = line.trim().replace(/^#{1,3}\s+/, "").replace(/:$/, "");
+    // A Markdown heading always starts a section, including a section the
+    // candidate renamed or added themselves. The fixed word list only covers
+    // documents written before the structured editor existed.
+    const markdownHeading = /^#{1,6}\s+(.+)$/.exec(line.trim());
+    const candidate = (markdownHeading?.[1] ?? line.trim()).replace(/:$/, "");
     const normalized = candidate.toLowerCase();
-    const isHeading = candidate.length > 0 && candidate.length <= 60 && DOCUMENT_HEADINGS.has(normalized);
+    const isHeading =
+      markdownHeading !== null ||
+      (candidate.length > 0 &&
+        candidate.length <= 60 &&
+        DOCUMENT_HEADINGS.has(normalized));
     if (isHeading) {
       flush();
       heading = candidate;
@@ -97,45 +114,82 @@ export async function renderPdf(
   const accent = /^#[0-9a-f]{6}$/i.test(style.accent ?? "")
     ? (style.accent as string)
     : undefined;
+  const textColor = /^#[0-9a-f]{6}$/i.test(style.textColor ?? "")
+    ? (style.textColor as string)
+    : undefined;
   const margin =
     style.margins === "narrow" ? 44 : style.margins === "comfortable" ? 72 : 64;
-  // Template keys come from the `resume_templates` catalogue, so the variants
-  // must match catalogue keys (`ats-modern` / `ats-minimal`), not bare words.
-  const isModern = template === "ats-modern";
-  const isMinimal = template === "ats-minimal";
-  const palette = isModern
-    ? { title: accent ?? "#0f766e", heading: accent ?? "#115e59", rule: "#99f6e4", margin }
+  // Resumonk stores four margins in millimetres; PDFKit works in points.
+  const mmPerInch = 25.4;
+  const pointsPerMm = 72 / mmPerInch;
+  const rawMargins = style.margins;
+  const independent = typeof rawMargins === "object" && rawMargins !== null;
+  const edgeMargins = independent
+    ? {
+        top: Math.max(0, rawMargins.top) * pointsPerMm,
+        right: Math.max(0, rawMargins.right) * pointsPerMm,
+        bottom: Math.max(0, rawMargins.bottom) * pointsPerMm,
+        left: Math.max(0, rawMargins.left) * pointsPerMm,
+      }
+    : { top: 56, right: margin, bottom: 56, left: margin };
+  // Template keys come from the `resume_templates` catalogue. The shape of a
+  // key is shared with the editor's preview, so the PDF and the sheet the
+  // candidate edited agree.
+  const shape = resumeTemplateShape(template);
+  const isMinimal = !shape.colouredHeadings && !shape.contactRule && !shape.headingRule;
+  const palette = shape.colouredHeadings
+    ? { title: accent ?? "#0f172a", heading: accent ?? "#0f172a", rule: "#d7dde6", margin }
     : isMinimal
       ? { title: "#111827", heading: "#374151", rule: "#d1d5db", margin: Math.max(margin, 72) }
       : { title: accent ?? "#0f172a", heading: accent ?? "#0f172a", rule: "#d7dde6", margin };
   const bodySize = style.bodySize ?? (isMinimal ? 10 : 10);
   const headingSize = style.headingSize ?? (isMinimal ? 11 : 12.5);
+  // The editor lets the candidate pick a typeface. PDFKit ships the standard
+  // PDF fonts, so a serif choice maps to Times and everything else to
+  // Helvetica rather than silently printing in the wrong voice.
+  const serif = /times|serif|georgia|lora/i.test(style.fontFamily ?? "");
+  const bodyFont = serif ? "Times-Roman" : "Helvetica";
+  const headingFont = serif ? "Times-Bold" : "Helvetica-Bold";
+  const pageWidth = style.pageSize === "letter" ? 612 : 595;
   const doc = new PDFDocument({
-    size: "A4",
-    margins: { top: 56, bottom: 56, left: palette.margin, right: palette.margin },
+    size: style.pageSize === "letter" ? "LETTER" : "A4",
+    margins: {
+      top: edgeMargins.top,
+      bottom: edgeMargins.bottom,
+      left: edgeMargins.left,
+      right: edgeMargins.right,
+    },
   });
 
   doc.on("data", (chunk: Buffer) => chunks.push(chunk));
 
-  doc.font("Helvetica-Bold").fontSize(isMinimal ? 22 : 19).fillColor(palette.title).text(document.title, { align: "left" });
+  doc.font(headingFont).fontSize(isMinimal ? 22 : 19).fillColor(palette.title).text(document.title, { align: "left" });
   if (document.subtitle) {
-    doc.moveDown(0.2).font("Helvetica").fontSize(11).fillColor("#3f4a56").text(document.subtitle);
+    doc.moveDown(0.2).font(bodyFont).fontSize(11).fillColor("#3f4a56").text(document.subtitle);
   }
-  doc.moveDown(0.6).moveTo(palette.margin, doc.y).lineTo(531 + (64 - palette.margin), doc.y).strokeColor(palette.rule).stroke();
-  doc.moveDown(0.8);
+  if (shape.contactRule) {
+    doc.moveDown(0.6).moveTo(palette.margin, doc.y).lineTo(pageWidth - palette.margin, doc.y).strokeColor(palette.rule).stroke();
+    doc.moveDown(0.8);
+  } else {
+    doc.moveDown(0.8);
+  }
 
   for (const section of document.sections) {
     if (section.heading) {
-      doc.font("Helvetica-Bold").fontSize(headingSize).fillColor(palette.heading).text(section.heading);
+      doc.font(headingFont).fontSize(headingSize).fillColor(palette.heading).text(section.heading);
       doc.moveDown(0.25);
+      if (shape.headingRule) {
+        doc.moveDown(0.1).moveTo(palette.margin, doc.y).lineTo(pageWidth - palette.margin, doc.y).strokeColor(palette.rule).stroke();
+        doc.moveDown(0.25);
+      }
     }
     for (const paragraph of section.paragraphs) {
-      doc.font("Helvetica").fontSize(bodySize).fillColor("#1f2937");
+      doc.font(bodyFont).fontSize(bodySize).fillColor(textColor ?? "#1f2937");
       doc.text(wrapText(paragraph, 88).join("\n"), { align: "left", lineGap: 2 });
       doc.moveDown(0.4);
     }
     for (const bullet of section.bullets ?? []) {
-      doc.font("Helvetica").fontSize(bodySize).fillColor("#1f2937");
+      doc.font(bodyFont).fontSize(bodySize).fillColor(textColor ?? "#1f2937");
       doc.text(`•  ${wrapText(bullet, 82).join("\n      ")}`, { lineGap: 1.5 });
       doc.moveDown(0.15);
     }

@@ -1,17 +1,14 @@
 /**
  * Resume / cover letter template catalogue contracts.
  *
- * The authoritative catalogue lives in the `resume_templates` and
- * `cover_letter_templates` tables, seeded by
- * `db/migrations/020_template_catalogue.sql`.
- *
- * The fallbacks below mirror that catalogue row-for-row and exist only so the
- * web and API can still render a usable picker when the table read fails.
- * Every key here must exist in the migration — an unknown key produces an
- * unstyled export, so keep these two lists in sync when adding a template.
+ * The authoritative catalogue is seeded from the same list Resumonk uses so
+ * the builder can offer its exact template set: 21 resume layouts, 18 type
+ * families, six accent colours, three densities, two page sizes and
+ * independent margins in millimetres.
  */
 
 export interface ResumeTemplateSummary {
+  /** Stable slug used by previews, exports and saved documents. */
   key: string;
   label: string;
   category: string;
@@ -19,6 +16,14 @@ export interface ResumeTemplateSummary {
   atsSafe: boolean;
   accent: string;
   sortOrder: number;
+  /** Free templates can be used without a paid plan. */
+  free?: boolean;
+  /** Photo templates place a portrait in the contact block. */
+  photo?: boolean;
+  /** Photo templates cannot export as DOCX in Resumonk. */
+  docx?: boolean;
+  /** Locked templates are visible but require an upgrade. */
+  locked?: boolean;
 }
 
 export interface CoverLetterTemplateSummary {
@@ -35,76 +40,313 @@ export interface TemplateCatalogue {
 }
 
 /** Fallback used when a document has never had a template saved. */
-export const DEFAULT_RESUME_TEMPLATE_KEY = "ats-classic";
+export const DEFAULT_RESUME_TEMPLATE_KEY = "zen";
 
 /** Fallback used when a cover letter has never had a template saved. */
 export const DEFAULT_COVER_LETTER_TEMPLATE_KEY = "professional";
 
-export const FALLBACK_RESUME_TEMPLATES: readonly ResumeTemplateSummary[] = [
+/** The default resume template accent: the Resumonk free-tier accent. */
+export const DEFAULT_RESUME_ACCENT = "#ff8a00";
+
+/**
+ * The exact 21 Resumonk resume templates captured from the authenticated
+ * account. `key` is the slug Resumonk uses in `layout`, previews and
+ * downloads.
+ */
+export const RESUME_TEMPLATE_CATALOGUE: readonly ResumeTemplateSummary[] = [
   {
-    key: "ats-classic",
-    label: "ATS Classic",
-    category: "ats",
-    description: "Single column, standard headings, system font. The safest possible layout.",
+    key: "zen",
+    label: "Zen",
+    category: "free",
+    description: "Balanced one-page layout with a clean headline block.",
     atsSafe: true,
-    accent: "#1f2937",
+    accent: "#ff8a00",
     sortOrder: 10,
+    free: true,
+    photo: true,
+    docx: false,
+    locked: false,
   },
   {
-    key: "ats-modern",
-    label: "ATS Modern",
-    category: "ats",
-    description: "Modern typography, subtle accent colour, one column. Parses cleanly.",
+    key: "elegant",
+    label: "Elegant",
+    category: "free",
+    description: "Restrained serif styling for professional roles.",
     atsSafe: true,
-    accent: "#1d4ed8",
+    accent: "#1e1a17",
+    sortOrder: 20,
+    free: true,
+    photo: false,
+    docx: true,
+    locked: false,
+  },
+  {
+    key: "clear",
+    label: "Clear",
+    category: "free",
+    description: "Plain, readable layout that keeps content first.",
+    atsSafe: true,
+    accent: "#14532d",
     sortOrder: 30,
+    free: true,
+    photo: true,
+    docx: false,
+    locked: false,
   },
   {
-    key: "ats-minimal",
-    label: "ATS Minimal",
-    category: "ats",
-    description: "No rules, no colour, no icons. Pure text an ATS cannot misread.",
+    key: "classica",
+    label: "Classica",
+    category: "free",
+    description: "Traditional CV structure for conservative employers.",
     atsSafe: true,
-    accent: "#000000",
+    accent: "#7a2e1e",
     sortOrder: 40,
+    free: true,
+    photo: false,
+    docx: true,
+    locked: false,
   },
   {
-    key: "chronological",
-    label: "Chronological",
-    category: "chronological",
-    description: "Most recent role first, reverse-chronological. Best for continuous careers.",
+    key: "sleek",
+    label: "Sleek",
+    category: "free",
+    description: "Compact spacing for dense experience sections.",
     atsSafe: true,
-    accent: "#334155",
+    accent: "#1e3a5f",
     sortOrder: 50,
+    free: true,
+    photo: false,
+    docx: true,
+    locked: false,
   },
   {
-    key: "hybrid",
-    label: "Hybrid",
-    category: "hybrid",
-    description: "A skills summary up top, then reverse-chronological history. Best for career changers.",
+    key: "simplimo",
+    label: "Simplimo",
+    category: "free",
+    description: "Minimal rules, quiet type and generous whitespace.",
+    atsSafe: true,
+    accent: "#4a2a6b",
+    sortOrder: 60,
+    free: true,
+    photo: false,
+    docx: true,
+    locked: false,
+  },
+  {
+    key: "elemental",
+    label: "Elemental",
+    category: "premium",
+    description: "Strong section hierarchy with accent rules.",
     atsSafe: true,
     accent: "#0f766e",
-    sortOrder: 60,
+    sortOrder: 70,
+    free: false,
+    photo: true,
+    docx: false,
+    locked: true,
   },
   {
-    key: "executive",
-    label: "Executive",
-    category: "executive",
-    description: "Profile-led layout for senior roles, with a concise impact summary.",
+    key: "regal",
+    label: "Regal",
+    category: "premium",
+    description: "Executive layout for senior and leadership resumes.",
     atsSafe: true,
-    accent: "#111827",
+    accent: "#7a2e1e",
     sortOrder: 80,
+    free: false,
+    photo: true,
+    docx: false,
+    locked: true,
   },
   {
-    key: "technical",
-    label: "Technical",
-    category: "technical",
-    description: "Skills, projects and tooling grouped for engineering resumes.",
+    key: "bold",
+    label: "Bold",
+    category: "premium",
+    description: "High-contrast headings and confident rhythm.",
     atsSafe: true,
-    accent: "#065f46",
+    accent: "#ff8a00",
     sortOrder: 90,
+    free: false,
+    photo: false,
+    docx: true,
+    locked: true,
+  },
+  {
+    key: "concrete",
+    label: "Concrete",
+    category: "premium",
+    description: "Structured blocks with generous labelling.",
+    atsSafe: true,
+    accent: "#1e1a17",
+    sortOrder: 100,
+    free: false,
+    photo: false,
+    docx: true,
+    locked: true,
+  },
+  {
+    key: "concise",
+    label: "Concise",
+    category: "premium",
+    description: "Short, direct presentation for fast recruiters.",
+    atsSafe: true,
+    accent: "#14532d",
+    sortOrder: 110,
+    free: false,
+    photo: false,
+    docx: true,
+    locked: true,
+  },
+  {
+    key: "slim",
+    label: "Slim",
+    category: "premium",
+    description: "Narrow sidebar rhythm for long documents.",
+    atsSafe: true,
+    accent: "#1e3a5f",
+    sortOrder: 120,
+    free: false,
+    photo: false,
+    docx: true,
+    locked: true,
+  },
+  {
+    key: "collegium",
+    label: "Collegium",
+    category: "premium",
+    description: "Academic styling built for research histories.",
+    atsSafe: true,
+    accent: "#7a2e1e",
+    sortOrder: 130,
+    free: false,
+    photo: false,
+    docx: true,
+    locked: true,
+  },
+  {
+    key: "charisma",
+    label: "Charisma",
+    category: "premium",
+    description: "Warm, people-first layout for client-facing roles.",
+    atsSafe: true,
+    accent: "#ff8a00",
+    sortOrder: 140,
+    free: false,
+    photo: false,
+    docx: true,
+    locked: true,
+  },
+  {
+    key: "slate",
+    label: "Slate",
+    category: "premium",
+    description: "Cool, technical layout for engineering resumes.",
+    atsSafe: true,
+    accent: "#0f766e",
+    sortOrder: 150,
+    free: false,
+    photo: false,
+    docx: true,
+    locked: true,
+  },
+  {
+    key: "modernism",
+    label: "Modernism",
+    category: "premium",
+    description: "Modern type pairing and strong section headings.",
+    atsSafe: true,
+    accent: "#4a2a6b",
+    sortOrder: 160,
+    free: false,
+    photo: false,
+    docx: true,
+    locked: true,
+  },
+  {
+    key: "stylismo",
+    label: "Stylismo",
+    category: "premium",
+    description: "Creative layout with expressive headline treatment.",
+    atsSafe: true,
+    accent: "#ff8a00",
+    sortOrder: 170,
+    free: false,
+    photo: false,
+    docx: true,
+    locked: true,
+  },
+  {
+    key: "prestige",
+    label: "Prestige",
+    category: "premium",
+    description: "Formal, presentation-led layout for senior roles.",
+    atsSafe: true,
+    accent: "#1e1a17",
+    sortOrder: 180,
+    free: false,
+    photo: false,
+    docx: true,
+    locked: true,
+  },
+  {
+    key: "vivid",
+    label: "Vivid",
+    category: "premium",
+    description: "Colour-forward layout with portrait support.",
+    atsSafe: true,
+    accent: "#ff8a00",
+    sortOrder: 190,
+    free: false,
+    photo: true,
+    docx: false,
+    locked: true,
+  },
+  {
+    key: "vibrant",
+    label: "Vibrant",
+    category: "premium",
+    description: "Energetic layout with a portrait block.",
+    atsSafe: true,
+    accent: "#0f766e",
+    sortOrder: 200,
+    free: false,
+    photo: true,
+    docx: false,
+    locked: true,
+  },
+  {
+    key: "avant",
+    label: "Avant",
+    category: "premium",
+    description: "Distinctive editorial layout with portrait support.",
+    atsSafe: true,
+    accent: "#4a2a6b",
+    sortOrder: 210,
+    free: false,
+    photo: true,
+    docx: false,
+    locked: true,
   },
 ];
+
+/** The six Resumonk accent colours. */
+export const RESUME_ACCENT_COLOURS: readonly string[] = [
+  "#0F766E",
+  "#1E1A17",
+  "#7A2E1E",
+  "#1E3A5F",
+  "#4A2A6B",
+  "#14532D",
+] as const;
+
+/** The three Resumonk print densities. */
+export const RESUME_DENSITIES: readonly string[] = [
+  "compact",
+  "comfortable",
+  "cozy",
+] as const;
+
+export const FALLBACK_RESUME_TEMPLATES = RESUME_TEMPLATE_CATALOGUE;
 
 export const FALLBACK_COVER_LETTER_TEMPLATES: readonly CoverLetterTemplateSummary[] = [
   {

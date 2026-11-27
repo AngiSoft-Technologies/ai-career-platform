@@ -47,6 +47,12 @@ html {
   --font-body: var(--font-body);
   --font-mono: var(--font-mono);
 
+  /* The two faces a document can be set in. The resume editor is a paper
+     bench: the sheet on screen has to read like the sheet that prints, so
+     the document fonts are separate from the interface fonts. */
+  --font-resume-serif: var(--font-resume-serif), Georgia, "Times New Roman", serif;
+  --font-resume-sans: var(--font-resume-sans), ui-sans-serif, system-ui, sans-serif;
+
   --radius-card: var(--mk-radius-lg);
   --radius-pill: var(--mk-radius-pill);
 
