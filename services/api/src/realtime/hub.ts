@@ -1,11 +1,18 @@
 import { randomUUID } from "node:crypto";
 import type { Server } from "node:http";
+import Redis from "ioredis";
 import { WebSocket, WebSocketServer } from "ws";
 import type { EventEnvelope, RealtimeEvent } from "@angisoft/mboqara-contracts";
 import { resolveIdentity } from "../auth/resolve-identity.js";
+import { config } from "../config.js";
+import { redis } from "../db/redis.js";
 import { logger } from "../logger.js";
 
 let wss: WebSocketServer | null = null;
+let subscriber: Redis | null = null;
+/** Distinguishes this function instance's own publishes from other instances'. */
+const INSTANCE_ID = randomUUID();
+const REALTIME_CHANNEL = "mboqara:realtime";
 const alive = new WeakMap<WebSocket, boolean>();
 const socketUsers = new WeakMap<WebSocket, string>();
 const WEBSOCKET_PATHS = new Set(["/ws", "/v1/ws"]);
@@ -61,6 +68,55 @@ function send(socket: WebSocket, payload: unknown): void {
   if (socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify(payload));
   }
+}
+
+interface BusMessage {
+  origin: string;
+  event: EventEnvelope<unknown>;
+  userId?: string;
+}
+
+/** Deliver one envelope to the sockets held by this instance. */
+function deliverLocal(event: EventEnvelope<unknown>, userId?: string): void {
+  for (const socket of wss?.clients ?? []) {
+    if (userId && socketUsers.get(socket) !== userId) continue;
+    send(socket, event);
+  }
+}
+
+/**
+ * A WebSocket connection lives on one function instance, but the request that
+ * creates an event can land on any other. Redis pub/sub is the bridge: every
+ * instance subscribes, and every broadcast is published once. Messages this
+ * instance published are skipped so local sockets are not served twice.
+ */
+function startSubscriber(): void {
+  if (subscriber) return;
+  const client = new Redis(config.REDIS_URL, {
+    lazyConnect: true,
+    maxRetriesPerRequest: 1,
+    enableOfflineQueue: false,
+    retryStrategy: (times) => Math.min(times * 250, 2_000),
+  });
+  subscriber = client;
+
+  client.on("error", (error) => {
+    logger.debug({ error: error.message }, "Realtime subscriber unavailable");
+  });
+  client.on("message", (_channel, message) => {
+    try {
+      const payload = JSON.parse(message) as BusMessage;
+      if (!payload || payload.origin === INSTANCE_ID) return;
+      deliverLocal(payload.event, payload.userId);
+    } catch {
+      // A malformed bus message must never take down the subscriber.
+    }
+  });
+
+  void client
+    .connect()
+    .then(() => client.subscribe(REALTIME_CHANNEL))
+    .catch(() => undefined);
 }
 
 export function attachRealtime(server: Server): void {
@@ -142,6 +198,7 @@ export function attachRealtime(server: Server): void {
   }, 30_000);
 
   wss.on("close", () => clearInterval(heartbeat));
+  startSubscriber();
   logger.info("WebSocket hub listening at /ws");
 }
 
@@ -157,15 +214,22 @@ export function broadcast<T>(
     data,
   };
 
-  for (const socket of wss?.clients ?? []) {
-    if (userId && socketUsers.get(socket) !== userId) continue;
-    send(socket, event);
+  deliverLocal(event, userId);
+  if (redis.status === "ready") {
+    const message: BusMessage = { origin: INSTANCE_ID, event, userId };
+    void redis
+      .publish(REALTIME_CHANNEL, JSON.stringify(message))
+      .catch(() => undefined);
   }
 
   return event;
 }
 
 export async function closeRealtime(): Promise<void> {
+  if (subscriber) {
+    await subscriber.quit().catch(() => undefined);
+    subscriber = null;
+  }
   if (!wss) return;
   for (const socket of wss.clients) socket.close(1001, "Server shutting down");
   await new Promise<void>((resolve) => wss?.close(() => resolve()));

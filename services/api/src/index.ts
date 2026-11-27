@@ -1,11 +1,10 @@
-import { createServer } from "node:http";
-import { app } from "./app.js";
+import { server } from "./app.js";
 import { config } from "./config.js";
 import { pool, warmPool } from "./db/pool.js";
 import { redis, startRedis, waitForRedis } from "./db/redis.js";
 import { ensureRedisQueuePolicy } from "./db/redis-policy.js";
 import { logger } from "./logger.js";
-import { attachRealtime, closeRealtime } from "./realtime/hub.js";
+import { closeRealtime } from "./realtime/hub.js";
 import { startGrpcServer, type GrpcHandle } from "./grpc/server.js";
 import { startWorkers, type WorkerHandle } from "./worker/index.js";
 
@@ -42,9 +41,6 @@ async function main(): Promise<void> {
   }
 
   if (role === "app" || role === "api") {
-    const server = createServer(app);
-    attachRealtime(server);
-
     server.listen(config.PORT, () => {
       logger.info(
         { port: config.PORT, env: config.NODE_ENV, role },

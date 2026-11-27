@@ -103,14 +103,15 @@ preferencesRouter.put("/", async (request, response, next) => {
          auto_prepare_enabled, employment_types, updated_at
        )
        VALUES ($1,
-         COALESCE($2, '{}'), COALESCE($3, '{}'), COALESCE($4, '{}'),
+         COALESCE($2::text[], '{}'::text[]), COALESCE($3::text[], '{}'::text[]),
+         COALESCE($4::text[], '{}'::text[]),
          COALESCE($5, 'junior'), $6, COALESCE($7, 'KES'),
          COALESCE($8, false), COALESCE($9, false), COALESCE($10, true),
-         COALESCE($11, true), COALESCE($12, '{full_time}'), now())
+         COALESCE($11, true), COALESCE($12::text[], '{full_time}'::text[]), now())
        ON CONFLICT (user_id) DO UPDATE SET
-         preferred_countries = COALESCE($2, candidate_preferences.preferred_countries),
-         preferred_locations = COALESCE($3, candidate_preferences.preferred_locations),
-         preferred_roles = COALESCE($4, candidate_preferences.preferred_roles),
+         preferred_countries = COALESCE($2::text[], candidate_preferences.preferred_countries),
+         preferred_locations = COALESCE($3::text[], candidate_preferences.preferred_locations),
+         preferred_roles = COALESCE($4::text[], candidate_preferences.preferred_roles),
          desired_seniority = COALESCE($5, candidate_preferences.desired_seniority),
          min_salary = COALESCE($6, candidate_preferences.min_salary),
          currency = COALESCE($7, candidate_preferences.currency),
@@ -118,7 +119,7 @@ preferencesRouter.put("/", async (request, response, next) => {
          willing_to_relocate = COALESCE($9, candidate_preferences.willing_to_relocate),
          notifications_enabled = COALESCE($10, candidate_preferences.notifications_enabled),
          auto_prepare_enabled = COALESCE($11, candidate_preferences.auto_prepare_enabled),
-         employment_types = COALESCE($12, candidate_preferences.employment_types),
+         employment_types = COALESCE($12::text[], candidate_preferences.employment_types),
          updated_at = now()
        RETURNING preferred_countries, preferred_locations, preferred_roles,
               desired_seniority, min_salary, currency, remote_only,

@@ -75,11 +75,8 @@ analysisRouter.get("/prepare/:opportunityId", async (request, response, next) =>
     const opportunityId = z.string().uuid().parse(request.params.opportunityId);
     const userId = response.locals.userId as string;
     const preparation = await getPreparationByOpportunity(userId, opportunityId);
-    if (!preparation) {
-      response.status(404).json({ error: "Preparation not found" });
-      return;
-    }
-    response.json({ preparation });
+    // "Not prepared yet" is the normal state on first open, not an error.
+    response.json({ preparation: preparation ?? null });
   } catch (error) {
     next(error);
   }
@@ -113,11 +110,8 @@ analysisRouter.get("/:id/preparation", async (request, response, next) => {
     const applicationId = z.string().uuid().parse(request.params.id);
     const userId = response.locals.userId as string;
     const preparation = await getPreparationByApplication(userId, applicationId);
-    if (!preparation) {
-      response.status(404).json({ error: "Preparation not found" });
-      return;
-    }
-    response.json({ preparation });
+    // The applications page opens this before preparation is queued.
+    response.json({ preparation: preparation ?? null });
   } catch (error) {
     next(error);
   }

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { createServer } from "node:http";
 import cors from "cors";
 import express from "express";
 import rateLimit from "express-rate-limit";
@@ -19,6 +20,7 @@ import {
   notFoundHandler,
 } from "./middleware/error-handler.js";
 import { identity } from "./middleware/identity.js";
+import { attachRealtime } from "./realtime/hub.js";
 import { mcpRouter } from "./routes/mcp.js";
 import { metricsRouter, recordHttpRequest } from "./routes/metrics.js";
 import { statsRouter } from "./routes/stats.js";
@@ -37,11 +39,13 @@ import { API_VERSION, API_VERSION_HEADER } from "./version.js";
 
 export const app = express();
 
-// Vercel's zero-config Express support requires a default export of the
-// app (see src/app.ts entry detection). The standalone server entry stays
-// src/index.ts, which also starts gRPC, workers and the ticker — none of
-// which can run inside a serverless function.
-export default app;
+// Vercel's zero-config Express support detects this file as the function
+// entry. The default export at the bottom is an HTTP *server* with the
+// realtime upgrade handler attached — exporting the bare Express app makes
+// Vercel treat /v1/ws as an ordinary GET, so the WebSocket handshake never
+// reaches the hub. The standalone server entry stays src/index.ts, which
+// also starts gRPC, workers and the ticker — none of which can run inside
+// a serverless function.
 
 // index.ts owns process startup (gRPC, workers, ticker), which never runs on
 // serverless. The shared cache client still has to connect here or every
@@ -306,3 +310,13 @@ app.use("/api/v1", v1Router);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
+
+/**
+ * Vercel needs the default export to be a Node HTTP server when the app serves
+ * WebSockets (https://vercel.com/docs/functions/websockets). Attaching the hub
+ * here means both the serverless function and the standalone server in
+ * src/index.ts serve the same /ws and /v1/ws upgrade path.
+ */
+export const server = createServer(app);
+attachRealtime(server);
+export default server;

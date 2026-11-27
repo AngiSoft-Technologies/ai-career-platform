@@ -112,11 +112,11 @@ function OpportunityDetailInner() {
 
   const refreshPreparation = useCallback(async () => {
     try {
-      const response = await api.get<{ preparation: ApplicationPreparation }>(
-        `/applications/prepare/${opportunityId}`,
-      );
+      const response = await api.get<{
+        preparation: ApplicationPreparation | null;
+      }>(`/applications/prepare/${opportunityId}`);
       setPreparation(response.preparation);
-      return true;
+      return Boolean(response.preparation);
     } catch {
       // A missing preparation is normal before the first queue request.
       return false;
