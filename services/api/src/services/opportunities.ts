@@ -365,3 +365,91 @@ export async function getOpportunity(
   const row = result.rows[0];
   return row ? mapOpportunity(row) : null;
 }
+
+/**
+ * The safe, public view of one live role.
+ *
+ * This is what anonymous visitors and mobile clients can read before they
+ * create an account. It deliberately leaves out the source `applyUrl` and the
+ * raw `platform` identifier: Apply stays an intentional, authenticated action,
+ * and the platform string is an internal board address rather than candidate
+ * information.
+ */
+export interface PublicOpportunity {
+  id: string;
+  title: string;
+  company: string;
+  companySlug: string;
+  description: string;
+  country: string;
+  city: string;
+  workMode: string;
+  seniority: string;
+  employmentType: string;
+  salaryMin?: number;
+  salaryMax?: number;
+  currency?: string;
+  applicationMethod: string;
+  sourceKind: string;
+  postedAt: string;
+  expiresAt?: string;
+  skills: string[];
+  eligibility?: string;
+  eligibilityReasons: string[];
+  riskScore?: number;
+  riskAction?: string;
+}
+
+function toPublicOpportunity(item: Opportunity): PublicOpportunity {
+  return {
+    id: item.id,
+    title: item.title,
+    company: item.companyName,
+    companySlug: item.companySlug,
+    description: item.description,
+    country: item.country,
+    city: item.city,
+    workMode: item.workMode,
+    seniority: item.seniority,
+    employmentType: item.employmentType,
+    salaryMin: item.salaryMin,
+    salaryMax: item.salaryMax,
+    currency: item.currency,
+    applicationMethod: item.applicationMethod,
+    sourceKind: item.sourceKind ?? "Job listing",
+    postedAt: item.postedAt,
+    expiresAt: item.expiresAt,
+    skills: item.skills ?? [],
+    eligibility: item.eligibility,
+    eligibilityReasons: item.eligibilityReasons ?? [],
+    riskScore: item.riskScore,
+    riskAction: item.riskAction,
+  };
+}
+
+export async function getPublicOpportunity(
+  id: string,
+): Promise<PublicOpportunity | null> {
+  if (!id || id.length > 128) return null;
+
+  const result = await query<OpportunityRow>(
+    `${opportunitySelect}
+     WHERE o.id = $1
+       AND o.status = 'active'
+       AND (o.expires_at IS NULL OR o.expires_at > now())
+       AND COALESCE(o.risk_action, 'publish') <> 'hold'
+     GROUP BY o.id, c.id`,
+    [id],
+  );
+  const row = result.rows[0];
+  return row ? toPublicOpportunity(mapOpportunity(row)) : null;
+}
+
+/** Public catalogue for the marketing pages and mobile clients. */
+export async function listPublicOpportunities(
+  limit = 24,
+): Promise<PublicOpportunity[]> {
+  const bounded = Math.min(Math.max(limit, 1), 100);
+  const items = await listOpportunities({ limit: bounded, offset: 0 });
+  return items.map(toPublicOpportunity);
+}

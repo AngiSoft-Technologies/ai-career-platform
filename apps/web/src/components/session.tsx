@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { usePathname } from "next/navigation";
 import {
   cachedSession,
   clearSession,
@@ -59,6 +60,40 @@ const ROLE_ORDER: RoleKey[] = [
   "job_seeker",
 ];
 
+/**
+ * Pages a visitor can fully use without an account. The session probe would
+ * otherwise answer 401 on every public landing page, which shows up as a
+ * browser console error even though "not signed in" is the expected state.
+ */
+const SESSION_FREE_PREFIXES = [
+  "/about",
+  "/accessibility",
+  "/careers",
+  "/consent",
+  "/contact",
+  "/cookies",
+  "/download",
+  "/faq",
+  "/features",
+  "/guides",
+  "/legal",
+  "/login",
+  "/opportunities",
+  "/pricing",
+  "/privacy",
+  "/reset-password",
+  "/security",
+  "/signup",
+  "/terms",
+];
+
+function isSessionFreePath(pathname: string): boolean {
+  if (pathname === "/") return true;
+  return SESSION_FREE_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
+
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -66,6 +101,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [serverPermissions, setServerPermissions] = useState<string[]>([]);
 
   const refresh = useCallback(async () => {
+    setLoading(true);
     try {
       const next = await fetchSession();
       setSession(next);
@@ -81,9 +117,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const pathname = usePathname();
+  const sessionFree = useMemo(
+    () => isSessionFreePath(pathname),
+    [pathname],
+  );
+
   useEffect(() => {
+    if (sessionFree) {
+      // Public pages only need to know whether this browser already has an
+      // account. The cached session answers that without a 401 request.
+      setSession(cachedSession());
+      setLoading(false);
+      return;
+    }
     void refresh();
-  }, [refresh]);
+  }, [sessionFree, refresh]);
 
   const loadIdentity = useCallback(async (userId: string) => {
     try {

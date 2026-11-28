@@ -1,16 +1,18 @@
 import type { MetadataRoute } from "next";
 import { SITE } from "@/lib/seo";
+import { fetchFeaturedJobs } from "@/lib/server-content";
 
 /**
- * Public marketing routes. Authenticated app routes are excluded on purpose
- * (see robots.ts).
+ * Public marketing routes and canonical job detail pages. Authenticated app
+ * routes and the job listing/search page are excluded on purpose (see
+ * robots.ts and Google's JobPosting guidance).
  */
 const routes: Array<{
   path: string;
-  changeFrequency: "weekly" | "monthly" | "yearly";
+  changeFrequency: "daily" | "weekly" | "monthly" | "yearly";
   priority: number;
 }> = [
-  { path: "/", changeFrequency: "weekly", priority: 1 },
+  { path: "/", changeFrequency: "daily", priority: 1 },
   { path: "/features", changeFrequency: "monthly", priority: 0.9 },
   { path: "/faq", changeFrequency: "weekly", priority: 0.8 },
   { path: "/guides", changeFrequency: "monthly", priority: 0.8 },
@@ -29,12 +31,33 @@ const routes: Array<{
   { path: "/legal/acceptable-use", changeFrequency: "yearly", priority: 0.3 },
 ];
 
-export default function sitemap(): MetadataRoute.Sitemap {
+interface FeaturedJobsFeed {
+  jobs: Array<{
+    id: string;
+    postedAt?: string | null;
+    expiresAt?: string | null;
+  }>;
+}
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const lastModified = new Date();
-  return routes.map((route) => ({
+  const publicPages = routes.map((route) => ({
     url: `${SITE.url}${route.path}`,
     lastModified,
     changeFrequency: route.changeFrequency,
     priority: route.priority,
   }));
+
+  const featured = await fetchFeaturedJobs<FeaturedJobsFeed>(120);
+  const jobPages = (featured?.jobs ?? []).map((job) => {
+    const modified = job.postedAt ? new Date(job.postedAt) : lastModified;
+    return {
+      url: `${SITE.url}/opportunities/${encodeURIComponent(job.id)}`,
+      lastModified: Number.isNaN(modified.getTime()) ? lastModified : modified,
+      changeFrequency: "daily" as const,
+      priority: 0.7,
+    };
+  });
+
+  return [...publicPages, ...jobPages];
 }

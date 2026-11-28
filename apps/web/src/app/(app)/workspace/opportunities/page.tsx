@@ -131,9 +131,10 @@ function OpportunitiesPageInner() {
     if (pageSize !== 24) next.set("size", String(pageSize));
     if (page > 1) next.set("page", String(page));
     const suffix = next.toString();
-    router.replace(suffix ? `/opportunities?${suffix}` : "/opportunities", {
-      scroll: false,
-    });
+    router.replace(
+      suffix ? `/workspace/opportunities?${suffix}` : "/workspace/opportunities",
+      { scroll: false },
+    );
   }, [
     compact,
     country,
@@ -392,7 +393,7 @@ function OpportunitiesPageInner() {
     </div>
   );
 
-  const scene = sceneForPath("/opportunities");
+  const scene = sceneForPath("/workspace/opportunities");
 
   return (
     <Page>

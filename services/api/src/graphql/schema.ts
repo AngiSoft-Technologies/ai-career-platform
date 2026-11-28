@@ -1,3 +1,4 @@
+import { GraphQLError } from "graphql";
 import { createSchema } from "graphql-yoga";
 import { SCHEMA_SDL } from "./schema-sdl.js";
 import {
@@ -15,15 +16,34 @@ import {
   getOpportunityWithMatch,
   rankedOpportunities,
 } from "../services/matching.js";
+import {
+  getPublicOpportunity,
+  listPublicOpportunities,
+} from "../services/opportunities.js";
 import { getProfile, updateProfile } from "../services/profile.js";
 import { updateDocumentAndInvalidatePreparation } from "../services/application/preparation.js";
 import { query } from "../db/pool.js";
 
 export interface GraphQLContext {
   userId: string;
+  authenticated: boolean;
 }
 
 const typeDefs = SCHEMA_SDL;
+
+/**
+ * Public fields resolve without a session; everything tied to a person must
+ * pass this guard. The HTTP handler no longer rejects every anonymous GraphQL
+ * request in context, so mobile clients can read public roles without a token.
+ */
+function requireUser(context: GraphQLContext): string {
+  if (!context.authenticated || !context.userId) {
+    throw new GraphQLError("UNAUTHORIZED", {
+      extensions: { code: "UNAUTHORIZED" },
+    });
+  }
+  return context.userId;
+}
 
 async function getDocument(
   userId: string,
@@ -70,7 +90,7 @@ export const schema = createSchema<GraphQLContext>({
   typeDefs,
   resolvers: {
     Query: {
-      profile: (_parent, _args, context) => getProfile(context.userId),
+      profile: (_parent, _args, context) => getProfile(requireUser(context)),
       opportunities: async (
         _parent,
         args: {
@@ -83,7 +103,7 @@ export const schema = createSchema<GraphQLContext>({
         },
         context,
       ) => {
-        const page = await rankedOpportunities(context.userId, {
+        const page = await rankedOpportunities(requireUser(context), {
           country: args.country,
           q: args.q,
           workMode: args.workMode,
@@ -98,9 +118,15 @@ export const schema = createSchema<GraphQLContext>({
         return page.items;
       },
       opportunity: (_parent, args: { id: string }, context) =>
-        getOpportunityWithMatch(context.userId, args.id),
+        getOpportunityWithMatch(requireUser(context), args.id),
+      // Public reads for the website and mobile clients. They never touch
+      // the caller's identity or expose the source application URL.
+      publicOpportunity: (_parent, args: { id: string }) =>
+        getPublicOpportunity(args.id),
+      publicOpportunities: (_parent, args: { limit?: number }) =>
+        listPublicOpportunities(args.limit ?? 24),
       matches: async (_parent, args: { limit?: number }, context) => {
-        const page = await rankedOpportunities(context.userId, {
+        const page = await rankedOpportunities(requireUser(context), {
           semantic: false,
           limit: args.limit ?? 25,
           offset: 0,
@@ -108,38 +134,54 @@ export const schema = createSchema<GraphQLContext>({
         return page.items;
       },
       applicationWorkspace: (_parent, args: { id: string }, context) =>
-        getApplicationBlueprint(context.userId, args.id),
+        getApplicationBlueprint(requireUser(context), args.id),
       applications: async (_parent, _args, context) =>
-        (await listApplications(context.userId)).items,
+        (await listApplications(requireUser(context))).items,
       application: (_parent, args: { id: string }, context) =>
-        getApplicationById(context.userId, args.id),
+        getApplicationById(requireUser(context), args.id),
       followups: (_parent, args: { status?: string }, context) =>
-        listFollowUps(context.userId, args.status),
+        listFollowUps(requireUser(context), args.status),
       documents: async (_parent, args: { opportunityId?: string }, context) =>
-        (await listDocuments(context.userId, { opportunityId: args.opportunityId }))
-          .items,
+        (await listDocuments(requireUser(context), {
+          opportunityId: args.opportunityId,
+        })).items,
       document: (_parent, args: { id: string }, context) =>
-        getDocument(context.userId, args.id),
-      companies: (_parent, args: { q?: string; limit?: number }) =>
-        listCompanies({ q: args.q, limit: args.limit }),
-      company: (_parent, args: { slug: string }) => getCompanyBySlug(args.slug),
-      professions: (_parent, args: { depth?: number }) => listProfessions(args.depth),
+        getDocument(requireUser(context), args.id),
+      companies: (_parent, args: { q?: string; limit?: number }, context) => {
+        requireUser(context);
+        return listCompanies({ q: args.q, limit: args.limit });
+      },
+      company: (_parent, args: { slug: string }, context) => {
+        requireUser(context);
+        return getCompanyBySlug(args.slug);
+      },
+      professions: (_parent, args: { depth?: number }, context) => {
+        requireUser(context);
+        return listProfessions(args.depth);
+      },
       validateDocument: async (
         _parent,
         args: { content: string },
         context,
       ) => {
-        const report = await validateDocumentForAts(context.userId, args.content, []);
+        const report = await validateDocumentForAts(
+          requireUser(context),
+          args.content,
+          [],
+        );
         return {
           score: report.score,
           grade: report.grade,
           issues: report.issues.map((issue) => `${issue.severity.toUpperCase()}: ${issue.message}`),
         };
       },
-      aiStatus: () => ({
-        configured: isAiConfigured(),
-        mode: process.env.AI_PROVIDER ?? "auto",
-      }),
+      aiStatus: (_parent, _args, context) => {
+        requireUser(context);
+        return {
+          configured: isAiConfigured(),
+          mode: process.env.AI_PROVIDER ?? "auto",
+        };
+      },
     },
     Mutation: {
       createApplication: (
@@ -148,7 +190,7 @@ export const schema = createSchema<GraphQLContext>({
         context,
       ) =>
         createApplication(
-          context.userId,
+          requireUser(context),
           args.opportunityId,
           (args.status as never) ?? "SHORTLISTED",
         ),
@@ -156,16 +198,22 @@ export const schema = createSchema<GraphQLContext>({
         _parent,
         args: { id: string; status: string; version: number },
         context,
-      ) => updateApplicationStatus(context.userId, args.id, args.status as never, args.version),
+      ) =>
+        updateApplicationStatus(
+          requireUser(context),
+          args.id,
+          args.status as never,
+          args.version,
+        ),
       updateProfile: (_parent, args: { input: Record<string, unknown> }, context) =>
-        updateProfile(context.userId, args.input),
+        updateProfile(requireUser(context), args.input),
       saveDocument: async (
         _parent,
         args: { id: string; title?: string; content?: string },
         context,
       ) => {
         const row = await updateDocumentAndInvalidatePreparation({
-          userId: context.userId,
+          userId: requireUser(context),
           documentId: args.id,
           title: args.title,
           content: args.content,
@@ -184,7 +232,11 @@ export const schema = createSchema<GraphQLContext>({
         args: { content: string },
         context,
       ) => {
-        const report = await validateDocumentForAts(context.userId, args.content, []);
+        const report = await validateDocumentForAts(
+          requireUser(context),
+          args.content,
+          [],
+        );
         return {
           score: report.score,
           grade: report.grade,

@@ -44,7 +44,7 @@ export function OpportunityRow({
         )}
       >
         <Link
-          href={`/opportunities/${item.id}`}
+          href={`/workspace/opportunities/${item.id}`}
           className="flex min-w-0 flex-1 items-start gap-4"
         >
           <CompanyMark

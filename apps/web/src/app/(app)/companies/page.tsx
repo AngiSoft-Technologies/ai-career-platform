@@ -279,7 +279,7 @@ export function CompanyDetail({ slug }: { slug: string }) {
           {(detail.data?.roles ?? []).map((role) => (
             <Row key={role.id} as="li" className="items-center gap-3">
               <Link
-                href={`/opportunities/${role.id}`}
+                href={`/workspace/opportunities/${role.id}`}
                 className="flex min-w-[200px] flex-1 flex-wrap items-center gap-3"
               >
                 <div className="min-w-[180px] flex-1">

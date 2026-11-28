@@ -16,7 +16,7 @@ export async function generateMetadata({
     title: "Job opportunity",
     description:
       "Review a role, its fit factors and application guidance in MboQara.",
-    path: `/opportunities/${encodeURIComponent(id)}`,
+    path: `/workspace/opportunities/${encodeURIComponent(id)}`,
     noindex: true,
     type: "website",
   });

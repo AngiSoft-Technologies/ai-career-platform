@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { query } from "../db/pool.js";
+import { getPublicOpportunity } from "../services/opportunities.js";
 
 export const publicRouter = Router();
 
@@ -184,6 +185,33 @@ publicRouter.get("/featured", async (_request, response, next) => {
     featuredCache = { value, expiresAt: Date.now() + 60_000 };
     response.setHeader("Cache-Control", "public, max-age=60");
     response.json(value);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Public detail for one live role. Anonymous visitors can read the role
+ * before they decide to create an account; the source apply URL is omitted so
+ * Apply remains a deliberate, authenticated action.
+ */
+publicRouter.get("/opportunities/:id", async (request, response, next) => {
+  try {
+    const id = String(request.params.id ?? "").trim();
+    const opportunity = await getPublicOpportunity(id);
+    if (!opportunity) {
+      response.status(404).json({
+        error: "That opportunity is no longer available",
+        code: "OPPORTUNITY_NOT_FOUND",
+      });
+      return;
+    }
+
+    response.setHeader(
+      "Cache-Control",
+      "public, max-age=60, stale-while-revalidate=300",
+    );
+    response.json({ opportunity });
   } catch (error) {
     next(error);
   }

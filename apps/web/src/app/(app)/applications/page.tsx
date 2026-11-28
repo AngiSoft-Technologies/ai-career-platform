@@ -202,7 +202,7 @@ export default function ApplicationsPage() {
           title={tab === "all" ? "Nothing here yet" : `No ${titleCase(tab).toLowerCase()} applications`}
           description="Start an application from any opportunity and it will show up here."
           action={
-            <Link href="/opportunities">
+            <Link href="/workspace/opportunities">
               <Button size="sm">Browse opportunities</Button>
             </Link>
           }

@@ -80,11 +80,12 @@ function LoginInner() {
     }
   }, [authError, params]);
 
-  const requestedNext = params.get("next") ?? "/dashboard";
+  const requestedNext = params.get("next");
   const next =
-    requestedNext.startsWith("/") && !requestedNext.startsWith("//")
+    requestedNext && requestedNext.startsWith("/") && !requestedNext.startsWith("//")
       ? requestedNext
       : "/dashboard";
+  const hasRequestedNext = Boolean(requestedNext);
 
   const continueWithGoogle = async () => {
     setGoogleBusy(true);
@@ -129,8 +130,11 @@ function LoginInner() {
         return;
       }
       toast.push(mode === "signin" ? "Welcome back" : "Account created", "success");
+      // A caller such as the public Apply button supplied a safe return path.
+      // Honour it so the person lands back in the application step they chose,
+      // instead of being dropped on a generic dashboard.
       const home = getRoleHome(session?.roles ?? []);
-      router.replace(home);
+      router.replace(hasRequestedNext ? next : home);
       router.refresh();
     } finally {
       setBusy(false);

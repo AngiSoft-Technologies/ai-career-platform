@@ -182,6 +182,112 @@ export function breadcrumbSchema(
   };
 }
 
+const EMPLOYMENT_TYPES: Record<string, string> = {
+  full_time: "FULL_TIME",
+  part_time: "PART_TIME",
+  contract: "CONTRACTOR",
+  temporary: "TEMPORARY",
+  intern: "INTERN",
+  internship: "INTERN",
+  volunteer: "VOLUNTEER",
+  per_diem: "PER_DIEM",
+  other: "OTHER",
+};
+
+/**
+ * JobPosting for the public, indexable role page.
+ *
+ * `descriptionHtml` is built from the same visible text as the page body and
+ * only from the public payload — never from a login-gated API response. The
+ * Apply URL is intentionally not exposed: `directApply` stays unset because
+ * the application desk is the next step, not an employer offsite link.
+ */
+export function jobPostingSchema({
+  opportunity,
+  descriptionHtml,
+  path,
+}: {
+  opportunity: {
+    id: string;
+    title: string;
+    company: string;
+    country: string;
+    city: string;
+    workMode: string;
+    seniority: string;
+    employmentType: string;
+    salaryMin?: number;
+    salaryMax?: number;
+    currency?: string;
+    postedAt: string;
+    expiresAt?: string;
+  };
+  descriptionHtml: string;
+  path: string;
+}): Json {
+  const remote = /(remote|telecommute|virtual|anywhere)/i.test(
+    `${opportunity.workMode} ${opportunity.city}`,
+  );
+  const hasSalary = Boolean(opportunity.salaryMin || opportunity.salaryMax);
+  const employmentType =
+    EMPLOYMENT_TYPES[opportunity.employmentType] ?? "OTHER";
+
+  return {
+    "@type": "JobPosting",
+    "@id": `${SITE.url}${path}#jobposting`,
+    url: `${SITE.url}${path}`,
+    title: opportunity.title,
+    description: descriptionHtml,
+    datePosted: opportunity.postedAt,
+    ...(opportunity.expiresAt ? { validThrough: opportunity.expiresAt } : {}),
+    employmentType,
+    hiringOrganization: {
+      "@type": "Organization",
+      name: opportunity.company,
+    },
+    jobLocation: {
+      "@type": "Place",
+      address: {
+        "@type": "PostalAddress",
+        ...(opportunity.city ? { addressLocality: opportunity.city } : {}),
+        addressCountry: opportunity.country || SITE.country,
+      },
+    },
+    ...(remote
+      ? {
+          jobLocationType: "TELECOMMUTE",
+          applicantLocationRequirements: {
+            "@type": "Country",
+            name: opportunity.country || SITE.country,
+          },
+        }
+      : {}),
+    ...(hasSalary
+      ? {
+          baseSalary: {
+            "@type": "MonetaryAmount",
+            currency: opportunity.currency || "KES",
+            value: {
+              "@type": "QuantitativeValue",
+              ...(opportunity.salaryMin
+                ? { minValue: opportunity.salaryMin }
+                : {}),
+              ...(opportunity.salaryMax
+                ? { maxValue: opportunity.salaryMax }
+                : {}),
+              unitText: "YEAR",
+            },
+          },
+        }
+      : {}),
+    identifier: {
+      "@type": "PropertyValue",
+      name: `${SITE.name} opportunity ID`,
+      value: opportunity.id,
+    },
+  };
+}
+
 export function faqSchema(items: Array<{ question: string; answer: string }>): Json {
   return {
     "@type": "FAQPage",
@@ -202,7 +308,7 @@ export function itemListSchema({
   items,
 }: {
   name: string;
-  items: Array<{ name: string; description: string }>;
+  items: Array<{ name: string; description: string; url?: string }>;
 }): Json {
   return {
     "@type": "ItemList",
@@ -213,6 +319,7 @@ export function itemListSchema({
       position: index + 1,
       name: item.name,
       description: item.description,
+      ...(item.url ? { url: `${SITE.url}${item.url}` } : {}),
     })),
   };
 }

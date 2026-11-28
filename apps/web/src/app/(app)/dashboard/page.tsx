@@ -191,7 +191,7 @@ function SeekerDashboard() {
         description="Here are the roles posted today that meet your profile's baseline. See the full catalogue whenever you want to look wider."
         actions={
           <>
-            <Link href="/opportunities">
+            <Link href="/workspace/opportunities">
               <Button icon={<Compass size={15} />}>Browse all roles</Button>
             </Link>
             <Link href="/saved">
@@ -247,7 +247,7 @@ function SeekerDashboard() {
                   : "Posted today in UTC. Each row opens the full posting."
               }
               action={
-                <Link href="/opportunities">
+                <Link href="/workspace/opportunities">
                   <Button variant="ghost" size="sm" icon={<ArrowUpRight size={14} />}>
                     All roles
                   </Button>
@@ -268,7 +268,7 @@ function SeekerDashboard() {
                   title="No roles posted today"
                   description="Nothing posted today in UTC met your profile's baseline. The full catalogue is still open."
                   action={
-                    <Link href="/opportunities">
+                    <Link href="/workspace/opportunities">
                       <Button size="sm">Browse all roles</Button>
                     </Link>
                   }
@@ -284,7 +284,7 @@ function SeekerDashboard() {
                     <CompanyMark name={item.companyName} size={40} className="rounded-app-md" />
                     <div className="min-w-0 flex-1">
                       <Link
-                        href={`/opportunities/${item.id}`}
+                        href={`/workspace/opportunities/${item.id}`}
                         className="block truncate text-[0.98rem] leading-snug font-medium text-app-text hover:text-app-accent"
                       >
                         {item.title}
@@ -544,7 +544,7 @@ function AnalystDashboard() {
                 <tr key={item.id} className="transition-colors hover:bg-app-surface-2/40">
                   <Td>
                     <Link
-                      href={`/opportunities/${item.id}`}
+                      href={`/workspace/opportunities/${item.id}`}
                       className="font-medium text-app-text hover:text-app-accent"
                     >
                       {item.title}
@@ -696,7 +696,7 @@ function ModeratorDashboard() {
                   <Badge tone={scoreTone(100 - (item.riskScore ?? 0))} dot>
                     Risk {Math.round(item.riskScore ?? 0)}
                   </Badge>
-                  <Link href={`/opportunities/${item.id}`}>
+                  <Link href={`/workspace/opportunities/${item.id}`}>
                     <Button variant="outline" size="sm" className="w-full">
                       Review
                     </Button>

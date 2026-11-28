@@ -54,7 +54,7 @@ export default function SavedPage() {
           ) : null
         }
         actions={
-          <Link href="/opportunities">
+          <Link href="/workspace/opportunities">
             <Button size="sm" icon={<ArrowUpRight size={14} />}>
               Browse opportunities
             </Button>
@@ -94,7 +94,7 @@ export default function SavedPage() {
           title="Nothing saved yet"
           description="Save a role from the catalogue or the daily list and it will appear here, with the date you saved it."
           action={
-            <Link href="/opportunities">
+            <Link href="/workspace/opportunities">
               <Button size="sm">Find roles to save</Button>
             </Link>
           }

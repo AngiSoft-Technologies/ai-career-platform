@@ -136,13 +136,13 @@ export function ShareLinks({ job }: ShareLinksProps) {
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, 1200, 630);
 
-      // Subtle pattern
-      ctx.fillStyle = "rgba(109, 139, 255, 0.08)";
-      for (let x = 0; x < 1200; x += 40) {
-        for (let y = 0; y < 630; y += 40) {
-          ctx.fillRect(x, y, 1, 1);
-        }
-      }
+      // A single soft light source, not a tiled pattern: the card should
+      // read as a photograph-like cover rather than graph paper.
+      const glow = ctx.createRadialGradient(1020, 60, 20, 1020, 60, 720);
+      glow.addColorStop(0, "rgba(192, 132, 252, 0.20)");
+      glow.addColorStop(1, "rgba(192, 132, 252, 0)");
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, 1200, 630);
 
       // Company logo area
       if (job.logo) {

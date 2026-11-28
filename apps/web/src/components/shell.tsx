@@ -88,7 +88,7 @@ const SIDEBAR_COLLAPSED_KEY = "mboqara.sidebar.collapsed";
 const ROLE_NAV: Record<RoleKey, NavItem[]> = {
   job_seeker: [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["job_seeker"], group: "Overview" },
-    { href: "/opportunities", label: "Opportunities", icon: Compass, roles: ["job_seeker"], group: "Overview" },
+    { href: "/workspace/opportunities", label: "Opportunities", icon: Compass, roles: ["job_seeker"], group: "Overview" },
     { href: "/saved", label: "Saved roles", icon: Bookmark, roles: ["job_seeker"], group: "Overview" },
     { href: "/matches", label: "Matches", icon: Sparkles, roles: ["job_seeker"], group: "Overview" },
     { href: "/applications", label: "Applications", icon: Briefcase, roles: ["job_seeker"], group: "Work" },
@@ -101,7 +101,7 @@ const ROLE_NAV: Record<RoleKey, NavItem[]> = {
   ],
   analyst: [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["analyst"], group: "Overview" },
-    { href: "/opportunities", label: "Opportunities", icon: Compass, roles: ["analyst"], group: "Data" },
+    { href: "/workspace/opportunities", label: "Opportunities", icon: Compass, roles: ["analyst"], group: "Data" },
     { href: "/matches", label: "Matches", icon: Sparkles, roles: ["analyst"], group: "Data" },
     { href: "/analytics", label: "Analytics", icon: Gauge, roles: ["analyst"], group: "Analysis" },
     { href: "/reports", label: "Reports", icon: FileText, roles: ["analyst"], group: "Analysis" },
@@ -155,14 +155,14 @@ const ROLE_NAV: Record<RoleKey, NavItem[]> = {
       ],
     },
     {
-      href: "/opportunities",
+      href: "/workspace/opportunities",
       label: "Jobs",
       icon: Compass,
       roles: ["source_curator"],
       group: "Jobs",
       subItems: [
-        { href: "/opportunities", label: "All jobs", icon: Compass, roles: ["source_curator"] },
-        { href: "/opportunities/import", label: "Import", icon: Globe2, roles: ["source_curator"] },
+        { href: "/workspace/opportunities", label: "All jobs", icon: Compass, roles: ["source_curator"] },
+        { href: "/workspace/opportunities/import", label: "Import", icon: Globe2, roles: ["source_curator"] },
       ],
     },
     {
@@ -713,7 +713,11 @@ function TopBar({
           onSubmit={(event) => {
             event.preventDefault();
             const q = query.trim();
-            router.push(q ? `/opportunities?q=${encodeURIComponent(q)}` : "/opportunities");
+            router.push(
+              q
+                ? `/workspace/opportunities?q=${encodeURIComponent(q)}`
+                : "/workspace/opportunities",
+            );
           }}
           className="relative ml-auto w-full min-w-0 max-w-md"
         >

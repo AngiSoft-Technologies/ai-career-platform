@@ -228,7 +228,7 @@ function MatchRow({ item }: { item: Opportunity }) {
 
   return (
     <Link
-      href={`/opportunities/${item.id}`}
+      href={`/workspace/opportunities/${item.id}`}
       className="group flex items-start gap-4 px-4 py-4 transition-colors duration-150 hover:bg-app-surface-2/40 sm:gap-5 sm:px-5"
     >
       <div className="flex w-14 shrink-0 flex-col items-center gap-1 border-r border-app-border pr-3 sm:pr-4">

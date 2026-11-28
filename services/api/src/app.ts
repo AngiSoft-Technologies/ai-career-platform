@@ -6,7 +6,10 @@ import rateLimit from "express-rate-limit";
 import { createYoga } from "graphql-yoga";
 import helmet from "helmet";
 import pinoHttp from "pino-http";
-import { resolveIdentity } from "./auth/resolve-identity.js";
+import {
+  resolveIdentity,
+  UnauthorizedError,
+} from "./auth/resolve-identity.js";
 import { config } from "./config.js";
 import { healthCheck } from "./db/pool.js";
 import { redis, startRedis, waitForRedis } from "./db/redis.js";
@@ -152,11 +155,22 @@ function buildYoga(endpoint: string) {
     graphqlEndpoint: endpoint,
     cors: false,
     context: async ({ request }) => {
-      const resolved = await resolveIdentity({
-        authorization: request.headers.get("authorization"),
-        headerUserId: request.headers.get("x-user-id"),
-      });
-      return { userId: resolved.userId };
+      try {
+        const resolved = await resolveIdentity({
+          authorization: request.headers.get("authorization"),
+          headerUserId: request.headers.get("x-user-id"),
+        });
+        return {
+          userId: resolved.userId,
+          authenticated: resolved.authenticated,
+        };
+      } catch (error) {
+        if (!(error instanceof UnauthorizedError)) throw error;
+        // Anonymous GraphQL is allowed so the public role queries work for
+        // the website and mobile clients. Personal fields and mutations are
+        // guarded by requireUser() in the schema resolvers.
+        return { userId: "", authenticated: false };
+      }
     },
   });
 }

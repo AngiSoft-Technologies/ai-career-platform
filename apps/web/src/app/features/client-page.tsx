@@ -99,7 +99,7 @@ const PRODUCT_REEL: MediaSlide[] = [
     body:
       "Roles from company career pages and job boards, filtered by what you want — role, location, work mode, experience level — and ranked by how well each one fits.",
     illustration: (
-      <AppFrame url="mboqara.angisoft.co.ke/opportunities" label="The opportunity feed, showing ranked roles with match scores and eligibility badges">
+      <AppFrame url="mboqara.angisoft.co.ke/workspace/opportunities" label="The opportunity feed, showing ranked roles with match scores and eligibility badges">
         <OpportunityFeedMock />
       </AppFrame>
     ),
@@ -111,7 +111,7 @@ const PRODUCT_REEL: MediaSlide[] = [
     body:
       "Every posting is scored before it reaches you: a salary that is out of line for the title, a domain registered last month, text copied from a known template. The pane shows exactly what was found.",
     illustration: (
-      <AppFrame url="mboqara.angisoft.co.ke/opportunities/trust" label="The trust engine's verdict on a posting, listing what it found and the decision it made">
+      <AppFrame url="mboqara.angisoft.co.ke/workspace/opportunities/trust" label="The trust engine's verdict on a posting, listing what it found and the decision it made">
         <TrustEngineMock />
       </AppFrame>
     ),
@@ -405,7 +405,7 @@ export default function FeaturesPage({
             </InView>
             <InView className="mk-reveal mk-reveal--right" delay={140}>
               <div className="mk-tilt">
-                <AppFrame url="mboqara.angisoft.co.ke/opportunities/held" label="The trust engine's report on a held posting">
+                <AppFrame url="mboqara.angisoft.co.ke/workspace/opportunities/held" label="The trust engine's report on a held posting">
                   <TrustEngineMock />
                 </AppFrame>
               </div>

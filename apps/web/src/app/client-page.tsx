@@ -234,8 +234,9 @@ export default function LandingPage({
       document.removeEventListener("visibilitychange", start);
     };
   }, []);
-  const gate = (path: string) =>
-    session ? path : `/signup?next=${encodeURIComponent(path)}`;
+  // Public opportunities stay open. The only reason to gate is when the
+  // visitor asks for their signed-in workspace, never to read a role.
+  const workspaceHref = session ? "/workspace/opportunities" : "/opportunities";
 
   useEffect(() => {
     document.title = "Find work that fits you | MboQara";
@@ -280,10 +281,10 @@ export default function LandingPage({
             <h1 id="hero-title">Find work that fits the life you’re building.</h1>
             <p>Discover relevant opportunities, shape your resume for each role, and keep every application moving from one workspace.</p>
             <div className="jr-hero__actions">
-              <Link href="/signup" className="jr-button jr-button--primary">Build my career profile <ArrowRight aria-hidden="true" /></Link>
-              <Link href={gate("/opportunities")} className="jr-button jr-button--quiet">Browse opportunities</Link>
+              <Link href="/opportunities" className="jr-button jr-button--primary">Browse live opportunities <ArrowRight aria-hidden="true" /></Link>
+              <Link href="/features" className="jr-button jr-button--quiet">See how it works</Link>
             </div>
-            <p className="jr-hero__note">Your experience stays yours. You choose what to share and when to apply.</p>
+            <p className="jr-hero__note">Read every role first. We only ask for an account when you choose to apply.</p>
           </div>
 
           {/* Photograph in a glass panel, floating over the hero video. */}
@@ -349,7 +350,7 @@ export default function LandingPage({
                         <span className="jr-job-card__live">Live</span>
                       </div>
                       <h3 className="jr-job-card__title">
-                        <Link href={gate(`/opportunities/${job.id}`)}>{job.title}</Link>
+                        <Link href={`/opportunities/${job.id}`}>{job.title}</Link>
                       </h3>
                       <div className="jr-job-card__meta">
                         <span><MapPin aria-hidden="true" />{job.city || job.country}</span>
@@ -373,7 +374,7 @@ export default function LandingPage({
                         {salary ? <span>{salary}</span> : null}
                       </div>
                       <div className="jr-job-card__actions">
-                        <Link href={gate(`/opportunities/${job.id}`)} className="jr-job-card__view">
+                        <Link href={`/opportunities/${job.id}`} className="jr-job-card__view">
                           View role <ArrowRight aria-hidden="true" />
                         </Link>
                         <ShareLinks job={job} />
@@ -421,8 +422,8 @@ export default function LandingPage({
           )}
 
           <div className="jr-jobs__more">
-            <Link href={gate("/opportunities")} className="mk-btn mk-btn--primary mk-btn--lg">
-              {session ? "View all jobs" : "Create a free account"} <ArrowRight aria-hidden="true" />
+            <Link href={workspaceHref} className="mk-btn mk-btn--primary mk-btn--lg">
+              {session ? "Open my job workspace" : "Explore all opportunities"} <ArrowRight aria-hidden="true" />
             </Link>
           </div>
         </div>

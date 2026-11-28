@@ -369,7 +369,7 @@ function ApplicationWorkspaceInner() {
               </p>
             </div>
           </div>
-          <Link href={`/opportunities/${application.opportunityId}`}>
+          <Link href={`/workspace/opportunities/${application.opportunityId}`}>
             <Button variant="ghost" size="sm">
               View the role
             </Button>

@@ -219,7 +219,7 @@ function OpportunityDetailInner() {
 
   const goBack = () => {
     if (canGoBack) router.back();
-    else router.push("/opportunities");
+    else router.push("/workspace/opportunities");
   };
 
   const apply = async () => {
@@ -261,7 +261,7 @@ function OpportunityDetailInner() {
             <Button variant="outline" onClick={() => window.location.reload()}>
               Try again
             </Button>
-            <Link href="/opportunities">
+            <Link href="/workspace/opportunities">
               <Button variant="ghost">Back to opportunities</Button>
             </Link>
           </div>
@@ -276,7 +276,7 @@ function OpportunityDetailInner() {
         title="Opportunity not found"
         description="It may have expired or been hidden by moderation."
         action={
-          <Link href="/opportunities">
+          <Link href="/workspace/opportunities">
             <Button variant="outline">Back to opportunities</Button>
           </Link>
         }
@@ -288,7 +288,7 @@ function OpportunityDetailInner() {
   const score = typeof match?.score === "number" ? Math.round(match.score) : null;
   const riskFlags = data.riskFlags ?? [];
   const flagged = data.riskAction && data.riskAction !== "publish";
-  const scene = sceneForPath("/opportunities");
+  const scene = sceneForPath("/workspace/opportunities");
   const insightsLoading = preparationLoading || profile.loading || documents.loading;
 
   return (

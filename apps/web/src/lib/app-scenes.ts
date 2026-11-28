@@ -32,7 +32,7 @@ export const SCENES: AppScene[] = [
     src: `${IMAGES}/career-fair.webp`,
     alt: "Recruiters and candidates at a career fair",
     caption: "Open roles · refreshed continuously",
-  }, // /opportunities
+  }, // /workspace/opportunities
   {
     src: `${IMAGES}/careers/engineering-professional.webp`,
     alt: "An engineer working through a technical brief",
@@ -92,7 +92,7 @@ export const SCENES: AppScene[] = [
 
 const ROUTE_SCENES: Array<{ prefixes: string[]; scene: AppScene }> = [
   { prefixes: ["/dashboard"], scene: SCENES[0] },
-  { prefixes: ["/opportunities", "/saved"], scene: SCENES[1] },
+  { prefixes: ["/workspace/opportunities", "/saved"], scene: SCENES[1] },
   { prefixes: ["/matches"], scene: SCENES[2] },
   { prefixes: ["/applications"], scene: SCENES[3] },
   { prefixes: ["/documents"], scene: SCENES[4] },

@@ -43,6 +43,32 @@ type Opportunity {
   match: Match
 }
 
+"""A live role an anonymous visitor or mobile client may read before signing up."""
+type PublicOpportunity {
+  id: ID!
+  title: String!
+  description: String!
+  company: String!
+  companySlug: String!
+  country: String!
+  city: String!
+  workMode: String!
+  seniority: String!
+  employmentType: String!
+  salaryMin: Float
+  salaryMax: Float
+  currency: String
+  applicationMethod: String!
+  sourceKind: String!
+  postedAt: String!
+  expiresAt: String
+  skills: [String!]!
+  eligibility: String
+  eligibilityReasons: [String!]!
+  riskScore: Int
+  riskAction: String
+}
+
 type Match {
   opportunityId: ID!
   score: Float!
@@ -140,6 +166,10 @@ type Query {
     limit: Int
   ): [Opportunity!]!
   opportunity(id: ID!): Opportunity
+  "Public role detail. No authentication and no source apply URL are required."
+  publicOpportunity(id: ID!): PublicOpportunity
+  "Public live catalogue for marketing pages and mobile clients."
+  publicOpportunities(limit: Int): [PublicOpportunity!]!
   matches(limit: Int): [Opportunity!]!
   applicationWorkspace(id: ID!): ApplicationBlueprint
   applications: [Application!]!

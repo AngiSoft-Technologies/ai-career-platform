@@ -69,6 +69,56 @@ export interface MatchResult {
   gaps: string[];
 }
 
+/** The fields in the public featured feed. Safe for anonymous pages. */
+export interface FeaturedJob {
+  id: string;
+  title: string;
+  company: string;
+  country: string;
+  city: string;
+  workMode: string;
+  seniority: string;
+  platform: string;
+  postedAt: string;
+  expiresAt?: string | null;
+  salaryMin?: number | null;
+  salaryMax?: number | null;
+  currency?: string | null;
+  riskScore?: number | null;
+  kenyaEligible: boolean;
+}
+
+/**
+ * The auth-free detail payload served by `/v1/public/opportunities/:id`.
+ * It deliberately has no `applyUrl`, raw `platform`, or account-specific
+ * match data, so a visitor can read the role without being funnelled into a
+ * sign-up first.
+ */
+export interface PublicOpportunity {
+  id: string;
+  title: string;
+  company: string;
+  companySlug: string;
+  description: string;
+  country: string;
+  city: string;
+  workMode: string;
+  seniority: string;
+  employmentType: string;
+  salaryMin?: number;
+  salaryMax?: number;
+  currency?: string;
+  applicationMethod: string;
+  sourceKind: string;
+  postedAt: string;
+  expiresAt?: string;
+  skills: string[];
+  eligibility?: string;
+  eligibilityReasons: string[];
+  riskScore?: number;
+  riskAction?: string;
+}
+
 export interface Profile {
   id: string;
   email: string;

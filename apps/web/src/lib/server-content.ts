@@ -1,5 +1,8 @@
 import "server-only";
 
+import { cache } from "react";
+import type { FeaturedJob, PublicOpportunity } from "./types";
+
 /**
  * Server-side fetchers for public marketing content.
  *
@@ -37,4 +40,29 @@ export function fetchPublicContent<T>(
 /** Fetch the public featured-jobs feed shown on the landing page. */
 export function fetchFeaturedJobs<T>(revalidate = 120): Promise<T | null> {
   return getJson<T>(`${API_URL}/public/featured`, revalidate);
+}
+
+/**
+ * Fetch one complete public role. Cached with React `cache` so the page and
+ * its `generateMetadata` share a single request for the same opportunity.
+ */
+export const fetchPublicOpportunity = cache(
+  async (
+    id: string,
+    revalidate = 120,
+  ): Promise<PublicOpportunity | null> => {
+    if (!id || id.length > 128) return null;
+    const payload = await getJson<{ opportunity: PublicOpportunity }>(
+      `${API_URL}/public/opportunities/${encodeURIComponent(id)}`,
+      revalidate,
+    );
+    return payload?.opportunity ?? null;
+  },
+);
+
+/** Typed alias for callers that do not need a custom response shape. */
+export function fetchPublicFeaturedJobs(
+  revalidate = 120,
+): Promise<{ jobs: FeaturedJob[]; generatedAt: string } | null> {
+  return fetchFeaturedJobs<{ jobs: FeaturedJob[]; generatedAt: string }>(revalidate);
 }

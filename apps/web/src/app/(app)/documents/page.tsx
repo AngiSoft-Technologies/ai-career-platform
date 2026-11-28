@@ -128,7 +128,7 @@ function DocumentsPageInner() {
         title="Your application kit"
         description="A source resume, job-specific editions and the cover letters that go with them. Generated from your real profile and the live description — nothing is invented."
         actions={
-          <Link href="/opportunities">
+          <Link href="/workspace/opportunities">
             <Button variant="outline" size="sm" icon={<FilePlus2 size={14} />}>
               Find a role
             </Button>
@@ -183,7 +183,7 @@ function DocumentsPageInner() {
               title="No documents yet"
               description="Pick a role on the right and we will draft the first version from your profile."
               action={
-                <Link href="/opportunities">
+                <Link href="/workspace/opportunities">
                   <Button size="sm" icon={<FilePlus2 size={14} />}>
                     Find a role
                   </Button>
