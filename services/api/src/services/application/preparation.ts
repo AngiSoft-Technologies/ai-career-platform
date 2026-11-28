@@ -156,7 +156,7 @@ class PreparationSupersededError extends Error {
   }
 }
 
-class PreparationAlreadyRunningError extends Error {
+export class PreparationAlreadyRunningError extends Error {
   constructor(preparationId: string) {
     super(`PREPARATION_ALREADY_RUNNING:${preparationId}`);
     this.name = "PreparationAlreadyRunningError";
@@ -802,8 +802,8 @@ async function claimPreparation(
       `SELECT * FROM application_preparations
         WHERE id = $1
           AND status = 'QUEUED'
-          AND ($2::integer IS NULL OR version = $2)
-          AND ($3::integer IS NULL OR attempt_count < $3)
+          AND ($2::integer IS NULL OR version = $2::integer)
+          AND ($3::integer IS NULL OR attempt_count < $3::integer)
         FOR UPDATE`,
       [preparationId, expectedVersion ?? null, attemptLimit ?? null],
     );
@@ -836,7 +836,7 @@ async function claimPreparation(
          preparation_id, attempt, status, stage, payload
        ) VALUES (
          $1, $2, 'RUNNING', 'researching',
-         jsonb_build_object('version', $3, 'sourceFingerprint', $4)
+         jsonb_build_object('version', $3::integer, 'sourceFingerprint', $4::text)
        )
        RETURNING id`,
       [preparationId, attempt, preparation.version, preparation.source_fingerprint],
@@ -923,7 +923,7 @@ async function updatePreparationPhase(
 ): Promise<void> {
   const updated = await query(
     `UPDATE application_preparations
-        SET phase = $3
+        SET phase = $3, updated_at = now()
       WHERE id = $1 AND version = $2 AND status = 'RUNNING'`,
     [preparationId, version, phase],
   );

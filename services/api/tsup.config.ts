@@ -19,6 +19,9 @@ export default defineConfig({
   target: "node24",
   // Externalize workspace packages that are TypeScript source
   external: [
+    // esbuild does not yet know node:sqlite as a builtin and rewrites it to a
+    // bare `sqlite` package. Keep the runtime import intact.
+    "node:sqlite",
     "@angisoft/mboqara-contracts",
     "sharp",
     "pdfkit",

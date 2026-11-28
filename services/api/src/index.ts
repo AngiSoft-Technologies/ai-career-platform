@@ -4,6 +4,8 @@ import { pool, warmPool } from "./db/pool.js";
 import { redis, startRedis, waitForRedis } from "./db/redis.js";
 import { ensureRedisQueuePolicy } from "./db/redis-policy.js";
 import { logger } from "./logger.js";
+import { startServerTicker, type ServerTickerHandle } from "./lib/server-ticker.js";
+import { serverStoreBackend, usesServerStore } from "./lib/server-store.js";
 import { closeRealtime } from "./realtime/hub.js";
 import { startGrpcServer, type GrpcHandle } from "./grpc/server.js";
 import { startWorkers, type WorkerHandle } from "./worker/index.js";
@@ -24,14 +26,41 @@ async function main(): Promise<void> {
   const startedAt = Date.now();
   let grpc: GrpcHandle | null = null;
   let workers: WorkerHandle | null = null;
+  let serverTicker: ServerTickerHandle | null = null;
+  let shuttingDown = false;
 
-  startRedis();
-  if (await waitForRedis()) {
-    await ensureRedisQueuePolicy(redis);
-  } else {
-    logger.warn(
-      "Redis was not connected at startup, so its eviction policy was not checked. BullMQ jobs are durable only when it is noeviction.",
+  const shutdown = async (signal: string): Promise<void> => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    logger.info({ signal, role }, "Shutting down");
+    if (role === "app" || role === "api") {
+      server.close();
+      await closeRealtime();
+      if (grpc) await grpc.stop();
+    }
+    if (workers) await workers.stop();
+    if (serverTicker) await serverTicker.stop();
+    redis.disconnect();
+    await pool.end();
+    process.exit(0);
+  };
+  process.on("SIGINT", () => void shutdown("SIGINT"));
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
+
+  if (usesServerStore()) {
+    logger.info(
+      { backend: serverStoreBackend() },
+      "Persistent server store active; Redis is not required on this host",
     );
+  } else {
+    startRedis();
+    if (await waitForRedis()) {
+      await ensureRedisQueuePolicy(redis);
+    } else {
+      logger.warn(
+        "Redis was not connected at startup, so its eviction policy was not checked. BullMQ jobs are durable only when it is noeviction.",
+      );
+    }
   }
 
   const databaseReady = await warmPool();
@@ -48,25 +77,20 @@ async function main(): Promise<void> {
       );
     });
 
-    const shutdownHttp = async (signal: string): Promise<void> => {
-      logger.info({ signal }, "Shutting down");
-      server.close();
-      await closeRealtime();
-      if (grpc) await grpc.stop();
-      if (workers) await workers.stop();
-      redis.disconnect();
-      await pool.end();
-      process.exit(0);
-    };
-
-    process.on("SIGINT", () => void shutdownHttp("SIGINT"));
-    process.on("SIGTERM", () => void shutdownHttp("SIGTERM"));
-
     grpc = await startGrpcServer();
   }
 
   if (role === "app" || role === "worker") {
-    workers = await startWorkers();
+    if (usesServerStore()) {
+      // Production server: SQLite + JSONL own the queue, cache, automations
+      // and tick leases. BullMQ/Redis remain the Vercel/Redis-backed path.
+      serverTicker = await startServerTicker();
+      if (!serverTicker) {
+        workers = await startWorkers();
+      }
+    } else {
+      workers = await startWorkers();
+    }
   }
 
   logger.info(

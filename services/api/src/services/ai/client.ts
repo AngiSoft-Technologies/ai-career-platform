@@ -289,6 +289,14 @@ export async function aiChatDetailed(
       };
     } catch (error) {
       lastError = error;
+      logger.debug(
+        {
+          provider: provider.name,
+          model: options.model ?? provider.chatModel,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        "AI chat provider failed; trying the next configured provider",
+      );
     }
   }
 

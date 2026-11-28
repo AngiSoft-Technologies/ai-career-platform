@@ -38,6 +38,11 @@ import { randomUUID } from "node:crypto";
 import { redis } from "../db/redis.js";
 import { logger } from "../logger.js";
 import { alignToCadence } from "./jitter.js";
+import {
+  claimServerTick,
+  releaseServerTick,
+  usesServerStore,
+} from "./server-store.js";
 import { redisIsReady, runScript, TIMED_OUT, withTimeout } from "./redis-scripts.js";
 
 export interface TickHandle {
@@ -52,8 +57,11 @@ export async function claimTick(
   ttlSeconds: number,
   timeoutMs = CLAIM_TIMEOUT_MS,
 ): Promise<string | null> {
-  if (!redisIsReady()) return null;
   const token = `${process.pid}:${Date.now()}:${randomUUID().slice(0, 8)}`;
+  if (usesServerStore()) {
+    return (await claimServerTick(name, ttlSeconds, token)) ? token : null;
+  }
+  if (!redisIsReady()) return null;
   try {
     // `NX` makes the claim exclusive: the first holder wins, and everyone
     // else is told the tick is taken.
@@ -76,6 +84,10 @@ export async function releaseTick(
   token: string,
   timeoutMs = CLAIM_TIMEOUT_MS,
 ): Promise<void> {
+  if (usesServerStore()) {
+    await releaseServerTick(name, token);
+    return;
+  }
   if (!redisIsReady()) return;
   await withTimeout(runScript("releaseIfEqual", [name], [token]), timeoutMs);
 }
@@ -120,7 +132,7 @@ export function startDistributedInterval(
     try {
       const token = await claimTick(name, ttlSeconds, redisTimeoutMs);
       if (token === null) {
-        if (options.runWhenRedisDown && !redisIsReady()) {
+        if (!usesServerStore() && options.runWhenRedisDown && !redisIsReady()) {
           await handler();
         }
         return;

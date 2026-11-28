@@ -77,8 +77,22 @@ export async function draftApplicationAnswers(input: {
         },
       ], { temperature: 0.1, maxTokens: 2_800 });
 
-      const json = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-      const parsed = answerSchema.parse(JSON.parse(json));
+      const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+      const start = cleaned.indexOf("{");
+      const end = cleaned.lastIndexOf("}");
+      if (start < 0 || end <= start) throw new Error("ANSWERS_INVALID_JSON");
+      const value = JSON.parse(cleaned.slice(start, end + 1)) as {
+        answers?: Array<Record<string, unknown>>;
+      };
+      // A null `reason` is how the model says "no reason". The schema marks it
+      // optional, not nullable, so normalise it before validation.
+      if (Array.isArray(value.answers)) {
+        value.answers = value.answers.map((answer) => ({
+          ...answer,
+          reason: answer.reason ?? undefined,
+        }));
+      }
+      const parsed = answerSchema.parse(value);
       const byQuestion = new Map(parsed.answers.map((answer) => [answer.question, answer]));
       return uniqueQuestions.map((question) => {
         const candidateAnswer = input.userInputs?.[answerInputKey(question)]?.trim();

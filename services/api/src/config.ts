@@ -140,7 +140,7 @@ const schema = z.object({
   NVIDIA_MODEL: z.string().default("nvidia/nemotron-3.5-bolt-e4b"),
   NVIDIA_EMBEDDING_MODEL: z
     .string()
-    .default("nvidia/nemotron-3-embed-1b"),
+    .default("nvidia/nemotron-3.5-embed-1b"),
   AI_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
   JOB_SOURCE_FETCH_LIMIT: z.coerce.number().int().positive().default(100),
 

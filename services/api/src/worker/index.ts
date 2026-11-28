@@ -4,6 +4,8 @@ import IORedis from "ioredis";
 import { config } from "../config.js";
 import { logger } from "../logger.js";
 import { startTicker, type TickerEntry, type TickerHandle } from "../lib/ticker.js";
+import { enqueueServerJob } from "../lib/server-queue.js";
+import { usesServerStore } from "../lib/server-store.js";
 import { clearBacklog, jobPriority, registerBacklog } from "../services/engine/priority.js";
 import {
   shutdownHtmlWorkers,
@@ -449,6 +451,21 @@ async function dispatchQueuedPreparations(
   for (const batch of partitionPreparationDispatchBatches(preparations)) {
     const results = await Promise.all(batch.map(async (preparation) => {
       try {
+        const delayMs = preparation.nextAttemptAt
+          ? Math.max(0, new Date(preparation.nextAttemptAt).getTime() - Date.now())
+          : 0;
+        if (usesServerStore()) {
+          await enqueueServerJob(
+            "preparation-drain",
+            {
+              preparationId: preparation.preparationId,
+              version: preparation.version,
+              attemptCount: preparation.attemptCount,
+            },
+            { delayMs, maxAttempts: 2 },
+          );
+          return true;
+        }
         return await enqueuePreparationJob(
           preparation.preparationId,
           preparation.version,
@@ -678,6 +695,37 @@ const handlers: Record<JobName, (data: Record<string, unknown>) => Promise<unkno
   [JOB_NAMES.evaluateSavedSearchAlerts]: handleSavedSearchAlerts,
   [JOB_NAMES.sendCalendarReminders]: handleCalendarReminders,
 };
+
+/**
+ * Runs one existing worker handler without a BullMQ consumer.
+ *
+ * The persistent server ticker and the Vercel adapter both call the *same*
+ * handlers. Nothing in the job implementation needs to know which topology
+ * invoked it. The only difference is the deadline: a server may use the full
+ * job timeout, while a Function must stay inside its 300s ceiling.
+ */
+export async function runJobHandler(
+  jobName: JobName,
+  data: Record<string, unknown> = {},
+  timeoutMs?: number,
+): Promise<unknown> {
+  const handler = handlers[jobName];
+  if (!handler) throw new Error(`Unknown job: ${jobName}`);
+  return withJobDeadline(jobName, () => handler(data), timeoutMs);
+}
+
+/** Function-safe wrapper: every call is bounded well below the 300s ceiling. */
+export async function runServerlessJob(
+  jobName: JobName,
+  data: Record<string, unknown> = {},
+  timeoutMs?: number,
+): Promise<unknown> {
+  const limitMs = Math.min(
+    timeoutMs ?? JOB_TIMEOUTS[jobName] ?? 240_000,
+    240_000,
+  );
+  return runJobHandler(jobName, data, limitMs);
+}
 
 /** Last time a job finished on each queue, for the stall watchdog. */
 const lastCompletion = new Map<string, number>();

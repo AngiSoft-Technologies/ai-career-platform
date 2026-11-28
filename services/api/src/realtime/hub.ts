@@ -7,9 +7,16 @@ import { resolveIdentity } from "../auth/resolve-identity.js";
 import { config } from "../config.js";
 import { redis } from "../db/redis.js";
 import { logger } from "../logger.js";
+import {
+  publishServerEvent,
+  subscribeServerEvents,
+  type ServerEventSubscriberHandle,
+} from "../lib/server-events.js";
+import { usesServerStore } from "../lib/server-store.js";
 
 let wss: WebSocketServer | null = null;
 let subscriber: Redis | null = null;
+let serverSubscriber: ServerEventSubscriberHandle | null = null;
 /** Distinguishes this function instance's own publishes from other instances'. */
 const INSTANCE_ID = randomUUID();
 const REALTIME_CHANNEL = "mboqara:realtime";
@@ -85,13 +92,25 @@ function deliverLocal(event: EventEnvelope<unknown>, userId?: string): void {
 }
 
 /**
- * A WebSocket connection lives on one function instance, but the request that
- * creates an event can land on any other. Redis pub/sub is the bridge: every
+ * A WebSocket connection lives on one process, but the request that creates an
+ * event can land on any other. Redis pub/sub is the bridge on Vercel; a
+ * persistent production server uses the SQLite event bus instead. Every
  * instance subscribes, and every broadcast is published once. Messages this
  * instance published are skipped so local sockets are not served twice.
  */
 function startSubscriber(): void {
-  if (subscriber) return;
+  if (subscriber || serverSubscriber) return;
+  if (usesServerStore()) {
+    serverSubscriber = subscribeServerEvents<BusMessage>(
+      REALTIME_CHANNEL,
+      (event) => {
+        const message = event.payload;
+        if (!message || message.origin === INSTANCE_ID) return;
+        deliverLocal(message.event, message.userId);
+      },
+    );
+    return;
+  }
   const client = new Redis(config.REDIS_URL, {
     lazyConnect: true,
     maxRetriesPerRequest: 1,
@@ -215,8 +234,12 @@ export function broadcast<T>(
   };
 
   deliverLocal(event, userId);
+  const message: BusMessage = { origin: INSTANCE_ID, event, userId };
+  if (usesServerStore()) {
+    void publishServerEvent(REALTIME_CHANNEL, message).catch(() => undefined);
+    return event;
+  }
   if (redis.status === "ready") {
-    const message: BusMessage = { origin: INSTANCE_ID, event, userId };
     void redis
       .publish(REALTIME_CHANNEL, JSON.stringify(message))
       .catch(() => undefined);
@@ -226,6 +249,10 @@ export function broadcast<T>(
 }
 
 export async function closeRealtime(): Promise<void> {
+  if (serverSubscriber) {
+    await serverSubscriber.stop();
+    serverSubscriber = null;
+  }
   if (subscriber) {
     await subscriber.quit().catch(() => undefined);
     subscriber = null;

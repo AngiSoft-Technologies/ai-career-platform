@@ -1,7 +1,7 @@
 import { Router } from "express";
 import type { ApplicationStatus } from "@angisoft/mboqara-contracts";
 import { z } from "zod";
-import { cacheDelByPrefix } from "../db/redis.js";
+import { cacheDelByPrefix } from "../lib/app-cache.js";
 import { broadcast } from "../realtime/hub.js";
 import {
   createApplication,

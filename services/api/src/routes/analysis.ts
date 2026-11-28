@@ -1,3 +1,4 @@
+import { waitUntil } from "@vercel/functions";
 import { Router } from "express";
 import { z } from "zod";
 import { getProfile } from "../services/profile.js";
@@ -19,9 +20,13 @@ import {
 import { ensureBlueprint } from "../services/applications.js";
 import { query } from "../db/pool.js";
 import { broadcast } from "../realtime/hub.js";
-import { enqueuePreparationJob } from "../worker/index.js";
+import { logger } from "../logger.js";
+import { runPreparationServerless } from "../services/application/serverless-preparations.js";
+import { dispatchPreparation } from "../services/application/preparation-dispatch.js";
 
 export const analysisRouter = Router();
+
+const IS_VERCEL = process.env.VERCEL === "1";
 
 const preparationSchema = z.object({
   sourceCvDocumentId: z.string().uuid().optional(),
@@ -34,10 +39,39 @@ async function enqueuePreparation(
   attemptCount = 0,
   nextAttemptAt?: string,
 ): Promise<void> {
-  await enqueuePreparationJob(preparationId, version, {
-    attemptCount,
-    notBefore: nextAttemptAt ? new Date(nextAttemptAt) : undefined,
-  });
+  await dispatchPreparation(preparationId, version, { attemptCount, nextAttemptAt });
+}
+
+/**
+ * On Vercel there is no BullMQ consumer to pick up the job above. Run the same
+ * durable pipeline inside this invocation so the candidate does not wait for
+ * the next schedule tick. A persistent production server enqueues the job in
+ * SQLite instead and its ticker drains it. The database claim prevents a
+ * second worker (or the scheduled drain) from doing the work twice.
+ */
+function startServerlessPreparation(
+  preparationId: string,
+  version: number,
+  attemptCount: number,
+): void {
+  const task = runPreparationServerless({ preparationId, version, attemptCount })
+    .then((outcome) => {
+      logger.info(
+        { preparationId, version, outcome },
+        "Serverless preparation started from request",
+      );
+    })
+    .catch((error) => {
+      logger.warn(
+        {
+          preparationId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        "Serverless preparation request failed",
+      );
+    });
+  waitUntil(task);
+  void task;
 }
 
 /**
@@ -61,6 +95,13 @@ analysisRouter.post("/prepare/:opportunityId", async (request, response, next) =
         result.attemptCount,
         result.nextAttemptAt,
       );
+      if (IS_VERCEL) {
+        startServerlessPreparation(
+          result.preparation.id,
+          result.preparation.version,
+          result.attemptCount,
+        );
+      }
     }
     response.status(result.shouldQueue ? 202 : 200).json({
       preparation: result.preparation,
@@ -98,6 +139,13 @@ analysisRouter.post("/prepare/:opportunityId/refresh", async (request, response,
         result.attemptCount,
         result.nextAttemptAt,
       );
+      if (IS_VERCEL) {
+        startServerlessPreparation(
+          result.preparation.id,
+          result.preparation.version,
+          result.attemptCount,
+        );
+      }
     }
     response.status(202).json({ preparation: result.preparation });
   } catch (error) {

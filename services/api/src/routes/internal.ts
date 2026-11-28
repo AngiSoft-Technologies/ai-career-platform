@@ -4,6 +4,8 @@ import { z } from "zod";
 import { assertPublicUrl } from "../services/engine/fetch.js";
 import { directFetch } from "../services/engine/egress.js";
 import { runIngestion } from "../services/ingestion/run.js";
+import { runServerlessPreparationCycle } from "../services/application/serverless-preparations.js";
+import { runBackendCycle } from "../services/serverless/backend-cycle.js";
 import { DeduplicationAgent } from "../services/agents/dedup-agent.js";
 import { query } from "../db/pool.js";
 import { redis } from "../db/redis.js";
@@ -189,6 +191,99 @@ internalRouter.post("/ingest", async (request, response) => {
   });
 
   // Deliberately not awaited: only used by operators on a persistent host.
+  void execute();
+});
+
+const PREPARATION_SCHEDULE_LOCK_KEY = "preparation:schedule:lock";
+
+/**
+ * Serverless preparation clock.
+ *
+ * There is no BullMQ consumer on Vercel, so a QUEUED row would otherwise wait
+ * forever. Vercel Schedules calls this route every 15 minutes; a user clicking
+ * "prepare" also starts the same pipeline immediately through `waitUntil` in
+ * the public route. This endpoint is the safety net for interrupted runs,
+ * automatic preparations, and rows whose original invocation timed out.
+ */
+internalRouter.post("/prepare", async (request, response) => {
+  const auth = ingestAuthorisation(request);
+  if (!auth.ok) {
+    response.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const requestedLimit = Number(request.query.limit);
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 5)
+    : undefined;
+  const wait =
+    request.query.wait === "1" || request.query.wait === "true";
+  const started = Date.now();
+
+  let releaseLock: (() => Promise<void>) | null = null;
+  if (auth.scheduled) {
+    let acquired = false;
+    try {
+      acquired =
+        (await redis.set(
+          PREPARATION_SCHEDULE_LOCK_KEY,
+          "1",
+          "EX",
+          280,
+          "NX",
+        )) === "OK";
+    } catch {
+      acquired = true;
+    }
+    if (!acquired) {
+      response.status(202).json({ success: true, skipped: "cycle already running" });
+      return;
+    }
+    releaseLock = async () => {
+      await redis.del(PREPARATION_SCHEDULE_LOCK_KEY).catch(() => undefined);
+    };
+  }
+
+  const execute = async () => {
+    try {
+      // A scheduled hit is the Vercel fallback clock for the whole backend;
+      // operator calls can request the same full cycle with ?full=1.
+      const fullCycle = auth.scheduled || request.query.full === "1";
+      const result = fullCycle
+        ? await runBackendCycle({ limit, scheduleAutomatic: true })
+        : await runServerlessPreparationCycle({ limit });
+      logger.info(
+        { cycle: result, elapsedMs: Date.now() - started, scheduled: auth.scheduled },
+        "Serverless backend cycle finished",
+      );
+      return result;
+    } catch (error) {
+      logger.error(
+        { error: error instanceof Error ? error.message : String(error) },
+        "Backend cycle failed",
+      );
+      return { error: error instanceof Error ? error.message : String(error) };
+    } finally {
+      if (releaseLock) await releaseLock();
+    }
+  };
+
+  if (auth.scheduled) {
+    response.json({ success: true, accepted: true, scheduled: true });
+    waitUntil(execute());
+    return;
+  }
+
+  if (wait) {
+    response.json({ success: true, result: await execute() });
+    return;
+  }
+
+  response.status(202).json({
+    success: true,
+    accepted: true,
+    message: "Preparation cycle started. Poll the preparation status.",
+  });
   void execute();
 });
 

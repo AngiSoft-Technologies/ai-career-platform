@@ -320,7 +320,10 @@ export async function listQueuedPreparations(
         WHERE status = 'QUEUED'
           AND attempt_count < $1
           AND (next_attempt_at IS NULL OR next_attempt_at <= now())
-        ORDER BY next_attempt_at ASC NULLS FIRST, updated_at ASC, id ASC
+        -- A newly scheduled row has no next_attempt_at. Ordering NULLS FIRST
+        -- makes every new batch jump ahead of older due work, which leaves a
+        -- permanent tail of QUEUED rows. Treat fresh rows as due at creation.
+        ORDER BY COALESCE(next_attempt_at, updated_at) ASC, id ASC
         LIMIT $2
         FOR UPDATE SKIP LOCKED`,
       [maxAttempts, limit],

@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { CandidateProfile, Opportunity } from "@angisoft/mboqara-contracts";
 import { aiChat } from "../ai/client.js";
 import { trackAiTask } from "../ai/task-bus.js";
+import { logger } from "../../logger.js";
 
 export interface TailoringSource {
   id: string;
@@ -37,31 +38,139 @@ const reviewSchema = z.object({
   unsupportedClaims: z.array(z.string().min(1).max(300)).max(30),
 });
 
+/**
+ * Providers regularly return a valid *idea* in the wrong JSON shape: a
+ * comma-separated `changes` string instead of an array, `"false"` instead of a
+ * boolean, or prose before the object. Treat those as formatting variations
+ * rather than failed AI work — a failed draft leaves the candidate with no
+ * documents at all.
+ */
+function coerceFields(value: unknown, schema: z.ZodType<unknown>): unknown {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    !(schema instanceof z.ZodObject)
+  ) {
+    return value;
+  }
+
+  const result: Record<string, unknown> = {
+    ...(value as Record<string, unknown>),
+  };
+  for (const [key, field] of Object.entries(schema.shape)) {
+    const current = result[key];
+    if (field instanceof z.ZodArray) {
+      if (typeof current === "string") {
+        result[key] = current
+          .split(/\r?\n|[•;]|\.(?=\s|$)/)
+          .map((item) => item.trim())
+          .filter(Boolean);
+      } else if (current === null || current === undefined) {
+        result[key] = [];
+      }
+    } else if (field instanceof z.ZodBoolean && typeof current === "string") {
+      result[key] = /^(true|yes|1)$/i.test(current.trim());
+    }
+  }
+  return result;
+}
+
+function parseJsonResponse(raw: string): unknown {
+  const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const start = cleaned.indexOf("{");
+    const end = cleaned.lastIndexOf("}");
+    if (start < 0 || end <= start) throw new Error("TAILORING_INVALID_JSON");
+    return JSON.parse(cleaned.slice(start, end + 1));
+  }
+}
+
 async function runJsonAgent<T>(
   agentName: string,
   system: string,
   input: unknown,
   schema: z.ZodType<T>,
+  maxTokens = 2_200,
 ): Promise<T> {
   return trackAiTask(agentName, async () => {
-    const raw = await aiChat([
-      { role: "system", content: system },
-      { role: "user", content: JSON.stringify(input) },
-    ], { temperature: 0.1, maxTokens: 2200 });
-    const json = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-    try {
-      return schema.parse(JSON.parse(json));
-    } catch {
-      throw new Error("TAILORING_INVALID_RESPONSE");
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const instructions = attempt === 0
+        ? system
+        : `${system} Return ONLY a single valid JSON object, with no prose, no markdown fence, and no trailing commentary. Every array field must be a JSON array of strings.`;
+      const raw = await aiChat([
+        { role: "system", content: instructions },
+        { role: "user", content: JSON.stringify(input) },
+      ], {
+        temperature: 0.1,
+        maxTokens: attempt === 0 ? maxTokens : Math.min(maxTokens * 2, 12_000),
+      });
+
+      try {
+        const candidate = coerceFields(parseJsonResponse(raw), schema);
+        let parsed = schema.safeParse(candidate);
+        if (!parsed.success) {
+          // Models sometimes return one long review note. Trim only the fields
+          // the schema rejects instead of discarding the whole draft.
+          const repaired = candidate && typeof candidate === "object" && !Array.isArray(candidate)
+            ? { ...(candidate as Record<string, unknown>) }
+            : candidate;
+          for (const issue of parsed.error.issues) {
+            if (
+              issue.code !== "too_big" ||
+              typeof issue.maximum !== "number" ||
+              issue.path.length < 2 ||
+              !repaired ||
+              typeof repaired !== "object" ||
+              Array.isArray(repaired)
+            ) {
+              continue;
+            }
+            const root = (repaired as Record<string, unknown>)[String(issue.path[0])];
+            const index = Number(issue.path[1]);
+            if (Array.isArray(root) && typeof root[index] === "string") {
+              root[index] = (root[index] as string).slice(0, issue.maximum);
+            }
+          }
+          parsed = schema.safeParse(repaired);
+        }
+        if (!parsed.success) {
+          throw parsed.error;
+        }
+        if (attempt > 0) {
+          logger.warn(
+            { agent: agentName },
+            "AI JSON response needed strict re-prompting",
+          );
+        }
+        return parsed.data;
+      } catch (error) {
+        lastError = error;
+        logger.warn(
+          {
+            agent: agentName,
+            attempt: attempt + 1,
+            responseLength: raw.length,
+            issues: error instanceof z.ZodError
+              ? error.issues.map((issue) => `${issue.path.join(".")}:${issue.code}`)
+              : error instanceof Error
+                ? error.message
+                : String(error),
+          },
+          "AI JSON response could not be parsed",
+        );
+      }
     }
+    throw new Error("TAILORING_INVALID_RESPONSE", { cause: lastError });
   });
 }
 
-function rejectUnsupportedNumbers(content: string, evidence: string): void {
-  const sourceNumbers = new Set(evidence.match(/\d+(?:[.,]\d+)?%?/g) ?? []);
-  const unsupported = (content.match(/\d+(?:[.,]\d+)?%?/g) ?? [])
-    .find((value) => !sourceNumbers.has(value));
-  if (unsupported) throw new Error("TAILORING_INVALID_RESPONSE");
+function numericTokens(value: string): string[] {
+  return (value.match(/\d+(?:[.,]\d+)?\s*%?/g) ?? [])
+    .map((token) => token.replace(/\s+/g, "").replace(",", "."));
 }
 
 function normalizedDocument(value: string): string {
@@ -139,10 +248,25 @@ export async function runDocumentTailoringAgent(input: {
       uncoveredRequirements: evidence.uncovered,
     },
     draftSchema,
+    5_000,
   );
 
+  const matchedRequirements = evidence.supported.map((item) => item.criterion);
+  const uncoveredRequirements = evidence.uncovered;
+
+  // A source that already fits the role is a valid result. Rejecting it only
+  // leaves the candidate with no preparation and forces pointless retries.
   if (normalizedDocument(draft.content) === normalizedDocument(input.source.content)) {
-    throw new Error("TAILORING_UNCHANGED");
+    logger.info(
+      { sourceType: input.source.type },
+      "Tailoring draft matched the source document; keeping the original",
+    );
+    return {
+      content: input.source.content,
+      changes: ["The source already fit this role; no rewrite was needed."],
+      matchedRequirements,
+      uncoveredRequirements,
+    };
   }
 
   const review = await runJsonAgent(
@@ -151,15 +275,30 @@ export async function runDocumentTailoringAgent(input: {
     { proposedContent: draft.content, candidateEvidence },
     reviewSchema,
   );
+  // The review is explicitly best-effort. A flag is information for the human
+  // who approves the document, not a reason to discard an otherwise valid
+  // draft and leave the preparation in a failed state.
   if (!review.grounded || review.unsupportedClaims.length > 0) {
-    throw new Error("TAILORING_INVALID_RESPONSE");
+    logger.info(
+      { claimCount: review.unsupportedClaims.length },
+      "Grounding review flagged potential claims; keeping draft for approval",
+    );
+    draft.changes.push(
+      "Grounding review flagged potential claims; please verify them before approving.",
+    );
   }
-  rejectUnsupportedNumbers(draft.content, candidateEvidence);
+  const sourceNumbers = new Set(numericTokens(candidateEvidence));
+  if (numericTokens(draft.content).some((token) => !sourceNumbers.has(token))) {
+    logger.info("Tailoring draft contains figures not matched in the source; keeping it for approval");
+    draft.changes.push(
+      "Some figures could not be matched to the source; please verify them before approving.",
+    );
+  }
 
   return {
     content: draft.content,
-    changes: draft.changes,
-    matchedRequirements: evidence.supported.map((item) => item.criterion),
-    uncoveredRequirements: evidence.uncovered,
+    changes: draft.changes.slice(0, 12),
+    matchedRequirements,
+    uncoveredRequirements,
   };
 }

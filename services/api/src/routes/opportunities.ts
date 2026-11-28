@@ -1,7 +1,7 @@
 import type { ProfessionFacet } from "@angisoft/mboqara-contracts";
 import { Router } from "express";
 import { z } from "zod";
-import { cacheGet, cacheSet } from "../db/redis.js";
+import { cacheGet, cacheSet } from "../lib/app-cache.js";
 import { query } from "../db/pool.js";
 import { ensureBlueprint } from "../services/applications.js";
 import { requirePermission } from "../middleware/rbac.js";

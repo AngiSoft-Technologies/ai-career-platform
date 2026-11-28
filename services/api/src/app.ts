@@ -11,6 +11,7 @@ import { config } from "./config.js";
 import { healthCheck } from "./db/pool.js";
 import { redis, startRedis, waitForRedis } from "./db/redis.js";
 import { ensureRedisQueuePolicy } from "./db/redis-policy.js";
+import { serverStoreBackend, usesServerStore } from "./lib/server-store.js";
 import { schema } from "./graphql/schema.js";
 import { logger } from "./logger.js";
 import { redactError, redactHeaders, redactUrl } from "./lib/redact.js";
@@ -48,12 +49,15 @@ export const app = express();
 // a serverless function.
 
 // index.ts owns process startup (gRPC, workers, ticker), which never runs on
-// serverless. The shared cache client still has to connect here or every
-// cacheGet stays a no-op and /health reports "wait" forever.
-startRedis();
-void waitForRedis().then((connected) => {
-  if (connected) void ensureRedisQueuePolicy(redis).catch(() => {});
-});
+// serverless. Vercel still needs Redis for cache, queues and pub/sub. A
+// persistent production backend uses the SQLite+JSONL store instead, so it
+// must not open a Redis client it does not need.
+if (!usesServerStore()) {
+  startRedis();
+  void waitForRedis().then((connected) => {
+    if (connected) void ensureRedisQueuePolicy(redis).catch(() => {});
+  });
+}
 
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
@@ -181,10 +185,12 @@ app.get("/live", (_request, response) => {
 app.get(["/health", "/v1/health"], async (_request, response) => {
   try {
     const database = await healthCheck();
+    const store = serverStoreBackend();
     response.status(database ? 200 : 503).json({
       status: database ? "ok" : "degraded",
       database,
-      cache: redis.status,
+      cache: store === "redis" ? redis.status : store,
+      store,
       apiVersion: API_VERSION,
       ticker: tickerStatus(),
       timestamp: new Date().toISOString(),
@@ -202,11 +208,12 @@ app.get("/", async (_request, response) => {
     database = false;
   }
   const ok = database;
+  const store = serverStoreBackend();
   const rows: Array<[string, string]> = [
     ["Service", "mboqara-api"],
     ["Status", ok ? "operational" : "degraded"],
     ["Database", database ? "connected" : "unreachable"],
-    ["Cache", redis.status],
+    ["Cache", store === "redis" ? redis.status : store],
     ["API version", API_VERSION],
     ["Time", new Date().toISOString()],
   ];
