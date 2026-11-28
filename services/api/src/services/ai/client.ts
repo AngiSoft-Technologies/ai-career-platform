@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { config } from "../../config.js";
 import { logger } from "../../logger.js";
 
@@ -38,6 +40,11 @@ export class AiRequestError extends Error {
     super(message);
     this.name = "AiRequestError";
   }
+}
+
+/** Non-secret identifier so operators can confirm which credential is active. */
+function credentialFingerprint(apiKey: string): string {
+  return createHash("sha256").update(apiKey).digest("hex").slice(0, 12);
 }
 
 function normaliseBaseUrl(value: string): string {
@@ -160,37 +167,89 @@ export function activeEmbeddingModel(): string {
   return getAiProvider()?.embeddingModel ?? config.AI_EMBEDDING_MODEL;
 }
 
+const AI_REQUEST_ATTEMPTS = 4;
+const RETRYABLE_AI_STATUS = new Set([429, 500, 502, 503, 504]);
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Respect the provider's `Retry-After` when it sends one; otherwise use short
+ * exponential backoff with jitter so concurrent preparations do not retry in
+ * lockstep. The wait is capped because a Function must finish its response.
+ */
+function aiRetryDelay(response: Response, attempt: number): number {
+  const header = response.headers.get("retry-after");
+  if (header) {
+    const seconds = Number(header);
+    if (Number.isFinite(seconds)) {
+      return Math.min(Math.max(seconds * 1000, 250), 5000);
+    }
+    const at = Date.parse(header);
+    if (!Number.isNaN(at)) {
+      return Math.min(Math.max(at - Date.now(), 250), 5000);
+    }
+  }
+  return Math.min(500 * 2 ** (attempt - 1), 4000) + Math.random() * 250;
+}
+
 async function aiRequest(
   provider: AiProvider,
   path: string,
   body: unknown,
 ): Promise<unknown> {
-  let response: Response;
-  try {
-    response = await fetch(`${provider.baseUrl}${path}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${provider.apiKey}`,
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(config.AI_TIMEOUT_MS),
-    });
-  } catch (error) {
-    throw new AiRequestError(
-      error instanceof Error ? error.message : "AI_REQUEST_FAILED",
-    );
-  }
+  const payload = JSON.stringify(body);
 
-  if (!response.ok) {
+  for (let attempt = 1; attempt <= AI_REQUEST_ATTEMPTS; attempt += 1) {
+    let response: Response;
+    try {
+      response = await fetch(`${provider.baseUrl}${path}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${provider.apiKey}`,
+        },
+        body: payload,
+        signal: AbortSignal.timeout(config.AI_TIMEOUT_MS),
+      });
+    } catch (error) {
+      throw new AiRequestError(
+        error instanceof Error ? error.message : "AI_REQUEST_FAILED",
+      );
+    }
+
+    if (response.ok) {
+      return (await response.json()) as unknown;
+    }
+
     const detail = await response.text().catch(() => "");
-    throw new AiRequestError(
-      `AI_UPSTREAM_${response.status}: ${detail.slice(0, 200)}`,
-      response.status,
+    if (
+      !RETRYABLE_AI_STATUS.has(response.status) ||
+      attempt === AI_REQUEST_ATTEMPTS
+    ) {
+      throw new AiRequestError(
+        `AI_UPSTREAM_${response.status}: ${detail.slice(0, 200)}`,
+        response.status,
+      );
+    }
+
+    const waitMs = aiRetryDelay(response, attempt);
+    logger.warn(
+      {
+        provider: provider.name,
+        credential: credentialFingerprint(provider.apiKey),
+        path,
+        status: response.status,
+        attempt,
+        waitMs,
+      },
+      "AI provider throttled or temporarily unavailable; retrying",
     );
+    await sleep(waitMs);
   }
 
-  return (await response.json()) as unknown;
+  throw new AiRequestError("AI_REQUEST_FAILED");
 }
 
 export interface AiChatResult {
@@ -289,9 +348,10 @@ export async function aiChatDetailed(
       };
     } catch (error) {
       lastError = error;
-      logger.debug(
+      logger.warn(
         {
           provider: provider.name,
+          credential: credentialFingerprint(provider.apiKey),
           model: options.model ?? provider.chatModel,
           error: error instanceof Error ? error.message : String(error),
         },
@@ -380,6 +440,15 @@ export async function aiEmbedWithProvider(
       return { provider, vectors };
     } catch (error) {
       lastError = error;
+      logger.warn(
+        {
+          provider: provider.name,
+          credential: credentialFingerprint(provider.apiKey),
+          model: provider.embeddingModel,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        "AI embedding provider failed; trying the next configured provider",
+      );
     }
   }
 
